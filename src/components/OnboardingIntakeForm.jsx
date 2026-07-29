@@ -87,16 +87,28 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
     setLoading(true)
 
     try {
+      // Clean up data: convert empty strings to null for text fields, empty to null for numbers
+      const cleanData = {}
+      for (const [key, value] of Object.entries(formData)) {
+        if (typeof value === 'string' && value.trim() === '') {
+          cleanData[key] = null
+        } else if (typeof value === 'string' && ['average_job_value', 'monthly_ad_budget', 'customer_lifetime_value'].includes(key)) {
+          cleanData[key] = value ? parseFloat(value) : null
+        } else {
+          cleanData[key] = value
+        }
+      }
+
       if (existingIntake) {
         const { error } = await supabase
           .from('onboarding_intake')
-          .update(formData)
+          .update(cleanData)
           .eq('id', existingIntake.id)
         if (error) throw error
       } else {
         const { error } = await supabase.from('onboarding_intake').insert({
           client_id: client.id,
-          ...formData,
+          ...cleanData,
         })
         if (error) throw error
       }
