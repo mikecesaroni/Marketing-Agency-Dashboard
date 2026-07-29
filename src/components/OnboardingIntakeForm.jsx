@@ -50,6 +50,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
     success_90_days: '',
     competitors_to_beat: '',
     bad_experience_past_marketers: '',
+    call_notes: '',
   })
 
   const [loading, setLoading] = useState(false)
@@ -276,6 +277,19 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
           <input type="text" name="competitors_to_beat" placeholder="Competitors to beat" value={formData.competitors_to_beat} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
           <textarea name="bad_experience_past_marketers" placeholder="Bad experience with past marketers?" value={formData.bad_experience_past_marketers} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
         </div>
+      </div>
+
+      {/* NOTES */}
+      <div className="border-t pt-4">
+        <h3 className="font-bold text-slate-900 mb-3">Call Notes</h3>
+        <textarea
+          name="call_notes"
+          placeholder="Ad creative ideas, follow-ups, budget notes, anything else discussed on the call..."
+          value={formData.call_notes}
+          onChange={handleChange}
+          rows="4"
+          className="w-full px-2 py-1 border rounded text-sm"
+        />
       </div>
 
       {error && (
