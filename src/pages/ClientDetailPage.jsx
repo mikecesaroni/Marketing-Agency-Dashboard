@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import Modal from '../components/Modal'
-import EditClientForm from '../components/EditClientForm'
 import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
@@ -18,7 +17,6 @@ export default function ClientDetailPage() {
   const [creativeLogs, setCreativeLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [showEditModal, setShowEditModal] = useState(false)
   const [showIntakeModal, setShowIntakeModal] = useState(false)
   const [showKPIsModal, setShowKPIsModal] = useState(false)
   const [showWorkLogModal, setShowWorkLogModal] = useState(false)
@@ -172,12 +170,6 @@ export default function ClientDetailPage() {
                 className="flex-1 md:flex-none px-3 md:px-4 py-3 md:py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition text-sm touch-none"
               >
                 Intake Form
-              </button>
-              <button
-                onClick={() => setShowEditModal(true)}
-                className="flex-1 md:flex-none px-3 md:px-4 py-3 md:py-2 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition text-sm touch-none"
-              >
-                Edit Info
               </button>
             </div>
           </div>
@@ -362,18 +354,6 @@ export default function ClientDetailPage() {
             client={client}
             onSuccess={() => handleDataAdded('intake')}
             onClose={() => setShowIntakeModal(false)}
-          />
-        </Modal>
-
-        <Modal
-          isOpen={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          title="Edit Client Info"
-        >
-          <EditClientForm
-            client={client}
-            onSuccess={() => handleDataAdded('edit')}
-            onClose={() => setShowEditModal(false)}
           />
         </Modal>
 
