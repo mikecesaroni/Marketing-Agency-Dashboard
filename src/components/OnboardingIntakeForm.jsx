@@ -16,6 +16,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
     services_offered: '',
     most_profitable_service: '',
     service_want_more: '',
+    jobs_to_avoid: '',
     average_job_value: '',
     busy_season: '',
 
@@ -201,6 +202,10 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Service They Want More Of</label>
             <input type="text" name="service_want_more" placeholder="Which service to push" value={formData.service_want_more} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Jobs To Avoid</label>
+            <textarea name="jobs_to_avoid" placeholder="Types of jobs or industries to avoid..." value={formData.jobs_to_avoid} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Average Job Value</label>
