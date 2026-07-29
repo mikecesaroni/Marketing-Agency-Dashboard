@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import Modal from '../components/Modal'
 import EditClientForm from '../components/EditClientForm'
+import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
 import AddCreativeForm from '../components/AddCreativeForm'
@@ -18,6 +19,7 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showIntakeModal, setShowIntakeModal] = useState(false)
   const [showKPIsModal, setShowKPIsModal] = useState(false)
   const [showWorkLogModal, setShowWorkLogModal] = useState(false)
   const [showCreativeModal, setShowCreativeModal] = useState(false)
@@ -109,6 +111,8 @@ export default function ClientDetailPage() {
   const handleDataAdded = async (type) => {
     if (type === 'edit') {
       setShowEditModal(false)
+    } else if (type === 'intake') {
+      setShowIntakeModal(false)
     } else if (type === 'kpis') {
       setShowKPIsModal(false)
     } else if (type === 'worklog') {
@@ -162,12 +166,20 @@ export default function ClientDetailPage() {
         <div className="mb-8">
           <div className="flex justify-between items-start mb-4">
             <h1 className="text-3xl font-bold text-slate-900">{client.name}</h1>
-            <button
-              onClick={() => setShowEditModal(true)}
-              className="px-4 py-2 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition"
-            >
-              Edit Info
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowIntakeModal(true)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition text-sm"
+              >
+                Onboarding Intake
+              </button>
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="px-4 py-2 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition"
+              >
+                Edit Info
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div>
@@ -341,6 +353,18 @@ export default function ClientDetailPage() {
         </div>
 
         {/* MODALS */}
+        <Modal
+          isOpen={showIntakeModal}
+          onClose={() => setShowIntakeModal(false)}
+          title="Client Onboarding Intake"
+        >
+          <OnboardingIntakeForm
+            client={client}
+            onSuccess={() => handleDataAdded('intake')}
+            onClose={() => setShowIntakeModal(false)}
+          />
+        </Modal>
+
         <Modal
           isOpen={showEditModal}
           onClose={() => setShowEditModal(false)}
