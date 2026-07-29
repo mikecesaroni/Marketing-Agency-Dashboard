@@ -4,11 +4,6 @@ import { supabase } from '../lib/supabaseClient'
 export default function AddClientForm({ onSuccess, onClose }) {
   const [formData, setFormData] = useState({
     name: '',
-    industry: '',
-    market: '',
-    meta_budget_per_day: '',
-    lsa_budget_per_day: '',
-    status: 'onboarding',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -29,22 +24,15 @@ export default function AddClientForm({ onSuccess, onClose }) {
     try {
       const { error } = await supabase.from('clients').insert({
         name: formData.name,
-        industry: formData.industry || null,
-        market: formData.market || null,
-        meta_budget_per_day: formData.meta_budget_per_day ? parseFloat(formData.meta_budget_per_day) : 0,
-        lsa_budget_per_day: formData.lsa_budget_per_day ? parseFloat(formData.lsa_budget_per_day) : 0,
-        status: formData.status,
+        status: 'onboarding',
+        meta_budget_per_day: 0,
+        lsa_budget_per_day: 0,
       })
 
       if (error) throw error
 
       setFormData({
         name: '',
-        industry: '',
-        market: '',
-        meta_budget_per_day: '',
-        lsa_budget_per_day: '',
-        status: 'onboarding',
       })
       onSuccess()
       onClose()
@@ -58,94 +46,24 @@ export default function AddClientForm({ onSuccess, onClose }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Client Name *
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          Business Name *
         </label>
         <input
           type="text"
           name="name"
           value={formData.name}
           onChange={handleChange}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
           placeholder="e.g. John's Plumbing"
+          autoFocus
           required
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Industry
-        </label>
-        <input
-          type="text"
-          name="industry"
-          value={formData.industry}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-          placeholder="e.g. Plumbing, HVAC, Roofing"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Market
-        </label>
-        <input
-          type="text"
-          name="market"
-          value={formData.market}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-          placeholder="e.g. Denver, CO"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Meta Ads Budget ($/day)
-        </label>
-        <input
-          type="number"
-          name="meta_budget_per_day"
-          value={formData.meta_budget_per_day}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-          placeholder="e.g. 50"
-          step="0.01"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          LSA Budget ($/day)
-        </label>
-        <input
-          type="number"
-          name="lsa_budget_per_day"
-          value={formData.lsa_budget_per_day}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-          placeholder="e.g. 30"
-          step="0.01"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Status
-        </label>
-        <select
-          name="status"
-          value={formData.status}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          <option value="onboarding">Onboarding</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="churned">Churned</option>
-        </select>
-      </div>
+      <p className="text-sm text-slate-500 mt-4">
+        You'll fill in all other details (industry, market, budgets, etc.) in the onboarding intake form after creating the client.
+      </p>
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
