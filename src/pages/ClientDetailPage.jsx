@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import Modal from '../components/Modal'
+import EditClientForm from '../components/EditClientForm'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
 import AddCreativeForm from '../components/AddCreativeForm'
@@ -16,6 +17,7 @@ export default function ClientDetailPage() {
   const [creativeLogs, setCreativeLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showEditModal, setShowEditModal] = useState(false)
   const [showKPIsModal, setShowKPIsModal] = useState(false)
   const [showWorkLogModal, setShowWorkLogModal] = useState(false)
   const [showCreativeModal, setShowCreativeModal] = useState(false)
@@ -105,7 +107,9 @@ export default function ClientDetailPage() {
   }
 
   const handleDataAdded = async (type) => {
-    if (type === 'kpis') {
+    if (type === 'edit') {
+      setShowEditModal(false)
+    } else if (type === 'kpis') {
       setShowKPIsModal(false)
     } else if (type === 'worklog') {
       setShowWorkLogModal(false)
@@ -156,7 +160,15 @@ export default function ClientDetailPage() {
         </button>
 
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-4">{client.name}</h1>
+          <div className="flex justify-between items-start mb-4">
+            <h1 className="text-3xl font-bold text-slate-900">{client.name}</h1>
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="px-4 py-2 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition"
+            >
+              Edit Info
+            </button>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div>
               <p className="text-xs text-slate-500 uppercase">Industry</p>
@@ -323,6 +335,18 @@ export default function ClientDetailPage() {
         </div>
 
         {/* MODALS */}
+        <Modal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          title="Edit Client Info"
+        >
+          <EditClientForm
+            client={client}
+            onSuccess={() => handleDataAdded('edit')}
+            onClose={() => setShowEditModal(false)}
+          />
+        </Modal>
+
         <Modal
           isOpen={showKPIsModal}
           onClose={() => setShowKPIsModal(false)}
