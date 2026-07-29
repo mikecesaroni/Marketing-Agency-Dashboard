@@ -154,55 +154,55 @@ export default function ClientDetailPage() {
   const progressPercent = progressTotal > 0 ? Math.round((progressDone / progressTotal) * 100) : 0
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4">
+    <div className="min-h-screen bg-slate-50 p-3 md:p-4">
       <div className="max-w-7xl mx-auto">
         <button
           onClick={() => navigate('/dashboard')}
-          className="mb-4 px-4 py-2 bg-slate-200 text-slate-900 rounded-lg hover:bg-slate-300 transition"
+          className="mb-4 px-3 md:px-4 py-2 md:py-2 bg-slate-200 text-slate-900 rounded-lg hover:bg-slate-300 transition text-sm md:text-base"
         >
           ← Back
         </button>
 
-        <div className="mb-8">
-          <div className="flex justify-between items-start mb-4">
-            <h1 className="text-3xl font-bold text-slate-900">{client.name}</h1>
-            <div className="flex gap-2">
+        <div className="mb-6 md:mb-8">
+          <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-start mb-4">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">{client.name}</h1>
+            <div className="flex gap-2 flex-col md:flex-row w-full md:w-auto">
               <button
                 onClick={() => setShowIntakeModal(true)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition text-sm"
+                className="flex-1 md:flex-none px-3 md:px-4 py-3 md:py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition text-sm touch-none"
               >
-                Onboarding Intake
+                Onboarding
               </button>
               <button
                 onClick={() => setShowEditModal(true)}
-                className="px-4 py-2 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition"
+                className="flex-1 md:flex-none px-3 md:px-4 py-3 md:py-2 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition text-sm touch-none"
               >
                 Edit Info
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
             <div>
-              <p className="text-xs text-slate-500 uppercase">Industry</p>
-              <p className="font-semibold text-slate-900">{client.industry || '—'}</p>
+              <p className="text-xs text-slate-500 uppercase font-medium">Industry</p>
+              <p className="font-semibold text-slate-900 text-sm md:text-base">{client.industry || '—'}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 uppercase">Market</p>
-              <p className="font-semibold text-slate-900">{client.market || '—'}</p>
+              <p className="text-xs text-slate-500 uppercase font-medium">Market</p>
+              <p className="font-semibold text-slate-900 text-sm md:text-base">{client.market || '—'}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 uppercase">Status</p>
-              <p className="font-semibold text-slate-900 capitalize">{client.status}</p>
+              <p className="text-xs text-slate-500 uppercase font-medium">Status</p>
+              <p className="font-semibold text-slate-900 capitalize text-sm md:text-base">{client.status}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 uppercase">Meta Budget/day</p>
-              <p className="font-semibold text-slate-900">
+              <p className="text-xs text-slate-500 uppercase font-medium">Meta/day</p>
+              <p className="font-semibold text-slate-900 text-sm md:text-base">
                 ${client.meta_budget_per_day ? client.meta_budget_per_day.toFixed(2) : '0'}
               </p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 uppercase">LSA Budget/day</p>
-              <p className="font-semibold text-slate-900">
+              <p className="text-xs text-slate-500 uppercase font-medium">LSA/day</p>
+              <p className="font-semibold text-slate-900 text-sm md:text-base">
                 ${client.lsa_budget_per_day ? client.lsa_budget_per_day.toFixed(2) : '0'}
               </p>
             </div>
@@ -210,7 +210,7 @@ export default function ClientDetailPage() {
         </div>
 
         {/* ONBOARDING CHECKLIST */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
+        <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 mb-6 md:mb-8">
           <h2 className="text-xl font-bold text-slate-900 mb-4">Onboarding Checklist</h2>
           <div className="mb-4 flex items-center gap-2">
             <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
@@ -241,12 +241,12 @@ export default function ClientDetailPage() {
         </div>
 
         {/* WEEKLY KPIs */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-slate-900">Weekly KPI History</h2>
+        <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 mb-6 md:mb-8">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
+            <h2 className="text-lg md:text-xl font-bold text-slate-900">Weekly KPI History</h2>
             <button
               onClick={() => setShowKPIsModal(true)}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              className="w-full md:w-auto px-3 py-2 md:py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition touch-none"
             >
               + Log KPIs
             </button>
@@ -288,12 +288,12 @@ export default function ClientDetailPage() {
         </div>
 
         {/* WORK LOG */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-slate-900">Weekly Work Log</h2>
+        <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 mb-6 md:mb-8">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
+            <h2 className="text-lg md:text-xl font-bold text-slate-900">Weekly Work Log</h2>
             <button
               onClick={() => setShowWorkLogModal(true)}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              className="w-full md:w-auto px-3 py-2 md:py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition touch-none"
             >
               + Add Entry
             </button>
@@ -313,12 +313,12 @@ export default function ClientDetailPage() {
         </div>
 
         {/* CREATIVE LOG */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-slate-900">Creative Log</h2>
+        <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
+            <h2 className="text-lg md:text-xl font-bold text-slate-900">Creative Log</h2>
             <button
               onClick={() => setShowCreativeModal(true)}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              className="w-full md:w-auto px-3 py-2 md:py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition touch-none"
             >
               + Add Entry
             </button>
