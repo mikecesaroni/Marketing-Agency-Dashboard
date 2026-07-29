@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabaseClient'
 export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
   const [formData, setFormData] = useState({
     date_filled: new Date().toISOString().split('T')[0],
-    contact_name: client.name || '',
+    business_name: client.name || '',
+    owner_name: '',
     contact_phone: '',
     contact_email: '',
     website: '',
@@ -148,15 +149,17 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
             <label className="text-xs font-medium text-slate-600 block mb-1">Date</label>
             <input type="date" name="date_filled" value={formData.date_filled} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">Contact Name</label>
-              <input type="text" name="contact_name" placeholder="John Doe" value={formData.contact_name} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">Phone</label>
-              <input type="text" name="contact_phone" placeholder="(555) 123-4567" value={formData.contact_phone} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
-            </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Business Name</label>
+            <input type="text" name="business_name" placeholder="Business name" value={formData.business_name} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Owner(s) Name</label>
+            <input type="text" name="owner_name" placeholder="e.g. John Doe, Jane Smith" value={formData.owner_name} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Phone</label>
+            <input type="text" name="contact_phone" placeholder="(555) 123-4567" value={formData.contact_phone} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Email</label>
