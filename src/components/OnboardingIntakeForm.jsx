@@ -193,7 +193,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
         <div className="space-y-2">
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Services Offered</label>
-            <textarea name="services_offered" placeholder="List all services..." value={formData.services_offered} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="services_offered" placeholder="List all services..." value={formData.services_offered} onChange={handleChange} rows="3" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Most Profitable Service</label>
@@ -205,7 +205,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Jobs To Avoid</label>
-            <textarea name="jobs_to_avoid" placeholder="Types of jobs or industries to avoid..." value={formData.jobs_to_avoid} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="jobs_to_avoid" placeholder="Types of jobs or industries to avoid..." value={formData.jobs_to_avoid} onChange={handleChange} rows="3" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Average Job Value</label>
@@ -236,7 +236,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Current Ads - What's Working?</label>
-            <textarea name="current_ads_what_works" placeholder="Running ads now? What works/doesn't work?" value={formData.current_ads_what_works} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="current_ads_what_works" placeholder="Running ads now? What works/doesn't work?" value={formData.current_ads_what_works} onChange={handleChange} rows="3" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
         </div>
       </div>
@@ -247,11 +247,11 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
         <div className="space-y-2">
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Ideal Customer</label>
-            <textarea name="ideal_customer" placeholder="Describe your best customer..." value={formData.ideal_customer} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="ideal_customer" placeholder="Describe your best customer..." value={formData.ideal_customer} onChange={handleChange} rows="3" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">What Makes Them Better Than Competitors?</label>
-            <textarea name="why_people_choose" placeholder="Your unique advantages..." value={formData.why_people_choose} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="why_people_choose" placeholder="Your unique advantages..." value={formData.why_people_choose} onChange={handleChange} rows="3" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Most Common Objection</label>
@@ -266,11 +266,11 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
         <div className="space-y-2">
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">What Are We Offering to Get Leads?</label>
-            <textarea name="cta_offering" placeholder="e.g. Free estimate, Paid consultation, Phone call, etc." value={formData.cta_offering} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="cta_offering" placeholder="e.g. Free estimate, Paid consultation, Phone call, etc." value={formData.cta_offering} onChange={handleChange} rows="3" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Current Offers / Guarantees</label>
-            <textarea name="current_offers_guarantees" placeholder="Any current promotions or guarantees..." value={formData.current_offers_guarantees} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="current_offers_guarantees" placeholder="Any current promotions or guarantees..." value={formData.current_offers_guarantees} onChange={handleChange} rows="3" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
         </div>
       </div>
@@ -397,7 +397,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Bad Experience with Past Marketers?</label>
-            <textarea name="bad_experience_past_marketers" placeholder="Anything we should know..." value={formData.bad_experience_past_marketers} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="bad_experience_past_marketers" placeholder="Anything we should know..." value={formData.bad_experience_past_marketers} onChange={handleChange} rows="3" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
         </div>
       </div>
@@ -413,7 +413,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
             value={formData.call_notes}
             onChange={handleChange}
             rows="4"
-            className="w-full px-2 py-1 border rounded text-sm"
+            className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden"
           />
         </div>
       </div>
