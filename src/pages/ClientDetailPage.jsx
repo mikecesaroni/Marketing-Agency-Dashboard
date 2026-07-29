@@ -1,0 +1,285 @@
+import { useEffect, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabaseClient'
+
+export default function ClientDetailPage() {
+  const { clientId } = useParams()
+  const navigate = useNavigate()
+  const [client, setClient] = useState(null)
+  const [onboardingTasks, setOnboardingTasks] = useState([])
+  const [weeklyKPIs, setWeeklyKPIs] = useState([])
+  const [workLogs, setWorkLogs] = useState([])
+  const [creativeLogs, setCreativeLogs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    loadClientData()
+  }, [clientId])
+
+  const loadClientData = async () => {
+    try {
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', clientId)
+        .single()
+
+      if (clientError) throw clientError
+
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('onboarding_tasks')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('task_name')
+
+      if (tasksError) throw tasksError
+
+      const { data: kpisData, error: kpisError } = await supabase
+        .from('weekly_kpis')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('week_of', { ascending: false })
+
+      if (kpisError) throw kpisError
+
+      const { data: logsData, error: logsError } = await supabase
+        .from('weekly_work_log')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('week_of', { ascending: false })
+
+      if (logsError) throw logsError
+
+      const { data: creativesData, error: creativesError } = await supabase
+        .from('creative_log')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('date', { ascending: false })
+
+      if (creativesError) throw creativesError
+
+      setClient(clientData)
+      setOnboardingTasks(tasksData)
+      setWeeklyKPIs(kpisData)
+      setWorkLogs(logsData)
+      setCreativeLogs(creativesData)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const toggleTask = async (taskId, currentDone) => {
+    const { error } = await supabase
+      .from('onboarding_tasks')
+      .update({
+        done: !currentDone,
+        date_completed: !currentDone ? new Date().toISOString().split('T')[0] : null,
+      })
+      .eq('id', taskId)
+
+    if (!error) {
+      setOnboardingTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                done: !currentDone,
+                date_completed: !currentDone
+                  ? new Date().toISOString().split('T')[0]
+                  : null,
+              }
+            : t
+        )
+      )
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-slate-600">Loading...</div>
+      </div>
+    )
+  }
+
+  if (error || !client) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-4">
+        <div className="max-w-7xl mx-auto">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="mb-4 px-4 py-2 bg-slate-200 text-slate-900 rounded-lg hover:bg-slate-300 transition"
+          >
+            ← Back
+          </button>
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+            {error || 'Client not found'}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const progressDone = onboardingTasks.filter((t) => t.done).length
+  const progressTotal = onboardingTasks.length
+  const progressPercent = progressTotal > 0 ? Math.round((progressDone / progressTotal) * 100) : 0
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4">
+      <div className="max-w-7xl mx-auto">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="mb-4 px-4 py-2 bg-slate-200 text-slate-900 rounded-lg hover:bg-slate-300 transition"
+        >
+          ← Back
+        </button>
+
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-slate-900 mb-4">{client.name}</h1>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div>
+              <p className="text-xs text-slate-500 uppercase">Industry</p>
+              <p className="font-semibold text-slate-900">{client.industry || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase">Market</p>
+              <p className="font-semibold text-slate-900">{client.market || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase">Status</p>
+              <p className="font-semibold text-slate-900 capitalize">{client.status}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase">Monthly Budget</p>
+              <p className="font-semibold text-slate-900">
+                ${client.monthly_budget ? client.monthly_budget.toFixed(0) : '0'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ONBOARDING CHECKLIST */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
+          <h2 className="text-xl font-bold text-slate-900 mb-4">Onboarding Checklist</h2>
+          <div className="mb-4 flex items-center gap-2">
+            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 transition-all"
+                style={{ width: `${progressPercent}%` }}
+              ></div>
+            </div>
+            <span className="text-sm font-semibold text-slate-600">
+              {progressDone}/{progressTotal}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {onboardingTasks.map((task) => (
+              <label key={task.id} className="flex items-center gap-3 p-2 rounded hover:bg-slate-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={task.done}
+                  onChange={() => toggleTask(task.id, task.done)}
+                  className="w-4 h-4 rounded"
+                />
+                <span className={task.done ? 'line-through text-slate-400' : 'text-slate-700'}>
+                  {task.task_name}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* WEEKLY KPIs */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
+          <h2 className="text-xl font-bold text-slate-900 mb-4">Weekly KPI History</h2>
+          {weeklyKPIs.length === 0 ? (
+            <p className="text-slate-500">No KPI data logged yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="px-3 py-2 text-left font-semibold text-slate-900">Week Of</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-900">Channel</th>
+                    <th className="px-3 py-2 text-right font-semibold text-slate-900">Spend</th>
+                    <th className="px-3 py-2 text-right font-semibold text-slate-900">Leads</th>
+                    <th className="px-3 py-2 text-right font-semibold text-slate-900">Cost/Lead</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-900">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {weeklyKPIs.map((kpi) => (
+                    <tr key={kpi.id} className="border-b border-slate-200 hover:bg-slate-50">
+                      <td className="px-3 py-2">{kpi.week_of}</td>
+                      <td className="px-3 py-2">{kpi.channel}</td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        ${kpi.ad_spend.toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium">{kpi.leads}</td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        {kpi.leads > 0 ? `$${(kpi.ad_spend / kpi.leads).toFixed(2)}` : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600 text-xs">{kpi.notes || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* WORK LOG */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
+          <h2 className="text-xl font-bold text-slate-900 mb-4">Weekly Work Log</h2>
+          {workLogs.length === 0 ? (
+            <p className="text-slate-500">No work log entries yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {workLogs.map((log) => (
+                <div key={log.id} className="border-b border-slate-200 pb-4 last:border-b-0">
+                  <p className="text-sm text-slate-500 mb-1">Week of {log.week_of}</p>
+                  <p className="text-slate-700">{log.work_summary}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* CREATIVE LOG */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <h2 className="text-xl font-bold text-slate-900 mb-4">Creative Log</h2>
+          {creativeLogs.length === 0 ? (
+            <p className="text-slate-500">No creative entries yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {creativeLogs.map((creative) => (
+                <div key={creative.id} className="border-b border-slate-200 pb-4 last:border-b-0">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="text-sm text-slate-500 mb-1">{creative.date}</p>
+                      <p className="font-semibold text-slate-900">{creative.description}</p>
+                    </div>
+                    <span
+                      className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                        creative.status === 'live'
+                          ? 'bg-green-100 text-green-800'
+                          : creative.status === 'in progress'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-slate-100 text-slate-800'
+                      }`}
+                    >
+                      {creative.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

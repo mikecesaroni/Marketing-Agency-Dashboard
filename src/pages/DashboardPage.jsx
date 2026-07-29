@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { fetchClientsWithKPIs } from '../lib/queries'
 
 export default function DashboardPage() {
@@ -95,8 +96,13 @@ export default function DashboardPage() {
                         client.hasMissingKPIs ? 'bg-yellow-50' : ''
                       }`}
                     >
-                      <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                        {client.name}
+                      <td className="px-4 py-3 text-sm font-medium">
+                        <Link
+                          to={`/client/${client.id}`}
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {client.name}
+                        </Link>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">
                         {client.industry || '—'}
