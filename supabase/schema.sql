@@ -1,0 +1,130 @@
+-- Marketing Agency Dashboard — database setup
+-- Paste this whole file into the Supabase SQL Editor and click "Run".
+-- Safe to run once on a fresh project.
+
+-- 1. CLIENTS -----------------------------------------------------------
+create table clients (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  industry text,
+  market text,
+  monthly_budget numeric,
+  status text not null default 'onboarding'
+    check (status in ('active', 'paused', 'onboarding', 'churned')),
+  meta_ads_active boolean not null default false,
+  lsa_active boolean not null default false,
+  date_added date not null default current_date
+);
+
+-- 2. ONBOARDING TASKS ----------------------------------------------------
+create table onboarding_tasks (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references clients(id) on delete cascade,
+  task_name text not null,
+  done boolean not null default false,
+  date_completed date
+);
+
+-- 3. WEEKLY KPIS -----------------------------------------------------
+-- Cost per lead is NOT stored here — the app calculates it as ad_spend / leads.
+create table weekly_kpis (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references clients(id) on delete cascade,
+  week_of date not null,
+  ad_spend numeric not null default 0,
+  leads integer not null default 0,
+  channel text not null check (channel in ('Meta', 'LSA')),
+  notes text
+);
+
+-- 4. WEEKLY WORK LOG -----------------------------------------------------
+create table weekly_work_log (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references clients(id) on delete cascade,
+  week_of date not null,
+  work_summary text not null
+);
+
+-- 5. CREATIVE LOG -----------------------------------------------------
+create table creative_log (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references clients(id) on delete cascade,
+  date date not null default current_date,
+  description text not null,
+  status text not null default 'in progress'
+    check (status in ('in progress', 'live', 'retired'))
+);
+
+-- 6. AUTO-CREATE ONBOARDING CHECKLIST ------------------------------------
+-- Whenever a new client is added, automatically create their 14-item
+-- onboarding checklist so you never have to add it by hand.
+create function create_onboarding_tasks()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into onboarding_tasks (client_id, task_name)
+  values
+    (new.id, 'Signed agreement received'),
+    (new.id, 'Payment / billing set up'),
+    (new.id, 'Access to Meta Business Manager granted'),
+    (new.id, 'Access to Google LSA account granted'),
+    (new.id, 'Facebook Page + Instagram connected'),
+    (new.id, 'Meta pixel / conversions API installed'),
+    (new.id, 'LSA profile verified, license/insurance uploaded'),
+    (new.id, 'Kickoff call completed'),
+    (new.id, 'Offer / promo confirmed'),
+    (new.id, 'First creative batch produced (Higgsfield)'),
+    (new.id, 'First Meta campaign live'),
+    (new.id, 'LSA budget live'),
+    (new.id, 'Lead tracking confirmed with client'),
+    (new.id, 'Week 1 report sent');
+  return new;
+end;
+$$;
+
+create trigger on_client_created
+  after insert on clients
+  for each row
+  execute function create_onboarding_tasks();
+
+-- 7. SECURITY (Row Level Security) ---------------------------------------
+-- This locks every table down so only someone logged in (you) can read or
+-- write data. Nobody logged out can see anything.
+alter table clients enable row level security;
+alter table onboarding_tasks enable row level security;
+alter table weekly_kpis enable row level security;
+alter table weekly_work_log enable row level security;
+alter table creative_log enable row level security;
+
+create policy "Authenticated users can do everything with clients"
+  on clients for all
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "Authenticated users can do everything with onboarding_tasks"
+  on onboarding_tasks for all
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "Authenticated users can do everything with weekly_kpis"
+  on weekly_kpis for all
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "Authenticated users can do everything with weekly_work_log"
+  on weekly_work_log for all
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "Authenticated users can do everything with creative_log"
+  on creative_log for all
+  to authenticated
+  using (true)
+  with check (true);
