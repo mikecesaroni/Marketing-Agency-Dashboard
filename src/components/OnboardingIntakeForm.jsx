@@ -197,11 +197,11 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Most Profitable Service</label>
-            <input type="text" name="most_profitable_service" placeholder="Which service makes the most money" value={formData.most_profitable_service} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="most_profitable_service" placeholder="Which service makes the most money" value={formData.most_profitable_service} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Service They Want More Of</label>
-            <input type="text" name="service_want_more" placeholder="Which service to push" value={formData.service_want_more} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="service_want_more" placeholder="Which service to push" value={formData.service_want_more} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Jobs To Avoid</label>
@@ -255,7 +255,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Most Common Objection</label>
-            <input type="text" name="most_common_objection" placeholder="What do customers hesitate about?" value={formData.most_common_objection} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="most_common_objection" placeholder="What do customers hesitate about?" value={formData.most_common_objection} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
         </div>
       </div>
@@ -385,15 +385,15 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
         <div className="space-y-2">
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Main Goal</label>
-            <input type="text" name="main_goal" placeholder="What's your #1 priority?" value={formData.main_goal} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="main_goal" placeholder="What's your #1 priority?" value={formData.main_goal} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Success in 90 Days Looks Like...</label>
-            <input type="text" name="success_90_days" placeholder="How will you know this worked?" value={formData.success_90_days} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="success_90_days" placeholder="How will you know this worked?" value={formData.success_90_days} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Competitors to Beat</label>
-            <input type="text" name="competitors_to_beat" placeholder="Who's your main competition?" value={formData.competitors_to_beat} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
+            <textarea name="competitors_to_beat" placeholder="Who's your main competition?" value={formData.competitors_to_beat} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Bad Experience with Past Marketers?</label>
