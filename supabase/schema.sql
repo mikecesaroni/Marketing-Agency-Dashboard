@@ -68,7 +68,6 @@ begin
   insert into onboarding_tasks (client_id, task_name)
   values
     (new.id, 'Signed agreement received'),
-    (new.id, 'Payment / billing set up'),
     (new.id, 'Access to Meta Business Manager granted'),
     (new.id, 'Access to Google LSA account granted'),
     (new.id, 'Facebook Page + Instagram connected'),
