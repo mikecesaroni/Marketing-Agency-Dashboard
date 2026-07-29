@@ -26,7 +26,9 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
     ideal_customer: '',
     why_people_choose: '',
     most_common_objection: '',
-    what_makes_different: '',
+
+    cta_offering: '',
+    current_offers_guarantees: '',
 
     reviews_star_rating: '',
     reviews_count: '',
@@ -183,7 +185,15 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
           <textarea name="ideal_customer" placeholder="Ideal customer" value={formData.ideal_customer} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
           <textarea name="why_people_choose" placeholder="What makes them better than competitors" value={formData.why_people_choose} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
           <input type="text" name="most_common_objection" placeholder="Most common objection" value={formData.most_common_objection} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
-          <input type="text" name="what_makes_different" placeholder="What makes them different" value={formData.what_makes_different} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
+        </div>
+      </div>
+
+      {/* OFFER & CTA */}
+      <div className="border-b pb-4">
+        <h3 className="font-bold text-slate-900 mb-3">OFFER & CTA</h3>
+        <div className="space-y-2">
+          <textarea name="cta_offering" placeholder="What are we offering to get leads? (e.g. Free estimate, Paid consultation, Phone call, etc.)" value={formData.cta_offering} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
+          <textarea name="current_offers_guarantees" placeholder="Current offers / guarantees" value={formData.current_offers_guarantees} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
         </div>
       </div>
 
