@@ -17,8 +17,8 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
     average_job_value: '',
     busy_season: '',
 
-    monthly_ad_budget: '',
-    customer_lifetime_value: '',
+    meta_ad_budget_per_day: '',
+    lsa_ad_budget_per_day: '',
     leads_needed_per_month: '',
     current_ads_what_works: '',
 
@@ -92,7 +92,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
       for (const [key, value] of Object.entries(formData)) {
         if (typeof value === 'string' && value.trim() === '') {
           cleanData[key] = null
-        } else if (typeof value === 'string' && ['average_job_value', 'monthly_ad_budget', 'customer_lifetime_value'].includes(key)) {
+        } else if (typeof value === 'string' && ['average_job_value', 'meta_ad_budget_per_day', 'lsa_ad_budget_per_day'].includes(key)) {
           cleanData[key] = value ? parseFloat(value) : null
         } else {
           cleanData[key] = value
@@ -111,6 +111,18 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
           ...cleanData,
         })
         if (error) throw error
+      }
+
+      // Auto-populate client budgets from intake
+      if (cleanData.meta_ad_budget_per_day || cleanData.lsa_ad_budget_per_day) {
+        const clientUpdate = {}
+        if (cleanData.meta_ad_budget_per_day) clientUpdate.meta_budget_per_day = cleanData.meta_ad_budget_per_day
+        if (cleanData.lsa_ad_budget_per_day) clientUpdate.lsa_budget_per_day = cleanData.lsa_ad_budget_per_day
+
+        await supabase
+          .from('clients')
+          .update(clientUpdate)
+          .eq('id', client.id)
       }
 
       onSuccess()
@@ -152,10 +164,10 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
 
       {/* MONEY */}
       <div className="border-b pb-4">
-        <h3 className="font-bold text-slate-900 mb-3">MONEY</h3>
+        <h3 className="font-bold text-slate-900 mb-3">MONEY & BUDGETS</h3>
         <div className="space-y-2">
-          <input type="number" name="monthly_ad_budget" placeholder="Monthly ad budget ($)" value={formData.monthly_ad_budget} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" step="0.01" />
-          <input type="number" name="customer_lifetime_value" placeholder="Lifetime value of customer ($)" value={formData.customer_lifetime_value} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" step="0.01" />
+          <input type="number" name="meta_ad_budget_per_day" placeholder="Meta ad budget ($/day)" value={formData.meta_ad_budget_per_day} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" step="0.01" />
+          <input type="number" name="lsa_ad_budget_per_day" placeholder="LSA ad budget ($/day)" value={formData.lsa_ad_budget_per_day} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" step="0.01" />
           <input type="text" name="leads_needed_per_month" placeholder="Leads/jobs per month to make it worth it" value={formData.leads_needed_per_month} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
           <textarea name="current_ads_what_works" placeholder="Running ads now? What's working/not?" value={formData.current_ads_what_works} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
         </div>
