@@ -6,7 +6,8 @@ export default function EditClientForm({ client, onSuccess, onClose }) {
     name: client.name,
     industry: client.industry || '',
     market: client.market || '',
-    monthly_budget: client.monthly_budget || '',
+    meta_budget_per_day: client.meta_budget_per_day || '',
+    lsa_budget_per_day: client.lsa_budget_per_day || '',
     status: client.status,
     meta_ads_active: client.meta_ads_active,
     lsa_active: client.lsa_active,
@@ -34,7 +35,8 @@ export default function EditClientForm({ client, onSuccess, onClose }) {
           name: formData.name,
           industry: formData.industry || null,
           market: formData.market || null,
-          monthly_budget: formData.monthly_budget ? parseFloat(formData.monthly_budget) : null,
+          meta_budget_per_day: formData.meta_budget_per_day ? parseFloat(formData.meta_budget_per_day) : 0,
+          lsa_budget_per_day: formData.lsa_budget_per_day ? parseFloat(formData.lsa_budget_per_day) : 0,
           status: formData.status,
           meta_ads_active: formData.meta_ads_active,
           lsa_active: formData.lsa_active,
@@ -98,15 +100,30 @@ export default function EditClientForm({ client, onSuccess, onClose }) {
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">
-          Monthly Budget ($)
+          Meta Ads Budget ($/day)
         </label>
         <input
           type="number"
-          name="monthly_budget"
-          value={formData.monthly_budget}
+          name="meta_budget_per_day"
+          value={formData.meta_budget_per_day}
           onChange={handleChange}
           className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-          placeholder="e.g. 2000"
+          placeholder="e.g. 50"
+          step="0.01"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+          LSA Budget ($/day)
+        </label>
+        <input
+          type="number"
+          name="lsa_budget_per_day"
+          value={formData.lsa_budget_per_day}
+          onChange={handleChange}
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          placeholder="e.g. 30"
           step="0.01"
         />
       </div>

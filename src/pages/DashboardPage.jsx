@@ -86,7 +86,10 @@ export default function DashboardPage() {
                       Status
                     </th>
                     <th className="px-4 py-3 text-right text-sm font-semibold text-slate-900">
-                      Monthly Budget
+                      Meta Budget/day
+                    </th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-slate-900">
+                      LSA Budget/day
                     </th>
                     <th className="px-4 py-3 text-right text-sm font-semibold text-slate-900">
                       This Week Spend
@@ -136,8 +139,11 @@ export default function DashboardPage() {
                           {client.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-right text-slate-600">
-                        ${client.monthly_budget ? client.monthly_budget.toFixed(0) : '0'}
+                      <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">
+                        ${client.meta_budget_per_day ? client.meta_budget_per_day.toFixed(2) : '0'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">
+                        ${client.lsa_budget_per_day ? client.lsa_budget_per_day.toFixed(2) : '0'}
                       </td>
                       <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">
                         ${client.thisWeekTotalSpend.toFixed(2)}

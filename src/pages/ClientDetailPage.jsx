@@ -183,9 +183,15 @@ export default function ClientDetailPage() {
               <p className="font-semibold text-slate-900 capitalize">{client.status}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 uppercase">Monthly Budget</p>
+              <p className="text-xs text-slate-500 uppercase">Meta Budget/day</p>
               <p className="font-semibold text-slate-900">
-                ${client.monthly_budget ? client.monthly_budget.toFixed(0) : '0'}
+                ${client.meta_budget_per_day ? client.meta_budget_per_day.toFixed(2) : '0'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase">LSA Budget/day</p>
+              <p className="font-semibold text-slate-900">
+                ${client.lsa_budget_per_day ? client.lsa_budget_per_day.toFixed(2) : '0'}
               </p>
             </div>
           </div>
