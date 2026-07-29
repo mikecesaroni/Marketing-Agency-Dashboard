@@ -171,7 +171,7 @@ export default function ClientDetailPage() {
                 onClick={() => setShowIntakeModal(true)}
                 className="flex-1 md:flex-none px-3 md:px-4 py-3 md:py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition text-sm touch-none"
               >
-                Onboarding
+                Intake Form
               </button>
               <button
                 onClick={() => setShowEditModal(true)}
