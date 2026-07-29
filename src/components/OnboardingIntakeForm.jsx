@@ -178,7 +178,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
         <h3 className="font-bold text-slate-900 mb-3">CUSTOMER</h3>
         <div className="space-y-2">
           <textarea name="ideal_customer" placeholder="Ideal customer" value={formData.ideal_customer} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
-          <textarea name="why_people_choose" placeholder="Why people choose them" value={formData.why_people_choose} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
+          <textarea name="why_people_choose" placeholder="What makes them better than competitors" value={formData.why_people_choose} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" />
           <input type="text" name="most_common_objection" placeholder="Most common objection" value={formData.most_common_objection} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
           <input type="text" name="what_makes_different" placeholder="What makes them different" value={formData.what_makes_different} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
         </div>
