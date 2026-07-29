@@ -8,6 +8,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
     contact_phone: '',
     contact_email: '',
     website: '',
+    industry_trade: '',
     service_area: client.market || '',
     years_in_business: '',
 
@@ -146,6 +147,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
           <input type="text" name="contact_phone" placeholder="Phone" value={formData.contact_phone} onChange={handleChange} className="px-2 py-1 border rounded text-sm" />
           <input type="email" name="contact_email" placeholder="Email" value={formData.contact_email} onChange={handleChange} className="col-span-2 px-2 py-1 border rounded text-sm" />
           <input type="text" name="website" placeholder="Website" value={formData.website} onChange={handleChange} className="col-span-2 px-2 py-1 border rounded text-sm" />
+          <input type="text" name="industry_trade" placeholder="Industry/trade (e.g. Plumbing, HVAC, Roofing)" value={formData.industry_trade} onChange={handleChange} className="col-span-2 px-2 py-1 border rounded text-sm" />
           <input type="text" name="service_area" placeholder="Service area" value={formData.service_area} onChange={handleChange} className="px-2 py-1 border rounded text-sm" />
           <input type="text" name="years_in_business" placeholder="Years in business" value={formData.years_in_business} onChange={handleChange} className="px-2 py-1 border rounded text-sm" />
         </div>
