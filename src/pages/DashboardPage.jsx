@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchClientsWithKPIs } from '../lib/queries'
+import Modal from '../components/Modal'
+import AddClientForm from '../components/AddClientForm'
 
 export default function DashboardPage() {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showAddClientModal, setShowAddClientModal] = useState(false)
 
   useEffect(() => {
     loadClients()
@@ -20,6 +23,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleClientAdded = () => {
+    loadClients()
+    setShowAddClientModal(false)
   }
 
   if (loading) {
@@ -47,7 +55,10 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-slate-900">Clients</h1>
-          <button className="px-4 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition">
+          <button
+            onClick={() => setShowAddClientModal(true)}
+            className="px-4 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition"
+          >
             + New Client
           </button>
         </div>
@@ -150,6 +161,17 @@ export default function DashboardPage() {
         <div className="mt-6 text-xs text-slate-500">
           <p>💡 Rows highlighted in yellow are missing this week's KPI data.</p>
         </div>
+
+        <Modal
+          isOpen={showAddClientModal}
+          onClose={() => setShowAddClientModal(false)}
+          title="Add New Client"
+        >
+          <AddClientForm
+            onSuccess={handleClientAdded}
+            onClose={() => setShowAddClientModal(false)}
+          />
+        </Modal>
       </div>
     </div>
   )

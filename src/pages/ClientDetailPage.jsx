@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import Modal from '../components/Modal'
+import LogKPIsForm from '../components/LogKPIsForm'
+import AddWorkLogForm from '../components/AddWorkLogForm'
+import AddCreativeForm from '../components/AddCreativeForm'
 
 export default function ClientDetailPage() {
   const { clientId } = useParams()
@@ -12,6 +16,9 @@ export default function ClientDetailPage() {
   const [creativeLogs, setCreativeLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showKPIsModal, setShowKPIsModal] = useState(false)
+  const [showWorkLogModal, setShowWorkLogModal] = useState(false)
+  const [showCreativeModal, setShowCreativeModal] = useState(false)
 
   useEffect(() => {
     loadClientData()
@@ -95,6 +102,17 @@ export default function ClientDetailPage() {
         )
       )
     }
+  }
+
+  const handleDataAdded = async (type) => {
+    if (type === 'kpis') {
+      setShowKPIsModal(false)
+    } else if (type === 'worklog') {
+      setShowWorkLogModal(false)
+    } else if (type === 'creative') {
+      setShowCreativeModal(false)
+    }
+    loadClientData()
   }
 
   if (loading) {
@@ -194,7 +212,15 @@ export default function ClientDetailPage() {
 
         {/* WEEKLY KPIs */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Weekly KPI History</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-slate-900">Weekly KPI History</h2>
+            <button
+              onClick={() => setShowKPIsModal(true)}
+              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+            >
+              + Log KPIs
+            </button>
+          </div>
           {weeklyKPIs.length === 0 ? (
             <p className="text-slate-500">No KPI data logged yet.</p>
           ) : (
@@ -233,7 +259,15 @@ export default function ClientDetailPage() {
 
         {/* WORK LOG */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Weekly Work Log</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-slate-900">Weekly Work Log</h2>
+            <button
+              onClick={() => setShowWorkLogModal(true)}
+              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+            >
+              + Add Entry
+            </button>
+          </div>
           {workLogs.length === 0 ? (
             <p className="text-slate-500">No work log entries yet.</p>
           ) : (
@@ -250,7 +284,15 @@ export default function ClientDetailPage() {
 
         {/* CREATIVE LOG */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Creative Log</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-slate-900">Creative Log</h2>
+            <button
+              onClick={() => setShowCreativeModal(true)}
+              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+            >
+              + Add Entry
+            </button>
+          </div>
           {creativeLogs.length === 0 ? (
             <p className="text-slate-500">No creative entries yet.</p>
           ) : (
@@ -279,6 +321,46 @@ export default function ClientDetailPage() {
             </div>
           )}
         </div>
+
+        {/* MODALS */}
+        <Modal
+          isOpen={showKPIsModal}
+          onClose={() => setShowKPIsModal(false)}
+          title="Log Weekly KPIs"
+        >
+          <LogKPIsForm
+            clientId={clientId}
+            clientName={client.name}
+            onSuccess={() => handleDataAdded('kpis')}
+            onClose={() => setShowKPIsModal(false)}
+          />
+        </Modal>
+
+        <Modal
+          isOpen={showWorkLogModal}
+          onClose={() => setShowWorkLogModal(false)}
+          title="Add Work Log Entry"
+        >
+          <AddWorkLogForm
+            clientId={clientId}
+            clientName={client.name}
+            onSuccess={() => handleDataAdded('worklog')}
+            onClose={() => setShowWorkLogModal(false)}
+          />
+        </Modal>
+
+        <Modal
+          isOpen={showCreativeModal}
+          onClose={() => setShowCreativeModal(false)}
+          title="Add Creative Entry"
+        >
+          <AddCreativeForm
+            clientId={clientId}
+            clientName={client.name}
+            onSuccess={() => handleDataAdded('creative')}
+            onClose={() => setShowCreativeModal(false)}
+          />
+        </Modal>
       </div>
     </div>
   )
