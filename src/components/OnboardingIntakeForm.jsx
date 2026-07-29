@@ -412,7 +412,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
             placeholder="Anything else discussed on the call..."
             value={formData.call_notes}
             onChange={handleChange}
-            rows="4"
+            rows="6"
             className="w-full px-2 py-1 border rounded text-sm resize-none overflow-hidden"
           />
         </div>
