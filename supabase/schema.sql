@@ -55,7 +55,19 @@ create table creative_log (
     check (status in ('in progress', 'live', 'retired'))
 );
 
--- 6. AUTO-CREATE ONBOARDING CHECKLIST ------------------------------------
+-- 6. CLIENT FILES (logos, documents, assets) ----------------------------
+create table client_files (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references clients(id) on delete cascade,
+  file_name text not null,
+  file_type text not null,
+  file_size integer not null,
+  storage_path text not null,
+  date_uploaded timestamp not null default current_timestamp,
+  description text
+);
+
+-- 7. AUTO-CREATE ONBOARDING CHECKLIST ------------------------------------
 -- Whenever a new client is added, automatically create their 14-item
 -- onboarding checklist so you never have to add it by hand.
 create function create_onboarding_tasks()
@@ -90,7 +102,7 @@ create trigger on_client_created
   for each row
   execute function create_onboarding_tasks();
 
--- 7. SECURITY (Row Level Security) ---------------------------------------
+-- 8. SECURITY (Row Level Security) ---------------------------------------
 -- This locks every table down so only someone logged in (you) can read or
 -- write data. Nobody logged out can see anything.
 alter table clients enable row level security;
@@ -98,6 +110,7 @@ alter table onboarding_tasks enable row level security;
 alter table weekly_kpis enable row level security;
 alter table weekly_work_log enable row level security;
 alter table creative_log enable row level security;
+alter table client_files enable row level security;
 
 create policy "Authenticated users can do everything with clients"
   on clients for all
@@ -125,6 +138,12 @@ create policy "Authenticated users can do everything with weekly_work_log"
 
 create policy "Authenticated users can do everything with creative_log"
   on creative_log for all
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "Authenticated users can do everything with client_files"
+  on client_files for all
   to authenticated
   using (true)
   with check (true);
