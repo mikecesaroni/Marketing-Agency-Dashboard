@@ -6,9 +6,13 @@ export default function PaymentTracker({ clientId, clientName, monthlyFee = 998,
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [paidDate, setPaidDate] = useState(new Date().toISOString().split('T')[0])
   const [paymentMethod, setPaymentMethod] = useState('card')
+  const [editAmount, setEditAmount] = useState('')
+  const [editDueDate, setEditDueDate] = useState('')
+  const [editNotes, setEditNotes] = useState('')
 
   useEffect(() => {
     loadPayments()
@@ -47,6 +51,37 @@ export default function PaymentTracker({ clientId, clientName, monthlyFee = 998,
       if (err) throw err
 
       setShowPaymentModal(false)
+      setSelectedPayment(null)
+      await loadPayments()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const handleOpenEdit = (payment) => {
+    setSelectedPayment(payment)
+    setEditAmount(payment.amount.toString())
+    setEditDueDate(payment.due_date)
+    setEditNotes(payment.notes || '')
+    setShowEditModal(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!selectedPayment) return
+
+    try {
+      const { error: err } = await supabase
+        .from('payments')
+        .update({
+          amount: parseFloat(editAmount),
+          due_date: editDueDate,
+          notes: editNotes || null,
+        })
+        .eq('id', selectedPayment.id)
+
+      if (err) throw err
+
+      setShowEditModal(false)
       setSelectedPayment(null)
       await loadPayments()
     } catch (err) {
@@ -135,6 +170,12 @@ export default function PaymentTracker({ clientId, clientName, monthlyFee = 998,
               >
                 {getStatusIcon(setupPayment.status)} {setupPayment.status}
               </span>
+              <button
+                onClick={() => handleOpenEdit(setupPayment)}
+                className="px-2 py-1 text-xs bg-slate-500 text-white rounded hover:bg-slate-600 transition"
+              >
+                Edit
+              </button>
               {setupPayment.status !== 'paid' && (
                 <button
                   onClick={() => {
@@ -177,27 +218,35 @@ export default function PaymentTracker({ clientId, clientName, monthlyFee = 998,
                   <p className="text-xs text-slate-600">Due: {payment.due_date}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`px-2 py-1 rounded text-xs font-semibold inline-flex items-center gap-1 ${getStatusColor(
-                      payment.status
-                    )}`}
-                  >
-                    {getStatusIcon(payment.status)} {payment.status}
-                  </span>
-                  {payment.status !== 'paid' && (
-                    <button
-                      onClick={() => {
-                        setSelectedPayment(payment)
-                        setShowPaymentModal(true)
-                      }}
-                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-semibold inline-flex items-center gap-1 ${getStatusColor(
+                        payment.status
+                      )}`}
                     >
-                      Mark Paid
+                      {getStatusIcon(payment.status)} {payment.status}
+                    </span>
+                    <button
+                      onClick={() => handleOpenEdit(payment)}
+                      className="px-2 py-1 text-xs bg-slate-500 text-white rounded hover:bg-slate-600 transition"
+                    >
+                      Edit
                     </button>
-                  )}
-                  {payment.status === 'paid' && (
-                    <span className="text-xs text-slate-600">{payment.payment_method}</span>
-                  )}
+                    {payment.status !== 'paid' && (
+                      <button
+                        onClick={() => {
+                          setSelectedPayment(payment)
+                          setShowPaymentModal(true)
+                        }}
+                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                      >
+                        Mark Paid
+                      </button>
+                    )}
+                    {payment.status === 'paid' && (
+                      <span className="text-xs text-slate-600">{payment.payment_method}</span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))
@@ -257,6 +306,63 @@ export default function PaymentTracker({ clientId, clientName, monthlyFee = 998,
               </button>
               <button
                 onClick={() => setShowPaymentModal(false)}
+                className="flex-1 bg-slate-200 text-slate-900 py-2 rounded-lg font-medium hover:bg-slate-300 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PAYMENT MODAL */}
+      {showEditModal && selectedPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Edit Payment</h3>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-2">Amount</label>
+                <input
+                  type="number"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-2">Due Date</label>
+                <input
+                  type="date"
+                  value={editDueDate}
+                  onChange={(e) => setEditDueDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-2">Notes</label>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  rows="3"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveEdit}
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setShowEditModal(false)}
                 className="flex-1 bg-slate-200 text-slate-900 py-2 rounded-lg font-medium hover:bg-slate-300 transition"
               >
                 Cancel
