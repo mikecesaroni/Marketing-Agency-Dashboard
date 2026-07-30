@@ -7,6 +7,7 @@ import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
 import AddCreativeForm from '../components/AddCreativeForm'
 import ClientFilesSection from '../components/ClientFilesSection'
+import PaymentTracker from '../components/PaymentTracker'
 
 export default function ClientDetailPage() {
   const { clientId } = useParams()
@@ -348,6 +349,16 @@ export default function ClientDetailPage() {
         {/* CLIENT FILES */}
         <div className="mb-6 md:mb-8">
           <ClientFilesSection clientId={clientId} clientName={client.name} />
+        </div>
+
+        {/* PAYMENTS */}
+        <div className="mb-6 md:mb-8">
+          <PaymentTracker
+            clientId={clientId}
+            clientName={client.name}
+            monthlyFee={client.monthly_fee || 998}
+            setupFee={client.setup_fee || 0}
+          />
         </div>
 
         {/* MODALS */}
