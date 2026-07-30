@@ -6,6 +6,7 @@ import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
 import AddCreativeForm from '../components/AddCreativeForm'
+import ClientFilesSection from '../components/ClientFilesSection'
 
 export default function ClientDetailPage() {
   const { clientId } = useParams()
@@ -342,6 +343,11 @@ export default function ClientDetailPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* CLIENT FILES */}
+        <div className="mb-6 md:mb-8">
+          <ClientFilesSection clientId={clientId} clientName={client.name} />
         </div>
 
         {/* MODALS */}
