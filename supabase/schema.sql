@@ -74,6 +74,7 @@ begin
     (new.id, 'Meta pixel / conversions API installed'),
     (new.id, 'LSA profile verified, license/insurance uploaded'),
     (new.id, 'Kickoff call completed'),
+    (new.id, 'Collect owner video'),
     (new.id, 'Offer / promo confirmed'),
     (new.id, 'First creative batch produced (Higgsfield)'),
     (new.id, 'First Meta campaign live'),
