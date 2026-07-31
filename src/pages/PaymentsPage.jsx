@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
-import { calcMRR, fetchPayments, formatDate, isOverdue, money, today } from '../lib/queries'
+import { calcMRR, fetchPayments, isOverdue, money, today } from '../lib/queries'
 
 const FILTERS = ['paid', 'overdue', 'upcoming', 'all']
 const METHODS = ['card', 'ach', 'check', 'paypal', 'other']
@@ -119,27 +119,33 @@ export default function PaymentsPage() {
 
   const overdue = payments.filter(isOverdue)
 
-  // "Upcoming" means the next month's worth of bills, not every unpaid row on
-  // the books — otherwise a year of scheduled payments buries what's actually
-  // due soon.
-  const oneMonthOut = (() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() + 1)
-    return formatDate(d)
-  })()
-
   // Sorted here rather than leaning on the query's order clause, so every view
   // — the paid ledger especially — is chronological no matter what comes back.
   const filtered = useMemo(() => {
-    const list = payments.filter((p) => {
-      if (clientFilter !== 'all' && p.client_id !== clientFilter) return false
+    const inScope = payments.filter(
+      (p) => clientFilter === 'all' || p.client_id === clientFilter
+    )
+
+    // Upcoming answers "what is each client next going to owe me", so it shows
+    // exactly one row per client — their earliest unpaid payment — however far
+    // out it falls. Anything already past due belongs to the Overdue view.
+    if (filter === 'upcoming') {
+      const nextByClient = new Map()
+      for (const p of inScope) {
+        if (p.status === 'paid' || isOverdue(p)) continue
+        const current = nextByClient.get(p.client_id)
+        if (!current || p.due_date < current.due_date) nextByClient.set(p.client_id, p)
+      }
+      return [...nextByClient.values()].sort((a, b) => a.due_date.localeCompare(b.due_date))
+    }
+
+    const list = inScope.filter((p) => {
       if (filter === 'all') return true
       if (filter === 'paid') return p.status === 'paid'
-      if (filter === 'overdue') return isOverdue(p)
-      return p.status !== 'paid' && !isOverdue(p) && p.due_date <= oneMonthOut
+      return isOverdue(p)
     })
     return list.sort((a, b) => a.due_date.localeCompare(b.due_date))
-  }, [payments, filter, clientFilter, oneMonthOut])
+  }, [payments, filter, clientFilter])
 
   return (
     <Layout title="Payments & Revenue" subtitle={`${payments.length} payments tracked`}>
