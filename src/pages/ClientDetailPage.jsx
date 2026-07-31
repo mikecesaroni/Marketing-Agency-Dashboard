@@ -350,12 +350,7 @@ export default function ClientDetailPage() {
 
         {/* PAYMENTS */}
         <div className="mb-6 md:mb-8">
-          <PaymentTracker
-            clientId={clientId}
-            clientName={client.name}
-            monthlyFee={client.monthly_fee || 998}
-            setupFee={client.setup_fee || 0}
-          />
+          <PaymentTracker client={client} onClientUpdate={loadClientData} />
         </div>
 
         {/* MODALS */}

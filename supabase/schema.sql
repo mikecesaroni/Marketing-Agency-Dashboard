@@ -119,47 +119,11 @@ create trigger on_client_created
   for each row
   execute function create_onboarding_tasks();
 
--- AUTO-GENERATE PAYMENTS WHEN CLIENT GOES ACTIVE -----------
-create function create_payment_schedule()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  -- Only generate if status changes to 'active' and no payments exist yet
-  if new.status = 'active' and old.status != 'active' then
-    -- Check if payments already exist
-    if not exists (select 1 from payments where client_id = new.id) then
-      -- Set contract start date if not already set
-      if new.contract_start_date is null then
-        update clients set contract_start_date = current_date where id = new.id;
-      end if;
-
-      -- Create setup fee payment (if setup_fee > 0)
-      if new.setup_fee > 0 then
-        insert into payments (client_id, payment_type, amount, due_date, status)
-        values (new.id, 'setup', new.setup_fee, current_date, 'pending');
-      end if;
-
-      -- Create 12 monthly payments
-      insert into payments (client_id, payment_type, amount, due_date, status)
-      select
-        new.id,
-        'monthly',
-        new.monthly_fee,
-        current_date + (interval '1 month' * generate_series(1, 12)),
-        'pending';
-    end if;
-  end if;
-  return new;
-end;
-$$;
-
-create trigger on_client_activate
-  after update on clients
-  for each row
-  execute function create_payment_schedule();
+-- NOTE ON PAYMENTS -------------------------------------------------------
+-- Payment schedules are created from the app, not by a trigger. Open a client
+-- and use "Billing Setup" to enter the setup fee, the monthly amount, and the
+-- first payment date. Clients usually start paying before onboarding finishes,
+-- so nothing here waits for a status change.
 
 -- 9. SECURITY (Row Level Security) ---------------------------------------
 -- This locks every table down so only someone logged in (you) can read or

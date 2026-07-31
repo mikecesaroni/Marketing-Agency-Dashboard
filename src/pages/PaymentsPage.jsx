@@ -199,7 +199,7 @@ export default function PaymentsPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
           <p className="text-slate-500">
             {payments.length === 0
-              ? 'No payments yet. Payments generate automatically when a client is set to active.'
+              ? 'No payments yet. Open a client, then use Billing Setup to enter their setup fee and monthly amount.'
               : 'Nothing matches these filters.'}
           </p>
         </div>
