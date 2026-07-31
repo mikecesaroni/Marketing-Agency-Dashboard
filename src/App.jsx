@@ -1,13 +1,21 @@
 import { Routes, Route } from 'react-router-dom'
-import DashboardPage from './pages/DashboardPage'
+import HomePage from './pages/HomePage'
+import ClientsPage from './pages/ClientsPage'
 import ClientDetailPage from './pages/ClientDetailPage'
+import DeliverablesPage from './pages/DeliverablesPage'
+import PaymentsPage from './pages/PaymentsPage'
+import ReportsPage from './pages/ReportsPage'
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<DashboardPage />} />
-      <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/" element={<HomePage />} />
+      <Route path="/dashboard" element={<HomePage />} />
+      <Route path="/clients" element={<ClientsPage />} />
       <Route path="/client/:clientId" element={<ClientDetailPage />} />
+      <Route path="/deliverables" element={<DeliverablesPage />} />
+      <Route path="/payments" element={<PaymentsPage />} />
+      <Route path="/reports" element={<ReportsPage />} />
     </Routes>
   )
 }
