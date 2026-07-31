@@ -168,7 +168,19 @@ export default function ClientFilesSection({ clientId, clientName }) {
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm mb-4">
-          {error}
+          {/* The raw "Bucket not found" gives no hint that this is a one-time
+              setup step rather than a broken upload. */}
+          {error.toLowerCase().includes('bucket') ? (
+            <>
+              <p className="font-semibold mb-1">File storage isn't set up yet.</p>
+              <p>
+                Run <code className="bg-red-100 px-1 rounded">supabase/storage-bucket.sql</code>{' '}
+                in the Supabase SQL Editor to create the storage bucket, then try again.
+              </p>
+            </>
+          ) : (
+            error
+          )}
         </div>
       )}
 
