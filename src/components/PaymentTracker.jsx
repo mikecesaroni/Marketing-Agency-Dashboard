@@ -194,7 +194,9 @@ export default function PaymentTracker({ client, onClientUpdate }) {
   const totalPaid = payments
     .filter((p) => p.status === 'paid')
     .reduce((sum, p) => sum + p.amount, 0)
-  const contractValue = payments.reduce((sum, p) => sum + p.amount, 0)
+  // Falls back to the schedule itself for clients billed before monthly_fee
+  // was recorded on the client row.
+  const monthlyAmount = client.monthly_fee || monthlyPayments[0]?.amount || 0
   const nextDue = payments.find((p) => p.status !== 'paid')
 
   const PaymentRow = ({ payment, label }) => {
@@ -297,8 +299,8 @@ export default function PaymentTracker({ client, onClientUpdate }) {
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-xs text-blue-600 font-medium">Contract Value</p>
-              <p className="text-xl font-bold text-blue-900">{money(contractValue)}</p>
+              <p className="text-xs text-blue-600 font-medium">Monthly Payment</p>
+              <p className="text-xl font-bold text-blue-900">{money(monthlyAmount)}</p>
               <p className="text-xs text-blue-600 mt-1">
                 {monthlyPayments.length} months
                 {client.setup_fee > 0 && ` + ${money(client.setup_fee)} setup`}
