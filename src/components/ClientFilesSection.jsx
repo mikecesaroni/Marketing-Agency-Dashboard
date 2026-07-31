@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import Modal from './Modal'
 
 export default function ClientFilesSection({ clientId, clientName }) {
   const [files, setFiles] = useState([])
@@ -7,6 +8,8 @@ export default function ClientFilesSection({ clientId, clientName }) {
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [renaming, setRenaming] = useState(null)
+  const [newName, setNewName] = useState('')
 
   useEffect(() => {
     loadFiles()
@@ -110,6 +113,32 @@ export default function ClientFilesSection({ clientId, clientName }) {
     }
   }
 
+  // Only the display name changes — the stored object keeps its original path,
+  // so existing links stay valid and there's nothing to move in the bucket.
+  const handleRename = async () => {
+    const trimmed = newName.trim()
+    if (!trimmed) return
+
+    // Keep the extension if they typed a name without one, so the file still
+    // opens in the right app when downloaded.
+    const oldExt = renaming.file_name.includes('.')
+      ? renaming.file_name.split('.').pop()
+      : ''
+    const finalName =
+      oldExt && !trimmed.toLowerCase().endsWith(`.${oldExt.toLowerCase()}`)
+        ? `${trimmed}.${oldExt}`
+        : trimmed
+
+    const { error: err } = await supabase
+      .from('client_files')
+      .update({ file_name: finalName })
+      .eq('id', renaming.id)
+
+    if (err) return setError(err.message)
+    setRenaming(null)
+    await loadFiles()
+  }
+
   const getPublicUrl = (storagePath) => {
     const { data } = supabase.storage
       .from('client-files')
@@ -207,16 +236,67 @@ export default function ClientFilesSection({ clientId, clientName }) {
                   {new Date(file.date_uploaded).toLocaleDateString()}
                 </div>
               </div>
-              <button
-                onClick={() => handleDeleteFile(file.id, file.storage_path)}
-                className="ml-2 px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition"
-              >
-                Delete
-              </button>
+              <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    setNewName(file.file_name)
+                    setRenaming(file)
+                  }}
+                  className="px-3 py-1 text-xs text-slate-600 hover:bg-slate-200 rounded transition"
+                >
+                  Rename
+                </button>
+                <button
+                  onClick={() => handleDeleteFile(file.id, file.storage_path)}
+                  className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      <Modal isOpen={!!renaming} onClose={() => setRenaming(null)} title="Rename File">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleRename()
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">File name</label>
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              autoFocus
+              required
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              The file extension is kept automatically if you leave it off.
+            </p>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              type="submit"
+              className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setRenaming(null)}
+              className="flex-1 bg-slate-200 text-slate-900 py-2.5 rounded-lg font-medium hover:bg-slate-300 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }
