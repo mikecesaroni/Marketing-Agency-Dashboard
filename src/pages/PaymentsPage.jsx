@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
-import { fetchPayments, formatDate, isOverdue, money, today } from '../lib/queries'
+import { calcMRR, fetchPayments, formatDate, isOverdue, money, today } from '../lib/queries'
 
 const FILTERS = ['paid', 'overdue', 'upcoming', 'all']
 const METHODS = ['card', 'ach', 'check', 'paypal', 'other']
@@ -111,9 +111,7 @@ export default function PaymentsPage() {
 
   const thisMonth = today().slice(0, 7)
 
-  const mrr = clients
-    .filter((c) => c.status === 'active')
-    .reduce((sum, c) => sum + (c.monthly_fee || 0), 0)
+  const { mrr, count: billingCount } = calcMRR(clients, payments)
 
   const collectedThisMonth = payments
     .filter((p) => p.status === 'paid' && p.paid_date?.startsWith(thisMonth))
@@ -152,7 +150,12 @@ export default function PaymentsPage() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
-        <StatCard label="MRR" value={money(mrr)} sub="Active clients" tone="blue" />
+        <StatCard
+          label="MRR"
+          value={money(mrr)}
+          sub={`${billingCount} ${billingCount === 1 ? 'client' : 'clients'} billing`}
+          tone="blue"
+        />
         <StatCard
           label="Collected"
           value={money(collectedThisMonth)}

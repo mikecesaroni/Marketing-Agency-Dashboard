@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
-import { fetchDashboardData, formatDate, isOverdue, money, today } from '../lib/queries'
+import { calcMRR, fetchDashboardData, formatDate, isOverdue, money, today } from '../lib/queries'
 
 function StatCard({ label, value, sub, tone = 'slate' }) {
   const tones = {
@@ -87,7 +87,7 @@ export default function HomePage() {
   const activeClients = clients.filter((c) => c.status === 'active')
   const onboardingClients = clients.filter((c) => c.status === 'onboarding')
 
-  const mrr = activeClients.reduce((sum, c) => sum + (c.monthly_fee || 0), 0)
+  const { mrr, count: billingCount } = calcMRR(clients, payments)
   const collectedThisMonth = payments
     .filter((p) => p.status === 'paid' && p.paid_date?.startsWith(thisMonth))
     .reduce((sum, p) => sum + p.amount, 0)
@@ -183,7 +183,12 @@ export default function HomePage() {
           value={activeClients.length}
           sub={`${onboardingClients.length} onboarding`}
         />
-        <StatCard label="MRR" value={money(mrr)} sub="Recurring monthly" tone="blue" />
+        <StatCard
+          label="MRR"
+          value={money(mrr)}
+          sub={`${billingCount} ${billingCount === 1 ? 'client' : 'clients'} billing`}
+          tone="blue"
+        />
         <StatCard
           label="Collected"
           value={money(collectedThisMonth)}

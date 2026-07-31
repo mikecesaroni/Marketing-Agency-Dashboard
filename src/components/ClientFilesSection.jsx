@@ -6,6 +6,7 @@ export default function ClientFilesSection({ clientId, clientName }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [dragging, setDragging] = useState(false)
 
   useEffect(() => {
     loadFiles()
@@ -28,40 +29,66 @@ export default function ClientFilesSection({ clientId, clientName }) {
     }
   }
 
-  const handleFileUpload = async (e) => {
-    const selectedFile = e.target.files?.[0]
-    if (!selectedFile) return
+  const uploadFiles = async (fileList) => {
+    const selected = Array.from(fileList || [])
+    if (selected.length === 0) return
 
     setUploading(true)
     setError('')
 
     try {
-      const fileExt = selectedFile.name.split('.').pop()
-      const fileName = `${clientId}/${Date.now()}.${fileExt}`
+      for (const file of selected) {
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${clientId}/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}.${fileExt}`
 
-      const { error: uploadErr } = await supabase.storage
-        .from('client-files')
-        .upload(fileName, selectedFile)
+        const { error: uploadErr } = await supabase.storage
+          .from('client-files')
+          .upload(fileName, file)
 
-      if (uploadErr) throw uploadErr
+        if (uploadErr) throw uploadErr
 
-      const { error: dbErr } = await supabase.from('client_files').insert({
-        client_id: clientId,
-        file_name: selectedFile.name,
-        file_type: selectedFile.type || 'file',
-        file_size: selectedFile.size,
-        storage_path: fileName,
-      })
+        const { error: dbErr } = await supabase.from('client_files').insert({
+          client_id: clientId,
+          file_name: file.name,
+          file_type: file.type || 'file',
+          file_size: file.size,
+          storage_path: fileName,
+        })
 
-      if (dbErr) throw dbErr
+        if (dbErr) throw dbErr
+      }
 
       await loadFiles()
-      e.target.value = ''
     } catch (err) {
       setError(err.message)
     } finally {
       setUploading(false)
     }
+  }
+
+  const handleFileUpload = async (e) => {
+    await uploadFiles(e.target.files)
+    e.target.value = ''
+  }
+
+  // Without preventDefault on dragOver the browser refuses the drop and just
+  // navigates to the file instead.
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    setDragging(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    setDragging(false)
+  }
+
+  const handleDrop = async (e) => {
+    e.preventDefault()
+    setDragging(false)
+    await uploadFiles(e.dataTransfer.files)
   }
 
   const handleDeleteFile = async (fileId, storagePath) => {
@@ -107,20 +134,35 @@ export default function ClientFilesSection({ clientId, clientName }) {
       <h2 className="text-xl font-bold text-slate-900 mb-4">Client Files</h2>
 
       <div className="mb-6">
-        <label className="flex items-center justify-center w-full p-4 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-slate-400 transition">
-          <div className="text-center">
+        <label
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`flex items-center justify-center w-full p-6 border-2 border-dashed rounded-lg cursor-pointer transition ${
+            dragging
+              ? 'border-blue-500 bg-blue-50'
+              : 'border-slate-300 hover:border-slate-400'
+          }`}
+        >
+          <div className="text-center pointer-events-none">
             <div className="text-slate-600 mb-2">📁 Upload Logo or Files</div>
-            <input
-              type="file"
-              onChange={handleFileUpload}
-              disabled={uploading}
-              className="hidden"
-              accept="image/*,.pdf,.doc,.docx"
-            />
             <span className="text-xs text-slate-500">
-              {uploading ? 'Uploading...' : 'Click to upload or drag and drop'}
+              {uploading
+                ? 'Uploading...'
+                : dragging
+                  ? 'Drop to upload'
+                  : 'Click to upload or drag and drop'}
             </span>
           </div>
+          <input
+            type="file"
+            multiple
+            onChange={handleFileUpload}
+            disabled={uploading}
+            className="hidden"
+            accept="image/*,.pdf,.doc,.docx"
+          />
         </label>
       </div>
 

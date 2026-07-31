@@ -43,6 +43,21 @@ export function money(n) {
   })}`
 }
 
+// Clients start paying before onboarding finishes, so MRR can't wait on the
+// status reaching 'active'. It counts anyone who has a monthly schedule and
+// hasn't churned — the schedule existing is what proves they're billing, since
+// monthly_fee carries a column default and is set on every client row.
+export function calcMRR(clients, payments) {
+  const scheduled = new Set(
+    payments.filter((p) => p.payment_type === 'monthly').map((p) => p.client_id)
+  )
+  const billing = clients.filter((c) => scheduled.has(c.id) && c.status !== 'churned')
+  return {
+    mrr: billing.reduce((sum, c) => sum + (c.monthly_fee || 0), 0),
+    count: billing.length,
+  }
+}
+
 // A payment counts as overdue when it is unpaid and its due date has passed,
 // regardless of what the stored status column says — nothing sweeps the table.
 export function isOverdue(payment) {
