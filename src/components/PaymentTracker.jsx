@@ -5,6 +5,10 @@ import { formatDate, isOverdue, money, today } from '../lib/queries'
 
 const METHODS = ['card', 'ach', 'check', 'paypal', 'other']
 
+// Every client is on the same 12-month agreement, so the schedule length isn't
+// something worth asking about each time.
+const MONTHS = 12
+
 const inputClass =
   'w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
 
@@ -28,10 +32,9 @@ export default function PaymentTracker({ client, onClientUpdate }) {
   const [showBilling, setShowBilling] = useState(false)
   const [billing, setBilling] = useState({
     setupFee: '',
-    setupDueDate: today(),
+    setupPaid: false,
     monthlyFee: '',
     firstPaymentDate: today(),
-    months: '12',
   })
   const [saving, setSaving] = useState(false)
 
@@ -61,11 +64,10 @@ export default function PaymentTracker({ client, onClientUpdate }) {
   const openBilling = () => {
     setBilling({
       setupFee: client.setup_fee ? String(client.setup_fee) : '',
-      setupDueDate: setupPayment?.due_date || client.contract_start_date || today(),
+      setupPaid: setupPayment?.status === 'paid',
       monthlyFee: client.monthly_fee ? String(client.monthly_fee) : '998',
       firstPaymentDate:
         monthlyPayments[0]?.due_date || client.contract_start_date || today(),
-      months: String(Math.max(monthlyPayments.length, 12)),
     })
     setShowBilling(true)
   }
@@ -78,7 +80,6 @@ export default function PaymentTracker({ client, onClientUpdate }) {
 
     const setupFee = parseFloat(billing.setupFee) || 0
     const monthlyFee = parseFloat(billing.monthlyFee) || 0
-    const months = parseInt(billing.months, 10) || 0
 
     try {
       const { error: delErr } = await supabase
@@ -100,11 +101,12 @@ export default function PaymentTracker({ client, onClientUpdate }) {
           client_id: clientId,
           payment_type: 'setup',
           amount: setupFee,
-          due_date: billing.setupDueDate,
-          status: 'pending',
+          due_date: today(),
+          status: billing.setupPaid ? 'paid' : 'pending',
+          paid_date: billing.setupPaid ? today() : null,
         })
       }
-      for (let i = 0; i < months; i++) {
+      for (let i = 0; i < MONTHS; i++) {
         const dueDate = addMonths(billing.firstPaymentDate, i)
         if (paidMonthlyDates.has(dueDate)) continue
         rows.push({
@@ -372,14 +374,28 @@ export default function PaymentTracker({ client, onClientUpdate }) {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Setup fee due
+                Paid?
               </label>
-              <input
-                type="date"
-                value={billing.setupDueDate}
-                onChange={(e) => setBilling((b) => ({ ...b, setupDueDate: e.target.value }))}
-                className={inputClass}
-              />
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: true, label: 'Yes' },
+                  { value: false, label: 'No' },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => setBilling((b) => ({ ...b, setupPaid: opt.value }))}
+                    className={`py-2.5 rounded-lg text-sm font-medium border transition ${
+                      billing.setupPaid === opt.value
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Has it been collected already?</p>
             </div>
           </div>
 
@@ -413,22 +429,10 @@ export default function PaymentTracker({ client, onClientUpdate }) {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Number of months
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="60"
-              value={billing.months}
-              onChange={(e) => setBilling((b) => ({ ...b, months: e.target.value }))}
-              className={inputClass}
-            />
-            <p className="text-xs text-slate-500 mt-1">
-              Bills on the same day each month, starting from the first payment date.
-            </p>
-          </div>
+          <p className="text-xs text-slate-500">
+            Bills the same day each month for {MONTHS} months, starting from the first payment
+            date.
+          </p>
 
           {payments.some((p) => p.status === 'paid') && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
