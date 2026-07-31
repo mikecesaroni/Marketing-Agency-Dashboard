@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
-import { fetchPayments, isOverdue, money, today } from '../lib/queries'
+import { fetchPayments, formatDate, isOverdue, money, today } from '../lib/queries'
 
-const FILTERS = ['overdue', 'upcoming', 'paid', 'all']
+const FILTERS = ['paid', 'overdue', 'upcoming', 'all']
 const METHODS = ['card', 'ach', 'check', 'paypal', 'other']
 
 const inputClass =
@@ -32,7 +32,7 @@ export default function PaymentsPage() {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filter, setFilter] = useState('upcoming')
+  const [filter, setFilter] = useState('paid')
   const [clientFilter, setClientFilter] = useState('all')
 
   const [markingPaid, setMarkingPaid] = useState(null)
@@ -120,23 +120,28 @@ export default function PaymentsPage() {
     .reduce((sum, p) => sum + p.amount, 0)
 
   const overdue = payments.filter(isOverdue)
-  const outstanding = payments
-    .filter((p) => p.status !== 'paid')
-    .reduce((sum, p) => sum + p.amount, 0)
 
+  // "Upcoming" means the next month's worth of bills, not every unpaid row on
+  // the books — otherwise a year of scheduled payments buries what's actually
+  // due soon.
+  const oneMonthOut = (() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() + 1)
+    return formatDate(d)
+  })()
+
+  // Sorted here rather than leaning on the query's order clause, so every view
+  // — the paid ledger especially — is chronological no matter what comes back.
   const filtered = useMemo(() => {
     const list = payments.filter((p) => {
       if (clientFilter !== 'all' && p.client_id !== clientFilter) return false
       if (filter === 'all') return true
       if (filter === 'paid') return p.status === 'paid'
       if (filter === 'overdue') return isOverdue(p)
-      return p.status !== 'paid' && !isOverdue(p)
+      return p.status !== 'paid' && !isOverdue(p) && p.due_date <= oneMonthOut
     })
-    // Paid payments read best newest-first; everything else is a to-do list.
-    return filter === 'paid'
-      ? [...list].sort((a, b) => (b.paid_date || '').localeCompare(a.paid_date || ''))
-      : list
-  }, [payments, filter, clientFilter])
+    return list.sort((a, b) => a.due_date.localeCompare(b.due_date))
+  }, [payments, filter, clientFilter, oneMonthOut])
 
   return (
     <Layout title="Payments & Revenue" subtitle={`${payments.length} payments tracked`}>
@@ -146,7 +151,7 @@ export default function PaymentsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
         <StatCard label="MRR" value={money(mrr)} sub="Active clients" tone="blue" />
         <StatCard
           label="Collected"
@@ -154,7 +159,6 @@ export default function PaymentsPage() {
           sub="This month"
           tone="green"
         />
-        <StatCard label="Outstanding" value={money(outstanding)} sub="All unpaid" />
         <StatCard
           label="Overdue"
           value={money(overdue.reduce((s, p) => s + p.amount, 0))}
