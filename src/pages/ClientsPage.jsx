@@ -14,6 +14,24 @@ const STATUS_STYLES = {
   churned: 'bg-slate-200 text-slate-700',
 }
 
+const SETUP_FEE_STYLES = {
+  paid: { label: '✓ Paid', className: 'bg-green-100 text-green-800' },
+  unpaid: { label: 'Unpaid', className: 'bg-amber-100 text-amber-800' },
+  overdue: { label: 'Overdue', className: 'bg-red-100 text-red-800' },
+}
+
+function SetupFeeBadge({ status, amount }) {
+  if (!status) return <span className="text-slate-400">—</span>
+
+  const { label, className } = SETUP_FEE_STYLES[status]
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${className}`}>
+      {label}
+      {amount ? ` · ${money(amount)}` : ''}
+    </span>
+  )
+}
+
 function StatusBadge({ status }) {
   return (
     <span
@@ -138,10 +156,19 @@ export default function ClientsPage() {
                   </div>
                   <StatusBadge status={client.status} />
                 </div>
-                <p className="text-xs text-slate-500 mb-3">
+                <p className="text-xs text-slate-500 mb-2">
                   {[client.industry, client.market].filter(Boolean).join(' · ') ||
                     'No intake filled in yet'}
                 </p>
+                {client.setupFeeStatus && (
+                  <p className="mb-3">
+                    <span className="text-xs text-slate-500 mr-1.5">Setup fee:</span>
+                    <SetupFeeBadge
+                      status={client.setupFeeStatus}
+                      amount={client.setupFeeAmount}
+                    />
+                  </p>
+                )}
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
                     <p className="font-semibold text-slate-900">
@@ -177,6 +204,7 @@ export default function ClientsPage() {
                     <th className="px-4 py-3 text-left font-semibold">Industry</th>
                     <th className="px-4 py-3 text-left font-semibold">Market</th>
                     <th className="px-4 py-3 text-left font-semibold">Status</th>
+                    <th className="px-4 py-3 text-left font-semibold">Setup Fee</th>
                     <th className="px-4 py-3 text-right font-semibold">Meta $/day</th>
                     <th className="px-4 py-3 text-right font-semibold">Wk Spend</th>
                     <th className="px-4 py-3 text-right font-semibold">Wk Leads</th>
@@ -204,6 +232,12 @@ export default function ClientsPage() {
                       <td className="px-4 py-3 text-slate-600">{client.market || '—'}</td>
                       <td className="px-4 py-3">
                         <StatusBadge status={client.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <SetupFeeBadge
+                          status={client.setupFeeStatus}
+                          amount={client.setupFeeAmount}
+                        />
                       </td>
                       <td className="px-4 py-3 text-right text-slate-600">
                         {money(client.meta_budget_per_day)}

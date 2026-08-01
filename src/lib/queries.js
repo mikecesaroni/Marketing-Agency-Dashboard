@@ -68,14 +68,23 @@ export function isOverdue(payment) {
 export async function fetchClientsWithKPIs() {
   const thisMonday = formatDate(getMonday(new Date()))
 
-  const [clientsRes, kpisRes, intakeRes] = await Promise.all([
+  const [clientsRes, kpisRes, intakeRes, setupRes] = await Promise.all([
     supabase.from('clients').select('*').order('date_added', { ascending: false }),
     supabase.from('weekly_kpis').select('*').eq('week_of', thisMonday),
     supabase.from('onboarding_intake').select('client_id, owner_name, industry_trade, service_area'),
+    supabase
+      .from('payments')
+      .select('client_id, amount, status, due_date')
+      .eq('payment_type', 'setup'),
   ])
 
   if (clientsRes.error) throw clientsRes.error
   if (kpisRes.error) throw kpisRes.error
+
+  const setupByClient = {}
+  for (const row of setupRes.data || []) {
+    setupByClient[row.client_id] = row
+  }
 
   // Industry and market are captured on the intake call, so the intake record
   // is the source of truth — the columns on `clients` are only a fallback for
@@ -104,7 +113,20 @@ export async function fetchClientsWithKPIs() {
 
     const intake = intakeByClient[client.id]
 
+    // No setup row means either no billing set up yet or a client with no setup
+    // fee at all — both read as "nothing owed", so neither shows a status.
+    const setup = setupByClient[client.id]
+    const setupFeeStatus = !setup
+      ? null
+      : setup.status === 'paid'
+        ? 'paid'
+        : isOverdue(setup)
+          ? 'overdue'
+          : 'unpaid'
+
     return {
+      setupFeeStatus,
+      setupFeeAmount: setup?.amount ?? null,
       ...client,
       industry: intake?.industry_trade || client.industry || '',
       market: intake?.service_area || client.market || '',
