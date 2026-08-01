@@ -68,13 +68,22 @@ export function isOverdue(payment) {
 export async function fetchClientsWithKPIs() {
   const thisMonday = formatDate(getMonday(new Date()))
 
-  const [clientsRes, kpisRes] = await Promise.all([
+  const [clientsRes, kpisRes, intakeRes] = await Promise.all([
     supabase.from('clients').select('*').order('date_added', { ascending: false }),
     supabase.from('weekly_kpis').select('*').eq('week_of', thisMonday),
+    supabase.from('onboarding_intake').select('client_id, owner_name, industry_trade, service_area'),
   ])
 
   if (clientsRes.error) throw clientsRes.error
   if (kpisRes.error) throw kpisRes.error
+
+  // Industry and market are captured on the intake call, so the intake record
+  // is the source of truth — the columns on `clients` are only a fallback for
+  // clients whose intake hasn't been filled in yet.
+  const intakeByClient = {}
+  for (const row of intakeRes.data || []) {
+    intakeByClient[row.client_id] = row
+  }
 
   const kpisByClient = {}
   for (const kpi of kpisRes.data || []) {
@@ -93,8 +102,13 @@ export async function fetchClientsWithKPIs() {
     const totalSpend = metaSpend + lsaSpend
     const totalLeads = metaLeads + lsaLeads
 
+    const intake = intakeByClient[client.id]
+
     return {
       ...client,
+      industry: intake?.industry_trade || client.industry || '',
+      market: intake?.service_area || client.market || '',
+      ownerName: intake?.owner_name || '',
       thisWeekMetaSpend: metaSpend,
       thisWeekMetaLeads: metaLeads,
       thisWeekLsaSpend: lsaSpend,

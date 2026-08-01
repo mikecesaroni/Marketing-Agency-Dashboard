@@ -53,7 +53,9 @@ export default function ClientsPage() {
     return clients.filter((c) => {
       if (statusFilter !== 'all' && c.status !== statusFilter) return false
       if (!term) return true
-      return [c.name, c.industry, c.market].some((f) => f?.toLowerCase().includes(term))
+      return [c.name, c.ownerName, c.industry, c.market].some((f) =>
+        f?.toLowerCase().includes(term)
+      )
     })
   }, [clients, search, statusFilter])
 
@@ -83,7 +85,7 @@ export default function ClientsPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search name, industry, or market..."
+          placeholder="Search business, client, industry, or market..."
           className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">
@@ -127,12 +129,18 @@ export default function ClientsPage() {
                     : 'bg-white border-slate-200'
                 }`}
               >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <p className="font-semibold text-slate-900">{client.name}</p>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 truncate">{client.name}</p>
+                    {client.ownerName && (
+                      <p className="text-xs text-slate-600">{client.ownerName}</p>
+                    )}
+                  </div>
                   <StatusBadge status={client.status} />
                 </div>
                 <p className="text-xs text-slate-500 mb-3">
-                  {[client.industry, client.market].filter(Boolean).join(' · ') || 'No details yet'}
+                  {[client.industry, client.market].filter(Boolean).join(' · ') ||
+                    'No intake filled in yet'}
                 </p>
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
@@ -164,12 +172,12 @@ export default function ClientsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-slate-900">
-                    <th className="px-4 py-3 text-left font-semibold">Name</th>
+                    <th className="px-4 py-3 text-left font-semibold">Business</th>
+                    <th className="px-4 py-3 text-left font-semibold">Client</th>
                     <th className="px-4 py-3 text-left font-semibold">Industry</th>
                     <th className="px-4 py-3 text-left font-semibold">Market</th>
                     <th className="px-4 py-3 text-left font-semibold">Status</th>
                     <th className="px-4 py-3 text-right font-semibold">Meta $/day</th>
-                    <th className="px-4 py-3 text-right font-semibold">LSA $/day</th>
                     <th className="px-4 py-3 text-right font-semibold">Wk Spend</th>
                     <th className="px-4 py-3 text-right font-semibold">Wk Leads</th>
                     <th className="px-4 py-3 text-right font-semibold">Cost/Lead</th>
@@ -191,6 +199,7 @@ export default function ClientsPage() {
                           {client.name}
                         </Link>
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{client.ownerName || '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{client.industry || '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{client.market || '—'}</td>
                       <td className="px-4 py-3">
@@ -198,9 +207,6 @@ export default function ClientsPage() {
                       </td>
                       <td className="px-4 py-3 text-right text-slate-600">
                         {money(client.meta_budget_per_day)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-600">
-                        {money(client.lsa_budget_per_day)}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
                         {money(client.thisWeekTotalSpend)}

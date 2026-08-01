@@ -124,12 +124,15 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
         if (error) throw error
       }
 
-      // Auto-populate client budgets from intake
-      if (cleanData.meta_ad_budget_per_day || cleanData.lsa_ad_budget_per_day) {
-        const clientUpdate = {}
-        if (cleanData.meta_ad_budget_per_day) clientUpdate.meta_budget_per_day = cleanData.meta_ad_budget_per_day
-        if (cleanData.lsa_ad_budget_per_day) clientUpdate.lsa_budget_per_day = cleanData.lsa_ad_budget_per_day
+      // Copy the fields the rest of the app reads off the client record, so
+      // the dashboard and reports match what was captured on the call.
+      const clientUpdate = {}
+      if (cleanData.meta_ad_budget_per_day) clientUpdate.meta_budget_per_day = cleanData.meta_ad_budget_per_day
+      if (cleanData.lsa_ad_budget_per_day) clientUpdate.lsa_budget_per_day = cleanData.lsa_ad_budget_per_day
+      if (cleanData.industry_trade) clientUpdate.industry = cleanData.industry_trade
+      if (cleanData.service_area) clientUpdate.market = cleanData.service_area
 
+      if (Object.keys(clientUpdate).length > 0) {
         await supabase
           .from('clients')
           .update(clientUpdate)
