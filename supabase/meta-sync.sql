@@ -1,0 +1,62 @@
+-- Meta Ads weekly sync — database side.
+-- Run this in the Supabase SQL Editor. Steps 1 and 2 first; step 4 only after
+-- the Edge Function is deployed.
+
+-- 1. Where each client's Meta ad account ID lives. Numeric ID only, no "act_"
+--    prefix — the function adds that itself.
+alter table clients add column if not exists meta_ad_account_id text;
+
+-- 2. Stops a re-run from duplicating a week.
+--
+--    IMPORTANT: this fails if you already have two rows for the same client,
+--    week and channel — likely if you logged the same week twice by hand. Check
+--    first:
+--
+--      select client_id, week_of, channel, count(*)
+--      from weekly_kpis
+--      group by 1, 2, 3
+--      having count(*) > 1;
+--
+--    If that returns rows, collapse them before creating the index:
+--
+--      delete from weekly_kpis a using weekly_kpis b
+--      where a.id > b.id
+--        and a.client_id = b.client_id
+--        and a.week_of = b.week_of
+--        and a.channel = b.channel;
+--
+--    (That keeps the earliest row of each duplicate set and drops the others —
+--    read the select output before running it.)
+
+create unique index if not exists weekly_kpis_client_week_channel_idx
+  on weekly_kpis (client_id, week_of, channel);
+
+-- 3. Extensions needed to call the function on a schedule from Postgres.
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+-- 4. The weekly schedule. RUN THIS ONLY AFTER deploying the Edge Function.
+--
+--    Replace <PROJECT_REF> with your project ref (the subdomain of your
+--    Supabase URL) and <SERVICE_ROLE_KEY> with the service role key from
+--    Settings -> API. That key is a full-access credential — it is safe here
+--    because this runs inside your database, but never put it in the app.
+--
+--    Fires 08:00 UTC every Monday, just after the week it reports on closes.
+
+-- select cron.unschedule('sync-meta-kpis');  -- run first if rescheduling
+
+-- select cron.schedule(
+--   'sync-meta-kpis',
+--   '0 8 * * 1',
+--   $$
+--   select net.http_post(
+--     url := 'https://<PROJECT_REF>.supabase.co/functions/v1/sync-meta-kpis',
+--     headers := '{"Content-Type":"application/json","Authorization":"Bearer <SERVICE_ROLE_KEY>"}'::jsonb,
+--     body := '{}'::jsonb
+--   );
+--   $$
+-- );
+
+-- Check what's scheduled:      select * from cron.job;
+-- Check recent runs:           select * from cron.job_run_details order by start_time desc limit 10;

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
+import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
@@ -336,6 +337,15 @@ export default function ClientDetailPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* META ADS SYNC */}
+        <div className="mt-6 md:mt-8">
+          <MetaAdAccountCard
+            client={client}
+            weeklyKPIs={weeklyKPIs}
+            onUpdate={loadClientData}
+          />
         </div>
 
         {/* DELIVERABLES */}
