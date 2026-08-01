@@ -109,13 +109,12 @@ export default function PaymentsPage() {
     loadData()
   }
 
-  const thisMonth = today().slice(0, 7)
-
   const { mrr, count: billingCount } = calcMRR(clients, payments)
 
-  const collectedThisMonth = payments
-    .filter((p) => p.status === 'paid' && p.paid_date?.startsWith(thisMonth))
-    .reduce((sum, p) => sum + p.amount, 0)
+  // Deliberately all-time. Scoping this to the current calendar month meant it
+  // reset to $0 every 1st, hiding money collected days earlier.
+  const paidPayments = payments.filter((p) => p.status === 'paid')
+  const totalCollected = paidPayments.reduce((sum, p) => sum + p.amount, 0)
 
   const overdue = payments.filter(isOverdue)
 
@@ -164,8 +163,8 @@ export default function PaymentsPage() {
         />
         <StatCard
           label="Collected"
-          value={money(collectedThisMonth)}
-          sub="This month"
+          value={money(totalCollected)}
+          sub={`${paidPayments.length} ${paidPayments.length === 1 ? 'payment' : 'payments'} all time`}
           tone="green"
         />
         <StatCard

@@ -82,15 +82,16 @@ export default function HomePage() {
 
   const { clients, payments, deliverables } = data
   const now = today()
-  const thisMonth = now.slice(0, 7)
 
   const activeClients = clients.filter((c) => c.status === 'active')
   const onboardingClients = clients.filter((c) => c.status === 'onboarding')
 
   const { mrr, count: billingCount } = calcMRR(clients, payments)
-  const collectedThisMonth = payments
-    .filter((p) => p.status === 'paid' && p.paid_date?.startsWith(thisMonth))
-    .reduce((sum, p) => sum + p.amount, 0)
+
+  // All-time, matching the Payments tab — a month-scoped total read $0 on the
+  // 1st even when money had just come in.
+  const paidPayments = payments.filter((p) => p.status === 'paid')
+  const totalCollected = paidPayments.reduce((sum, p) => sum + p.amount, 0)
 
   const overduePayments = payments.filter(isOverdue)
   const leadsThisWeek = clients.reduce((sum, c) => sum + c.thisWeekTotalLeads, 0)
@@ -191,8 +192,8 @@ export default function HomePage() {
         />
         <StatCard
           label="Collected"
-          value={money(collectedThisMonth)}
-          sub="This month"
+          value={money(totalCollected)}
+          sub={`${paidPayments.length} ${paidPayments.length === 1 ? 'payment' : 'payments'} all time`}
           tone="green"
         />
         <StatCard
