@@ -50,13 +50,18 @@ export default function Layout({ title, subtitle, actions, children }) {
           </div>
         </header>
 
-        <main className="px-4 md:px-8 py-5 md:py-8 pb-24 md:pb-8">
+        <main className="px-4 md:px-8 py-5 md:py-8 pb-28 md:pb-8">
           <div className="max-w-7xl mx-auto">{children}</div>
         </main>
       </div>
 
       {/* MOBILE BOTTOM TABS */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex z-40">
+      {/* The inset keeps the tabs above the iPhone home indicator when this is
+          launched from the home screen; it resolves to 0 in a normal browser. */}
+      <nav
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex z-40"
+      >
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}

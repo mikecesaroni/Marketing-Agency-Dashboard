@@ -9,4 +9,18 @@ body,
 body {
   margin: 0;
   background-color: #f8fafc;
+  /* Stops iOS inflating text in landscape, and drops the grey flash on tap —
+     both of which give away that a home-screen app is a web page. */
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safari zooms the page in when a focused input is under 16px. Every form here
+   uses text-sm, so without this, tapping any field jumps the layout. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
