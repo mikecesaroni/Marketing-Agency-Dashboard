@@ -13,11 +13,19 @@ create table clients (
     check (status in ('active', 'paused', 'onboarding', 'churned')),
   meta_ads_active boolean not null default false,
   lsa_active boolean not null default false,
+  meta_budget_per_day numeric default 0,
+  lsa_budget_per_day numeric default 0,
+  meta_ad_account_id text,
   setup_fee numeric default 0,
   monthly_fee numeric default 998,
   contract_start_date date,
   date_added date not null default current_date
 );
+
+-- For projects created before these columns existed. No-ops on a fresh run.
+alter table clients add column if not exists meta_budget_per_day numeric default 0;
+alter table clients add column if not exists lsa_budget_per_day numeric default 0;
+alter table clients add column if not exists meta_ad_account_id text;
 
 -- 2. ONBOARDING TASKS ----------------------------------------------------
 create table onboarding_tasks (
