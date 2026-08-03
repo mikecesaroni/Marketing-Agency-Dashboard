@@ -12,6 +12,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
     website: '',
     industry_trade: '',
     service_area: client.market || '',
+    target_cities: '',
     years_in_business: '',
 
     services_offered: '',
@@ -220,6 +221,10 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
               <label className="text-xs font-medium text-slate-600 block mb-1">Years in Business</label>
               <input type="text" name="years_in_business" placeholder="e.g. 5" value={formData.years_in_business} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" />
             </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Cities to Target in Ads</label>
+            <textarea name="target_cities" placeholder="Cities, towns or ZIPs to run ads in — plus any to exclude" value={formData.target_cities} onChange={handleChange} rows="2" className="w-full px-2 py-1 border rounded text-sm" onInput={autoExpandTextarea} />
           </div>
         </div>
       </div>

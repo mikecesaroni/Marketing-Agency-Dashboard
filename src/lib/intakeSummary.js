@@ -14,6 +14,7 @@ export const INTAKE_SECTIONS = [
       ['industry_trade', 'Industry / Trade'],
       ['service_area', 'Service Area'],
       ['years_in_business', 'Years in Business'],
+      ['target_cities', 'Cities to Target in Ads'],
     ],
   },
   {
