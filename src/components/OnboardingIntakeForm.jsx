@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { copyText, formatIntake } from '../lib/intakeSummary'
 
 export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
   const [formData, setFormData] = useState({
@@ -61,6 +62,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [existingIntake, setExistingIntake] = useState(null)
+  const [copied, setCopied] = useState(null)
 
   useEffect(() => {
     loadExistingIntake()
@@ -148,8 +150,35 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
     }
   }
 
+  // Copies what's on screen rather than what's saved, so it works mid-call
+  // before anyone has hit Save.
+  const handleCopyAll = async () => {
+    const ok = await copyText(formatIntake(formData, client.name))
+    setCopied(ok ? 'ok' : 'fail')
+    setTimeout(() => setCopied(null), 2000)
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+      <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3">
+        <p className="text-xs text-slate-600">
+          Copy everything filled in so far as plain text.
+        </p>
+        <button
+          type="button"
+          onClick={handleCopyAll}
+          className={`px-3 py-2 rounded-lg text-sm font-medium transition flex-shrink-0 ${
+            copied === 'ok'
+              ? 'bg-green-600 text-white'
+              : copied === 'fail'
+                ? 'bg-red-100 text-red-700'
+                : 'bg-slate-900 text-white hover:bg-slate-800'
+          }`}
+        >
+          {copied === 'ok' ? '✓ Copied' : copied === 'fail' ? 'Copy failed' : 'Copy All'}
+        </button>
+      </div>
+
       {/* BUSINESS */}
       <div className="border-b pb-4">
         <h3 className="font-bold text-slate-900 mb-3">BUSINESS</h3>
