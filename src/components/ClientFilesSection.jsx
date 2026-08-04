@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import JSZip from 'jszip'
 import { supabase } from '../lib/supabaseClient'
 import Modal from './Modal'
 
@@ -10,6 +11,7 @@ export default function ClientFilesSection({ clientId, clientName }) {
   const [dragging, setDragging] = useState(false)
   const [renaming, setRenaming] = useState(null)
   const [newName, setNewName] = useState('')
+  const [zipping, setZipping] = useState('')
 
   useEffect(() => {
     loadFiles()
@@ -139,6 +141,72 @@ export default function ClientFilesSection({ clientId, clientName }) {
     await loadFiles()
   }
 
+  // Zipped in the browser rather than firing one download per file: phones and
+  // Safari block or mangle rapid multi-file downloads, and a single archive is
+  // what you actually want to hand over anyway.
+  const handleDownloadAll = async () => {
+    setError('')
+    setZipping('Preparing...')
+
+    try {
+      const zip = new JSZip()
+      const used = new Set()
+      const failed = []
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        setZipping(`Downloading ${i + 1} of ${files.length}...`)
+
+        try {
+          const res = await fetch(getPublicUrl(file.storage_path))
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+          // Two files can share a display name after renaming, and a zip with
+          // duplicate entries silently loses all but one.
+          let name = file.file_name
+          if (used.has(name)) {
+            const dot = name.lastIndexOf('.')
+            const stem = dot > 0 ? name.slice(0, dot) : name
+            const ext = dot > 0 ? name.slice(dot) : ''
+            let n = 2
+            while (used.has(`${stem} (${n})${ext}`)) n++
+            name = `${stem} (${n})${ext}`
+          }
+          used.add(name)
+
+          zip.file(name, await res.blob())
+        } catch {
+          failed.push(file.file_name)
+        }
+      }
+
+      if (used.size === 0) {
+        setError('None of the files could be downloaded.')
+        return
+      }
+
+      setZipping('Building zip...')
+      const blob = await zip.generateAsync({ type: 'blob' })
+
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${(clientName || 'client').replace(/[^\w\s-]/g, '')} files.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      if (failed.length > 0) {
+        setError(`Skipped ${failed.length} file(s) that failed to download: ${failed.join(', ')}`)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setZipping('')
+    }
+  }
+
   const getPublicUrl = (storagePath) => {
     const { data } = supabase.storage
       .from('client-files')
@@ -160,7 +228,23 @@ export default function ClientFilesSection({ clientId, clientName }) {
 
   return (
     <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6">
-      <h2 className="text-xl font-bold text-slate-900 mb-4">Client Files</h2>
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
+        <h2 className="text-xl font-bold text-slate-900">
+          Client Files
+          {files.length > 0 && (
+            <span className="text-sm font-normal text-slate-500"> ({files.length})</span>
+          )}
+        </h2>
+        {files.length > 0 && (
+          <button
+            onClick={handleDownloadAll}
+            disabled={!!zipping}
+            className="w-full md:w-auto px-3 py-2 md:py-1.5 text-sm bg-slate-200 text-slate-800 rounded-lg font-medium hover:bg-slate-300 disabled:opacity-60 transition"
+          >
+            {zipping || `Download All (${files.length})`}
+          </button>
+        )}
+      </div>
 
       <div className="mb-6">
         <label

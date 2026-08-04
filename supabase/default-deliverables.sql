@@ -32,3 +32,27 @@ create trigger on_client_created_deliverables
 -- Due dates are deliberately left empty. Inventing deadlines here would mark
 -- these red on the dashboard the moment they passed, for dates nobody chose.
 -- Set them per client from the Deliverables tab.
+
+-- BACKFILL ---------------------------------------------------------------
+-- The trigger only fires on clients created after it exists, so anyone
+-- already in the CRM — including everyone still onboarding — would never get
+-- these. This adds whichever of the three they're missing.
+--
+-- Matches on title, so a deliverable you already created by hand isn't
+-- duplicated, and one you finished and deleted doesn't come back... it does,
+-- actually — deleting one and re-running this restores it. Re-run only when
+-- you've added new clients.
+
+insert into deliverables (client_id, title, type, status)
+select c.id, v.title, v.type, 'todo'
+from clients c
+cross join (values
+  ('Make video ad', 'creative'),
+  ('Make 4 static ads', 'creative'),
+  ('Go live with first Meta Campaign', 'campaign')
+) as v(title, type)
+where c.status <> 'churned'
+  and not exists (
+    select 1 from deliverables d
+    where d.client_id = c.id and d.title = v.title
+  );
