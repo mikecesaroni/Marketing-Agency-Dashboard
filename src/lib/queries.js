@@ -81,9 +81,11 @@ export async function fetchClientsWithKPIs() {
   if (clientsRes.error) throw clientsRes.error
   if (kpisRes.error) throw kpisRes.error
 
+  // A setup fee can be split across more than one payment, so these are
+  // collected per client rather than assuming a single row.
   const setupByClient = {}
   for (const row of setupRes.data || []) {
-    setupByClient[row.client_id] = row
+    ;(setupByClient[row.client_id] ||= []).push(row)
   }
 
   // Industry and market are captured on the intake call, so the intake record
@@ -115,18 +117,21 @@ export async function fetchClientsWithKPIs() {
 
     // No setup row means either no billing set up yet or a client with no setup
     // fee at all — both read as "nothing owed", so neither shows a status.
-    const setup = setupByClient[client.id]
-    const setupFeeStatus = !setup
-      ? null
-      : setup.status === 'paid'
-        ? 'paid'
-        : isOverdue(setup)
-          ? 'overdue'
-          : 'unpaid'
+    const setup = setupByClient[client.id] || []
+    const paidParts = setup.filter((p) => p.status === 'paid')
+
+    let setupFeeStatus = null
+    if (setup.length > 0) {
+      if (paidParts.length === setup.length) setupFeeStatus = 'paid'
+      else if (paidParts.length > 0) setupFeeStatus = 'partial'
+      else if (setup.some(isOverdue)) setupFeeStatus = 'overdue'
+      else setupFeeStatus = 'unpaid'
+    }
 
     return {
       setupFeeStatus,
-      setupFeeAmount: setup?.amount ?? null,
+      setupFeeAmount: setup.reduce((sum, p) => sum + (p.amount || 0), 0) || null,
+      setupFeePaidAmount: paidParts.reduce((sum, p) => sum + (p.amount || 0), 0),
       ...client,
       industry: intake?.industry_trade || client.industry || '',
       market: intake?.service_area || client.market || '',

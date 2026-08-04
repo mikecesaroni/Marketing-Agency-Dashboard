@@ -33,6 +33,13 @@ export default function PaymentTracker({ client, onClientUpdate }) {
   const [billing, setBilling] = useState({
     setupFee: '',
     setupPaid: false,
+    splitSetup: false,
+    setup1Amount: '',
+    setup1Date: today(),
+    setup1Paid: false,
+    setup2Amount: '',
+    setup2Date: today(),
+    setup2Paid: false,
     monthlyFee: '',
     firstPaymentDate: today(),
   })
@@ -62,9 +69,17 @@ export default function PaymentTracker({ client, onClientUpdate }) {
   }
 
   const openBilling = () => {
+    const [first, second] = setupPayments
     setBilling({
       setupFee: client.setup_fee ? String(client.setup_fee) : '',
-      setupPaid: setupPayment?.status === 'paid',
+      setupPaid: first?.status === 'paid',
+      splitSetup: setupPayments.length > 1,
+      setup1Amount: first ? String(first.amount) : '',
+      setup1Date: first?.due_date || today(),
+      setup1Paid: first?.status === 'paid',
+      setup2Amount: second ? String(second.amount) : '',
+      setup2Date: second?.due_date || today(),
+      setup2Paid: second?.status === 'paid',
       monthlyFee: client.monthly_fee ? String(client.monthly_fee) : '998',
       firstPaymentDate:
         monthlyPayments[0]?.due_date || client.contract_start_date || today(),
@@ -90,21 +105,59 @@ export default function PaymentTracker({ client, onClientUpdate }) {
       if (delErr) throw delErr
 
       const paid = payments.filter((p) => p.status === 'paid')
-      const setupAlreadyPaid = paid.some((p) => p.payment_type === 'setup')
+      const paidSetupRows = paid.filter((p) => p.payment_type === 'setup')
       const paidMonthlyDates = new Set(
         paid.filter((p) => p.payment_type === 'monthly').map((p) => p.due_date)
       )
 
+      // One row when the fee is taken in full, two when it's split. Parts the
+      // form marks paid and that already exist in the database are consumed in
+      // order rather than written again, so reopening Billing Setup to change
+      // something else doesn't duplicate money already collected.
+      const parts = billing.splitSetup
+        ? [
+            {
+              amount: parseFloat(billing.setup1Amount) || 0,
+              due: billing.setup1Date,
+              paid: billing.setup1Paid,
+            },
+            {
+              amount: parseFloat(billing.setup2Amount) || 0,
+              due: billing.setup2Date,
+              paid: billing.setup2Paid,
+            },
+          ]
+        : [{ amount: setupFee, due: today(), paid: billing.setupPaid }]
+
       const rows = []
-      if (setupFee > 0 && !setupAlreadyPaid) {
-        rows.push({
-          client_id: clientId,
-          payment_type: 'setup',
-          amount: setupFee,
-          due_date: today(),
-          status: billing.setupPaid ? 'paid' : 'pending',
-          paid_date: billing.setupPaid ? today() : null,
-        })
+      let paidCursor = 0
+
+      for (const part of parts) {
+        if (part.amount <= 0) continue
+
+        if (part.paid) {
+          if (paidCursor < paidSetupRows.length) {
+            paidCursor++
+            continue
+          }
+          rows.push({
+            client_id: clientId,
+            payment_type: 'setup',
+            amount: part.amount,
+            due_date: part.due,
+            status: 'paid',
+            paid_date: part.due,
+          })
+        } else {
+          rows.push({
+            client_id: clientId,
+            payment_type: 'setup',
+            amount: part.amount,
+            due_date: part.due,
+            status: 'pending',
+            paid_date: null,
+          })
+        }
       }
       for (let i = 0; i < MONTHS; i++) {
         const dueDate = addMonths(billing.firstPaymentDate, i)
@@ -189,7 +242,7 @@ export default function PaymentTracker({ client, onClientUpdate }) {
     loadPayments()
   }
 
-  const setupPayment = payments.find((p) => p.payment_type === 'setup')
+  const setupPayments = payments.filter((p) => p.payment_type === 'setup')
   const monthlyPayments = payments.filter((p) => p.payment_type === 'monthly')
   const totalPaid = payments
     .filter((p) => p.status === 'paid')
@@ -324,10 +377,22 @@ export default function PaymentTracker({ client, onClientUpdate }) {
             </div>
           </div>
 
-          {setupPayment && (
+          {setupPayments.length > 0 && (
             <div className="mb-6">
               <h3 className="font-semibold text-slate-900 mb-2">Setup Fee</h3>
-              <PaymentRow payment={setupPayment} label="Setup fee" />
+              <div className="space-y-2">
+                {setupPayments.map((p, i) => (
+                  <PaymentRow
+                    key={p.id}
+                    payment={p}
+                    label={
+                      setupPayments.length > 1
+                        ? `Setup fee — part ${i + 1} of ${setupPayments.length}`
+                        : 'Setup fee'
+                    }
+                  />
+                ))}
+              </div>
             </div>
           )}
 
@@ -396,6 +461,110 @@ export default function PaymentTracker({ client, onClientUpdate }) {
               <p className="text-xs text-slate-500 mt-1">Has it been collected already?</p>
             </div>
           </div>
+
+          {parseFloat(billing.setupFee) > 0 && (
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={billing.splitSetup}
+                onChange={(e) => {
+                  const on = e.target.checked
+                  const total = parseFloat(billing.setupFee) || 0
+                  // Prefill an even split so the common case is one click.
+                  const half = Math.round((total / 2) * 100) / 100
+                  setBilling((b) => ({
+                    ...b,
+                    splitSetup: on,
+                    setup1Amount: b.setup1Amount || String(half),
+                    setup2Amount: b.setup2Amount || String(Math.round((total - half) * 100) / 100),
+                    setup1Paid: b.setupPaid,
+                  }))
+                }}
+              />
+              Split the setup fee into two payments
+            </label>
+          )}
+
+          {billing.splitSetup && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-4">
+              {[1, 2].map((n) => (
+                <div key={n}>
+                  <p className="text-xs font-semibold text-slate-700 uppercase mb-2">
+                    Payment {n}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Amount ($)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={billing[`setup${n}Amount`]}
+                        onChange={(e) =>
+                          setBilling((b) => ({ ...b, [`setup${n}Amount`]: e.target.value }))
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Due date
+                      </label>
+                      <input
+                        type="date"
+                        value={billing[`setup${n}Date`]}
+                        onChange={(e) =>
+                          setBilling((b) => ({ ...b, [`setup${n}Date`]: e.target.value }))
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {[
+                      { value: true, label: 'Paid' },
+                      { value: false, label: 'Not yet' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() =>
+                          setBilling((b) => ({ ...b, [`setup${n}Paid`]: opt.value }))
+                        }
+                        className={`py-2 rounded-lg text-xs font-medium border transition ${
+                          billing[`setup${n}Paid`] === opt.value
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {(() => {
+                const total = parseFloat(billing.setupFee) || 0
+                const split =
+                  (parseFloat(billing.setup1Amount) || 0) +
+                  (parseFloat(billing.setup2Amount) || 0)
+                const diff = Math.round((split - total) * 100) / 100
+                // A silent mismatch between the parts and the stated fee is how
+                // you end up under-billing without noticing.
+                return diff !== 0 ? (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                    The two parts add up to {money(split)}, but the setup fee is{' '}
+                    {money(total)} ({diff > 0 ? 'over' : 'under'} by {money(Math.abs(diff))}).
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500">Parts add up to {money(total)}.</p>
+                )
+              })()}
+            </div>
+          )}
 
           <div className="border-t border-slate-200 pt-4 grid grid-cols-2 gap-3">
             <div>

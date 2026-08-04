@@ -16,18 +16,24 @@ const STATUS_STYLES = {
 
 const SETUP_FEE_STYLES = {
   paid: { label: '✓ Paid', className: 'bg-green-100 text-green-800' },
+  partial: { label: 'Part paid', className: 'bg-blue-100 text-blue-800' },
   unpaid: { label: 'Unpaid', className: 'bg-amber-100 text-amber-800' },
   overdue: { label: 'Overdue', className: 'bg-red-100 text-red-800' },
 }
 
-function SetupFeeBadge({ status, amount }) {
+function SetupFeeBadge({ status, amount, paidAmount }) {
   if (!status) return <span className="text-slate-400">—</span>
 
   const { label, className } = SETUP_FEE_STYLES[status]
+  // A split fee needs both numbers to mean anything — "Part paid · $2,500"
+  // doesn't say how much of it actually landed.
+  const detail =
+    status === 'partial' ? `${money(paidAmount)} of ${money(amount)}` : amount ? money(amount) : ''
+
   return (
     <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${className}`}>
       {label}
-      {amount ? ` · ${money(amount)}` : ''}
+      {detail ? ` · ${detail}` : ''}
     </span>
   )
 }
@@ -166,6 +172,7 @@ export default function ClientsPage() {
                     <SetupFeeBadge
                       status={client.setupFeeStatus}
                       amount={client.setupFeeAmount}
+                      paidAmount={client.setupFeePaidAmount}
                     />
                   </p>
                 )}
@@ -237,6 +244,7 @@ export default function ClientsPage() {
                         <SetupFeeBadge
                           status={client.setupFeeStatus}
                           amount={client.setupFeeAmount}
+                          paidAmount={client.setupFeePaidAmount}
                         />
                       </td>
                       <td className="px-4 py-3 text-right text-slate-600">
