@@ -159,6 +159,28 @@ export async function fetchDeliverables() {
   return data || []
 }
 
+// ---------- LSA setup tracking ----------
+// Anyone whose LSA isn't live yet. A client with no intake on file counts —
+// nobody has recorded their LSA as running, so it needs looking at.
+export async function fetchLsaSetupNeeded() {
+  const [clientsRes, intakeRes] = await Promise.all([
+    supabase.from('clients').select('id, name, status').neq('status', 'churned').order('name'),
+    supabase.from('onboarding_intake').select('client_id, lsa_status'),
+  ])
+
+  if (clientsRes.error) throw clientsRes.error
+  if (intakeRes.error) throw intakeRes.error
+
+  const statusByClient = {}
+  for (const row of intakeRes.data || []) {
+    statusByClient[row.client_id] = row.lsa_status
+  }
+
+  return (clientsRes.data || [])
+    .map((c) => ({ ...c, lsaStatus: statusByClient[c.id] || 'No intake yet' }))
+    .filter((c) => c.lsaStatus !== 'Active')
+}
+
 // ---------- payments ----------
 export async function fetchPayments() {
   const { data, error } = await supabase

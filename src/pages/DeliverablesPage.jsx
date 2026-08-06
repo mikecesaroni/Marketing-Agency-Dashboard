@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import DeliverableForm from '../components/DeliverableForm'
+import LsaSetupPanel from '../components/LsaSetupPanel'
 import { supabase } from '../lib/supabaseClient'
 import { fetchDeliverables, today } from '../lib/queries'
 
@@ -121,6 +122,8 @@ export default function DeliverablesPage() {
           )}
         </div>
       )}
+
+      <LsaSetupPanel />
 
       <div className="flex flex-col md:flex-row gap-2 mb-4">
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">
