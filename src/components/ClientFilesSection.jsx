@@ -12,6 +12,7 @@ export default function ClientFilesSection({ clientId, clientName }) {
   const [renaming, setRenaming] = useState(null)
   const [newName, setNewName] = useState('')
   const [zipping, setZipping] = useState('')
+  const [downloadingId, setDownloadingId] = useState(null)
 
   useEffect(() => {
     loadFiles()
@@ -139,6 +140,33 @@ export default function ClientFilesSection({ clientId, clientName }) {
     if (err) return setError(err.message)
     setRenaming(null)
     await loadFiles()
+  }
+
+  // Fetched into a blob rather than pointed at with a download attribute: the
+  // storage URL is a different origin, where browsers ignore that attribute and
+  // just navigate. Going through a blob also means the file saves under its
+  // display name instead of the generated storage path.
+  const handleDownloadOne = async (file) => {
+    setError('')
+    setDownloadingId(file.id)
+
+    try {
+      const res = await fetch(getPublicUrl(file.storage_path))
+      if (!res.ok) throw new Error(`Could not download this file (HTTP ${res.status})`)
+
+      const url = URL.createObjectURL(await res.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.file_name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDownloadingId(null)
+    }
   }
 
   // Zipped in the browser rather than firing one download per file: phones and
@@ -321,6 +349,13 @@ export default function ClientFilesSection({ clientId, clientName }) {
                 </div>
               </div>
               <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                <button
+                  onClick={() => handleDownloadOne(file)}
+                  disabled={downloadingId === file.id}
+                  className="px-3 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-60"
+                >
+                  {downloadingId === file.id ? 'Saving...' : 'Download'}
+                </button>
                 <button
                   onClick={() => {
                     setNewName(file.file_name)
