@@ -41,7 +41,7 @@ export default function DeliverablesPage() {
     try {
       const [items, clientsRes] = await Promise.all([
         fetchDeliverables(),
-        supabase.from('clients').select('id, name').order('name'),
+        supabase.from('clients').select('id, name, status').order('name'),
       ])
       if (clientsRes.error) throw clientsRes.error
       setDeliverables(items)

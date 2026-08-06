@@ -29,10 +29,26 @@ export default function DeliverableForm({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Picking several clients only makes sense when creating. Editing targets one
+  // existing row, and the client page already knows whose deliverable it is.
+  const bulkMode = !deliverable && !lockedClientId
+  const [selectedIds, setSelectedIds] = useState([])
+
+  const toggleClient = (id) =>
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+
   const set = (name) => (e) => setForm((prev) => ({ ...prev, [name]: e.target.value }))
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    if (bulkMode && selectedIds.length === 0) {
+      setError('Pick at least one client.')
+      return
+    }
+
     setError('')
     setLoading(true)
 
@@ -51,9 +67,14 @@ export default function DeliverableForm({
     }
 
     try {
+      // One row per selected client — same title, dates and notes across all.
+      const insertPayload = bulkMode
+        ? selectedIds.map((id) => ({ ...payload, client_id: id }))
+        : payload
+
       const { error: err } = deliverable
         ? await supabase.from('deliverables').update(payload).eq('id', deliverable.id)
-        : await supabase.from('deliverables').insert(payload)
+        : await supabase.from('deliverables').insert(insertPayload)
 
       if (err) throw err
 
@@ -85,18 +106,80 @@ export default function DeliverableForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {!lockedClientId && (
+      {bulkMode ? (
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Client *</label>
-          <select value={form.client_id} onChange={set('client_id')} className={inputClass} required>
-            <option value="">Select a client...</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-sm font-medium text-slate-700">
+              Clients *{' '}
+              <span className="font-normal text-slate-500">
+                ({selectedIds.length} selected)
+              </span>
+            </label>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSelectedIds(clients.map((c) => c.id))}
+                className="px-2 py-1 text-xs bg-slate-100 text-slate-700 rounded hover:bg-slate-200 transition"
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="px-2 py-1 text-xs bg-slate-100 text-slate-700 rounded hover:bg-slate-200 transition"
+              >
+                None
+              </button>
+            </div>
+          </div>
+          <div className="border border-slate-300 rounded-lg max-h-44 overflow-y-auto divide-y divide-slate-100">
+            {clients.length === 0 ? (
+              <p className="p-3 text-sm text-slate-500">No clients yet.</p>
+            ) : (
+              clients.map((c) => (
+                <label
+                  key={c.id}
+                  className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(c.id)}
+                    onChange={() => toggleClient(c.id)}
+                    className="w-4 h-4 rounded flex-shrink-0"
+                  />
+                  <span className="text-slate-900 truncate">{c.name}</span>
+                  {c.status && (
+                    <span className="ml-auto text-xs text-slate-400 capitalize flex-shrink-0">
+                      {c.status}
+                    </span>
+                  )}
+                </label>
+              ))
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Creates the same deliverable for everyone ticked.
+          </p>
         </div>
+      ) : (
+        !lockedClientId && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Client *</label>
+            <select
+              value={form.client_id}
+              onChange={set('client_id')}
+              className={inputClass}
+              required
+            >
+              <option value="">Select a client...</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )
       )}
 
       <div>
@@ -174,7 +257,13 @@ export default function DeliverableForm({
           disabled={loading}
           className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
         >
-          {loading ? 'Saving...' : deliverable ? 'Save Changes' : 'Add Deliverable'}
+          {loading
+            ? 'Saving...'
+            : deliverable
+              ? 'Save Changes'
+              : bulkMode && selectedIds.length > 1
+                ? `Add to ${selectedIds.length} Clients`
+                : 'Add Deliverable'}
         </button>
         {deliverable ? (
           <button
