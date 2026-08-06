@@ -78,7 +78,18 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
 
     if (data) {
       setExistingIntake(data)
-      setFormData(data)
+      // Merged key by key rather than replacing wholesale. A row can be sparse
+      // — the LSA panel creates one carrying only a status — and assigning it
+      // directly would turn every other field into null, which React treats as
+      // an uncontrolled input. It also keeps id/client_id out of form state so
+      // they can't ride along in the update payload.
+      setFormData((prev) => {
+        const merged = { ...prev }
+        for (const key of Object.keys(prev)) {
+          if (data[key] !== null && data[key] !== undefined) merged[key] = data[key]
+        }
+        return merged
+      })
     }
   }
 

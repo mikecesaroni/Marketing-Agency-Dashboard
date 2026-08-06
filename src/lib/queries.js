@@ -165,19 +165,25 @@ export async function fetchDeliverables() {
 export async function fetchLsaSetupNeeded() {
   const [clientsRes, intakeRes] = await Promise.all([
     supabase.from('clients').select('id, name, status').neq('status', 'churned').order('name'),
-    supabase.from('onboarding_intake').select('client_id, lsa_status'),
+    supabase.from('onboarding_intake').select('id, client_id, lsa_status'),
   ])
 
   if (clientsRes.error) throw clientsRes.error
   if (intakeRes.error) throw intakeRes.error
 
-  const statusByClient = {}
+  const intakeByClient = {}
   for (const row of intakeRes.data || []) {
-    statusByClient[row.client_id] = row.lsa_status
+    intakeByClient[row.client_id] = row
   }
 
+  // intakeId comes back so the status can be changed in place; without a row
+  // yet, one has to be created instead.
   return (clientsRes.data || [])
-    .map((c) => ({ ...c, lsaStatus: statusByClient[c.id] || 'No intake yet' }))
+    .map((c) => ({
+      ...c,
+      lsaStatus: intakeByClient[c.id]?.lsa_status || 'No intake yet',
+      intakeId: intakeByClient[c.id]?.id ?? null,
+    }))
     .filter((c) => c.lsaStatus !== 'Active')
 }
 

@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchLsaSetupNeeded } from '../lib/queries'
+import { supabase } from '../lib/supabaseClient'
 import { copyText } from '../lib/intakeSummary'
 import { LSA_SETUP_MESSAGE } from '../lib/lsaSetupMessage'
+
+// Matches the options on the intake form, so the two can't drift apart.
+const LSA_STATUSES = ['Not started', 'In progress', 'Active', 'Paused', 'Needs work']
 
 function CopyMessageButton() {
   const [copied, setCopied] = useState(null)
@@ -43,10 +47,44 @@ export default function LsaSetupPanel() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    load()
+  }, [])
+
+  const load = () =>
     fetchLsaSetupNeeded()
       .then(setClients)
       .catch((err) => setError(err.message))
-  }, [])
+
+  const changeStatus = async (client, lsaStatus) => {
+    // Drop the client from the list as soon as their LSA is live — this panel
+    // exists to show what's outstanding.
+    setClients((prev) =>
+      lsaStatus === 'Active'
+        ? prev.filter((c) => c.id !== client.id)
+        : prev.map((c) => (c.id === client.id ? { ...c, lsaStatus } : c))
+    )
+
+    // A client whose intake was never filled in has no row to update yet, so
+    // one is created carrying just the status. The intake form merges into
+    // whatever it finds, so the rest of the form still fills in later.
+    const { error: err } = client.intakeId
+      ? await supabase
+          .from('onboarding_intake')
+          .update({ lsa_status: lsaStatus })
+          .eq('id', client.intakeId)
+      : await supabase
+          .from('onboarding_intake')
+          .insert({ client_id: client.id, lsa_status: lsaStatus })
+
+    if (err) {
+      setError(err.message)
+      load()
+    } else if (!client.intakeId) {
+      // Pick up the new row's id so a second change updates instead of
+      // inserting a duplicate.
+      load()
+    }
+  }
 
   if (error || !clients) return null
 
@@ -93,24 +131,41 @@ export default function LsaSetupPanel() {
 
       {open && (
         <div className="border-t border-slate-200 divide-y divide-slate-100">
+          {/* The dropdown sits outside the link — inside it, every change would
+              also navigate away from the page. */}
           {clients.map((c) => (
-            <Link
+            <div
               key={c.id}
-              to={`/client/${c.id}`}
               className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-slate-50 transition"
             >
-              <span className="text-sm text-slate-900 truncate">
+              <Link
+                to={`/client/${c.id}`}
+                className="text-sm text-slate-900 truncate hover:text-blue-600"
+              >
                 {c.name}
                 <span className="ml-2 text-xs text-slate-400 capitalize">{c.status}</span>
-              </span>
-              <span
-                className={`px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${
+              </Link>
+              <select
+                value={LSA_STATUSES.includes(c.lsaStatus) ? c.lsaStatus : ''}
+                onChange={(e) => changeStatus(c, e.target.value)}
+                className={`px-2 py-1 rounded text-xs font-semibold border-0 cursor-pointer flex-shrink-0 ${
                   LSA_STATUS_STYLES[c.lsaStatus] || 'bg-slate-100 text-slate-600'
                 }`}
               >
-                {c.lsaStatus}
-              </span>
-            </Link>
+                {/* Shown only until a real status is picked, so "never filled
+                    in" stays distinguishable from "not started". */}
+                {!LSA_STATUSES.includes(c.lsaStatus) && (
+                  <option value="" disabled>
+                    {c.lsaStatus}
+                  </option>
+                )}
+                {LSA_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
           ))}
         </div>
       )}
