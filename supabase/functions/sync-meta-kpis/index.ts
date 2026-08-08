@@ -113,9 +113,13 @@ Deno.serve(async (req) => {
   }
 
   let requestedWeek: string | undefined
+  let requestedClientId: string | undefined
   try {
     const body = await req.json()
     requestedWeek = body?.week_of
+    // The app's per-client "Sync now" button passes a client_id so one client
+    // can be refreshed without waiting on every other account's API calls.
+    requestedClientId = body?.client_id
   } catch {
     // No body is the normal case for the scheduled run.
   }
@@ -128,8 +132,9 @@ Deno.serve(async (req) => {
     'Content-Type': 'application/json',
   }
 
+  const clientFilter = requestedClientId ? `&id=eq.${encodeURIComponent(requestedClientId)}` : ''
   const clientsRes = await fetch(
-    `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id&meta_ad_account_id=not.is.null&status=neq.churned`,
+    `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id&meta_ad_account_id=not.is.null&status=neq.churned${clientFilter}`,
     { headers }
   )
   const clients = await clientsRes.json()

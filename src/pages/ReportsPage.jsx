@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { fetchKPIHistory, money, shortWeekLabel } from '../lib/queries'
+import { runMetaSync, summariseSync } from '../lib/metaSync'
 
 const RANGES = [
   { weeks: 4, label: '4 weeks' },
@@ -85,6 +86,23 @@ export default function ReportsPage() {
   const [error, setError] = useState('')
   const [weeks, setWeeks] = useState(8)
   const [metricKey, setMetricKey] = useState('spend')
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState('')
+
+  const handleSync = async () => {
+    setSyncing(true)
+    setSyncResult('')
+    setError('')
+    try {
+      const summary = summariseSync(await runMetaSync())
+      setSyncResult(summary)
+      setKpis(await fetchKPIHistory(weeks))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -147,6 +165,13 @@ export default function ReportsPage() {
 
   const rangeButtons = (
     <div className="flex gap-1.5">
+      <button
+        onClick={handleSync}
+        disabled={syncing}
+        className="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 transition"
+      >
+        {syncing ? 'Syncing...' : '↻ Sync Meta'}
+      </button>
       {RANGES.map((r) => (
         <button
           key={r.weeks}
@@ -172,6 +197,12 @@ export default function ReportsPage() {
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 mb-4">
           Error: {error}
+        </div>
+      )}
+
+      {syncResult && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-800 mb-4 text-sm">
+          {syncResult}
         </div>
       )}
 

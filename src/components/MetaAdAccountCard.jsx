@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { runMetaSync, summariseSync } from '../lib/metaSync'
 
 export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate }) {
   const [editing, setEditing] = useState(false)
@@ -9,6 +10,22 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
   const [accounts, setAccounts] = useState([])
   const [manual, setManual] = useState(false)
   const [accountName, setAccountName] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState('')
+
+  const handleSync = async () => {
+    setSyncing(true)
+    setSyncResult('')
+    setError('')
+    try {
+      setSyncResult(summariseSync(await runMetaSync(client.id)))
+      onUpdate?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   // Resolve the connected account's name for display, so the card shows
   // "Comfort Experts NY" rather than a bare 16-digit number.
@@ -79,21 +96,38 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-3">
         <h2 className="text-lg md:text-xl font-bold text-slate-900">Meta Ads Sync</h2>
         {!editing && (
-          <button
-            onClick={() => {
-              setValue(client.meta_ad_account_id || '')
-              setEditing(true)
-            }}
-            className="w-full md:w-auto px-3 py-2 md:py-1.5 text-sm bg-slate-200 text-slate-800 rounded-lg font-medium hover:bg-slate-300 transition"
-          >
-            {client.meta_ad_account_id ? 'Change' : 'Connect Account'}
-          </button>
+          <div className="flex gap-2">
+            {client.meta_ad_account_id && (
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="flex-1 md:flex-none px-3 py-2 md:py-1.5 text-sm bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-60 transition"
+              >
+                {syncing ? 'Syncing...' : 'Sync Now'}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setValue(client.meta_ad_account_id || '')
+                setEditing(true)
+              }}
+              className="flex-1 md:flex-none px-3 py-2 md:py-1.5 text-sm bg-slate-200 text-slate-800 rounded-lg font-medium hover:bg-slate-300 transition"
+            >
+              {client.meta_ad_account_id ? 'Change' : 'Connect Account'}
+            </button>
+          </div>
         )}
       </div>
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm mb-3">
           {error}
+        </div>
+      )}
+
+      {syncResult && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm mb-3">
+          {syncResult}
         </div>
       )}
 
