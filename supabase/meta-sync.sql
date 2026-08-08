@@ -35,20 +35,22 @@ create unique index if not exists weekly_kpis_client_week_channel_idx
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
--- 4. The weekly schedule. RUN THIS ONLY AFTER deploying the Edge Function.
+-- 4. The daily schedule. RUN THIS ONLY AFTER deploying the Edge Function.
 --
 --    Replace <PROJECT_REF> with your project ref (the subdomain of your
 --    Supabase URL) and <SERVICE_ROLE_KEY> with the service role key from
 --    Settings -> API. That key is a full-access credential — it is safe here
 --    because this runs inside your database, but never put it in the app.
 --
---    Fires 08:00 UTC every Monday, just after the week it reports on closes.
+--    Fires 06:00 UTC daily. Each run refreshes the week in progress and
+--    re-checks last week, since Meta keeps attributing conversions for days
+--    after they happen.
 
 -- select cron.unschedule('sync-meta-kpis');  -- run first if rescheduling
 
 -- select cron.schedule(
 --   'sync-meta-kpis',
---   '0 8 * * 1',
+--   '0 6 * * *',
 --   $$
 --   select net.http_post(
 --     url := 'https://<PROJECT_REF>.supabase.co/functions/v1/sync-meta-kpis',

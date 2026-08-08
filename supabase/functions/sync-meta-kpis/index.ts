@@ -41,20 +41,30 @@ function mondayOf(date: Date): Date {
 
 // The CRM keys every KPI row to the Monday of its week, so the sync has to use
 // the same Monday-to-Sunday boundaries or the numbers land on the wrong row.
-function weekRange(weekOf?: string): { since: string; until: string; week_of: string } {
-  let monday: Date
-  if (weekOf) {
-    const [y, m, d] = weekOf.split('-').map(Number)
-    monday = mondayOf(new Date(y, m - 1, d))
-  } else {
-    // Default to the last week that has actually finished — syncing the current
-    // week mid-week would store a partial number and look like a drop.
-    monday = mondayOf(new Date())
-    monday.setDate(monday.getDate() - 7)
-  }
+function weekRange(weekOf: string): { since: string; until: string; week_of: string } {
+  const [y, m, d] = weekOf.split('-').map(Number)
+  const monday = mondayOf(new Date(y, m - 1, d))
   const sunday = new Date(monday)
   sunday.setDate(sunday.getDate() + 6)
   return { since: toDateString(monday), until: toDateString(sunday), week_of: toDateString(monday) }
+}
+
+// Which weeks a run covers.
+//
+// Running daily, the current week has to be included or the numbers would sit
+// stale until Monday — but it's still in progress, so each run overwrites it
+// with the running total rather than adding to it (the upsert handles that).
+//
+// Last week is re-synced too because Meta keeps attributing conversions for
+// days after they happen: a lead from Sunday can land in the data on Tuesday,
+// and a one-shot Monday sync would never see it.
+function weeksToSync(weekOf?: string): string[] {
+  if (weekOf) return [weekOf]
+
+  const thisMonday = mondayOf(new Date())
+  const lastMonday = new Date(thisMonday)
+  lastMonday.setDate(lastMonday.getDate() - 7)
+  return [toDateString(lastMonday), toDateString(thisMonday)]
 }
 
 function leadsFrom(insight: Insight): number {
@@ -110,7 +120,7 @@ Deno.serve(async (req) => {
     // No body is the normal case for the scheduled run.
   }
 
-  const { since, until, week_of } = weekRange(requestedWeek)
+  const weeks = weeksToSync(requestedWeek)
 
   const headers = {
     apikey: serviceKey,
@@ -132,27 +142,41 @@ Deno.serve(async (req) => {
   }
 
   const rows: Record<string, unknown>[] = []
-  const results: { client: string; spend?: number; leads?: number; error?: string }[] = []
+  const results: {
+    client: string
+    week?: string
+    spend?: number
+    leads?: number
+    error?: string
+  }[] = []
 
-  for (const client of clients) {
-    // One client's bad token or revoked account access shouldn't stop the rest
-    // of the run — record it and carry on.
-    try {
-      const insight = await fetchMetaInsight(client.meta_ad_account_id, metaToken, since, until)
-      const spend = Number(insight?.spend ?? 0)
-      const leads = insight ? leadsFrom(insight) : 0
+  for (const weekOf of weeks) {
+    const { since, until, week_of } = weekRange(weekOf)
 
-      rows.push({
-        client_id: client.id,
-        week_of,
-        channel: 'Meta',
-        ad_spend: spend,
-        leads,
-        notes: 'Synced from Meta Ads',
-      })
-      results.push({ client: client.name, spend, leads })
-    } catch (err) {
-      results.push({ client: client.name, error: String(err instanceof Error ? err.message : err) })
+    for (const client of clients) {
+      // One client's bad token or revoked account access shouldn't stop the
+      // rest of the run — record it and carry on.
+      try {
+        const insight = await fetchMetaInsight(client.meta_ad_account_id, metaToken, since, until)
+        const spend = Number(insight?.spend ?? 0)
+        const leads = insight ? leadsFrom(insight) : 0
+
+        rows.push({
+          client_id: client.id,
+          week_of,
+          channel: 'Meta',
+          ad_spend: spend,
+          leads,
+          notes: 'Synced from Meta Ads',
+        })
+        results.push({ client: client.name, week: week_of, spend, leads })
+      } catch (err) {
+        results.push({
+          client: client.name,
+          week: week_of,
+          error: String(err instanceof Error ? err.message : err),
+        })
+      }
     }
   }
 
@@ -168,7 +192,7 @@ Deno.serve(async (req) => {
 
     if (!upsert.ok) {
       const detail = await upsert.text()
-      return new Response(JSON.stringify({ error: 'Upsert failed', detail, week_of }), {
+      return new Response(JSON.stringify({ error: 'Upsert failed', detail, weeks }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -176,7 +200,7 @@ Deno.serve(async (req) => {
   }
 
   return new Response(
-    JSON.stringify({ week_of, range: { since, until }, synced: rows.length, results }, null, 2),
+    JSON.stringify({ weeks, synced: rows.length, results }, null, 2),
     { headers: { 'Content-Type': 'application/json' } }
   )
 })
