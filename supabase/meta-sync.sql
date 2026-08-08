@@ -62,3 +62,17 @@ create extension if not exists pg_net;
 
 -- Check what's scheduled:      select * from cron.job;
 -- Check recent runs:           select * from cron.job_run_details order by start_time desc limit 10;
+
+-- 5. Ad account picker.
+-- The client page offers a dropdown of Meta ad accounts rather than asking for
+-- a 16-digit ID by hand. The browser has no Meta credentials, so the list is
+-- cached here and refreshed from a session that can reach Meta.
+
+create table if not exists meta_ad_accounts (
+  ad_account_id text primary key,
+  name text,
+  business_name text,
+  synced_at timestamptz not null default now()
+);
+
+alter table meta_ad_accounts disable row level security;
