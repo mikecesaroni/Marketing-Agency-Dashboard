@@ -3,6 +3,7 @@ import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import DeliverableForm from '../components/DeliverableForm'
 import LsaSetupPanel from '../components/LsaSetupPanel'
+import MetaSetupPanel from '../components/MetaSetupPanel'
 import { supabase } from '../lib/supabaseClient'
 import { fetchDeliverables, today } from '../lib/queries'
 
@@ -123,6 +124,7 @@ export default function DeliverablesPage() {
         </div>
       )}
 
+      <MetaSetupPanel />
       <LsaSetupPanel />
 
       <div className="flex flex-col md:flex-row gap-2 mb-4">

@@ -162,15 +162,15 @@ export async function fetchDeliverables() {
   return data || []
 }
 
-// ---------- LSA setup tracking ----------
-// Everyone whose Google LSA isn't live yet. Reads the flag on the client
-// rather than the intake form's status, so there's one answer to "is LSA on".
-export async function fetchLsaSetupNeeded() {
+// ---------- channel setup tracking ----------
+// Everyone whose given channel isn't live yet. Reads the flags on the client
+// rather than the intake form, so there's one answer to "is this channel on".
+export async function fetchChannelSetupNeeded(field) {
   const { data, error } = await supabase
     .from('clients')
-    .select('id, name, meta_ads_active')
+    .select('id, name, meta_ads_active, lsa_active, meta_ad_account_id')
     .eq('archived', false)
-    .eq('lsa_active', false)
+    .eq(field, false)
     .order('name')
 
   if (error) throw error
