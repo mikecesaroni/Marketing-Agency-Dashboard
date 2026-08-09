@@ -51,7 +51,7 @@ export function calcMRR(clients, payments) {
   const scheduled = new Set(
     payments.filter((p) => p.payment_type === 'monthly').map((p) => p.client_id)
   )
-  const billing = clients.filter((c) => scheduled.has(c.id) && c.status !== 'churned')
+  const billing = clients.filter((c) => scheduled.has(c.id) && !c.archived)
   return {
     mrr: billing.reduce((sum, c) => sum + (c.monthly_fee || 0), 0),
     count: billing.length,
@@ -143,7 +143,10 @@ export async function fetchClientsWithKPIs() {
       thisWeekTotalSpend: totalSpend,
       thisWeekTotalLeads: totalLeads,
       thisWeekCostPerLead: totalLeads > 0 ? totalSpend / totalLeads : 0,
-      hasMissingKPIs: client.status === 'active' && totalSpend === 0 && totalLeads === 0,
+      // Only worth flagging once Meta is actually live — a client whose ads
+      // haven't launched has no KPIs to be missing.
+      hasMissingKPIs:
+        client.meta_ads_active && !client.archived && totalSpend === 0 && totalLeads === 0,
     }
   })
 }
@@ -160,31 +163,18 @@ export async function fetchDeliverables() {
 }
 
 // ---------- LSA setup tracking ----------
-// Anyone whose LSA isn't live yet. A client with no intake on file counts —
-// nobody has recorded their LSA as running, so it needs looking at.
+// Everyone whose Google LSA isn't live yet. Reads the flag on the client
+// rather than the intake form's status, so there's one answer to "is LSA on".
 export async function fetchLsaSetupNeeded() {
-  const [clientsRes, intakeRes] = await Promise.all([
-    supabase.from('clients').select('id, name, status').neq('status', 'churned').order('name'),
-    supabase.from('onboarding_intake').select('id, client_id, lsa_status'),
-  ])
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, name, meta_ads_active')
+    .eq('archived', false)
+    .eq('lsa_active', false)
+    .order('name')
 
-  if (clientsRes.error) throw clientsRes.error
-  if (intakeRes.error) throw intakeRes.error
-
-  const intakeByClient = {}
-  for (const row of intakeRes.data || []) {
-    intakeByClient[row.client_id] = row
-  }
-
-  // intakeId comes back so the status can be changed in place; without a row
-  // yet, one has to be created instead.
-  return (clientsRes.data || [])
-    .map((c) => ({
-      ...c,
-      lsaStatus: intakeByClient[c.id]?.lsa_status || 'No intake yet',
-      intakeId: intakeByClient[c.id]?.id ?? null,
-    }))
-    .filter((c) => c.lsaStatus !== 'Active')
+  if (error) throw error
+  return data || []
 }
 
 // ---------- payments ----------

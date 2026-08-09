@@ -29,7 +29,6 @@ export default function AddClientForm({ onSuccess, onClose }) {
     try {
       const { error: err } = await supabase.from('clients').insert({
         name: name.trim(),
-        status: 'onboarding',
         meta_budget_per_day: 0,
         lsa_budget_per_day: 0,
         meta_ad_account_id: adAccountId || null,

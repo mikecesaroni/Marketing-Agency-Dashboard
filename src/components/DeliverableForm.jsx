@@ -148,10 +148,8 @@ export default function DeliverableForm({
                     className="w-4 h-4 rounded flex-shrink-0"
                   />
                   <span className="text-slate-900 truncate">{c.name}</span>
-                  {c.status && (
-                    <span className="ml-auto text-xs text-slate-400 capitalize flex-shrink-0">
-                      {c.status}
-                    </span>
+                  {c.meta_ads_active && (
+                    <span className="ml-auto text-xs text-green-700 flex-shrink-0">Meta live</span>
                   )}
                 </label>
               ))

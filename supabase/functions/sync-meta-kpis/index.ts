@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
 
   const clientFilter = requestedClientId ? `&id=eq.${encodeURIComponent(requestedClientId)}` : ''
   const clientsRes = await fetch(
-    `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id&meta_ad_account_id=not.is.null&status=neq.churned${clientFilter}`,
+    `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id&meta_ad_account_id=not.is.null&archived=eq.false${clientFilter}`,
     { headers }
   )
   const clients = await clientsRes.json()

@@ -83,8 +83,10 @@ export default function HomePage() {
   const { clients, payments, deliverables } = data
   const now = today()
 
-  const activeClients = clients.filter((c) => c.status === 'active')
-  const onboardingClients = clients.filter((c) => c.status === 'onboarding')
+  const live = clients.filter((c) => !c.archived)
+  const metaLive = live.filter((c) => c.meta_ads_active)
+  const metaNotYet = live.filter((c) => !c.meta_ads_active)
+  const lsaNotYet = live.filter((c) => !c.lsa_active)
 
   const { mrr, count: billingCount } = calcMRR(clients, payments)
 
@@ -156,13 +158,24 @@ export default function HomePage() {
     },
     {
       icon: '🚀',
-      title: 'Still onboarding',
+      title: 'Meta not live yet',
       tone: 'blue',
-      items: onboardingClients.map((c) => ({
+      items: metaNotYet.map((c) => ({
         key: c.id,
         to: `/client/${c.id}`,
         label: c.name,
         meta: `added ${c.date_added}`,
+      })),
+    },
+    {
+      icon: '📍',
+      title: 'LSA not live yet',
+      tone: 'blue',
+      items: lsaNotYet.map((c) => ({
+        key: c.id,
+        to: `/client/${c.id}`,
+        label: c.name,
+        meta: 'needs setup',
       })),
     },
   ]
@@ -180,9 +193,9 @@ export default function HomePage() {
     >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
         <StatCard
-          label="Active clients"
-          value={activeClients.length}
-          sub={`${onboardingClients.length} onboarding`}
+          label="Clients"
+          value={live.length}
+          sub={`${metaLive.length} with Meta live`}
         />
         <StatCard
           label="MRR"

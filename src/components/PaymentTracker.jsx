@@ -339,7 +339,7 @@ export default function PaymentTracker({ client, onClientUpdate }) {
           <p className="text-slate-900 font-medium">No billing set up yet</p>
           <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
             Enter the setup fee and monthly amount and the whole payment schedule gets
-            created — you don't have to wait for onboarding to finish.
+            created — no need to wait for their ads to go live.
           </p>
           <button
             onClick={openBilling}

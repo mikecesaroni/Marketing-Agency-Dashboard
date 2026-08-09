@@ -5,6 +5,7 @@ import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
 import MetaAdAccountCard from '../components/MetaAdAccountCard'
+import LiveToggle from '../components/LiveToggle'
 import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
@@ -82,6 +83,15 @@ export default function ClientDetailPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleToggleArchive = async () => {
+    const next = !client.archived
+    if (next && !confirm(`Archive ${client.name}? They'll drop out of MRR, the Meta sync and every list, but nothing is deleted.`)) return
+
+    const { error: err } = await supabase.from('clients').update({ archived: next }).eq('id', client.id)
+    if (err) setError(err.message)
+    else loadClientData()
   }
 
   const toggleTask = async (taskId, currentDone) => {
@@ -167,8 +177,39 @@ export default function ClientDetailPage() {
           ← All clients
         </Link>
 
+        {client.archived && (
+          <div className="mb-3 p-3 bg-slate-100 border border-slate-300 rounded-lg text-sm text-slate-700">
+            This client is archived — excluded from MRR, the Meta sync and every list.
+          </div>
+        )}
+
         <div className="mb-6 md:mb-8">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6 bg-white rounded-xl border border-slate-200 p-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 mb-3 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex gap-2 flex-wrap">
+              <LiveToggle
+                clientId={client.id}
+                field="meta_ads_active"
+                label="Meta ads"
+                value={client.meta_ads_active}
+                onChange={loadClientData}
+              />
+              <LiveToggle
+                clientId={client.id}
+                field="lsa_active"
+                label="Google LSA"
+                value={client.lsa_active}
+                onChange={loadClientData}
+              />
+            </div>
+            <button
+              onClick={handleToggleArchive}
+              className="sm:ml-auto text-xs text-slate-400 hover:text-slate-700 transition text-left"
+            >
+              {client.archived ? '↩ Restore client' : 'Archive client'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 bg-white rounded-xl border border-slate-200 p-4">
             <div>
               <p className="text-xs text-slate-500 uppercase font-medium">Industry</p>
               <p className="font-semibold text-slate-900 text-sm md:text-base">{client.industry || '—'}</p>
@@ -176,10 +217,6 @@ export default function ClientDetailPage() {
             <div>
               <p className="text-xs text-slate-500 uppercase font-medium">Market</p>
               <p className="font-semibold text-slate-900 text-sm md:text-base">{client.market || '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 uppercase font-medium">Status</p>
-              <p className="font-semibold text-slate-900 capitalize text-sm md:text-base">{client.status}</p>
             </div>
             <div>
               <p className="text-xs text-slate-500 uppercase font-medium">Meta/day</p>

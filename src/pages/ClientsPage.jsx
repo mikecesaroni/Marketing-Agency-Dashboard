@@ -5,13 +5,26 @@ import Modal from '../components/Modal'
 import AddClientForm from '../components/AddClientForm'
 import { fetchClientsWithKPIs, money } from '../lib/queries'
 
-const STATUSES = ['all', 'active', 'onboarding', 'paused', 'churned']
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'meta-live', label: 'Meta live' },
+  { key: 'meta-not', label: 'Meta not yet' },
+  { key: 'lsa-live', label: 'LSA live' },
+  { key: 'lsa-not', label: 'LSA not yet' },
+  { key: 'archived', label: 'Archived' },
+]
 
-const STATUS_STYLES = {
-  active: 'bg-green-100 text-green-800',
-  onboarding: 'bg-blue-100 text-blue-800',
-  paused: 'bg-amber-100 text-amber-800',
-  churned: 'bg-slate-200 text-slate-700',
+function LiveBadge({ live, label }) {
+  return (
+    <span
+      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${
+        live ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-500'
+      }`}
+    >
+      {live ? '● ' : '○ '}
+      {label}
+    </span>
+  )
 }
 
 const SETUP_FEE_STYLES = {
@@ -38,14 +51,11 @@ function SetupFeeBadge({ status, amount, paidAmount }) {
   )
 }
 
-function StatusBadge({ status }) {
+function ChannelBadges({ client }) {
   return (
-    <span
-      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold capitalize ${
-        STATUS_STYLES[status] || 'bg-slate-100 text-slate-700'
-      }`}
-    >
-      {status}
+    <span className="inline-flex gap-1.5">
+      <LiveBadge live={client.meta_ads_active} label="Meta" />
+      <LiveBadge live={client.lsa_active} label="LSA" />
     </span>
   )
 }
@@ -75,7 +85,17 @@ export default function ClientsPage() {
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
     return clients.filter((c) => {
-      if (statusFilter !== 'all' && c.status !== statusFilter) return false
+      // Archived clients stay out of every view except their own, so a former
+      // client can't quietly reappear in a list you act on.
+      if (statusFilter === 'archived') {
+        if (!c.archived) return false
+      } else {
+        if (c.archived) return false
+        if (statusFilter === 'meta-live' && !c.meta_ads_active) return false
+        if (statusFilter === 'meta-not' && c.meta_ads_active) return false
+        if (statusFilter === 'lsa-live' && !c.lsa_active) return false
+        if (statusFilter === 'lsa-not' && c.lsa_active) return false
+      }
       if (!term) return true
       return [c.name, c.ownerName, c.industry, c.market].some((f) =>
         f?.toLowerCase().includes(term)
@@ -113,17 +133,17 @@ export default function ClientsPage() {
           className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">
-          {STATUSES.map((s) => (
+          {FILTERS.map((f) => (
             <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition ${
-                statusFilter === s
+              key={f.key}
+              onClick={() => setStatusFilter(f.key)}
+              className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
+                statusFilter === f.key
                   ? 'bg-slate-900 text-white'
                   : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
               }`}
             >
-              {s}
+              {f.label}
             </button>
           ))}
         </div>
@@ -160,7 +180,7 @@ export default function ClientsPage() {
                       <p className="text-xs text-slate-600">{client.ownerName}</p>
                     )}
                   </div>
-                  <StatusBadge status={client.status} />
+                  <ChannelBadges client={client} />
                 </div>
                 <p className="text-xs text-slate-500 mb-2">
                   {[client.industry, client.market].filter(Boolean).join(' · ') ||
@@ -210,7 +230,7 @@ export default function ClientsPage() {
                     <th className="px-4 py-3 text-left font-semibold">Client</th>
                     <th className="px-4 py-3 text-left font-semibold">Industry</th>
                     <th className="px-4 py-3 text-left font-semibold">Market</th>
-                    <th className="px-4 py-3 text-left font-semibold">Status</th>
+                    <th className="px-4 py-3 text-left font-semibold">Channels</th>
                     <th className="px-4 py-3 text-left font-semibold">Setup Fee</th>
                     <th className="px-4 py-3 text-right font-semibold">Meta $/day</th>
                     <th className="px-4 py-3 text-right font-semibold">Wk Spend</th>
@@ -238,7 +258,7 @@ export default function ClientsPage() {
                       <td className="px-4 py-3 text-slate-600">{client.industry || '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{client.market || '—'}</td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={client.status} />
+                        <ChannelBadges client={client} />
                       </td>
                       <td className="px-4 py-3">
                         <SetupFeeBadge

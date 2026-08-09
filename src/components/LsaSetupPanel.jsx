@@ -5,8 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { copyText } from '../lib/intakeSummary'
 import { LSA_SETUP_MESSAGE } from '../lib/lsaSetupMessage'
 
-// Matches the options on the intake form, so the two can't drift apart.
-const LSA_STATUSES = ['Not started', 'In progress', 'Active', 'Paused', 'Needs work']
+
 
 function CopyMessageButton() {
   const [copied, setCopied] = useState(null)
@@ -33,13 +32,7 @@ function CopyMessageButton() {
   )
 }
 
-const LSA_STATUS_STYLES = {
-  'Not started': 'bg-red-100 text-red-800',
-  'In progress': 'bg-blue-100 text-blue-800',
-  'Needs work': 'bg-amber-100 text-amber-800',
-  Paused: 'bg-slate-200 text-slate-700',
-  'No intake yet': 'bg-slate-100 text-slate-600',
-}
+
 
 export default function LsaSetupPanel() {
   const [clients, setClients] = useState(null)
@@ -55,33 +48,18 @@ export default function LsaSetupPanel() {
       .then(setClients)
       .catch((err) => setError(err.message))
 
-  const changeStatus = async (client, lsaStatus) => {
-    // Drop the client from the list as soon as their LSA is live — this panel
+  const markLive = async (client) => {
+    // Drop the client from the list the moment their LSA is live — this panel
     // exists to show what's outstanding.
-    setClients((prev) =>
-      lsaStatus === 'Active'
-        ? prev.filter((c) => c.id !== client.id)
-        : prev.map((c) => (c.id === client.id ? { ...c, lsaStatus } : c))
-    )
+    setClients((prev) => prev.filter((c) => c.id !== client.id))
 
-    // A client whose intake was never filled in has no row to update yet, so
-    // one is created carrying just the status. The intake form merges into
-    // whatever it finds, so the rest of the form still fills in later.
-    const { error: err } = client.intakeId
-      ? await supabase
-          .from('onboarding_intake')
-          .update({ lsa_status: lsaStatus })
-          .eq('id', client.intakeId)
-      : await supabase
-          .from('onboarding_intake')
-          .insert({ client_id: client.id, lsa_status: lsaStatus })
+    const { error: err } = await supabase
+      .from('clients')
+      .update({ lsa_active: true })
+      .eq('id', client.id)
 
     if (err) {
       setError(err.message)
-      load()
-    } else if (!client.intakeId) {
-      // Pick up the new row's id so a second change updates instead of
-      // inserting a duplicate.
       load()
     }
   }
@@ -131,8 +109,8 @@ export default function LsaSetupPanel() {
 
       {open && (
         <div className="border-t border-slate-200 divide-y divide-slate-100">
-          {/* The dropdown sits outside the link — inside it, every change would
-              also navigate away from the page. */}
+          {/* The button sits outside the link — inside it, marking a client
+              live would also navigate away from the page. */}
           {clients.map((c) => (
             <div
               key={c.id}
@@ -143,28 +121,16 @@ export default function LsaSetupPanel() {
                 className="text-sm text-slate-900 truncate hover:text-blue-600"
               >
                 {c.name}
-                <span className="ml-2 text-xs text-slate-400 capitalize">{c.status}</span>
-              </Link>
-              <select
-                value={LSA_STATUSES.includes(c.lsaStatus) ? c.lsaStatus : ''}
-                onChange={(e) => changeStatus(c, e.target.value)}
-                className={`px-2 py-1 rounded text-xs font-semibold border-0 cursor-pointer flex-shrink-0 ${
-                  LSA_STATUS_STYLES[c.lsaStatus] || 'bg-slate-100 text-slate-600'
-                }`}
-              >
-                {/* Shown only until a real status is picked, so "never filled
-                    in" stays distinguishable from "not started". */}
-                {!LSA_STATUSES.includes(c.lsaStatus) && (
-                  <option value="" disabled>
-                    {c.lsaStatus}
-                  </option>
+                {c.meta_ads_active && (
+                  <span className="ml-2 text-xs text-green-700">Meta live</span>
                 )}
-                {LSA_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+              </Link>
+              <button
+                onClick={() => markLive(c)}
+                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-green-100 hover:text-green-800 transition flex-shrink-0"
+              >
+                Mark LSA live
+              </button>
             </div>
           ))}
         </div>

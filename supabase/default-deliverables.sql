@@ -51,7 +51,7 @@ cross join (values
   ('Make 4 static ads', 'creative'),
   ('Go live with first Meta Campaign', 'campaign')
 ) as v(title, type)
-where c.status <> 'churned'
+where c.archived = false
   and not exists (
     select 1 from deliverables d
     where d.client_id = c.id and d.title = v.title
