@@ -19,7 +19,20 @@ Have your license and insurance info handy before you start, that's what slows m
 STEP 2: Add us as an admin
 Once your account is created (verified is even better), invite us as an Admin so we can build everything out for you.
 
-Add this email as Admin: roundtablemgmtt@gmail.com
+1. Sign in to your Google Local Services dashboard: https://ads.google.com/localservices/
+2. Go to Account Access in the menu
+3. Click the blue + button
+4. Enter our email: roundtablemgmtt@gmail.com
+5. Select Admin access
+6. Send the invitation
+
+If you get an error when adding us, Google is blocking outside email domains. Fix it like this, then try the invite again:
+
+1. In your Local Services Ads dashboard, click the Settings icon (gear) and choose Security from the dropdown
+2. Click the Security tab
+3. Find the Allowed Domains section
+4. Click Add Domain and enter: gmail.com
+5. Save
 
 THAT'S IT
 Once you've done those two steps, we handle the rest, full account setup, service areas, job types, photos, budgeting, lead routing, and ongoing management. We'll take it from there and keep you posted.
