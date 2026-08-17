@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { to: '/deliverables', label: 'Deliverables', short: 'Work', icon: '📦' },
   { to: '/payments', label: 'Payments', short: 'Money', icon: '💰' },
   { to: '/reports', label: 'Reports', short: 'Reports', icon: '📈' },
+  { to: '/sops', label: 'SOPs', short: 'SOPs', icon: '📖' },
 ]
 
 export default function Layout({ title, subtitle, actions, children }) {

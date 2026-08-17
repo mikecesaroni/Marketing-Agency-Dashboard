@@ -5,6 +5,7 @@ import ClientDetailPage from './pages/ClientDetailPage'
 import DeliverablesPage from './pages/DeliverablesPage'
 import PaymentsPage from './pages/PaymentsPage'
 import ReportsPage from './pages/ReportsPage'
+import SopsPage from './pages/SopsPage'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
       <Route path="/deliverables" element={<DeliverablesPage />} />
       <Route path="/payments" element={<PaymentsPage />} />
       <Route path="/reports" element={<ReportsPage />} />
+      <Route path="/sops" element={<SopsPage />} />
     </Routes>
   )
 }
