@@ -1,11 +1,11 @@
-// Weekly Meta Ads -> weekly_kpis sync.
+// Daily Meta Ads -> weekly_kpis sync.
 //
 // Runs on Supabase's servers, not in the browser, so the Meta access token
 // stays a secret. Scheduled from Postgres (see supabase/meta-sync.sql), and can
-// also be invoked by hand with {"week_of":"YYYY-MM-DD"} to backfill one week.
+// also be invoked with {"week_of":"YYYY-MM-DD"} to backfill one week or
+// {"client_id":"..."} to refresh a single client.
 //
-// Deploy:  supabase functions deploy sync-meta-kpis
-// Secrets: supabase secrets set META_ACCESS_TOKEN=...
+// Secrets: META_ACCESS_TOKEN must be set on the project.
 
 const META_API_VERSION = 'v21.0'
 
@@ -39,8 +39,9 @@ function mondayOf(date: Date): Date {
   return d
 }
 
-// The CRM keys every KPI row to the Monday of its week, so the sync has to use
-// the same Monday-to-Sunday boundaries or the numbers land on the wrong row.
+// The CRM keys every KPI row to the Monday of its week. Each week is fetched as
+// its own full Monday-to-Sunday range, so a week is never written from partial
+// coverage.
 function weekRange(weekOf: string): { since: string; until: string; week_of: string } {
   const [y, m, d] = weekOf.split('-').map(Number)
   const monday = mondayOf(new Date(y, m - 1, d))
@@ -107,7 +108,10 @@ Deno.serve(async (req) => {
 
   if (!metaToken) {
     return new Response(
-      JSON.stringify({ error: 'META_ACCESS_TOKEN is not set on this project' }),
+      JSON.stringify({
+        error:
+          'META_ACCESS_TOKEN is not set on this project. Add it under Project Settings > Edge Functions > Secrets.',
+      }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
@@ -134,7 +138,7 @@ Deno.serve(async (req) => {
 
   const clientFilter = requestedClientId ? `&id=eq.${encodeURIComponent(requestedClientId)}` : ''
   const clientsRes = await fetch(
-    `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id&meta_ad_account_id=not.is.null&archived=eq.false${clientFilter}`,
+    `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id,meta_ads_active&meta_ad_account_id=not.is.null&archived=eq.false${clientFilter}`,
     { headers }
   )
   const clients = await clientsRes.json()
@@ -154,6 +158,7 @@ Deno.serve(async (req) => {
     leads?: number
     error?: string
   }[] = []
+  const spendingClientIds = new Set<string>()
 
   for (const weekOf of weeks) {
     const { since, until, week_of } = weekRange(weekOf)
@@ -165,6 +170,8 @@ Deno.serve(async (req) => {
         const insight = await fetchMetaInsight(client.meta_ad_account_id, metaToken, since, until)
         const spend = Number(insight?.spend ?? 0)
         const leads = insight ? leadsFrom(insight) : 0
+
+        if (spend > 0) spendingClientIds.add(client.id)
 
         rows.push({
           client_id: client.id,
@@ -204,8 +211,27 @@ Deno.serve(async (req) => {
     }
   }
 
+  // A client with recorded spend is demonstrably running ads, so flip the flag
+  // rather than making someone tick it by hand. Never flipped back off — a
+  // quiet week is not the same as a campaign being switched off.
+  const toActivate = clients.filter(
+    (c: { id: string; meta_ads_active: boolean }) =>
+      !c.meta_ads_active && spendingClientIds.has(c.id)
+  )
+  for (const client of toActivate) {
+    await fetch(`${supabaseUrl}/rest/v1/clients?id=eq.${client.id}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({ meta_ads_active: true }),
+    })
+  }
+
   return new Response(
-    JSON.stringify({ weeks, synced: rows.length, results }, null, 2),
+    JSON.stringify(
+      { weeks, synced: rows.length, marked_live: toActivate.map((c) => c.name), results },
+      null,
+      2
+    ),
     { headers: { 'Content-Type': 'application/json' } }
   )
 })
