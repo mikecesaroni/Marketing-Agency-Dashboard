@@ -15,8 +15,20 @@ create index if not exists clients_is_internal_idx on clients (is_internal);
 
 -- The sync deliberately does NOT filter on is_internal: these accounts should
 -- keep pulling Meta data like any other, they just don't show up as clients.
+-- Guarded on the ad account id rather than `on conflict`: there is no unique
+-- constraint on clients.name, so on-conflict would silently insert duplicates
+-- if this file were run twice.
 insert into clients (name, industry, market, meta_ad_account_id, is_internal, meta_ads_active, lsa_active, archived)
-values
-  ('Horizon HVAC',      'HVAC',           'Rhode Island', '579874845095389',  true, true, false, false),
-  ('Horizon Water Co',  'Water treatment', 'Rhode Island', '2932769373743278', true, true, false, false)
-on conflict do nothing;
+select v.name, v.industry, v.market, v.acct, true, true, false, false
+from (values
+  ('Horizon HVAC',     'HVAC',            'Rhode Island', '579874845095389'),
+  ('Horizon Water Co', 'Water treatment', 'Rhode Island', '2932769373743278')
+) as v(name, industry, market, acct)
+where not exists (
+  select 1 from clients c where c.meta_ad_account_id = v.acct
+);
+
+-- If a row for either already exists (e.g. added by hand), make sure it is
+-- flagged internal rather than sitting in the client list.
+update clients set is_internal = true
+where meta_ad_account_id in ('579874845095389', '2932769373743278');
