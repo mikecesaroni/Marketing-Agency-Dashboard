@@ -16,6 +16,10 @@ create table clients (
   meta_budget_per_day numeric default 0,
   lsa_budget_per_day numeric default 0,
   meta_ad_account_id text,
+  -- Businesses we run ourselves. They carry Meta data but are not clients, so
+  -- they stay out of client lists, client counts and MRR. See
+  -- supabase/internal-businesses.sql.
+  is_internal boolean not null default false,
   setup_fee numeric default 0,
   monthly_fee numeric default 998,
   contract_start_date date,
@@ -26,6 +30,7 @@ create table clients (
 alter table clients add column if not exists meta_budget_per_day numeric default 0;
 alter table clients add column if not exists lsa_budget_per_day numeric default 0;
 alter table clients add column if not exists meta_ad_account_id text;
+alter table clients add column if not exists is_internal boolean not null default false;
 
 -- 2. ONBOARDING TASKS ----------------------------------------------------
 create table onboarding_tasks (

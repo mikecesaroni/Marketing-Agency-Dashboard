@@ -43,7 +43,12 @@ export default function DeliverablesPage() {
     try {
       const [items, clientsRes] = await Promise.all([
         fetchDeliverables(),
-        supabase.from('clients').select('id, name, meta_ads_active').eq('archived', false).order('name'),
+        supabase
+          .from('clients')
+          .select('id, name, meta_ads_active')
+          .eq('archived', false)
+          .eq('is_internal', false)
+          .order('name'),
       ])
       if (clientsRes.error) throw clientsRes.error
       setDeliverables(items)

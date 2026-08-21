@@ -80,8 +80,66 @@ function ChannelCard({ channel, spend, leads }) {
   )
 }
 
+function PerformanceTable({ rows, nameHeader, onOpen }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-slate-900">
+              <th className="px-4 py-3 text-left font-semibold">{nameHeader}</th>
+              <th className="px-4 py-3 text-right font-semibold">Meta spend</th>
+              <th className="px-4 py-3 text-right font-semibold">LSA spend</th>
+              <th className="px-4 py-3 text-right font-semibold">Total spend</th>
+              <th className="px-4 py-3 text-right font-semibold">Leads</th>
+              <th className="px-4 py-3 text-right font-semibold">Cost/lead</th>
+              <th className="px-4 py-3 text-right font-semibold">
+                <span className="sr-only">Ad breakdown</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.id}
+                onClick={(e) => {
+                  // The name cell is a real link — let it handle its own click
+                  // (and cmd-click) rather than navigating twice.
+                  if (e.target.closest('a')) return
+                  onOpen(row.id)
+                }}
+                className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition cursor-pointer"
+              >
+                <td className="px-4 py-3">
+                  <Link
+                    to={`/client/${row.id}#ad-performance`}
+                    className="font-medium text-blue-600 hover:text-blue-800"
+                  >
+                    {row.name}
+                  </Link>
+                </td>
+                <td className="px-4 py-3 text-right text-slate-600">{money(row.metaSpend)}</td>
+                <td className="px-4 py-3 text-right text-slate-600">{money(row.lsaSpend)}</td>
+                <td className="px-4 py-3 text-right font-medium">{money(row.spend)}</td>
+                <td className="px-4 py-3 text-right font-medium">{row.leads}</td>
+                <td className="px-4 py-3 text-right font-medium">
+                  {row.cpl > 0 ? `$${row.cpl.toFixed(2)}` : '—'}
+                </td>
+                <td className="px-4 py-3 text-right whitespace-nowrap text-xs font-medium text-blue-600">
+                  View ads →
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export default function ReportsPage() {
   const navigate = useNavigate()
+  const openAds = (id) => navigate(`/client/${id}#ad-performance`)
   const [kpis, setKpis] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -115,9 +173,16 @@ export default function ReportsPage() {
 
   const metric = METRICS.find((m) => m.key === metricKey)
 
+  // Horizon HVAC and Horizon Water Co are ours, not clients. Their spend is
+  // real and worth seeing, but folding it into agency totals would overstate
+  // what we run for clients — so every headline number below covers clients
+  // only, and the internal businesses get their own table.
+  const clientKpis = useMemo(() => kpis.filter((k) => !k.clients?.is_internal), [kpis])
+  const internalKpis = useMemo(() => kpis.filter((k) => k.clients?.is_internal), [kpis])
+
   const weeklyRows = useMemo(() => {
     const byWeek = {}
-    for (const kpi of kpis) {
+    for (const kpi of clientKpis) {
       const row = (byWeek[kpi.week_of] ||= { week: kpi.week_of, spend: 0, leads: 0 })
       row.spend += kpi.ad_spend || 0
       row.leads += kpi.leads || 0
@@ -125,11 +190,11 @@ export default function ReportsPage() {
     return Object.values(byWeek)
       .sort((a, b) => a.week.localeCompare(b.week))
       .map((r) => ({ ...r, cpl: r.leads > 0 ? r.spend / r.leads : 0 }))
-  }, [kpis])
+  }, [clientKpis])
 
-  const clientRows = useMemo(() => {
+  const rollUpByClient = (rows) => {
     const byClient = {}
-    for (const kpi of kpis) {
+    for (const kpi of rows) {
       const row = (byClient[kpi.client_id] ||= {
         id: kpi.client_id,
         name: kpi.clients?.name || 'Unknown',
@@ -146,7 +211,10 @@ export default function ReportsPage() {
     return Object.values(byClient)
       .map((r) => ({ ...r, cpl: r.leads > 0 ? r.spend / r.leads : 0 }))
       .sort((a, b) => b.leads - a.leads)
-  }, [kpis])
+  }
+
+  const clientRows = useMemo(() => rollUpByClient(clientKpis), [clientKpis])
+  const internalRows = useMemo(() => rollUpByClient(internalKpis), [internalKpis])
 
   const totals = weeklyRows.reduce(
     (acc, r) => ({ spend: acc.spend + r.spend, leads: acc.leads + r.leads }),
@@ -155,14 +223,14 @@ export default function ReportsPage() {
 
   const channelTotals = useMemo(() => {
     const t = { Meta: { spend: 0, leads: 0 }, LSA: { spend: 0, leads: 0 } }
-    for (const kpi of kpis) {
+    for (const kpi of clientKpis) {
       const bucket = t[kpi.channel]
       if (!bucket) continue
       bucket.spend += kpi.ad_spend || 0
       bucket.leads += kpi.leads || 0
     }
     return t
-  }, [kpis])
+  }, [clientKpis])
 
   const rangeButtons = (
     <div className="flex gap-1.5">
@@ -255,62 +323,19 @@ export default function ReportsPage() {
               </p>
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-900">
-                      <th className="px-4 py-3 text-left font-semibold">Client</th>
-                      <th className="px-4 py-3 text-right font-semibold">Meta spend</th>
-                      <th className="px-4 py-3 text-right font-semibold">LSA spend</th>
-                      <th className="px-4 py-3 text-right font-semibold">Total spend</th>
-                      <th className="px-4 py-3 text-right font-semibold">Leads</th>
-                      <th className="px-4 py-3 text-right font-semibold">Cost/lead</th>
-                      <th className="px-4 py-3 text-right font-semibold">
-                        <span className="sr-only">Ad breakdown</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {clientRows.map((row) => (
-                      <tr
-                        key={row.id}
-                        onClick={(e) => {
-                          // The name cell is a real link — let it handle its own
-                          // click (and cmd-click) rather than navigating twice.
-                          if (e.target.closest('a')) return
-                          navigate(`/client/${row.id}#ad-performance`)
-                        }}
-                        className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition cursor-pointer"
-                      >
-                        <td className="px-4 py-3">
-                          <Link
-                            to={`/client/${row.id}#ad-performance`}
-                            className="font-medium text-blue-600 hover:text-blue-800"
-                          >
-                            {row.name}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-3 text-right text-slate-600">
-                          {money(row.metaSpend)}
-                        </td>
-                        <td className="px-4 py-3 text-right text-slate-600">
-                          {money(row.lsaSpend)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-medium">{money(row.spend)}</td>
-                        <td className="px-4 py-3 text-right font-medium">{row.leads}</td>
-                        <td className="px-4 py-3 text-right font-medium">
-                          {row.cpl > 0 ? `$${row.cpl.toFixed(2)}` : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap text-xs font-medium text-blue-600">
-                          View ads →
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <PerformanceTable rows={clientRows} nameHeader="Client" onOpen={openAds} />
+          )}
+
+          {internalRows.length > 0 && (
+            <>
+              <div className="flex items-baseline gap-2 mt-6 mb-3">
+                <h2 className="font-bold text-slate-900">My businesses</h2>
+                <span className="text-xs text-slate-500">
+                  Not clients — excluded from the totals and charts above
+                </span>
               </div>
-            </div>
+              <PerformanceTable rows={internalRows} nameHeader="Business" onOpen={openAds} />
+            </>
           )}
         </>
       )}

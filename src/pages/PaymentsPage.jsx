@@ -50,7 +50,11 @@ export default function PaymentsPage() {
     try {
       const [items, clientsRes] = await Promise.all([
         fetchPayments(),
-        supabase.from('clients').select('id, name, monthly_fee, status').order('name'),
+        supabase
+          .from('clients')
+          .select('id, name, monthly_fee, status')
+          .eq('is_internal', false)
+          .order('name'),
       ])
       if (clientsRes.error) throw clientsRes.error
       setPayments(items)

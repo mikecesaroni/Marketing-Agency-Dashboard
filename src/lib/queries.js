@@ -51,7 +51,7 @@ export function calcMRR(clients, payments) {
   const scheduled = new Set(
     payments.filter((p) => p.payment_type === 'monthly').map((p) => p.client_id)
   )
-  const billing = clients.filter((c) => scheduled.has(c.id) && !c.archived)
+  const billing = clients.filter((c) => scheduled.has(c.id) && !c.archived && !c.is_internal)
   return {
     mrr: billing.reduce((sum, c) => sum + (c.monthly_fee || 0), 0),
     count: billing.length,
@@ -69,7 +69,14 @@ export async function fetchClientsWithKPIs() {
   const thisMonday = formatDate(getMonday(new Date()))
 
   const [clientsRes, kpisRes, intakeRes, setupRes] = await Promise.all([
-    supabase.from('clients').select('*').order('date_added', { ascending: false }),
+    // is_internal excludes the businesses we run ourselves — they carry Meta
+    // data but are not clients, so they never belong in a client list, a
+    // client count, or MRR.
+    supabase
+      .from('clients')
+      .select('*')
+      .eq('is_internal', false)
+      .order('date_added', { ascending: false }),
     supabase.from('weekly_kpis').select('*').eq('week_of', thisMonday),
     supabase.from('onboarding_intake').select('client_id, owner_name, industry_trade, service_area'),
     supabase
@@ -170,6 +177,7 @@ export async function fetchChannelSetupNeeded(field) {
     .from('clients')
     .select('id, name, meta_ads_active, lsa_active, meta_ad_account_id')
     .eq('archived', false)
+    .eq('is_internal', false)
     .eq(field, false)
     .order('name')
 
@@ -192,7 +200,7 @@ export async function fetchPayments() {
 export async function fetchKPIHistory(weeks = 12) {
   const { data, error } = await supabase
     .from('weekly_kpis')
-    .select('*, clients(name)')
+    .select('*, clients(name, is_internal)')
     .gte('week_of', weeksAgoMonday(weeks - 1))
     .order('week_of', { ascending: true })
 
