@@ -264,7 +264,6 @@ Deno.serve(async (req) => {
       for (const d of days) {
         const row = d as Record<string, string | unknown>
         const actions = (row.actions as { action_type: string; value: string }[]) || []
-        const lead = actions.find((a) => a.action_type === 'lead')
 
         adRows.push({
           client_id: client.id,
@@ -277,7 +276,10 @@ Deno.serve(async (req) => {
           impressions: Number(row.impressions ?? 0),
           reach: Number(row.reach ?? 0),
           clicks: Number(row.clicks ?? 0),
-          leads: lead ? Math.round(Number(lead.value) || 0) : 0,
+          // Same first-match-wins rule as the account-level totals, so per-ad
+          // leads add up to the weekly KPI instead of reading zero on accounts
+          // that only report the grouped action type.
+          leads: leadsFrom({ actions }),
           video_plays: firstActionValue(row.video_play_actions),
           video_thruplays: firstActionValue(row.video_thruplay_watched_actions),
           video_avg_watch_seconds: firstActionValue(row.video_avg_time_watched_actions),

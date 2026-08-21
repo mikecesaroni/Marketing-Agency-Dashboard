@@ -79,6 +79,8 @@ function Chart({ buckets, metric, period }) {
   )
 }
 
+const VIDEO_ONLY = new Set(['videoPlays', 'avgWatch', 'holdRate'])
+
 const COLUMNS = [
   { key: 'spend', label: 'Spend', fmt: (a) => `$${a.spend.toFixed(2)}`, num: true },
   { key: 'impressions', label: 'Impr.', fmt: (a) => a.impressions.toLocaleString(), num: true },
@@ -89,6 +91,12 @@ const COLUMNS = [
   { key: 'cpm', label: 'CPM', fmt: (a) => (a.cpm > 0 ? `$${a.cpm.toFixed(2)}` : '—'), num: true },
   { key: 'leads', label: 'Leads', fmt: (a) => String(a.leads), num: true },
   { key: 'cpl', label: 'Cost/lead', fmt: (a) => (a.cpl > 0 ? `$${a.cpl.toFixed(2)}` : '—'), num: true },
+  {
+    key: 'videoPlays',
+    label: 'Plays',
+    fmt: (a) => (a.isVideo ? a.videoPlays.toLocaleString() : '—'),
+    num: true,
+  },
   {
     key: 'avgWatch',
     label: 'Avg watch',
@@ -268,7 +276,7 @@ export default function AdPerformanceSection({ clientId }) {
                   {COLUMNS.map((c) => {
                     // Video-only columns stay hidden until there's a video ad,
                     // rather than showing a column of dashes.
-                    if ((c.key === 'avgWatch' || c.key === 'holdRate') && !hasVideo) return null
+                    if (VIDEO_ONLY.has(c.key) && !hasVideo) return null
                     return (
                       <th
                         key={c.key}
@@ -292,7 +300,7 @@ export default function AdPerformanceSection({ clientId }) {
                       </p>
                     </td>
                     {COLUMNS.map((c) => {
-                      if ((c.key === 'avgWatch' || c.key === 'holdRate') && !hasVideo) return null
+                      if (VIDEO_ONLY.has(c.key) && !hasVideo) return null
                       return (
                         <td
                           key={c.key}
@@ -310,8 +318,9 @@ export default function AdPerformanceSection({ clientId }) {
 
           {hasVideo && (
             <p className="text-[11px] text-slate-500 mt-3">
-              Avg watch and hold rate apply to video ads only — image ads show a dash rather than
-              a zero.
+              Plays, avg watch and hold rate apply to video ads only — image ads show a dash
+              rather than a zero. Avg watch is weighted by plays, so check the play count before
+              reading it: a few seconds off a handful of plays is noise, not a hook.
             </p>
           )}
         </>

@@ -295,8 +295,9 @@ export function summariseAds(rows) {
       reach: 0,
       videoPlays: 0,
       videoThruplays: 0,
+      hasThruplays: false,
       watchSecondsSum: 0,
-      watchDays: 0,
+      watchPlays: 0,
     }
     a.spend += Number(r.spend) || 0
     a.leads += r.leads || 0
@@ -304,10 +305,16 @@ export function summariseAds(rows) {
     a.clicks += r.clicks || 0
     a.reach += r.reach || 0
     if (r.video_plays != null) a.videoPlays += r.video_plays
-    if (r.video_thruplays != null) a.videoThruplays += r.video_thruplays
-    if (r.video_avg_watch_seconds != null) {
-      a.watchSecondsSum += Number(r.video_avg_watch_seconds)
-      a.watchDays += 1
+    if (r.video_thruplays != null) {
+      a.videoThruplays += r.video_thruplays
+      a.hasThruplays = true
+    }
+    // Weighted by that day's plays, not averaged across days. Meta reports an
+    // average per day, and a day with 3 plays must not count as heavily as a
+    // day with 2,000 — that read 8.3s on an ad nobody actually watched.
+    if (r.video_avg_watch_seconds != null && r.video_plays) {
+      a.watchSecondsSum += Number(r.video_avg_watch_seconds) * r.video_plays
+      a.watchPlays += r.video_plays
     }
     byAd.set(r.ad_id, a)
   }
@@ -318,8 +325,10 @@ export function summariseAds(rows) {
       // Null rather than zero for image ads: "no video" and "nobody watched"
       // are different findings and shouldn't look the same in a table.
       isVideo: a.videoPlays > 0,
-      holdRate: a.videoPlays > 0 ? (a.videoThruplays / a.videoPlays) * 100 : null,
-      avgWatch: a.watchDays > 0 ? a.watchSecondsSum / a.watchDays : null,
+      // Plays without any reported thruplay is missing data, not a 0% hold —
+      // dividing anyway would claim nobody watched past the hook.
+      holdRate: a.videoPlays > 0 && a.hasThruplays ? (a.videoThruplays / a.videoPlays) * 100 : null,
+      avgWatch: a.watchPlays > 0 ? a.watchSecondsSum / a.watchPlays : null,
     }))
     .sort((x, y) => y.spend - x.spend)
 }
