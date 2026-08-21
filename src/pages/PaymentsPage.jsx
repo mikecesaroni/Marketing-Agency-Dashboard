@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
-import { calcMRR, fetchPayments, isOverdue, money, today } from '../lib/queries'
+import { calcMRR, fetchPayments, hasInternalColumn, isOverdue, money, today } from '../lib/queries'
 
 const FILTERS = ['paid', 'overdue', 'upcoming', 'all']
 const METHODS = ['card', 'ach', 'check', 'paypal', 'other']
@@ -48,14 +48,13 @@ export default function PaymentsPage() {
 
   const loadData = async () => {
     try {
-      const [items, clientsRes] = await Promise.all([
-        fetchPayments(),
-        supabase
-          .from('clients')
-          .select('id, name, monthly_fee, status')
-          .eq('is_internal', false)
-          .order('name'),
-      ])
+      let clientsQuery = supabase
+        .from('clients')
+        .select('id, name, monthly_fee, status')
+        .order('name')
+      if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
+
+      const [items, clientsRes] = await Promise.all([fetchPayments(), clientsQuery])
       if (clientsRes.error) throw clientsRes.error
       setPayments(items)
       setClients(clientsRes.data || [])

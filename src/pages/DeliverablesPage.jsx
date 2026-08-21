@@ -5,7 +5,7 @@ import DeliverableForm from '../components/DeliverableForm'
 import LsaSetupPanel from '../components/LsaSetupPanel'
 import MetaSetupPanel from '../components/MetaSetupPanel'
 import { supabase } from '../lib/supabaseClient'
-import { fetchDeliverables, today } from '../lib/queries'
+import { fetchDeliverables, hasInternalColumn, today } from '../lib/queries'
 
 const STATUS_FILTERS = ['open', 'todo', 'in progress', 'review', 'done', 'all']
 const STATUSES = ['todo', 'in progress', 'review', 'done']
@@ -41,15 +41,14 @@ export default function DeliverablesPage() {
 
   const loadData = async () => {
     try {
-      const [items, clientsRes] = await Promise.all([
-        fetchDeliverables(),
-        supabase
-          .from('clients')
-          .select('id, name, meta_ads_active')
-          .eq('archived', false)
-          .eq('is_internal', false)
-          .order('name'),
-      ])
+      let clientsQuery = supabase
+        .from('clients')
+        .select('id, name, meta_ads_active')
+        .eq('archived', false)
+        .order('name')
+      if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
+
+      const [items, clientsRes] = await Promise.all([fetchDeliverables(), clientsQuery])
       if (clientsRes.error) throw clientsRes.error
       setDeliverables(items)
       setClients(clientsRes.data || [])

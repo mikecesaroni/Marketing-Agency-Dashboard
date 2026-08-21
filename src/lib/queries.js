@@ -1,5 +1,21 @@
 import { supabase } from './supabaseClient'
 
+// `is_internal` arrives with supabase/internal-businesses.sql. Until that runs,
+// filtering on it makes PostgREST return 400 and every page listing clients
+// goes blank. Probe for the column once and fall back to unfiltered — same
+// reasoning as the deliverables guard in fetchDashboardData: a migration that
+// has not been applied yet should degrade, not take the app down.
+let internalColumnProbe = null
+
+export function hasInternalColumn() {
+  internalColumnProbe ||= supabase
+    .from('clients')
+    .select('is_internal')
+    .limit(1)
+    .then(({ error }) => !error)
+  return internalColumnProbe
+}
+
 // ---------- date helpers ----------
 // Built from local date parts on purpose — toISOString() shifts to UTC and can
 // land on the wrong day for anyone west of Greenwich.
@@ -68,15 +84,13 @@ export function isOverdue(payment) {
 export async function fetchClientsWithKPIs() {
   const thisMonday = formatDate(getMonday(new Date()))
 
+  // Excludes the businesses we run ourselves — they carry Meta data but are
+  // not clients, so they never belong in a client list, a client count, or MRR.
+  let clientsQuery = supabase.from('clients').select('*').order('date_added', { ascending: false })
+  if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
+
   const [clientsRes, kpisRes, intakeRes, setupRes] = await Promise.all([
-    // is_internal excludes the businesses we run ourselves — they carry Meta
-    // data but are not clients, so they never belong in a client list, a
-    // client count, or MRR.
-    supabase
-      .from('clients')
-      .select('*')
-      .eq('is_internal', false)
-      .order('date_added', { ascending: false }),
+    clientsQuery,
     supabase.from('weekly_kpis').select('*').eq('week_of', thisMonday),
     supabase.from('onboarding_intake').select('client_id, owner_name, industry_trade, service_area'),
     supabase
@@ -173,13 +187,15 @@ export async function fetchDeliverables() {
 // Everyone whose given channel isn't live yet. Reads the flags on the client
 // rather than the intake form, so there's one answer to "is this channel on".
 export async function fetchChannelSetupNeeded(field) {
-  const { data, error } = await supabase
+  let q = supabase
     .from('clients')
     .select('id, name, meta_ads_active, lsa_active, meta_ad_account_id')
     .eq('archived', false)
-    .eq('is_internal', false)
     .eq(field, false)
     .order('name')
+  if (await hasInternalColumn()) q = q.eq('is_internal', false)
+
+  const { data, error } = await q
 
   if (error) throw error
   return data || []
@@ -198,9 +214,11 @@ export async function fetchPayments() {
 
 // ---------- reports ----------
 export async function fetchKPIHistory(weeks = 12) {
+  const embed = (await hasInternalColumn()) ? 'clients(name, is_internal)' : 'clients(name)'
+
   const { data, error } = await supabase
     .from('weekly_kpis')
-    .select('*, clients(name, is_internal)')
+    .select(`*, ${embed}`)
     .gte('week_of', weeksAgoMonday(weeks - 1))
     .order('week_of', { ascending: true })
 
