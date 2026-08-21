@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useLocation, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
@@ -14,6 +14,35 @@ import AddCreativeForm from '../components/AddCreativeForm'
 import ClientFilesSection from '../components/ClientFilesSection'
 import PaymentTracker from '../components/PaymentTracker'
 
+// Deep links like /client/:id#ad-performance come from the Reports table.
+// The ad section renders nothing until its own fetch resolves, so scrolling on
+// mount would land on a zero-height div and leave you at the top of the page.
+// Wait until the target actually has height, then scroll once.
+function useHashScroll(ready) {
+  const { hash } = useLocation()
+
+  useEffect(() => {
+    if (!ready || !hash) return
+
+    const id = hash.slice(1)
+    const startedAt = Date.now()
+    let frame
+
+    const tryScroll = () => {
+      const el = document.getElementById(id)
+      if (el && el.getBoundingClientRect().height > 0) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+      // Give up rather than spin forever if that section never renders.
+      if (Date.now() - startedAt < 3000) frame = requestAnimationFrame(tryScroll)
+    }
+
+    frame = requestAnimationFrame(tryScroll)
+    return () => cancelAnimationFrame(frame)
+  }, [hash, ready])
+}
+
 export default function ClientDetailPage() {
   const { clientId } = useParams()
   const [client, setClient] = useState(null)
@@ -27,6 +56,8 @@ export default function ClientDetailPage() {
   const [showKPIsModal, setShowKPIsModal] = useState(false)
   const [showWorkLogModal, setShowWorkLogModal] = useState(false)
   const [showCreativeModal, setShowCreativeModal] = useState(false)
+
+  useHashScroll(!loading && !!client)
 
   useEffect(() => {
     loadClientData()
@@ -387,7 +418,7 @@ export default function ClientDetailPage() {
         </div>
 
         {/* AD PERFORMANCE */}
-        <div className="mt-6 md:mt-8">
+        <div id="ad-performance" className="mt-6 md:mt-8 scroll-mt-4">
           <AdPerformanceSection clientId={clientId} />
         </div>
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { fetchKPIHistory, money, shortWeekLabel } from '../lib/queries'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
@@ -81,6 +81,7 @@ function ChannelCard({ channel, spend, leads }) {
 }
 
 export default function ReportsPage() {
+  const navigate = useNavigate()
   const [kpis, setKpis] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -265,17 +266,26 @@ export default function ReportsPage() {
                       <th className="px-4 py-3 text-right font-semibold">Total spend</th>
                       <th className="px-4 py-3 text-right font-semibold">Leads</th>
                       <th className="px-4 py-3 text-right font-semibold">Cost/lead</th>
+                      <th className="px-4 py-3 text-right font-semibold">
+                        <span className="sr-only">Ad breakdown</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {clientRows.map((row) => (
                       <tr
                         key={row.id}
-                        className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition"
+                        onClick={(e) => {
+                          // The name cell is a real link — let it handle its own
+                          // click (and cmd-click) rather than navigating twice.
+                          if (e.target.closest('a')) return
+                          navigate(`/client/${row.id}#ad-performance`)
+                        }}
+                        className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition cursor-pointer"
                       >
                         <td className="px-4 py-3">
                           <Link
-                            to={`/client/${row.id}`}
+                            to={`/client/${row.id}#ad-performance`}
                             className="font-medium text-blue-600 hover:text-blue-800"
                           >
                             {row.name}
@@ -291,6 +301,9 @@ export default function ReportsPage() {
                         <td className="px-4 py-3 text-right font-medium">{row.leads}</td>
                         <td className="px-4 py-3 text-right font-medium">
                           {row.cpl > 0 ? `$${row.cpl.toFixed(2)}` : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap text-xs font-medium text-blue-600">
+                          View ads →
                         </td>
                       </tr>
                     ))}
