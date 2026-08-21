@@ -76,6 +76,42 @@ function leadsFrom(insight: Insight): number {
   return 0
 }
 
+// Per-ad daily rows. A separate call from the account-level one because it
+// needs level=ad and a daily time_increment, and the two answer different
+// questions: account totals drive the CRM's weekly KPIs, these drive the
+// per-ad breakdown.
+async function fetchAdDaily(
+  adAccountId: string,
+  token: string,
+  since: string,
+  until: string
+): Promise<Record<string, unknown>[]> {
+  const account = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`
+  const url = new URL(`https://graph.facebook.com/${META_API_VERSION}/${account}/insights`)
+  url.searchParams.set(
+    'fields',
+    'ad_id,ad_name,campaign_id,adset_id,spend,impressions,reach,clicks,actions,video_play_actions,video_thruplay_watched_actions,video_avg_time_watched_actions'
+  )
+  url.searchParams.set('level', 'ad')
+  url.searchParams.set('time_increment', '1')
+  url.searchParams.set('time_range', JSON.stringify({ since, until }))
+  url.searchParams.set('limit', '500')
+  url.searchParams.set('access_token', token)
+
+  const res = await fetch(url)
+  const body = await res.json()
+  if (!res.ok) throw new Error(body?.error?.message || `Meta API returned ${res.status}`)
+  return body.data || []
+}
+
+// Meta returns these as [{ action_type, value }] arrays even when there is only
+// ever one entry.
+function firstActionValue(list: unknown): number | null {
+  if (!Array.isArray(list) || list.length === 0) return null
+  const v = Number((list[0] as { value?: string })?.value)
+  return Number.isFinite(v) ? v : null
+}
+
 async function fetchMetaInsight(
   adAccountId: string,
   token: string,
@@ -211,6 +247,58 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Per-ad detail for the same window, written to ad_daily.
+  const adRows: Record<string, unknown>[] = []
+  const firstWeek = weekRange(weeks[0])
+  const lastWeek = weekRange(weeks[weeks.length - 1])
+
+  for (const client of clients) {
+    try {
+      const days = await fetchAdDaily(
+        client.meta_ad_account_id,
+        metaToken,
+        firstWeek.since,
+        lastWeek.until
+      )
+
+      for (const d of days) {
+        const row = d as Record<string, string | unknown>
+        const actions = (row.actions as { action_type: string; value: string }[]) || []
+        const lead = actions.find((a) => a.action_type === 'lead')
+
+        adRows.push({
+          client_id: client.id,
+          ad_id: row.ad_id,
+          ad_name: row.ad_name,
+          campaign_id: row.campaign_id,
+          adset_id: row.adset_id,
+          date: row.date_start,
+          spend: Number(row.spend ?? 0),
+          impressions: Number(row.impressions ?? 0),
+          reach: Number(row.reach ?? 0),
+          clicks: Number(row.clicks ?? 0),
+          leads: lead ? Math.round(Number(lead.value) || 0) : 0,
+          video_plays: firstActionValue(row.video_play_actions),
+          video_thruplays: firstActionValue(row.video_thruplay_watched_actions),
+          video_avg_watch_seconds: firstActionValue(row.video_avg_time_watched_actions),
+        })
+      }
+    } catch (err) {
+      results.push({
+        client: client.name,
+        error: `ad detail: ${String(err instanceof Error ? err.message : err)}`,
+      })
+    }
+  }
+
+  if (adRows.length > 0) {
+    await fetch(`${supabaseUrl}/rest/v1/ad_daily?on_conflict=client_id,ad_id,date`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(adRows),
+    })
+  }
+
   // A client with recorded spend is demonstrably running ads, so flip the flag
   // rather than making someone tick it by hand. Never flipped back off — a
   // quiet week is not the same as a campaign being switched off.
@@ -228,7 +316,13 @@ Deno.serve(async (req) => {
 
   return new Response(
     JSON.stringify(
-      { weeks, synced: rows.length, marked_live: toActivate.map((c) => c.name), results },
+      {
+        weeks,
+        synced: rows.length,
+        ad_rows: adRows.length,
+        marked_live: toActivate.map((c) => c.name),
+        results,
+      },
       null,
       2
     ),

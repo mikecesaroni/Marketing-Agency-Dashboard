@@ -219,3 +219,107 @@ export async function fetchDashboardData() {
 
   return { clients, payments, deliverables, kpis }
 }
+
+// ---------- per-ad performance ----------
+export async function fetchAdDaily(clientId, since) {
+  let q = supabase
+    .from('ad_daily')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('date', { ascending: true })
+
+  if (since) q = q.gte('date', since)
+
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+// Rolls daily rows into weeks (Monday-keyed, matching weekly_kpis) or calendar
+// months. Daily storage is what makes both exact — bucketing weekly rows into
+// months would misplace every week that straddles a month boundary.
+export function bucketByPeriod(rows, period) {
+  const buckets = new Map()
+
+  for (const r of rows) {
+    const [y, m, d] = r.date.split('-').map(Number)
+    const dt = new Date(y, m - 1, d)
+    const key =
+      period === 'month'
+        ? `${y}-${String(m).padStart(2, '0')}-01`
+        : formatDate(getMonday(dt))
+
+    const b = buckets.get(key) || {
+      key,
+      spend: 0,
+      leads: 0,
+      impressions: 0,
+      clicks: 0,
+      reach: 0,
+    }
+    b.spend += Number(r.spend) || 0
+    b.leads += r.leads || 0
+    b.impressions += r.impressions || 0
+    b.clicks += r.clicks || 0
+    b.reach += r.reach || 0
+    buckets.set(key, b)
+  }
+
+  return [...buckets.values()].sort((a, b) => a.key.localeCompare(b.key)).map(withDerived)
+}
+
+// Rates are computed from the totals, never averaged from daily rates — an
+// average of ratios weights a $2 day the same as a $200 one.
+export function withDerived(t) {
+  return {
+    ...t,
+    cpl: t.leads > 0 ? t.spend / t.leads : 0,
+    ctr: t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0,
+    cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+    cpm: t.impressions > 0 ? (t.spend / t.impressions) * 1000 : 0,
+  }
+}
+
+export function summariseAds(rows) {
+  const byAd = new Map()
+
+  for (const r of rows) {
+    const a = byAd.get(r.ad_id) || {
+      ad_id: r.ad_id,
+      ad_name: r.ad_name,
+      status: r.effective_status,
+      spend: 0,
+      leads: 0,
+      impressions: 0,
+      clicks: 0,
+      reach: 0,
+      videoPlays: 0,
+      videoThruplays: 0,
+      watchSecondsSum: 0,
+      watchDays: 0,
+    }
+    a.spend += Number(r.spend) || 0
+    a.leads += r.leads || 0
+    a.impressions += r.impressions || 0
+    a.clicks += r.clicks || 0
+    a.reach += r.reach || 0
+    if (r.video_plays != null) a.videoPlays += r.video_plays
+    if (r.video_thruplays != null) a.videoThruplays += r.video_thruplays
+    if (r.video_avg_watch_seconds != null) {
+      a.watchSecondsSum += Number(r.video_avg_watch_seconds)
+      a.watchDays += 1
+    }
+    byAd.set(r.ad_id, a)
+  }
+
+  return [...byAd.values()]
+    .map((a) => ({
+      ...withDerived(a),
+      // Null rather than zero for image ads: "no video" and "nobody watched"
+      // are different findings and shouldn't look the same in a table.
+      isVideo: a.videoPlays > 0,
+      holdRate: a.videoPlays > 0 ? (a.videoThruplays / a.videoPlays) * 100 : null,
+      avgWatch: a.watchDays > 0 ? a.watchSecondsSum / a.watchDays : null,
+    }))
+    .sort((x, y) => y.spend - x.spend)
+}

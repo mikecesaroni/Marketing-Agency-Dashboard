@@ -6,6 +6,7 @@ import Modal from '../components/Modal'
 import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
 import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import LiveToggle from '../components/LiveToggle'
+import AdPerformanceSection from '../components/AdPerformanceSection'
 import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
@@ -383,6 +384,11 @@ export default function ClientDetailPage() {
             weeklyKPIs={weeklyKPIs}
             onUpdate={loadClientData}
           />
+        </div>
+
+        {/* AD PERFORMANCE */}
+        <div className="mt-6 md:mt-8">
+          <AdPerformanceSection clientId={clientId} />
         </div>
 
         {/* DELIVERABLES */}
