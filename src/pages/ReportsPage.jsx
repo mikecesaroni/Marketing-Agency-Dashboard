@@ -1,8 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
-import { fetchKPIHistory, money, shortWeekLabel } from '../lib/queries'
+import {
+  fetchKPIHistory,
+  fetchLiveAdRows,
+  formatDate,
+  getMonday,
+  money,
+  shortWeekLabel,
+} from '../lib/queries'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
+
+// Live mode reads per-ad rows so it can filter on ad status; All-time reads the
+// account-level weekly KPIs, which reach further back. Each mode is sourced
+// from wherever it is actually accurate rather than forcing one table to do both.
+const SCOPES = [
+  { key: 'live', label: 'Live ads' },
+  { key: 'all', label: 'All time' },
+]
 
 const RANGES = [
   { weeks: 4, label: '4 weeks' },
@@ -80,7 +95,7 @@ function ChannelCard({ channel, spend, leads }) {
   )
 }
 
-function PerformanceTable({ rows, nameHeader, onOpen }) {
+function PerformanceTable({ rows, nameHeader, onOpen, showLsa }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <div className="overflow-x-auto">
@@ -89,7 +104,7 @@ function PerformanceTable({ rows, nameHeader, onOpen }) {
             <tr className="border-b border-slate-200 bg-slate-50 text-slate-900">
               <th className="px-4 py-3 text-left font-semibold">{nameHeader}</th>
               <th className="px-4 py-3 text-right font-semibold">Meta spend</th>
-              <th className="px-4 py-3 text-right font-semibold">LSA spend</th>
+              {showLsa && <th className="px-4 py-3 text-right font-semibold">LSA spend</th>}
               <th className="px-4 py-3 text-right font-semibold">Total spend</th>
               <th className="px-4 py-3 text-right font-semibold">Leads</th>
               <th className="px-4 py-3 text-right font-semibold">Cost/lead</th>
@@ -119,7 +134,9 @@ function PerformanceTable({ rows, nameHeader, onOpen }) {
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-right text-slate-600">{money(row.metaSpend)}</td>
-                <td className="px-4 py-3 text-right text-slate-600">{money(row.lsaSpend)}</td>
+                {showLsa && (
+                  <td className="px-4 py-3 text-right text-slate-600">{money(row.lsaSpend)}</td>
+                )}
                 <td className="px-4 py-3 text-right font-medium">{money(row.spend)}</td>
                 <td className="px-4 py-3 text-right font-medium">{row.leads}</td>
                 <td className="px-4 py-3 text-right font-medium">
@@ -141,6 +158,8 @@ export default function ReportsPage() {
   const navigate = useNavigate()
   const openAds = (id) => navigate(`/client/${id}#ad-performance`)
   const [kpis, setKpis] = useState([])
+  const [liveRows, setLiveRows] = useState([])
+  const [scope, setScope] = useState('live')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [weeks, setWeeks] = useState(8)
@@ -165,8 +184,15 @@ export default function ReportsPage() {
 
   useEffect(() => {
     setLoading(true)
-    fetchKPIHistory(weeks)
-      .then(setKpis)
+    const since = formatDate(
+      new Date(getMonday(new Date()).getTime() - (weeks - 1) * 7 * 86400000)
+    )
+    Promise.all([fetchKPIHistory(weeks), fetchLiveAdRows(since)])
+      .then(([k, live]) => {
+        setKpis(k)
+        setLiveRows(live)
+        setError('')
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }, [weeks])
@@ -177,8 +203,34 @@ export default function ReportsPage() {
   // real and worth seeing, but folding it into agency totals would overstate
   // what we run for clients — so every headline number below covers clients
   // only, and the internal businesses get their own table.
-  const clientKpis = useMemo(() => kpis.filter((k) => !k.clients?.is_internal), [kpis])
-  const internalKpis = useMemo(() => kpis.filter((k) => k.clients?.is_internal), [kpis])
+  // Live per-ad rows are reshaped into the weekly_kpis shape (one row per
+  // client per week, channel Meta) so every aggregate below is source-agnostic.
+  const liveAsKpis = useMemo(() => {
+    const byKey = new Map()
+    for (const r of liveRows) {
+      const [y, m, d] = r.date.split('-').map(Number)
+      const week = formatDate(getMonday(new Date(y, m - 1, d)))
+      const key = `${r.client_id}|${week}`
+      const row = byKey.get(key) || {
+        id: key,
+        client_id: r.client_id,
+        week_of: week,
+        channel: 'Meta',
+        ad_spend: 0,
+        leads: 0,
+        clients: r.clients,
+      }
+      row.ad_spend += Number(r.spend) || 0
+      row.leads += r.leads || 0
+      byKey.set(key, row)
+    }
+    return [...byKey.values()]
+  }, [liveRows])
+
+  const active = scope === 'live' ? liveAsKpis : kpis
+
+  const clientKpis = useMemo(() => active.filter((k) => !k.clients?.is_internal), [active])
+  const internalKpis = useMemo(() => active.filter((k) => k.clients?.is_internal), [active])
 
   const weeklyRows = useMemo(() => {
     const byWeek = {}
@@ -241,6 +293,20 @@ export default function ReportsPage() {
       >
         {syncing ? 'Syncing...' : '↻ Sync Meta'}
       </button>
+      {SCOPES.map((sc) => (
+        <button
+          key={sc.key}
+          onClick={() => setScope(sc.key)}
+          className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
+            scope === sc.key
+              ? 'bg-blue-600 text-white'
+              : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          {sc.label}
+        </button>
+      ))}
+      <span className="w-px bg-slate-200 mx-0.5" />
       {RANGES.map((r) => (
         <button
           key={r.weeks}
@@ -260,7 +326,9 @@ export default function ReportsPage() {
   return (
     <Layout
       title="Performance Reports"
-      subtitle={`Last ${weeks} weeks · ${money(totals.spend)} spend · ${totals.leads} leads`}
+      subtitle={`Last ${weeks} weeks · ${
+        scope === 'live' ? 'live ads only' : 'all ads'
+      } · ${money(totals.spend)} spend · ${totals.leads} leads`}
       actions={rangeButtons}
     >
       {error && (
@@ -323,7 +391,7 @@ export default function ReportsPage() {
               </p>
             </div>
           ) : (
-            <PerformanceTable rows={clientRows} nameHeader="Client" onOpen={openAds} />
+            <PerformanceTable rows={clientRows} nameHeader="Client" onOpen={openAds} showLsa={scope === 'all'} />
           )}
 
           {internalRows.length > 0 && (
@@ -334,7 +402,12 @@ export default function ReportsPage() {
                   Not clients — excluded from the totals and charts above
                 </span>
               </div>
-              <PerformanceTable rows={internalRows} nameHeader="Business" onOpen={openAds} />
+              <PerformanceTable
+                rows={internalRows}
+                nameHeader="Business"
+                onOpen={openAds}
+                showLsa={scope === 'all'}
+              />
             </>
           )}
         </>

@@ -90,7 +90,7 @@ async function fetchAdDaily(
   const url = new URL(`https://graph.facebook.com/${META_API_VERSION}/${account}/insights`)
   url.searchParams.set(
     'fields',
-    'ad_id,ad_name,campaign_id,adset_id,spend,impressions,reach,clicks,actions,video_play_actions,video_thruplay_watched_actions,video_avg_time_watched_actions'
+    'ad_id,ad_name,campaign_id,campaign_name,adset_id,adset_name,effective_status,spend,impressions,reach,clicks,actions,video_play_actions,video_thruplay_watched_actions,video_avg_time_watched_actions'
   )
   url.searchParams.set('level', 'ad')
   url.searchParams.set('time_increment', '1')
@@ -270,7 +270,12 @@ Deno.serve(async (req) => {
           ad_id: row.ad_id,
           ad_name: row.ad_name,
           campaign_id: row.campaign_id,
+          campaign_name: row.campaign_name,
           adset_id: row.adset_id,
+          adset_name: row.adset_name,
+          // Drives the live/paused split in the CRM. Point-in-time, so it is
+          // refreshed on every row the sync touches rather than written once.
+          effective_status: row.effective_status,
           date: row.date_start,
           spend: Number(row.spend ?? 0),
           impressions: Number(row.impressions ?? 0),

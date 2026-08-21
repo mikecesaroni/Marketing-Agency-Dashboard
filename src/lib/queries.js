@@ -358,3 +358,126 @@ export function summariseAds(rows) {
     }))
     .sort((x, y) => y.spend - x.spend)
 }
+
+// An ad still delivering. WITH_ISSUES counts as live: Meta flags a setup or
+// policy problem but the ad keeps spending — Comfort Experts' "Financing" ad
+// is WITH_ISSUES and was its top spender.
+export const LIVE_STATUSES = ['ACTIVE', 'WITH_ISSUES']
+
+export function isLive(status) {
+  return LIVE_STATUSES.includes(status)
+}
+
+function blankTotals(extra) {
+  return { spend: 0, leads: 0, impressions: 0, clicks: 0, reach: 0, ...extra }
+}
+
+function accumulate(t, r) {
+  t.spend += Number(r.spend) || 0
+  t.leads += r.leads || 0
+  t.impressions += r.impressions || 0
+  t.clicks += r.clicks || 0
+  t.reach += r.reach || 0
+}
+
+// Campaign -> ad set -> ad, each level carrying its own totals.
+//
+// Reach is summed for ads but deliberately not surfaced above ad level: Meta
+// dedupes reach across an audience, so adding two ads' reach counts the same
+// person twice. Spend, leads, impressions and clicks are all genuinely additive.
+export function groupCampaigns(rows) {
+  const campaigns = new Map()
+
+  for (const r of rows) {
+    const cId = r.campaign_id || 'unknown'
+    let c = campaigns.get(cId)
+    if (!c) {
+      c = blankTotals({ id: cId, name: r.campaign_name || 'Unattributed', adsets: new Map() })
+      campaigns.set(cId, c)
+    }
+    accumulate(c, r)
+
+    const aId = r.adset_id || 'unknown'
+    let a = c.adsets.get(aId)
+    if (!a) {
+      a = blankTotals({ id: aId, name: r.adset_name || 'Unattributed', ads: new Map() })
+      c.adsets.set(aId, a)
+    }
+    accumulate(a, r)
+
+    let ad = a.ads.get(r.ad_id)
+    if (!ad) {
+      ad = blankTotals({
+        ad_id: r.ad_id,
+        ad_name: r.ad_name,
+        status: r.effective_status,
+        videoPlays: 0,
+        videoThruplays: 0,
+        hasThruplays: false,
+        watchSecondsSum: 0,
+        watchPlays: 0,
+      })
+      a.ads.set(r.ad_id, ad)
+    }
+    accumulate(ad, r)
+    if (r.video_plays != null) ad.videoPlays += r.video_plays
+    if (r.video_thruplays != null) {
+      ad.videoThruplays += r.video_thruplays
+      ad.hasThruplays = true
+    }
+    if (r.video_avg_watch_seconds != null && r.video_plays) {
+      ad.watchSecondsSum += Number(r.video_avg_watch_seconds) * r.video_plays
+      ad.watchPlays += r.video_plays
+    }
+  }
+
+  const finishAd = (ad) => ({
+    ...withDerived(ad),
+    isVideo: ad.videoPlays > 0,
+    holdRate: ad.videoPlays > 0 && ad.hasThruplays ? (ad.videoThruplays / ad.videoPlays) * 100 : null,
+    avgWatch: ad.watchPlays > 0 ? ad.watchSecondsSum / ad.watchPlays : null,
+    live: isLive(ad.status),
+  })
+
+  return [...campaigns.values()]
+    .map((c) => {
+      const adsets = [...c.adsets.values()]
+        .map((a) => {
+          const ads = [...a.ads.values()].map(finishAd).sort((x, y) => y.spend - x.spend)
+          return {
+            ...withDerived(a),
+            ads,
+            liveAds: ads.filter((x) => x.live).length,
+          }
+        })
+        .sort((x, y) => y.spend - x.spend)
+
+      const ads = adsets.flatMap((a) => a.ads)
+      return {
+        ...withDerived(c),
+        adsets,
+        adCount: ads.length,
+        liveAds: ads.filter((x) => x.live).length,
+      }
+    })
+    .sort((a, b) => b.spend - a.spend)
+}
+
+// Reports "Live ads" mode reads ad_daily instead of weekly_kpis, because ad
+// status only exists per ad. That is safe precisely because live ads are recent
+// by definition — the per-ad history covers every currently-running ad. Where
+// it does not reach as far back as weekly_kpis is old paused ads, which this
+// mode excludes anyway.
+export async function fetchLiveAdRows(since) {
+  let q = supabase
+    .from('ad_daily')
+    .select('client_id, date, spend, leads, impressions, clicks, effective_status, clients(name, is_internal)')
+    .in('effective_status', LIVE_STATUSES)
+    .order('date', { ascending: true })
+
+  if (since) q = q.gte('date', since)
+
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}

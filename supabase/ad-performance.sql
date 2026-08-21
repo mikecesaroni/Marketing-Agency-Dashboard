@@ -41,3 +41,14 @@ create unique index if not exists ad_daily_client_ad_date_idx
 create index if not exists ad_daily_client_date_idx on ad_daily (client_id, date);
 
 alter table ad_daily disable row level security;
+
+-- Campaign / ad set names for the drill-down.
+--
+-- Meta's ad-level insights carry campaign_id and adset_id but the names come
+-- from the same call at Graph API level (the MCP tool's field whitelist is
+-- narrower, so a hand backfill needs separate campaign/adset lookups).
+-- Denormalised onto each row so the tree can be built without extra joins.
+alter table ad_daily add column if not exists campaign_name text;
+alter table ad_daily add column if not exists adset_name text;
+
+create index if not exists ad_daily_campaign_idx on ad_daily (client_id, campaign_id);
