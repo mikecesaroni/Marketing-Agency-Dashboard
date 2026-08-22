@@ -9,6 +9,7 @@ import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import LiveToggle from '../components/LiveToggle'
 import AdPerformanceSection from '../components/AdPerformanceSection'
 import ClientBriefPanel from '../components/ClientBriefPanel'
+import ClientChatPanel from '../components/ClientChatPanel'
 import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
@@ -59,6 +60,7 @@ export default function ClientDetailPage() {
   const [showWorkLogModal, setShowWorkLogModal] = useState(false)
   const [showCreativeModal, setShowCreativeModal] = useState(false)
   const [showBriefModal, setShowBriefModal] = useState(false)
+  const [showChatModal, setShowChatModal] = useState(false)
   const [intake, setIntake] = useState(null)
   const [briefAds, setBriefAds] = useState([])
 
@@ -205,6 +207,12 @@ export default function ClientDetailPage() {
 
   const intakeButton = (
     <div className="flex flex-col md:flex-row gap-2">
+      <button
+        onClick={() => setShowChatModal(true)}
+        className="w-full md:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+      >
+        💬 Ask about {client.name}
+      </button>
       <button
         onClick={() => setShowBriefModal(true)}
         className="w-full md:w-auto px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition"
@@ -459,6 +467,15 @@ export default function ClientDetailPage() {
         </div>
 
         {/* MODALS */}
+        <Modal
+          isOpen={showChatModal}
+          onClose={() => setShowChatModal(false)}
+          title={`${client.name} — Chat`}
+          wide
+        >
+          <ClientChatPanel client={client} intake={intake} ads={briefAds} />
+        </Modal>
+
         <Modal
           isOpen={showBriefModal}
           onClose={() => setShowBriefModal(false)}
