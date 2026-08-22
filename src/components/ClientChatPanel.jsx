@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildBrief } from '../lib/clientBrief'
 import {
   clearChat,
+  creativeSetToStudio,
   extractCreativeSets,
   fetchChatHistory,
   renderBlocks,
@@ -18,7 +19,35 @@ const STARTERS = [
   'Build this week’s report',
 ]
 
-function Bubble({ role, text }) {
+// One detected creative set, ready to hand straight to the compositor. The
+// point of this card is that nothing here gets re-typed: the hook, offer and
+// CTA the model wrote are the ones the artboard paints.
+function CreativeSetCard({ set, index, onUse }) {
+  const mapped = useMemo(() => creativeSetToStudio(set), [set])
+
+  return (
+    <div className="rounded-md border border-slate-300 bg-white p-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-slate-700">
+            {mapped.hookAngle || `Set ${index + 1}`}
+          </p>
+          <p className="text-[11px] text-slate-500 truncate">{mapped.hook || '(no headline)'}</p>
+        </div>
+        {onUse && (
+          <button
+            onClick={() => onUse(mapped)}
+            className="flex-shrink-0 px-2 py-1 rounded bg-orange-600 text-white text-[11px] font-medium hover:bg-orange-700 transition"
+          >
+            Open in Ad Studio
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Bubble({ role, text, onUseSet }) {
   const mine = role === 'user'
   const sets = useMemo(() => (mine ? null : extractCreativeSets(text)), [mine, text])
 
@@ -30,14 +59,14 @@ function Bubble({ role, text }) {
         }`}
       >
         {text}
-        {sets && (
-          <div className="mt-2 pt-2 border-t border-slate-300">
+        {sets && sets.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-slate-300 space-y-1.5">
             <p className="text-[11px] font-semibold text-slate-600">
-              {sets.length} creative {sets.length === 1 ? 'set' : 'sets'} detected
+              {sets.length} creative {sets.length === 1 ? 'set' : 'sets'} ready to build
             </p>
-            <p className="text-[11px] text-slate-500">
-              {sets.map((s) => s.hook_angle).filter(Boolean).join(' · ')}
-            </p>
+            {sets.map((s, i) => (
+              <CreativeSetCard key={i} set={s} index={i} onUse={onUseSet} />
+            ))}
           </div>
         )}
       </div>
@@ -45,7 +74,7 @@ function Bubble({ role, text }) {
   )
 }
 
-export default function ClientChatPanel({ client, intake, ads }) {
+export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet }) {
   const [messages, setMessages] = useState([])
   const [chatId, setChatId] = useState(null)
   const [input, setInput] = useState('')
@@ -138,7 +167,7 @@ export default function ClientChatPanel({ client, intake, ads }) {
         )}
 
         {messages.map((m, i) => (
-          <Bubble key={i} role={m.role} text={m.text} />
+          <Bubble key={i} role={m.role} text={m.text} onUseSet={onUseCreativeSet} />
         ))}
 
         {sending && (

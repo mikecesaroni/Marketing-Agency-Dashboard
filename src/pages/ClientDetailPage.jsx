@@ -65,6 +65,8 @@ export default function ClientDetailPage() {
   const [showStudioModal, setShowStudioModal] = useState(false)
   const [intake, setIntake] = useState(null)
   const [briefAds, setBriefAds] = useState([])
+  // Copy handed from the chat to the Ad Studio. Null means "start from intake".
+  const [studioSeed, setStudioSeed] = useState(null)
 
   useHashScroll(!loading && !!client)
 
@@ -169,6 +171,14 @@ export default function ClientDetailPage() {
     }
   }
 
+  // The whole point of the handoff: the hook, offer and CTA the chat wrote go
+  // straight onto the artboards instead of being re-typed.
+  const handleUseCreativeSet = (mapped) => {
+    setStudioSeed(mapped)
+    setShowChatModal(false)
+    setShowStudioModal(true)
+  }
+
   const handleDataAdded = async (type) => {
     if (type === 'intake') {
       setShowIntakeModal(false)
@@ -210,7 +220,10 @@ export default function ClientDetailPage() {
   const intakeButton = (
     <div className="flex flex-col md:flex-row gap-2">
       <button
-        onClick={() => setShowStudioModal(true)}
+        onClick={() => {
+          setStudioSeed(null)
+          setShowStudioModal(true)
+        }}
         className="w-full md:w-auto px-4 py-2.5 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 transition"
       >
         🎨 Ad Studio
@@ -481,7 +494,7 @@ export default function ClientDetailPage() {
           title={`Ad Studio — ${client.name}`}
           wide
         >
-          <AdStudioPanel client={client} intake={intake} />
+          <AdStudioPanel client={client} intake={intake} seed={studioSeed} />
         </Modal>
 
         <Modal
@@ -490,7 +503,12 @@ export default function ClientDetailPage() {
           title={`${client.name} — Chat`}
           wide
         >
-          <ClientChatPanel client={client} intake={intake} ads={briefAds} />
+          <ClientChatPanel
+            client={client}
+            intake={intake}
+            ads={briefAds}
+            onUseCreativeSet={handleUseCreativeSet}
+          />
         </Modal>
 
         <Modal

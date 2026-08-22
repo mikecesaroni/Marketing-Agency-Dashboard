@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { copyText } from '../lib/intakeSummary'
 import {
   DEFAULT_ACCENT,
   SIZES,
@@ -27,7 +28,48 @@ function Artboard({ size, content, assets, canvasRef }) {
   )
 }
 
-export default function AdStudioPanel({ client, intake }) {
+// When copy arrives from the chat, the parts that do NOT go on the image still
+// matter: the primary text and description are the ad copy in the feed, and the
+// design brief says what background the model had in mind.
+function SeedBanner({ seed }) {
+  return (
+    <details className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+      <summary className="cursor-pointer text-sm font-medium text-orange-900">
+        From chat: {seed.hookAngle || 'creative set'}
+      </summary>
+      <div className="mt-2 space-y-2 text-xs text-slate-700">
+        {seed.designBrief && (
+          <div>
+            <p className="font-semibold text-slate-600">Design brief</p>
+            <p className="whitespace-pre-wrap">{seed.designBrief}</p>
+          </div>
+        )}
+        {seed.primaryText && (
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="font-semibold text-slate-600">Primary text (goes in Meta, not on the image)</p>
+              <button
+                onClick={() => copyText(seed.primaryText)}
+                className="text-[11px] text-blue-600 hover:text-blue-800"
+              >
+                Copy
+              </button>
+            </div>
+            <p className="whitespace-pre-wrap">{seed.primaryText}</p>
+          </div>
+        )}
+        {seed.description && (
+          <div>
+            <p className="font-semibold text-slate-600">Description</p>
+            <p>{seed.description}</p>
+          </div>
+        )}
+      </div>
+    </details>
+  )
+}
+
+export default function AdStudioPanel({ client, intake, seed }) {
   const [files, setFiles] = useState([])
   const [backgroundPath, setBackgroundPath] = useState('')
   const [logoPath, setLogoPath] = useState('')
@@ -45,8 +87,9 @@ export default function AdStudioPanel({ client, intake }) {
   const refs = useRef(SIZES.map(() => null))
 
   // Prefill from intake so the first render is a real ad, not empty boxes.
+  // Skipped when the chat handed us copy: that copy is the whole point.
   useEffect(() => {
-    if (!intake) return
+    if (!intake || seed) return
     const city = (intake.target_cities || intake.service_area || '').split(/[\n,]/)[0]?.trim()
     setHook(city ? `${city} homeowners: is your system ready?` : 'Is your system ready?')
     setOffer(
@@ -54,7 +97,15 @@ export default function AdStudioPanel({ client, intake }) {
         .split('\n')[0]
         ?.replace(/^[-•\s]+/, '') || ''
     )
-  }, [intake])
+  }, [intake, seed])
+
+  // Copy handed over from the chat, already mapped onto the three slots.
+  useEffect(() => {
+    if (!seed) return
+    setHook(seed.hook || '')
+    setOffer(seed.offer || '')
+    setCta(seed.cta || 'Get Quote')
+  }, [seed])
 
   useEffect(() => {
     supabase
@@ -193,6 +244,8 @@ export default function AdStudioPanel({ client, intake }) {
           {saved}
         </div>
       )}
+
+      {seed && <SeedBanner seed={seed} />}
 
       <div className="grid md:grid-cols-2 gap-3">
         <Picker

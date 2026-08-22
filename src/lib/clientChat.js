@@ -35,6 +35,66 @@ export function extractCreativeSets(text) {
   }
 }
 
+// Meta sends CTAs as enums; the button on the artboard should read like a button.
+const CTA_LABELS = {
+  CALL_NOW: 'Call Now',
+  GET_QUOTE: 'Get Quote',
+  BOOK_NOW: 'Book Now',
+  LEARN_MORE: 'Learn More',
+  SIGN_UP: 'Sign Up',
+  SEND_MESSAGE: 'Send Message',
+  MESSAGE_PAGE: 'Send Message',
+  GET_OFFER: 'Get Offer',
+}
+
+export function ctaLabel(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return 'Get Quote'
+  const key = raw.toUpperCase().replace(/[\s-]+/g, '_')
+  if (CTA_LABELS[key]) return CTA_LABELS[key]
+  // Already human ("Get Quote") or something unexpected: title-case it rather
+  // than shouting GET_QUOTE across the button.
+  return raw
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+// The design brief is written to a fixed set of labels (see clientBrief.js), so
+// the on-image lines can be read back out of it.
+function briefLine(designBrief, label) {
+  // Horizontal whitespace only. Plain \s would eat the newline and let an
+  // empty "OFFER BADGE:" line capture whatever sits on the line below it.
+  const h = '[^\\S\\n]*'
+  const re = new RegExp(`^${h}${label}${h}:${h}(\\S.*)$`, 'im')
+  const found = String(designBrief || '').match(re)
+  if (!found) return ''
+  // Drop the template's own square brackets if the model echoed them.
+  return found[1].trim().replace(/^\[(.*)\]$/, '$1').trim()
+}
+
+/**
+ * Maps one creative set from the chat onto the three text slots the compositor
+ * paints. The JSON has no explicit "offer" field, so it comes from the design
+ * brief's OFFER BADGE line, which is where the brief asks for it.
+ */
+export function creativeSetToStudio(set) {
+  if (!set) return null
+  const brief = set.design_brief || ''
+  return {
+    hook: briefLine(brief, 'HEADLINE ON IMAGE') || set.headline || '',
+    offer: briefLine(brief, 'OFFER BADGE') || set.description || '',
+    cta: ctaLabel(set.cta),
+    // Carried through for reference, not painted: the primary text is the ad
+    // copy that sits above the image in the feed.
+    hookAngle: set.hook_angle || '',
+    primaryText: set.primary_text || '',
+    headline: set.headline || '',
+    description: set.description || '',
+    designBrief: brief,
+  }
+}
+
 export async function fetchChatHistory(clientId) {
   const { data: chats } = await supabase
     .from('client_chats')
