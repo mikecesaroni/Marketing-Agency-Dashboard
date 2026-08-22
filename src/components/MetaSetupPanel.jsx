@@ -1,4 +1,6 @@
 import ChannelSetupPanel from './ChannelSetupPanel'
+import CopySetupMessageButton from './CopySetupMessageButton'
+import { META_SETUP_MESSAGE } from '../lib/metaSetupMessage'
 
 export default function MetaSetupPanel() {
   return (
@@ -10,6 +12,7 @@ export default function MetaSetupPanel() {
       title="Meta ads not live yet"
       markLabel="Mark Meta live"
       allLiveMessage="Meta ads are live for every client."
+      action={<CopySetupMessageButton message={META_SETUP_MESSAGE} />}
     />
   )
 }
