@@ -10,6 +10,7 @@ import LiveToggle from '../components/LiveToggle'
 import AdPerformanceSection from '../components/AdPerformanceSection'
 import ClientBriefPanel from '../components/ClientBriefPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
+import AdStudioPanel from '../components/AdStudioPanel'
 import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
@@ -61,6 +62,7 @@ export default function ClientDetailPage() {
   const [showCreativeModal, setShowCreativeModal] = useState(false)
   const [showBriefModal, setShowBriefModal] = useState(false)
   const [showChatModal, setShowChatModal] = useState(false)
+  const [showStudioModal, setShowStudioModal] = useState(false)
   const [intake, setIntake] = useState(null)
   const [briefAds, setBriefAds] = useState([])
 
@@ -207,6 +209,12 @@ export default function ClientDetailPage() {
 
   const intakeButton = (
     <div className="flex flex-col md:flex-row gap-2">
+      <button
+        onClick={() => setShowStudioModal(true)}
+        className="w-full md:w-auto px-4 py-2.5 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 transition"
+      >
+        🎨 Ad Studio
+      </button>
       <button
         onClick={() => setShowChatModal(true)}
         className="w-full md:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
@@ -467,6 +475,15 @@ export default function ClientDetailPage() {
         </div>
 
         {/* MODALS */}
+        <Modal
+          isOpen={showStudioModal}
+          onClose={() => setShowStudioModal(false)}
+          title={`Ad Studio — ${client.name}`}
+          wide
+        >
+          <AdStudioPanel client={client} intake={intake} />
+        </Modal>
+
         <Modal
           isOpen={showChatModal}
           onClose={() => setShowChatModal(false)}
