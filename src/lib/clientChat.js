@@ -73,17 +73,36 @@ function briefLine(designBrief, label) {
   return found[1].trim().replace(/^\[(.*)\]$/, '$1').trim()
 }
 
+// "$29.95 15-Point Visual Inspection" -> amount + detail. The leading price or
+// percentage is the thing the eye lands on, so it gets its own line in the
+// offer block.
+export function splitOffer(text) {
+  const raw = String(text || '').trim()
+  // The qualifier is part of the number: "$0 Down" and "$500 Off" both read
+  // wrong when the word is stranded on the detail line.
+  const m = raw.match(/^(\$[\d,.]+(?:\s*(?:off|down))?|\d+%\s*(?:off|down)|free)\b[\s\u2013\u2014:-]*(.*)$/i)
+  if (m && m[2]) return { amount: m[1].trim(), detail: m[2].trim() }
+  return { amount: '', detail: raw }
+}
+
 /**
- * Maps one creative set from the chat onto the three text slots the compositor
- * paints. The JSON has no explicit "offer" field, so it comes from the design
- * brief's OFFER BADGE line, which is where the brief asks for it.
+ * Maps one creative set from the chat onto the slots the compositor paints.
+ *
+ * The JSON carries the copy; the design brief carries the layout, written to
+ * the fixed labels clientBrief.js asks for. Reading them back out is what lets
+ * the model fill the whole artboard rather than just the headline.
  */
 export function creativeSetToStudio(set) {
   if (!set) return null
   const brief = set.design_brief || ''
+  const offer = splitOffer(briefLine(brief, 'OFFER BADGE'))
   return {
+    badge: briefLine(brief, 'LOCATION BADGE'),
     hook: briefLine(brief, 'HEADLINE ON IMAGE') || set.headline || '',
-    offer: briefLine(brief, 'OFFER BADGE') || set.description || '',
+    offerAmount: offer.amount,
+    offerDetail: offer.detail,
+    subhead: briefLine(brief, 'SUBHEAD'),
+    proof: briefLine(brief, 'PROOF STRIP') || set.description || '',
     cta: ctaLabel(set.cta),
     // Carried through for reference, not painted: the primary text is the ad
     // copy that sits above the image in the feed.

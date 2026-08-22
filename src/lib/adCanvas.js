@@ -1,22 +1,69 @@
 // Ad compositor.
 //
-// Same layout every time, three text slots that change: hook, offer, CTA. That
-// is deliberate. The playbook tests one variable at a time, which only works if
-// the layout holds still while the words change — a freeform canvas would let
-// every variant drift and you would be comparing hook AND design.
+// The layout is fixed and only the words change. That is deliberate: the
+// playbook tests one variable at a time, which only works if the design holds
+// still while the copy moves. A freeform canvas would let every variant drift
+// and you would be comparing hook AND design.
 //
 // Canvas 2D rather than rasterising HTML: it gives exact 1080-wide output and
-// lets the safe areas be enforced in real pixels. Meta's interface covers the
-// top and bottom of a 9:16, so text placed there is simply not seen.
+// lets the Reels safe areas be enforced in real pixels.
+//
+// The layout mirrors the Claude Design Studio ads: a header pinned to the top
+// (location badge, then the hook) and a footer stacked up from the bottom
+// (offer block, subhead, proof, CTA), with the photo breathing in between and
+// the logo in the bottom-right corner.
 
 export const SIZES = [
-  { key: 'feed', label: '4:5 Feed', w: 1080, h: 1350, safeTop: 70, safeBottom: 70 },
-  // Reels and Stories put UI over both ends of the frame.
-  { key: 'story', label: '9:16 Story', w: 1080, h: 1920, safeTop: 250, safeBottom: 250 },
-  { key: 'square', label: '1:1 Square', w: 1080, h: 1080, safeTop: 70, safeBottom: 70 },
+  { key: 'square', label: 'Feed / Square', w: 1080, h: 1080 },
+  { key: 'feed', label: 'Feed / Portrait', w: 1080, h: 1350 },
+  // Reels and Stories put UI over both ends of the frame: the profile row up
+  // top, the caption and message bar along the bottom. Anything placed there
+  // is simply not seen.
+  // Meta unified the 9:16 safe zone across Facebook/Instagram Stories and
+  // Reels in March 2026: 14% off the top, 6% off each side, and a bottom band
+  // that depends on the placement. Stories has the lighter interface and only
+  // loses 20%; Reels stacks a caption, audio row and action buttons and eats
+  // 35%. That is a ~290px difference, which is a whole headline.
+  {
+    key: 'story',
+    label: 'Story & Reels',
+    w: 1080,
+    h: 1920,
+    ui: { top: 0.14, side: 0.06, stories: 0.2, reels: 0.35 },
+  },
 ]
 
-export const DEFAULT_ACCENT = '#EA580C'
+// Meta's own advice: if you only make one vertical creative, make it for Reels,
+// because anything that clears the Reels margins fits Stories with room over.
+export const SAFE_MODES = [
+  { key: 'reels', label: 'Reels safe', hint: 'strictest, works everywhere' },
+  { key: 'stories', label: 'Stories safe', hint: 'more room, Stories only' },
+  { key: 'off', label: 'Edge to edge', hint: 'no safe area' },
+]
+
+export const DEFAULT_ACCENT = '#C81E1E' // offer block
+export const DEFAULT_BADGE = '#1E3A8A' // location badge
+
+// Every artboard is 1080 wide, so type is sized in absolute pixels and is the
+// same physical size in all three.
+const FONT = '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+const PAD = 60
+
+// Inter is loaded from the stylesheet, but a font declared in CSS is only
+// fetched once something on the page uses it. Canvas text does not count as a
+// use, so without this the first paint measures with a fallback face and wraps
+// on different words than the export does.
+const WEIGHTS = ['500 27px', '700 23px', '700 32px', '800 21px', '800 22px', '800 44px', '800 60px']
+export async function ensureFonts() {
+  if (!document.fonts) return
+  try {
+    await Promise.all(WEIGHTS.map((w) => document.fonts.load(`${w} "Inter"`)))
+    await document.fonts.ready
+  } catch {
+    // A font that will not load is not worth failing the render over; the
+    // fallback stack still draws something reasonable.
+  }
+}
 
 // Cross-origin is required or the canvas is tainted and toBlob() throws, which
 // would make the whole thing un-exportable. Supabase public buckets send the
@@ -30,6 +77,19 @@ export function loadImage(src) {
     img.onerror = () => reject(new Error(`Could not load image: ${src}`))
     img.src = src
   })
+}
+
+// ctx.letterSpacing is ignored rather than fatal where it is unsupported, so
+// this is safe to set unconditionally. It only ever has to be reset to '0px'.
+function setFont(ctx, weight, px, tracking = 0) {
+  ctx.font = `${weight} ${px}px ${FONT}`
+  ctx.letterSpacing = `${tracking}px`
+}
+
+// Display type wants a real apostrophe. A straight quote in a 60px headline
+// reads as a typo, which is not the impression a $30 offer should make.
+function typographic(text) {
+  return String(text || '').replace(/(\w)'/g, '$1\u2019')
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -62,17 +122,22 @@ function wrapText(ctx, text, maxWidth) {
   return lines
 }
 
-// Shrinks the headline until it fits the lines allowed. A long hook that
-// silently overflows the frame is worse than a slightly smaller one.
-function fitText(ctx, text, maxWidth, maxLines, startPx, minPx, weight = '800') {
+// Shrinks text until it fits the lines allowed. A long hook that silently
+// overflows the frame is worse than a slightly smaller one.
+function fitText(ctx, text, maxWidth, maxLines, startPx, minPx, weight, tracking = 0, budget) {
+  const { maxHeight = Infinity, lineRatio = 1.2 } = budget || {}
   let px = startPx
   let lines = []
   while (px >= minPx) {
-    ctx.font = `${weight} ${px}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`
+    setFont(ctx, weight, px, tracking)
     lines = wrapText(ctx, text, maxWidth)
-    if (lines.length <= maxLines) break
-    px -= 4
+    if (lines.length <= maxLines && lines.length * px * lineRatio <= maxHeight) break
+    px -= 3
   }
+  // Still too tall at the smallest size: drop lines rather than run the
+  // headline down through the offer block.
+  const fits = Math.max(1, Math.floor(maxHeight / (px * lineRatio)))
+  if (lines.length > fits) lines = lines.slice(0, fits)
   return { px, lines }
 }
 
@@ -87,99 +152,317 @@ function drawCover(ctx, img, w, h) {
 /**
  * Paints one ad onto a canvas.
  *
- * Content is laid out from the bottom of the safe area upward, so a long hook
- * grows into empty space instead of pushing the CTA off the frame.
+ * Visual hierarchy, largest to smallest: hook, then the offer, then the CTA
+ * pill. The hook is the only thing that gets a scroll stopped, so it is sized
+ * first and everything else is fitted around it.
+ *
+ * The footer is measured before anything is drawn, so the hook knows exactly
+ * how much room it has and shrinks instead of running into the offer block.
+ * That matters most on Reels, where the usable band is under half the frame.
+ *
+ * opts.safeMode: 'reels' (default) | 'stories' | 'off'
+ * opts.guides: draw the unsafe bands over the preview. Never export with this on.
  */
-export function renderAd(canvas, size, content, assets) {
-  const { w, h, safeTop, safeBottom } = size
-  const { hook, offer, cta, accent = DEFAULT_ACCENT } = content
+export function renderAd(canvas, size, content, assets, opts = {}) {
+  const { w, h } = size
+  const safeMode = opts.safeMode || 'reels'
+  const ui = size.ui
+  const safeOn = Boolean(ui) && safeMode !== 'off'
+  const safeTop = safeOn ? Math.round(h * ui.top) : 0
+  const safeBottom = safeOn ? Math.round(h * (safeMode === 'stories' ? ui.stories : ui.reels)) : 0
+  const safeSide = safeOn ? Math.round(w * ui.side) : 0
+
+  const {
+    badge,
+    hook,
+    offerAmount,
+    offerDetail,
+    subhead,
+    proof,
+    cta,
+    accent = DEFAULT_ACCENT,
+    badgeColor = DEFAULT_BADGE,
+  } = content
   const { background, logo } = assets || {}
 
   canvas.width = w
   canvas.height = h
   const ctx = canvas.getContext('2d')
+  ctx.letterSpacing = '0px'
 
-  // 1. Background
-  ctx.fillStyle = '#1E293B'
+  const padX = Math.max(PAD, safeSide)
+  const maxWidth = w - padX * 2
+  // Inside a safe inset the band is already generous, so only a little breathing
+  // room is added. Without one, the design margin applies.
+  const contentTop = safeTop + (safeTop ? 22 : PAD)
+  const contentBottom = h - safeBottom - (safeBottom ? 22 : PAD)
+
+  // ---- MEASURE ----
+  const badgeLabel = badge?.trim() ? badge.trim().toUpperCase() : ''
+  const badgeH = badgeLabel ? 52 : 0
+  const headerTop = contentTop
+  const hookTop = headerTop + (badgeH ? badgeH + 26 : 0)
+
+  let logoBox = null
+  if (logo) {
+    const box = 112
+    const scale = Math.min(box / logo.width, box / logo.height)
+    logoBox = { w: logo.width * scale, h: logo.height * scale }
+  }
+  const logoGutter = logoBox ? logoBox.w + 28 : 0
+
+  const footer = measureFooter(ctx, { offerAmount, offerDetail, subhead, proof, cta }, maxWidth, logoGutter)
+  const footerTop = contentBottom - footer.height
+
+  // ---- BACKGROUND ----
+  ctx.fillStyle = '#0F172A'
   ctx.fillRect(0, 0, w, h)
   if (background) drawCover(ctx, background, w, h)
 
-  // 2. Scrim. Without it, white text over a bright work photo is unreadable,
-  //    which is the single most common failure in this kind of ad.
-  // Ramped over more stops than feels necessary: with only three, the 9:16
-  // showed a visible horizontal seam where the gradient began, because the tall
-  // frame stretches each step over ~500px.
-  const scrim = ctx.createLinearGradient(0, 0, 0, h)
-  scrim.addColorStop(0, 'rgba(2,6,23,0.10)')
-  scrim.addColorStop(0.35, 'rgba(2,6,23,0.16)')
-  scrim.addColorStop(0.55, 'rgba(2,6,23,0.42)')
-  scrim.addColorStop(0.72, 'rgba(2,6,23,0.74)')
-  scrim.addColorStop(0.88, 'rgba(2,6,23,0.90)')
-  scrim.addColorStop(1, 'rgba(2,6,23,0.95)')
-  ctx.fillStyle = scrim
+  // Scrim. Without it, white text over a bright work photo is unreadable,
+  // which is the single most common failure in this kind of ad. Three passes:
+  // an overall knock-down so the photo reads as a backdrop, then extra weight
+  // behind the header and behind the footer. The lower ramp is anchored to the
+  // footer rather than to a fixed fraction, so it still sits behind the text
+  // when Reels pushes everything up the frame.
+  ctx.fillStyle = 'rgba(2,6,23,0.20)'
   ctx.fillRect(0, 0, w, h)
 
-  const pad = 72
-  const maxWidth = w - pad * 2
-  let cursor = h - safeBottom - pad // bottom of the content stack, moving up
+  const topEnd = Math.max(h * 0.2, hookTop + 260)
+  const topScrim = ctx.createLinearGradient(0, 0, 0, topEnd)
+  topScrim.addColorStop(0, 'rgba(2,6,23,0.58)')
+  topScrim.addColorStop(0.55, 'rgba(2,6,23,0.28)')
+  topScrim.addColorStop(1, 'rgba(2,6,23,0)')
+  ctx.fillStyle = topScrim
+  ctx.fillRect(0, 0, w, topEnd)
 
-  // 3. CTA button
-  if (cta?.trim()) {
-    ctx.font = '700 40px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
-    const textW = ctx.measureText(cta).width
-    const btnW = Math.min(textW + 88, maxWidth)
-    const btnH = 96
-    const btnY = cursor - btnH
+  // Ramped over more stops than feels necessary: with only two, a tall frame
+  // shows a visible horizontal seam where the gradient begins.
+  const botStart = Math.max(0, footerTop - 220)
+  const botScrim = ctx.createLinearGradient(0, botStart, 0, h)
+  botScrim.addColorStop(0, 'rgba(2,6,23,0)')
+  botScrim.addColorStop(0.3, 'rgba(2,6,23,0.34)')
+  botScrim.addColorStop(0.55, 'rgba(2,6,23,0.66)')
+  botScrim.addColorStop(0.78, 'rgba(2,6,23,0.86)')
+  botScrim.addColorStop(1, 'rgba(2,6,23,0.93)')
+  ctx.fillStyle = botScrim
+  ctx.fillRect(0, botStart, w, h - botStart)
 
-    ctx.fillStyle = accent
-    roundRect(ctx, pad, btnY, btnW, btnH, 16)
+  // ---- HEADER ----
+  if (badgeLabel) {
+    setFont(ctx, '800', 22, 1.4)
+    const boxW = Math.min(ctx.measureText(badgeLabel).width + 38, maxWidth)
+
+    ctx.fillStyle = badgeColor
+    roundRect(ctx, padX, headerTop, boxW, badgeH, 8)
     ctx.fill()
 
     ctx.fillStyle = '#FFFFFF'
+    ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.textAlign = 'center'
-    ctx.fillText(cta, pad + btnW / 2, btnY + btnH / 2 + 2)
-
-    cursor = btnY - 36
+    ctx.fillText(badgeLabel, padX + 19, headerTop + badgeH / 2 + 1)
   }
 
-  // 4. Offer line, directly above the button
-  if (offer?.trim()) {
-    const { px, lines } = fitText(ctx, offer, maxWidth, 2, 46, 30, '700')
-    const lineH = px * 1.25
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'alphabetic'
-
-    for (let i = lines.length - 1; i >= 0; i--) {
-      ctx.fillStyle = '#FDE68A'
-      ctx.fillText(lines[i], pad, cursor)
-      cursor -= lineH
-    }
-    cursor -= 18
-  }
-
-  // 5. Hook, the largest element, growing upward
+  // The hook: the largest element on the frame, and the only one allowed to
+  // claim whatever space is left between the badge and the offer block.
   if (hook?.trim()) {
-    const { px, lines } = fitText(ctx, hook, maxWidth, 4, 92, 44, '800')
-    const lineH = px * 1.12
+    const room = footerTop - 30 - hookTop
+    const { px, lines } = fitText(ctx, typographic(hook), maxWidth, 3, 60, 38, '800', -0.5, {
+      maxHeight: room,
+      lineRatio: 1.13,
+    })
+    const lineH = px * 1.13
+    ctx.fillStyle = '#FFFFFF'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
 
-    for (let i = lines.length - 1; i >= 0; i--) {
-      ctx.fillStyle = '#FFFFFF'
-      ctx.fillText(lines[i], pad, cursor)
-      cursor -= lineH
+    let y = hookTop + px
+    for (const line of lines) {
+      ctx.fillText(line, padX, y)
+      y += lineH
     }
   }
 
-  // 6. Logo, top-left inside the safe area
-  if (logo) {
-    const boxW = 220
-    const scale = Math.min(boxW / logo.width, 110 / logo.height)
-    ctx.drawImage(logo, pad, safeTop + 20, logo.width * scale, logo.height * scale)
+  // ---- FOOTER ----
+  if (logoBox) {
+    ctx.drawImage(logo, w - padX - logoBox.w, contentBottom - logoBox.h, logoBox.w, logoBox.h)
+  }
+  drawFooter(ctx, footer, { padX, contentBottom, maxWidth, accent })
+
+  if (opts.guides) drawGuides(ctx, w, h, safeTop, safeBottom, safeSide, safeOn)
+
+  ctx.letterSpacing = '0px'
+  return canvas
+}
+
+// Works out the footer's total height without drawing, so the hook above it
+// can be sized against real numbers rather than a guess.
+function measureFooter(ctx, { offerAmount, offerDetail, subhead, proof, cta }, maxWidth, logoGutter) {
+  const parts = { height: 0 }
+
+  if (cta?.trim()) {
+    setFont(ctx, '700', 32, 0)
+    const textW = ctx.measureText(cta).width
+    parts.cta = {
+      text: cta,
+      h: 98,
+      w: Math.min(Math.max(textW + 140, 640), maxWidth - logoGutter),
+    }
+    parts.height += 98 + 32
   }
 
-  return canvas
+  if (proof?.trim()) {
+    parts.proof = { text: proof.trim(), px: 23 }
+    parts.height += 23 + 22
+  }
+
+  if (subhead?.trim()) {
+    const fit = fitText(ctx, typographic(subhead), maxWidth - logoGutter, 3, 27, 21, '500', 0, {
+      lineRatio: 1.36,
+    })
+    parts.subhead = fit
+    parts.height += fit.lines.length * fit.px * 1.36 + 26
+  }
+
+  const amount = offerAmount?.trim()
+  const detail = offerDetail?.trim().toUpperCase()
+  if (amount || detail) {
+    const padBoxX = 22
+    const padBoxY = 18
+    let boxW = 0
+    let amountPx = 0
+    if (amount) {
+      setFont(ctx, '800', 44, 0)
+      amountPx = 44
+      boxW = Math.max(boxW, ctx.measureText(amount).width)
+    }
+    let detailLines = []
+    let detailPx = 0
+    if (detail) {
+      const fit = fitText(ctx, detail, maxWidth - padBoxX * 2, 2, 21, 16, '800', 1.1, { lineRatio: 1.3 })
+      detailLines = fit.lines
+      detailPx = fit.px
+      for (const l of detailLines) boxW = Math.max(boxW, ctx.measureText(l).width)
+    }
+    const gap = amount && detail ? 10 : 0
+    const boxH = padBoxY * 2 + amountPx + gap + detailLines.length * detailPx * 1.3
+    parts.offer = {
+      amount,
+      amountPx,
+      detailLines,
+      detailPx,
+      gap,
+      padBoxX,
+      padBoxY,
+      w: Math.min(boxW + padBoxX * 2, maxWidth),
+      h: boxH,
+    }
+    parts.height += boxH
+  }
+
+  return parts
+}
+
+// Draws what measureFooter worked out, stacking upward from the bottom.
+function drawFooter(ctx, parts, { padX, contentBottom, accent }) {
+  let cursor = contentBottom
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+
+  // CTA pill: white, dark text, wider than the words need so it reads as a
+  // button. Width-capped above so it never runs under the logo.
+  if (parts.cta) {
+    const { text, w: btnW, h: btnH } = parts.cta
+    const btnY = cursor - btnH
+
+    ctx.fillStyle = '#FFFFFF'
+    roundRect(ctx, padX, btnY, btnW, btnH, btnH / 2)
+    ctx.fill()
+
+    setFont(ctx, '700', 32, 0)
+    ctx.fillStyle = '#0F172A'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, padX + btnW / 2, btnY + btnH / 2 + 1)
+
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+    cursor = btnY - 32
+  }
+
+  if (parts.proof) {
+    setFont(ctx, '700', parts.proof.px, 0)
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fillText(parts.proof.text, padX, cursor)
+    cursor -= parts.proof.px + 22
+  }
+
+  if (parts.subhead) {
+    const { px, lines } = parts.subhead
+    setFont(ctx, '500', px, 0)
+    ctx.fillStyle = '#E2E8F0'
+    for (let i = lines.length - 1; i >= 0; i--) {
+      ctx.fillText(lines[i], padX, cursor)
+      cursor -= px * 1.36
+    }
+    cursor -= 26
+  }
+
+  if (parts.offer) {
+    const o = parts.offer
+    const boxY = cursor - o.h
+
+    ctx.fillStyle = accent
+    roundRect(ctx, padX, boxY, o.w, o.h, 4)
+    ctx.fill()
+
+    ctx.fillStyle = '#FFFFFF'
+    let ty = boxY + o.padBoxY
+    if (o.amount) {
+      setFont(ctx, '800', o.amountPx, 0)
+      ty += o.amountPx
+      ctx.fillText(o.amount, padX + o.padBoxX, ty)
+      ty += o.gap
+    }
+    setFont(ctx, '800', o.detailPx, 1.1)
+    for (const line of o.detailLines) {
+      ty += o.detailPx
+      ctx.fillText(line, padX + o.padBoxX, ty)
+      ty += o.detailPx * 0.3
+    }
+  }
+}
+
+// Preview-only overlay of the regions Meta's interface covers, the same idea as
+// the Safe Zone Guardrail in Ads Manager. Everything that exports a PNG
+// re-renders without this first.
+function drawGuides(ctx, w, h, safeTop, safeBottom, safeSide, safeOn) {
+  if (!safeOn) return
+  ctx.save()
+  ctx.fillStyle = 'rgba(220,38,38,0.28)'
+  ctx.fillRect(0, 0, w, safeTop)
+  ctx.fillRect(0, h - safeBottom, w, safeBottom)
+  ctx.fillRect(0, safeTop, safeSide, h - safeTop - safeBottom)
+  ctx.fillRect(w - safeSide, safeTop, safeSide, h - safeTop - safeBottom)
+
+  ctx.strokeStyle = 'rgba(254,202,202,0.9)'
+  ctx.lineWidth = 3
+  ctx.setLineDash([16, 12])
+  ctx.beginPath()
+  ctx.moveTo(0, safeTop)
+  ctx.lineTo(w, safeTop)
+  ctx.moveTo(0, h - safeBottom)
+  ctx.lineTo(w, h - safeBottom)
+  ctx.stroke()
+
+  ctx.setLineDash([])
+  ctx.fillStyle = '#FFFFFF'
+  ctx.font = '700 26px sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  ctx.fillText(`covered by Meta UI — ${safeTop}px`, 20, safeTop - 18)
+  ctx.fillText(`covered by Meta UI — ${safeBottom}px`, 20, h - safeBottom + 40)
+  ctx.restore()
 }
 
 export function canvasToBlob(canvas) {

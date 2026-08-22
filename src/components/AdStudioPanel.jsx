@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { copyText } from '../lib/intakeSummary'
+import { splitOffer } from '../lib/clientChat'
 import {
   DEFAULT_ACCENT,
+  DEFAULT_BADGE,
+  SAFE_MODES,
   SIZES,
   canvasToBlob,
+  ensureFonts,
   loadImage,
   renderAd,
 } from '../lib/adCanvas'
@@ -15,14 +19,32 @@ function publicUrl(path) {
   return supabase.storage.from('client-files').getPublicUrl(path).data.publicUrl
 }
 
-function Artboard({ size, content, assets, canvasRef }) {
+function Artboard({ size, canvasRef }) {
   return (
     <div className="flex-shrink-0">
-      <p className="text-[11px] font-medium text-slate-500 mb-1">{size.label}</p>
       <canvas
         ref={canvasRef}
         className="border border-slate-300 rounded bg-slate-100"
         style={{ width: size.w / 5, height: size.h / 5 }}
+      />
+      <p className="text-[11px] text-slate-500 mt-1">
+        {size.label} {size.w}&times;{size.h}
+      </p>
+    </div>
+  )
+}
+
+function Field({ label, value, onChange, hint }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 mb-1">
+        {label}
+        {hint && <span className="ml-1 font-normal text-slate-400">{hint}</span>}
+      </label>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
       />
     </div>
   )
@@ -47,7 +69,9 @@ function SeedBanner({ seed }) {
         {seed.primaryText && (
           <div>
             <div className="flex items-center gap-2">
-              <p className="font-semibold text-slate-600">Primary text (goes in Meta, not on the image)</p>
+              <p className="font-semibold text-slate-600">
+                Primary text (goes in Meta, not on the image)
+              </p>
               <button
                 onClick={() => copyText(seed.primaryText)}
                 className="text-[11px] text-blue-600 hover:text-blue-800"
@@ -58,15 +82,17 @@ function SeedBanner({ seed }) {
             <p className="whitespace-pre-wrap">{seed.primaryText}</p>
           </div>
         )}
-        {seed.description && (
-          <div>
-            <p className="font-semibold text-slate-600">Description</p>
-            <p>{seed.description}</p>
-          </div>
-        )}
       </div>
     </details>
   )
+}
+
+// The proof strip is a fact about the client, not something to retype per ad.
+function proofFromIntake(intake) {
+  const rating = intake?.reviews_star_rating
+  if (!rating) return ''
+  const count = Number(String(intake.reviews_count || '').replace(/\D/g, ''))
+  return count ? `\u2605 ${rating} on Google \u00b7 ${count} reviews` : `\u2605 ${rating} on Google`
 }
 
 export default function AdStudioPanel({ client, intake, seed }) {
@@ -74,10 +100,21 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [backgroundPath, setBackgroundPath] = useState('')
   const [logoPath, setLogoPath] = useState('')
   const [accent, setAccent] = useState(DEFAULT_ACCENT)
+  const [badgeColor, setBadgeColor] = useState(DEFAULT_BADGE)
 
+  const [badge, setBadge] = useState('')
   const [hook, setHook] = useState('')
-  const [offer, setOffer] = useState('')
-  const [cta, setCta] = useState('Get Quote')
+  const [offerAmount, setOfferAmount] = useState('')
+  const [offerDetail, setOfferDetail] = useState('')
+  const [subhead, setSubhead] = useState('')
+  const [proof, setProof] = useState('')
+  const [cta, setCta] = useState('Book Today!')
+
+  // Meta's interface covers the top and bottom of a 9:16. Reels is the
+  // strictest of the placements, so it is the default: a CTA hidden behind the
+  // caption row is worse than one sitting higher up the frame.
+  const [safeMode, setSafeMode] = useState('reels')
+  const [guides, setGuides] = useState(false)
 
   const [assets, setAssets] = useState({ background: null, logo: null })
   const [error, setError] = useState('')
@@ -85,27 +122,40 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [saved, setSaved] = useState('')
 
   const refs = useRef(SIZES.map(() => null))
+  const intakeProof = useMemo(() => proofFromIntake(intake), [intake])
 
   // Prefill from intake so the first render is a real ad, not empty boxes.
   // Skipped when the chat handed us copy: that copy is the whole point.
   useEffect(() => {
     if (!intake || seed) return
     const city = (intake.target_cities || intake.service_area || '').split(/[\n,]/)[0]?.trim()
+    setBadge(city || '')
     setHook(city ? `${city} homeowners: is your system ready?` : 'Is your system ready?')
-    setOffer(
+    const offer =
       (intake.current_offers_guarantees || intake.cta_offering || '')
         .split('\n')[0]
         ?.replace(/^[-•\s]+/, '') || ''
-    )
+    const { amount, detail } = splitOffer(offer)
+    setOfferAmount(amount)
+    setOfferDetail(detail)
+    setSubhead('Catch small problems before they become major breakdowns.')
+    setProof(intakeProof)
   }, [intake, seed])
 
-  // Copy handed over from the chat, already mapped onto the three slots.
+  // Copy handed over from the chat, already mapped onto the slots.
   useEffect(() => {
     if (!seed) return
     setHook(seed.hook || '')
-    setOffer(seed.offer || '')
-    setCta(seed.cta || 'Get Quote')
-  }, [seed])
+    setOfferAmount(seed.offerAmount || '')
+    setOfferDetail(seed.offerDetail || '')
+    setSubhead(seed.subhead || '')
+    setProof(seed.proof || '')
+    setCta(seed.cta || 'Book Today!')
+    // Neither the location nor the star rating belongs to a creative set, so
+    // the intake stays the source for those unless the brief overrode them.
+    if (seed.badge) setBadge(seed.badge)
+    setProof(seed.proof || intakeProof)
+  }, [seed, intakeProof])
 
   useEffect(() => {
     supabase
@@ -138,17 +188,35 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // first paint measures with a fallback face and wraps differently.
   useEffect(() => {
     let cancelled = false
-    document.fonts?.ready.then(() => {
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor }
+    ensureFonts().then(() => {
       if (cancelled) return
       SIZES.forEach((size, i) => {
         const canvas = refs.current[i]
-        if (canvas) renderAd(canvas, size, { hook, offer, cta, accent }, assets)
+        if (canvas) renderAd(canvas, size, content, assets, { safeMode, guides })
       })
     })
     return () => {
       cancelled = true
     }
-  }, [hook, offer, cta, accent, assets])
+  }, [badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor, assets, safeMode, guides])
+
+  // Guides are a preview aid. Repaint clean, export, then put them back, so a
+  // saved PNG can never carry the red bands into the ad account.
+  const withoutGuides = (fn) => async (...args) => {
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor }
+    const repaint = (g) =>
+      SIZES.forEach((size, i) => {
+        const c = refs.current[i]
+        if (c) renderAd(c, size, content, assets, { safeMode, guides: g })
+      })
+    if (guides) repaint(false)
+    try {
+      return await fn(...args)
+    } finally {
+      if (guides) repaint(true)
+    }
+  }
 
   const upload = async (file, setPath) => {
     setError('')
@@ -171,7 +239,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
 
   // Saves all three sizes back into the same public bucket. Public is exactly
   // what Meta's image uploader needs: it fetches the bytes with no auth.
-  const saveAll = async () => {
+  const saveAll = withoutGuides(async () => {
     setSaving(true)
     setSaved('')
     setError('')
@@ -201,7 +269,25 @@ export default function AdStudioPanel({ client, intake, seed }) {
     } finally {
       setSaving(false)
     }
-  }
+  })
+
+  // Straight to disk, for the times you want the PNG in hand rather than in
+  // the bucket.
+  const download = withoutGuides(async (i) => {
+    const canvas = refs.current[i]
+    if (!canvas) return
+    try {
+      const blob = await canvasToBlob(canvas)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${client.name.replace(/\W+/g, '-').toLowerCase()}-${SIZES[i].key}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err.message)
+    }
+  })
 
   const Picker = ({ label, value, onChange, onUpload }) => (
     <div>
@@ -263,55 +349,117 @@ export default function AdStudioPanel({ client, intake, seed }) {
       </div>
 
       <div className="space-y-2">
+        <Field label="Location badge" value={badge} onChange={setBadge} hint="top-left pill" />
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Hook</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            1 &middot; Hook <span className="font-normal text-slate-400">biggest text, the eye catcher</span>
+          </label>
           <textarea
             value={hook}
             onChange={(e) => setHook(e.target.value)}
             rows={2}
-            className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
+            className="w-full px-3 py-2 border border-slate-300 rounded text-base font-semibold"
           />
         </div>
+        <div className="grid md:grid-cols-3 gap-2">
+          <Field
+            label="2 · Offer amount"
+            value={offerAmount}
+            onChange={setOfferAmount}
+            hint="$29.95"
+          />
+          <div className="md:col-span-2">
+            <Field label="Offer detail" value={offerDetail} onChange={setOfferDetail} hint="set in caps" />
+          </div>
+        </div>
+        <Field label="3 · CTA pill" value={cta} onChange={setCta} hint="text on the white button" />
+        <Field label="Subhead" value={subhead} onChange={setSubhead} />
         <div className="grid md:grid-cols-2 gap-2">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Offer</label>
-            <input
-              value={offer}
-              onChange={(e) => setOffer(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
-            />
-          </div>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-slate-600 mb-1">CTA</label>
-              <input
-                value={cta}
-                onChange={(e) => setCta(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
-              />
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Field label="Proof strip" value={proof} onChange={setProof} />
+              </div>
+              {intakeProof && proof !== intakeProof && (
+                <button
+                  onClick={() => setProof(intakeProof)}
+                  className="mt-5 text-[11px] text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                >
+                  Use intake
+                </button>
+              )}
             </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {intakeProof ? `From the intake form: ${intakeProof}` : 'No star rating on the intake form yet.'}
+            </p>
+          </div>
+          <div className="flex gap-2 items-start">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Colour</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Offer colour</label>
               <input
                 type="color"
                 value={accent}
                 onChange={(e) => setAccent(e.target.value)}
-                className="h-[38px] w-12 border border-slate-300 rounded cursor-pointer"
+                className="h-[38px] w-14 border border-slate-300 rounded cursor-pointer"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Badge colour</label>
+              <input
+                type="color"
+                value={badgeColor}
+                onChange={(e) => setBadgeColor(e.target.value)}
+                className="h-[38px] w-14 border border-slate-300 rounded cursor-pointer"
               />
             </div>
           </div>
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+        <span className="text-xs font-medium text-slate-600">9:16 safe area</span>
+        <div className="flex gap-1">
+          {SAFE_MODES.map((m) => (
+            <button
+              key={m.key}
+              onClick={() => setSafeMode(m.key)}
+              title={m.hint}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition ${
+                safeMode === m.key
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1.5 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={guides}
+            onChange={(e) => setGuides(e.target.checked)}
+            className="rounded"
+          />
+          Show what Meta covers
+        </label>
+        <p className="text-[11px] text-slate-500 basis-full">
+          Reels covers the bottom 35% of a 9:16 and Stories 20%, so Reels-safe fits both.
+          The guides are preview only and never end up in a saved PNG.
+        </p>
+      </div>
+
       <div className="flex gap-4 overflow-x-auto pb-2 pt-1">
         {SIZES.map((size, i) => (
-          <Artboard
-            key={size.key}
-            size={size}
-            content={{ hook, offer, cta, accent }}
-            assets={assets}
-            canvasRef={(el) => (refs.current[i] = el)}
-          />
+          <div key={size.key} className="flex-shrink-0">
+            <Artboard size={size} canvasRef={(el) => (refs.current[i] = el)} />
+            <button
+              onClick={() => download(i)}
+              className="mt-1 text-[11px] text-blue-600 hover:text-blue-800 underline"
+            >
+              Save PNG
+            </button>
+          </div>
         ))}
       </div>
 

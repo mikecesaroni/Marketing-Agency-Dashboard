@@ -210,15 +210,22 @@ Real beats polished.
 I build these in my Claude Design Ads Studio, so give me a DESIGN BRIEF it can
 lay out, not an image-generation prompt. Be specific about what text sits where.
 
-ARTBOARDS: 1080x1350 (4:5 feed) and 1080x1920 (9:16 story)
+ARTBOARDS: 1080x1080 (square), 1080x1350 (4:5 feed), 1080x1920 (9:16 story)
 BACKGROUND: [the scene or photo treatment behind the text]
-HEADLINE ON IMAGE: [5-8 words, the hook, largest element]
-SUBHEAD: [one supporting line, optional]
-OFFER BADGE: [the offer, treated as a callout]
-PROOF STRIP: [stars and review count]
-LOGO: [placement, e.g. bottom left, small]
+LOCATION BADGE: [the service area, 2-4 words, sits top-left]
+HEADLINE ON IMAGE: [5-8 words, the hook, largest element, directly under the badge]
+OFFER BADGE: [the offer as one line, price first if there is one, e.g.
+  "$29.95 15-Point Visual Inspection · AC & Heating" — my studio splits the
+  price onto its own line inside a solid colour block]
+SUBHEAD: [one supporting line under the offer, plain sentence]
+PROOF STRIP: [stars and review count, e.g. "★ 5.0 on Google"]
+CTA BUTTON ON IMAGE: [2-3 words, e.g. "Book Today!" — white pill, dark text]
+LOGO: bottom-right, small
 COLOR DIRECTION: [what to pull from their brand]
-KEEP CLEAR: top 250px and bottom 250px on 9:16 — the Meta interface covers it
+
+Use these exact labels. My CRM reads them straight onto the artboard, so a
+label I cannot find is a slot that renders empty.
+KEEP CLEAR: top 250px and bottom 320px on 9:16 — the Meta interface covers it
 
 --- FORMAT 3: CLAUDE DESIGN — MOTION AD BRIEF ---
 Scene by scene, same studio. Under 15 seconds total, hook in the first 3.
