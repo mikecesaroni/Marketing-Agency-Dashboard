@@ -355,6 +355,7 @@ export function summariseAds(rows) {
       // dividing anyway would claim nobody watched past the hook.
       holdRate: a.videoPlays > 0 && a.hasThruplays ? (a.videoThruplays / a.videoPlays) * 100 : null,
       avgWatch: a.watchPlays > 0 ? a.watchSecondsSum / a.watchPlays : null,
+      live: isLive(a.status),
     }))
     .sort((x, y) => y.spend - x.spend)
 }

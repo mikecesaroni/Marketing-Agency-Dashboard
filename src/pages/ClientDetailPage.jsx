@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import { fetchAdDaily, summariseAds } from '../lib/queries'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
 import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import LiveToggle from '../components/LiveToggle'
 import AdPerformanceSection from '../components/AdPerformanceSection'
+import ClientBriefPanel from '../components/ClientBriefPanel'
 import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
@@ -56,6 +58,9 @@ export default function ClientDetailPage() {
   const [showKPIsModal, setShowKPIsModal] = useState(false)
   const [showWorkLogModal, setShowWorkLogModal] = useState(false)
   const [showCreativeModal, setShowCreativeModal] = useState(false)
+  const [showBriefModal, setShowBriefModal] = useState(false)
+  const [intake, setIntake] = useState(null)
+  const [briefAds, setBriefAds] = useState([])
 
   useHashScroll(!loading && !!client)
 
@@ -104,6 +109,14 @@ export default function ClientDetailPage() {
         .order('date', { ascending: false })
 
       if (creativesError) throw creativesError
+
+      // The brief needs both, but neither should be able to break the page.
+      const [intakeRes, adRows] = await Promise.all([
+        supabase.from('onboarding_intake').select('*').eq('client_id', clientId).maybeSingle(),
+        fetchAdDaily(clientId).catch(() => []),
+      ])
+      setIntake(intakeRes?.data || null)
+      setBriefAds(summariseAds(adRows || []))
 
       setClient(clientData)
       setOnboardingTasks(tasksData)
@@ -191,12 +204,20 @@ export default function ClientDetailPage() {
   const progressPercent = progressTotal > 0 ? Math.round((progressDone / progressTotal) * 100) : 0
 
   const intakeButton = (
-    <button
-      onClick={() => setShowIntakeModal(true)}
-      className="w-full md:w-auto px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
-    >
-      Intake Form
-    </button>
+    <div className="flex flex-col md:flex-row gap-2">
+      <button
+        onClick={() => setShowBriefModal(true)}
+        className="w-full md:w-auto px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition"
+      >
+        📋 Client Brief
+      </button>
+      <button
+        onClick={() => setShowIntakeModal(true)}
+        className="w-full md:w-auto px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
+      >
+        Intake Form
+      </button>
+    </div>
   )
 
   return (
@@ -438,6 +459,15 @@ export default function ClientDetailPage() {
         </div>
 
         {/* MODALS */}
+        <Modal
+          isOpen={showBriefModal}
+          onClose={() => setShowBriefModal(false)}
+          title={`Client Brief — ${client.name}`}
+          wide
+        >
+          <ClientBriefPanel client={client} intake={intake} ads={briefAds} />
+        </Modal>
+
         <Modal
           isOpen={showIntakeModal}
           onClose={() => setShowIntakeModal(false)}
