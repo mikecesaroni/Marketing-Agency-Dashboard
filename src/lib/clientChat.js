@@ -85,6 +85,28 @@ export function splitOffer(text) {
   return { amount: '', detail: raw }
 }
 
+// The model writes proof as a sentence ("5.0 stars on Google, 30 reviews").
+// The strip on the artboard is one short line with the glyph, so pull the
+// numbers out and rebuild it. Anything unrecognisable is passed through rather
+// than mangled.
+export function normaliseProof(text) {
+  const raw = String(text || '').trim()
+  if (!raw || raw.startsWith('\u2605')) return raw
+  const rating = raw.match(/(\d(?:\.\d)?)\s*(?:stars?|\/\s*5)\b/i)
+  if (!rating) return raw
+  const count = raw.match(/([\d,]+)\+?\s*reviews?\b/i)
+  const on = /google/i.test(raw) ? ' on Google' : ''
+  return count
+    ? `\u2605 ${rating[1]}${on} \u00b7 ${count[1]} reviews`
+    : `\u2605 ${rating[1]}${on}`
+}
+
+// A set can come back as an owner-video script rather than a static ad. It has
+// no artboard slots to fill, so the caller needs to know not to offer one.
+function isVideoScript(brief) {
+  return /video script|scene \d|hook \(\d/i.test(String(brief || ''))
+}
+
 /**
  * Maps one creative set from the chat onto the slots the compositor paints.
  *
@@ -102,8 +124,12 @@ export function creativeSetToStudio(set) {
     offerAmount: offer.amount,
     offerDetail: offer.detail,
     subhead: briefLine(brief, 'SUBHEAD'),
-    proof: briefLine(brief, 'PROOF STRIP') || set.description || '',
-    cta: ctaLabel(set.cta),
+    proof: normaliseProof(briefLine(brief, 'PROOF STRIP')),
+    // The button drawn on the image is whatever the brief says; the enum is
+    // what Meta needs on the ad object, and the two are rarely worded the same.
+    cta: briefLine(brief, 'CTA BUTTON ON IMAGE') || ctaLabel(set.cta),
+    metaCta: ctaLabel(set.cta),
+    isVideo: isVideoScript(brief),
     // Carried through for reference, not painted: the primary text is the ad
     // copy that sits above the image in the feed.
     hookAngle: set.hook_angle || '',

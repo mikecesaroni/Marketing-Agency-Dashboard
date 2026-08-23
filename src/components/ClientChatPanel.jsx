@@ -34,13 +34,19 @@ function CreativeSetCard({ set, index, onUse }) {
           </p>
           <p className="text-[11px] text-slate-500 truncate">{mapped.hook || '(no headline)'}</p>
         </div>
-        {onUse && (
-          <button
-            onClick={() => onUse(mapped)}
-            className="flex-shrink-0 px-2 py-1 rounded bg-orange-600 text-white text-[11px] font-medium hover:bg-orange-700 transition"
-          >
-            Open in Ad Studio
-          </button>
+        {mapped.isVideo ? (
+          <span className="flex-shrink-0 px-2 py-1 rounded bg-slate-100 text-slate-500 text-[11px] font-medium">
+            🎬 Video script
+          </span>
+        ) : (
+          onUse && (
+            <button
+              onClick={() => onUse(mapped)}
+              className="flex-shrink-0 px-2 py-1 rounded bg-orange-600 text-white text-[11px] font-medium hover:bg-orange-700 transition"
+            >
+              Open in Ad Studio
+            </button>
+          )
         )}
       </div>
     </div>

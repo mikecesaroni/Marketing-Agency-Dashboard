@@ -225,7 +225,9 @@ COLOR DIRECTION: [what to pull from their brand]
 
 Use these exact labels. My CRM reads them straight onto the artboard, so a
 label I cannot find is a slot that renders empty.
-KEEP CLEAR: top 250px and bottom 320px on 9:16 — the Meta interface covers it
+KEEP CLEAR on 9:16: Meta's interface covers the top 14% (about 270px) and,
+on Reels, the bottom 35% (about 672px). Stories only loses 20%, so design to
+the Reels numbers and it works in both.
 
 --- FORMAT 3: CLAUDE DESIGN — MOTION AD BRIEF ---
 Scene by scene, same studio. Under 15 seconds total, hook in the first 3.
