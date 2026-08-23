@@ -52,3 +52,35 @@ alter table ad_daily add column if not exists campaign_name text;
 alter table ad_daily add column if not exists adset_name text;
 
 create index if not exists ad_daily_campaign_idx on ad_daily (client_id, campaign_id);
+
+-- ---------------------------------------------------------------------------
+-- META AD ACCOUNT DISCOVERY
+--
+-- The daily sync lists every ad account the Meta login can see and parks the
+-- ones no client claims here. An agency's Meta access accumulates dead and
+-- prospect accounts, so the row carries last-30d spend: that is what separates
+-- "a new client we forgot to map" from "an account from 2023".
+--
+-- status is deliberately never touched by the sync's upsert. Ignoring an
+-- account has to stick, or the same dead accounts reappear every morning.
+-- ---------------------------------------------------------------------------
+create table if not exists meta_unmapped_accounts (
+  ad_account_id text primary key,
+  account_name text,
+  business_id text,
+  business_name text,
+  is_queryable boolean default true,
+  not_queryable_reason text,
+  spend_last_30d numeric default 0,
+  leads_last_30d integer default 0,
+  status text not null default 'new' check (status in ('new', 'ignored', 'mapped')),
+  mapped_client_id uuid references clients(id) on delete set null,
+  first_seen timestamptz default now(),
+  last_seen timestamptz default now()
+);
+
+create index if not exists meta_unmapped_new_idx
+  on meta_unmapped_accounts (spend_last_30d desc)
+  where status = 'new';
+
+alter table meta_unmapped_accounts disable row level security;

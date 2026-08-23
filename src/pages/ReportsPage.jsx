@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
+import UnmappedAccountsPanel from '../components/UnmappedAccountsPanel'
 import {
   fetchKPIHistory,
   fetchLiveAdRows,
@@ -331,6 +332,7 @@ export default function ReportsPage() {
       } · ${money(totals.spend)} spend · ${totals.leads} leads`}
       actions={rangeButtons}
     >
+      <UnmappedAccountsPanel />
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 mb-4">
           Error: {error}
