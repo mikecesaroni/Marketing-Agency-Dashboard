@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Modal from './Modal'
+import { StripeLinkButtons } from './StripePanel'
 import { formatDate, isOverdue, money, today } from '../lib/queries'
 
 const METHODS = ['card', 'ach', 'check', 'paypal', 'other']
@@ -325,6 +326,12 @@ export default function PaymentTracker({ client, onClientUpdate }) {
         >
           {payments.length === 0 ? 'Set Up Billing' : 'Billing Setup'}
         </button>
+      </div>
+
+      {/* Send these instead of the raw Stripe links: they carry the client's ID,
+          which is the only thing that tells the webhook whose payment it is. */}
+      <div className="mb-4">
+        <StripeLinkButtons clientId={clientId} stripeCustomerId={client.stripe_customer_id} />
       </div>
 
       {error && (

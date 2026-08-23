@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
+import StripePanel from '../components/StripePanel'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
 import { calcMRR, fetchPayments, hasInternalColumn, isOverdue, money, today } from '../lib/queries'
@@ -177,6 +178,8 @@ export default function PaymentsPage() {
           tone={overdue.length > 0 ? 'red' : 'slate'}
         />
       </div>
+
+      <StripePanel />
 
       <div className="flex flex-col md:flex-row gap-2 mb-4">
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">
