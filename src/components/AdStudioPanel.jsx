@@ -335,15 +335,18 @@ export default function AdStudioPanel({ client, intake, seed }) {
       const path = `${client.id}/${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`
       const { error: upErr } = await supabase.storage.from('client-files').upload(path, file)
       if (upErr) throw upErr
-      await supabase.from('client_files').insert({
+      const { error: rowErr } = await supabase.from('client_files').insert({
         client_id: client.id,
         file_name: file.name,
         file_type: file.type,
-        // NOT NULL in the schema. Omitting it fails the insert, which shows up
-        // as a file that uploaded to storage but never appears in the CRM.
+        // NOT NULL in the schema. Omitting it fails the insert, which showed up
+        // as a file that uploaded to storage but never appeared in the CRM.
         file_size: file.size,
         storage_path: path,
       })
+      // supabase-js returns errors rather than throwing them. Ignoring this is
+      // what turned a failed save into a green success message.
+      if (rowErr) throw rowErr
       setFiles((f) => [...f, { id: path, file_name: file.name, storage_path: path }])
       setPath(path)
     } catch (err) {
