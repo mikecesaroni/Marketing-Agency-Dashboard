@@ -6,6 +6,15 @@ body,
   height: 100%;
 }
 
+/* Wide tables scroll inside their own wrappers, but their layout overflow still
+   reaches the viewport scroller and lets a phone drag the whole page sideways,
+   leaving the fixed sidebar and nav behind. Clipping the viewport is the only
+   thing that stops it; the inner scrollers keep working. */
+html,
+body {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background-color: #f8fafc;

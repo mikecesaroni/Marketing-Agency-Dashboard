@@ -473,11 +473,17 @@ export function groupCampaigns(rows) {
 // by definition — the per-ad history covers every currently-running ad. Where
 // it does not reach as far back as weekly_kpis is old paused ads, which this
 // mode excludes anyway.
-export async function fetchLiveAdRows(since) {
+/**
+ * Per-ad daily rows for a date range.
+ *
+ * Status is returned rather than filtered so the caller can switch between live
+ * and all-time in memory. Refetching on a toggle would make the scope buttons
+ * feel like page loads, and the two scopes want the same rows anyway.
+ */
+export async function fetchAdRowsForRange(since) {
   let q = supabase
     .from('ad_daily')
     .select('client_id, date, spend, leads, impressions, clicks, effective_status, clients(name, is_internal)')
-    .in('effective_status', LIVE_STATUSES)
     .order('date', { ascending: true })
 
   if (since) q = q.gte('date', since)

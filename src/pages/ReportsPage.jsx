@@ -3,73 +3,52 @@ import { Link, useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
 import UnmappedAccountsPanel from '../components/UnmappedAccountsPanel'
 import {
-  fetchKPIHistory,
-  fetchLiveAdRows,
+  fetchAdRowsForRange,
   formatDate,
   getMonday,
+  isLive,
   money,
-  shortWeekLabel,
 } from '../lib/queries'
+import { LOWER_IS_BETTER, buildDailySeries, daysAgo, pctChange, totals as sumSeries } from '../lib/dailySeries'
+import DailyChart from '../components/DailyChart'
+import StatTile from '../components/StatTile'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
 
 // Live mode reads per-ad rows so it can filter on ad status; All-time reads the
 // account-level weekly KPIs, which reach further back. Each mode is sourced
 // from wherever it is actually accurate rather than forcing one table to do both.
+// Both scopes read the same daily rows and differ only on ad status, so the
+// toggle is a filter rather than a different source. It used to switch between
+// ad_daily and weekly_kpis, which meant the two scopes silently covered
+// different date ranges and could not be compared.
 const SCOPES = [
   { key: 'live', label: 'Live ads' },
-  { key: 'all', label: 'All time' },
+  { key: 'all', label: 'All ads' },
 ]
 
 const RANGES = [
-  { weeks: 4, label: '4 weeks' },
-  { weeks: 8, label: '8 weeks' },
-  { weeks: 12, label: '12 weeks' },
+  { days: 14, label: '14 days' },
+  { days: 30, label: '30 days' },
+  { days: 90, label: '90 days' },
 ]
 
+// axis() is separate from format(): an axis tick wants $1.2K where a tooltip
+// wants $1,240, and cramming both into one formatter makes one of them wrong.
 const METRICS = [
-  { key: 'spend', label: 'Ad spend', format: (v) => money(v) },
-  { key: 'leads', label: 'Leads', format: (v) => String(v) },
-  { key: 'cpl', label: 'Cost per lead', format: (v) => (v > 0 ? `$${v.toFixed(2)}` : '—') },
+  {
+    key: 'spend',
+    label: 'Ad spend',
+    format: (v) => money(v),
+    axis: (v) => (v >= 1000 ? `$${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `$${Math.round(v)}`),
+  },
+  { key: 'leads', label: 'Leads', format: (v) => v.toFixed(v % 1 === 0 ? 0 : 1), axis: (v) => String(v) },
+  {
+    key: 'cpl',
+    label: 'Cost per lead',
+    format: (v) => (v > 0 ? `$${v.toFixed(2)}` : '—'),
+    axis: (v) => `$${Math.round(v)}`,
+  },
 ]
-
-// Bar heights are in pixels on purpose — a percentage height would need a
-// parent with a definite height, which a flex-grown column doesn't give us.
-const MAX_BAR_PX = 150
-
-function BarChart({ rows, metric }) {
-  const max = Math.max(...rows.map((r) => r[metric.key]), 0)
-
-  if (rows.length === 0) {
-    return <p className="text-slate-500 text-sm">No KPI data in this range yet.</p>
-  }
-
-  return (
-    <div className="flex items-end gap-1.5 md:gap-3 overflow-x-auto pb-1">
-      {rows.map((row) => {
-        const value = row[metric.key]
-        const barPx = max > 0 ? Math.max((value / max) * MAX_BAR_PX, 3) : 3
-        return (
-          <div
-            key={row.week}
-            className="flex-1 min-w-[38px] flex flex-col items-center justify-end gap-1.5"
-          >
-            <span className="text-[10px] font-semibold text-slate-700 whitespace-nowrap">
-              {metric.format(value)}
-            </span>
-            <div
-              className="w-full bg-blue-500 rounded-t hover:bg-blue-600 transition"
-              style={{ height: `${barPx}px` }}
-              title={`${row.week}: ${metric.format(value)}`}
-            />
-            <span className="text-[10px] text-slate-500 whitespace-nowrap">
-              {shortWeekLabel(row.week)}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 function ChannelCard({ channel, spend, leads }) {
   const cpl = leads > 0 ? spend / leads : 0
@@ -158,12 +137,11 @@ function PerformanceTable({ rows, nameHeader, onOpen, showLsa }) {
 export default function ReportsPage() {
   const navigate = useNavigate()
   const openAds = (id) => navigate(`/client/${id}#ad-performance`)
-  const [kpis, setKpis] = useState([])
-  const [liveRows, setLiveRows] = useState([])
+  const [adRows, setAdRows] = useState([])
   const [scope, setScope] = useState('live')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [weeks, setWeeks] = useState(8)
+  const [days, setDays] = useState(30)
   const [metricKey, setMetricKey] = useState('spend')
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState('')
@@ -175,7 +153,7 @@ export default function ReportsPage() {
     try {
       const summary = summariseSync(await runMetaSync())
       setSyncResult(summary)
-      setKpis(await fetchKPIHistory(weeks))
+      setAdRows(await fetchAdRowsForRange(daysAgo(days * 2 - 1)))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -183,20 +161,20 @@ export default function ReportsPage() {
     }
   }
 
+  // Twice the range is fetched so each stat can be compared with the window
+  // immediately before it. One extra query beats a second round trip when the
+  // reader switches range.
   useEffect(() => {
     setLoading(true)
-    const since = formatDate(
-      new Date(getMonday(new Date()).getTime() - (weeks - 1) * 7 * 86400000)
-    )
-    Promise.all([fetchKPIHistory(weeks), fetchLiveAdRows(since)])
-      .then(([k, live]) => {
-        setKpis(k)
-        setLiveRows(live)
+    const since = daysAgo(days * 2 - 1)
+    fetchAdRowsForRange(since)
+      .then((rows) => {
+        setAdRows(rows)
         setError('')
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [weeks])
+  }, [days])
 
   const metric = METRICS.find((m) => m.key === metricKey)
 
@@ -206,9 +184,31 @@ export default function ReportsPage() {
   // only, and the internal businesses get their own table.
   // Live per-ad rows are reshaped into the weekly_kpis shape (one row per
   // client per week, channel Meta) so every aggregate below is source-agnostic.
+  // Scope is applied here rather than in the query, so switching is instant.
+  const scopedRows = useMemo(
+    () => (scope === 'live' ? adRows.filter((r) => isLive(r.effective_status)) : adRows),
+    [adRows, scope]
+  )
+
+  const windowStart = daysAgo(days - 1)
+  const prevStart = daysAgo(days * 2 - 1)
+  const prevEnd = daysAgo(days)
+
+  // Twice the range is fetched for the comparison, so the page has to be
+  // explicit about which half it is showing. Every number below the range
+  // buttons comes from currentRows; only the deltas look at prevRows.
+  const currentRows = useMemo(
+    () => scopedRows.filter((r) => r.date >= windowStart),
+    [scopedRows, windowStart]
+  )
+  const prevRows = useMemo(
+    () => scopedRows.filter((r) => r.date >= prevStart && r.date <= prevEnd),
+    [scopedRows, prevStart, prevEnd]
+  )
+
   const liveAsKpis = useMemo(() => {
     const byKey = new Map()
-    for (const r of liveRows) {
+    for (const r of currentRows) {
       const [y, m, d] = r.date.split('-').map(Number)
       const week = formatDate(getMonday(new Date(y, m - 1, d)))
       const key = `${r.client_id}|${week}`
@@ -226,24 +226,12 @@ export default function ReportsPage() {
       byKey.set(key, row)
     }
     return [...byKey.values()]
-  }, [liveRows])
+  }, [currentRows])
 
-  const active = scope === 'live' ? liveAsKpis : kpis
+  const active = liveAsKpis
 
   const clientKpis = useMemo(() => active.filter((k) => !k.clients?.is_internal), [active])
   const internalKpis = useMemo(() => active.filter((k) => k.clients?.is_internal), [active])
-
-  const weeklyRows = useMemo(() => {
-    const byWeek = {}
-    for (const kpi of clientKpis) {
-      const row = (byWeek[kpi.week_of] ||= { week: kpi.week_of, spend: 0, leads: 0 })
-      row.spend += kpi.ad_spend || 0
-      row.leads += kpi.leads || 0
-    }
-    return Object.values(byWeek)
-      .sort((a, b) => a.week.localeCompare(b.week))
-      .map((r) => ({ ...r, cpl: r.leads > 0 ? r.spend / r.leads : 0 }))
-  }, [clientKpis])
 
   const rollUpByClient = (rows) => {
     const byClient = {}
@@ -269,10 +257,30 @@ export default function ReportsPage() {
   const clientRows = useMemo(() => rollUpByClient(clientKpis), [clientKpis])
   const internalRows = useMemo(() => rollUpByClient(internalKpis), [internalKpis])
 
-  const totals = weeklyRows.reduce(
-    (acc, r) => ({ spend: acc.spend + r.spend, leads: acc.leads + r.leads }),
-    { spend: 0, leads: 0 }
+  // Client rows only: the internal businesses have real spend, but folding it
+  // into the headline would overstate what we run for clients.
+  const daily = useMemo(
+    () =>
+      buildDailySeries(
+        currentRows.filter((r) => !r.clients?.is_internal),
+        windowStart,
+        daysAgo(0)
+      ),
+    [currentRows, windowStart]
   )
+  const previous = useMemo(
+    () =>
+      buildDailySeries(
+        prevRows.filter((r) => !r.clients?.is_internal),
+        prevStart,
+        prevEnd
+      ),
+    [prevRows, prevStart, prevEnd]
+  )
+
+  const now = useMemo(() => sumSeries(daily), [daily])
+  const before = useMemo(() => sumSeries(previous), [previous])
+  const totals = { spend: now.spend, leads: now.leads }
 
   const channelTotals = useMemo(() => {
     const t = { Meta: { spend: 0, leads: 0 }, LSA: { spend: 0, leads: 0 } }
@@ -286,7 +294,11 @@ export default function ReportsPage() {
   }, [clientKpis])
 
   const rangeButtons = (
-    <div className="flex gap-1.5">
+    // Scrolls within itself on a phone. min-w-0 is the part that matters: as a
+    // flex item this defaults to min-width:auto, which refuses to shrink below
+    // its content no matter what max-width says, and the whole page goes
+    // sideways with it.
+    <div className="flex gap-1.5 min-w-0 max-w-full overflow-x-auto pb-1">
       <button
         onClick={handleSync}
         disabled={syncing}
@@ -310,10 +322,10 @@ export default function ReportsPage() {
       <span className="w-px bg-slate-200 mx-0.5" />
       {RANGES.map((r) => (
         <button
-          key={r.weeks}
-          onClick={() => setWeeks(r.weeks)}
+          key={r.days}
+          onClick={() => setDays(r.days)}
           className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
-            weeks === r.weeks
+            days === r.days
               ? 'bg-slate-900 text-white'
               : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
           }`}
@@ -327,7 +339,7 @@ export default function ReportsPage() {
   return (
     <Layout
       title="Performance Reports"
-      subtitle={`Last ${weeks} weeks · ${
+      subtitle={`Last ${days} days · ${
         scope === 'live' ? 'live ads only' : 'all ads'
       } · ${money(totals.spend)} spend · ${totals.leads} leads`}
       actions={rangeButtons}
@@ -349,9 +361,29 @@ export default function ReportsPage() {
         <p className="text-slate-500">Loading...</p>
       ) : (
         <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-4">
+            <StatTile
+              label="Ad spend"
+              value={money(now.spend)}
+              delta={pctChange(now.spend, before.spend)}
+            />
+            <StatTile label="Leads" value={now.leads} delta={pctChange(now.leads, before.leads)} />
+            <StatTile
+              label="Cost per lead"
+              value={now.cpl > 0 ? `$${now.cpl.toFixed(2)}` : '—'}
+              delta={pctChange(now.cpl, before.cpl)}
+              lowerIsBetter={LOWER_IS_BETTER.has('cpl')}
+            />
+          </div>
+
           <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 mb-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
-              <h2 className="font-bold text-slate-900">Weekly trend</h2>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+              <div>
+                <h2 className="font-bold text-slate-900">{metric.label} by day</h2>
+                <p className="text-xs text-slate-500">
+                  Meta · {scope === 'live' ? 'live ads only' : 'all ads'} · clients only
+                </p>
+              </div>
               <div className="flex gap-1.5">
                 {METRICS.map((m) => (
                   <button
@@ -368,7 +400,7 @@ export default function ReportsPage() {
                 ))}
               </div>
             </div>
-            <BarChart rows={weeklyRows} metric={metric} />
+            <DailyChart series={daily} metric={metric} />
           </div>
 
           <h2 className="font-bold text-slate-900 mb-3">Channel breakdown</h2>

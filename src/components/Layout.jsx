@@ -47,7 +47,10 @@ export default function Layout({ title, subtitle, actions, children }) {
               <h1 className="text-xl md:text-2xl font-bold text-slate-900 truncate">{title}</h1>
               {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
             </div>
-            {actions && <div className="flex gap-2 flex-shrink-0">{actions}</div>}
+            {/* Shrinkable on a phone so a long actions row scrolls inside itself
+                instead of widening the document; fixed from md up where
+                there is room for it. */}
+            {actions && <div className="flex gap-2 min-w-0 md:flex-shrink-0">{actions}</div>}
           </div>
         </header>
 
