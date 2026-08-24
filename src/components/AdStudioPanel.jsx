@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { copyText } from '../lib/intakeSummary'
 import { splitOffer } from '../lib/clientChat'
+import { extractPalette } from '../lib/logoColours'
 import {
   DEFAULT_ACCENT,
   DEFAULT_BADGE,
@@ -46,6 +47,39 @@ function Field({ label, value, onChange, hint }) {
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
       />
+    </div>
+  )
+}
+
+// A colour input with the logo's own colours offered underneath, so matching
+// the brand is a click rather than an eyedropper and a hex code.
+function ColourField({ label, value, onChange, swatches }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-[38px] w-14 border border-slate-300 rounded cursor-pointer"
+      />
+      {swatches.length > 0 && (
+        <div className="flex gap-1 mt-1">
+          {swatches.slice(0, 5).map((hex) => (
+            <button
+              key={hex}
+              title={`${hex} from the logo`}
+              onClick={() => onChange(hex)}
+              style={{ background: hex }}
+              className={`w-4 h-4 rounded-sm border transition ${
+                value.toUpperCase() === hex.toUpperCase()
+                  ? 'border-slate-900 ring-1 ring-slate-900'
+                  : 'border-slate-300 hover:border-slate-500'
+              }`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -115,6 +149,10 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // caption row is worse than one sitting higher up the frame.
   const [safeMode, setSafeMode] = useState('reels')
   const [guides, setGuides] = useState(false)
+  const [swatches, setSwatches] = useState([])
+  // Set once the colours came from the logo, so a later logo change can replace
+  // them without stamping over a colour picked by hand.
+  const [fromLogo, setFromLogo] = useState(false)
 
   const [assets, setAssets] = useState({ background: null, logo: null })
   const [error, setError] = useState('')
@@ -173,9 +211,25 @@ export default function AdStudioPanel({ client, intake, seed }) {
       logoPath ? loadImage(publicUrl(logoPath)) : null,
     ])
       .then(([background, logo]) => {
-        if (!cancelled) {
-          setAssets({ background, logo })
-          setError('')
+        if (cancelled) return
+        setAssets({ background, logo })
+        setError('')
+
+        if (!logo) {
+          setSwatches([])
+          return
+        }
+        const palette = extractPalette(logo, null)
+        if (!palette) return
+        setSwatches(palette.swatches || [])
+        // Only claim the colours if they are still the defaults or came from a
+        // previous logo. A colour the user chose is theirs to keep.
+        const untouched =
+          fromLogo || (accent === DEFAULT_ACCENT && badgeColor === DEFAULT_BADGE)
+        if (untouched) {
+          setAccent(palette.accent)
+          setBadgeColor(palette.badge)
+          setFromLogo(true)
         }
       })
       .catch((err) => !cancelled && setError(err.message))
@@ -393,25 +447,37 @@ export default function AdStudioPanel({ client, intake, seed }) {
               {intakeProof ? `From the intake form: ${intakeProof}` : 'No star rating on the intake form yet.'}
             </p>
           </div>
-          <div className="flex gap-2 items-start">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Offer colour</label>
-              <input
-                type="color"
-                value={accent}
-                onChange={(e) => setAccent(e.target.value)}
-                className="h-[38px] w-14 border border-slate-300 rounded cursor-pointer"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Badge colour</label>
-              <input
-                type="color"
-                value={badgeColor}
-                onChange={(e) => setBadgeColor(e.target.value)}
-                className="h-[38px] w-14 border border-slate-300 rounded cursor-pointer"
-              />
-            </div>
+          <div className="flex gap-3 items-start">
+            <ColourField
+              label="Offer colour"
+              value={accent}
+              onChange={(v) => {
+                setAccent(v)
+                setFromLogo(false)
+              }}
+              swatches={swatches}
+            />
+            <ColourField
+              label="Badge colour"
+              value={badgeColor}
+              onChange={(v) => {
+                setBadgeColor(v)
+                setFromLogo(false)
+              }}
+              swatches={swatches}
+            />
+            {swatches.length > 0 && (
+              <button
+                onClick={() => {
+                  setAccent(DEFAULT_ACCENT)
+                  setBadgeColor(DEFAULT_BADGE)
+                  setFromLogo(false)
+                }}
+                className="mt-5 text-[11px] text-slate-400 hover:text-slate-700 whitespace-nowrap"
+              >
+                Reset
+              </button>
+            )}
           </div>
         </div>
       </div>

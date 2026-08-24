@@ -41,6 +41,8 @@ export const SAFE_MODES = [
   { key: 'off', label: 'Edge to edge', hint: 'no safe area' },
 ]
 
+import { readableTextOn } from './logoColours'
+
 export const DEFAULT_ACCENT = '#C81E1E' // offer block
 export const DEFAULT_BADGE = '#1E3A8A' // location badge
 
@@ -257,7 +259,9 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     roundRect(ctx, padX, headerTop, boxW, badgeH, 8)
     ctx.fill()
 
-    ctx.fillStyle = '#FFFFFF'
+    // A pale brand colour needs dark text, not white. Deciding per block keeps
+    // the colour honest instead of darkening it until white happens to fit.
+    ctx.fillStyle = readableTextOn(badgeColor)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
     ctx.fillText(badgeLabel, padX + 19, headerTop + badgeH / 2 + 1)
@@ -416,7 +420,7 @@ function drawFooter(ctx, parts, { padX, contentBottom, accent }) {
     roundRect(ctx, padX, boxY, o.w, o.h, 4)
     ctx.fill()
 
-    ctx.fillStyle = '#FFFFFF'
+    ctx.fillStyle = readableTextOn(accent)
     let ty = boxY + o.padBoxY
     if (o.amount) {
       setFont(ctx, '800', o.amountPx, 0)
