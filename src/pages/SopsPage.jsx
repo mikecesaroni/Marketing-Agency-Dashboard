@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
+import SopAttachments from '../components/SopAttachments'
 import SopContent from '../components/SopContent'
 import SopForm from '../components/SopForm'
 import { supabase } from '../lib/supabaseClient'
@@ -210,6 +211,8 @@ export default function SopsPage() {
               </div>
 
               <SopContent text={selected.content} />
+
+              <SopAttachments sopId={selected.id} />
             </div>
           )}
         </div>
