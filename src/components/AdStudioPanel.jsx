@@ -168,6 +168,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [subhead, setSubhead] = useState('')
   const [proof, setProof] = useState('')
   const [cta, setCta] = useState('Book Today!')
+  // Off by default: the scrim handles most photos, and a plate on a clean
+  // background is just a box.
+  const [hookPlate, setHookPlate] = useState(false)
 
   // Meta's interface covers the top and bottom of a 9:16. Reels is the
   // strictest of the placements, so it is the default: a CTA hidden behind the
@@ -270,7 +273,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // first paint measures with a fallback face and wraps differently.
   useEffect(() => {
     let cancelled = false
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor }
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor, hookPlate }
     ensureFonts().then(() => {
       if (cancelled) return
       SIZES.forEach((size, i) => {
@@ -281,12 +284,12 @@ export default function AdStudioPanel({ client, intake, seed }) {
     return () => {
       cancelled = true
     }
-  }, [badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor, assets, safeMode, guides])
+  }, [badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor, hookPlate, assets, safeMode, guides])
 
   // Guides are a preview aid. Repaint clean, export, then put them back, so a
   // saved PNG can never carry the red bands into the ad account.
   const withoutGuides = (fn) => async (...args) => {
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor }
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor, hookPlate }
     const repaint = (g) =>
       SIZES.forEach((size, i) => {
         const c = refs.current[i]
@@ -319,6 +322,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
     setCta(r.cta)
     if (r.accent) setAccent(r.accent)
     if (r.badgeColor) setBadgeColor(r.badgeColor)
+    setHookPlate(Boolean(r.hookPlate))
     // Colours came from the saved ad, so a logo reload must not replace them.
     setFromLogo(false)
     setBackgroundPath(r.backgroundPath)
@@ -388,7 +392,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
         await saveAdRecipe({
           clientId: client.id,
           stamp,
-          content: { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor },
+          content: { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor, hookPlate },
           backgroundPath,
           logoPath,
           safeMode,
@@ -595,6 +599,15 @@ export default function AdStudioPanel({ client, intake, seed }) {
             </button>
           ))}
         </div>
+        <label className="flex items-center gap-1.5 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={hookPlate}
+            onChange={(e) => setHookPlate(e.target.checked)}
+            className="rounded"
+          />
+          Panel behind the hook
+        </label>
         <label className="flex items-center gap-1.5 text-xs text-slate-600">
           <input
             type="checkbox"

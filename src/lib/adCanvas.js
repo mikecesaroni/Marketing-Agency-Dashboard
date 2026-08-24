@@ -184,6 +184,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     cta,
     accent = DEFAULT_ACCENT,
     badgeColor = DEFAULT_BADGE,
+    hookPlate = false,
   } = content
   const { background, logo } = assets || {}
 
@@ -276,11 +277,42 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
       lineRatio: 1.13,
     })
     const lineH = px * 1.13
+    const firstBaseline = hookTop + px
+    const lastBaseline = firstBaseline + (lines.length - 1) * lineH
+
+    // A busy photo behind the hook beats any amount of gradient: faces and
+    // high-contrast detail cut straight through white type. The plate is a flat
+    // panel sized to the text rather than a full-width band, so it reads as
+    // design instead of a bug.
+    if (hookPlate && lines.length) {
+      // Font is still set from fitText, so measuring here is accurate.
+      let widest = 0
+      for (const line of lines) widest = Math.max(widest, ctx.measureText(line).width)
+
+      const padPlateX = 26
+      const padPlateY = 20
+      // Cap height sits about 0.74em above the baseline for this face, and
+      // descenders about 0.22em below.
+      const top = firstBaseline - px * 0.78 - padPlateY
+      const bottom = lastBaseline + px * 0.24 + padPlateY
+
+      ctx.fillStyle = 'rgba(2,6,23,0.55)'
+      roundRect(
+        ctx,
+        padX - padPlateX,
+        top,
+        Math.min(widest + padPlateX * 2, w - (padX - padPlateX) * 2),
+        bottom - top,
+        14
+      )
+      ctx.fill()
+    }
+
     ctx.fillStyle = '#FFFFFF'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
 
-    let y = hookTop + px
+    let y = firstBaseline
     for (const line of lines) {
       ctx.fillText(line, padX, y)
       y += lineH

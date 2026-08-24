@@ -69,8 +69,11 @@ function briefLine(designBrief, label) {
   const re = new RegExp(`^${h}${label}${h}:${h}(\\S.*)$`, 'im')
   const found = String(designBrief || '').match(re)
   if (!found) return ''
-  // Drop the template's own square brackets if the model echoed them.
-  return found[1].trim().replace(/^\[(.*)\]$/, '$1').trim()
+  // Drop the template's own square brackets if the model echoed them. They can
+  // wrap the whole value or just parts of it: "\u2605 [4.9] on Google" reached an
+  // artboard with the brackets painted on, because only the wrapping case was
+  // handled here.
+  return found[1].replace(/\[([^\]]*)\]/g, '$1').trim()
 }
 
 // "$29.95 15-Point Visual Inspection" -> amount + detail. The leading price or
