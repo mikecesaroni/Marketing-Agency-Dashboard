@@ -387,13 +387,17 @@ function accumulate(t, r) {
 // dedupes reach across an audience, so adding two ads' reach counts the same
 // person twice. Spend, leads, impressions and clicks are all genuinely additive.
 export function groupCampaigns(rows) {
+  // Rows whose campaign_id never got written group together under a placeholder
+  // rather than vanishing. It is not a real Meta campaign, and an ad that has
+  // both attributed and unattributed rows will show up in both places with its
+  // spend split, which is the visible symptom of a sync that dropped the field.
   const campaigns = new Map()
 
   for (const r of rows) {
     const cId = r.campaign_id || 'unknown'
     let c = campaigns.get(cId)
     if (!c) {
-      c = blankTotals({ id: cId, name: r.campaign_name || 'Unattributed', adsets: new Map() })
+      c = blankTotals({ id: cId, name: r.campaign_name || 'No campaign recorded', adsets: new Map() })
       campaigns.set(cId, c)
     }
     accumulate(c, r)
@@ -401,7 +405,7 @@ export function groupCampaigns(rows) {
     const aId = r.adset_id || 'unknown'
     let a = c.adsets.get(aId)
     if (!a) {
-      a = blankTotals({ id: aId, name: r.adset_name || 'Unattributed', ads: new Map() })
+      a = blankTotals({ id: aId, name: r.adset_name || 'No ad set recorded', ads: new Map() })
       c.adsets.set(aId, a)
     }
     accumulate(a, r)
