@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import DailyChart from './DailyChart'
+import { buildDailySeries, daysAgo } from '../lib/dailySeries'
 import {
   bucketByPeriod,
   fetchAdDaily,
@@ -16,13 +18,28 @@ const RANGES = [
   { key: 'all', label: 'Lifetime', days: null },
 ]
 
+// axis() is deliberately shorter than fmt(): a tick wants 12k where a tooltip
+// wants 12,480, and one formatter doing both makes one of them wrong.
+const compact = (v) =>
+  v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : String(Math.round(v))
+
 const METRICS = [
-  { key: 'spend', label: 'Spend', fmt: (v) => money(v) },
-  { key: 'leads', label: 'Leads', fmt: (v) => String(v) },
-  { key: 'cpl', label: 'Cost / lead', fmt: (v) => (v > 0 ? `$${v.toFixed(2)}` : '—') },
-  { key: 'impressions', label: 'Impressions', fmt: (v) => v.toLocaleString() },
-  { key: 'clicks', label: 'Clicks', fmt: (v) => v.toLocaleString() },
-  { key: 'ctr', label: 'CTR', fmt: (v) => (v > 0 ? `${v.toFixed(2)}%` : '—') },
+  { key: 'spend', label: 'Spend', fmt: (v) => money(v), axis: (v) => `$${compact(v)}` },
+  { key: 'leads', label: 'Leads', fmt: (v) => String(v), axis: (v) => String(v) },
+  {
+    key: 'cpl',
+    label: 'Cost / lead',
+    fmt: (v) => (v > 0 ? `$${v.toFixed(2)}` : '—'),
+    axis: (v) => `$${Math.round(v)}`,
+  },
+  { key: 'impressions', label: 'Impressions', fmt: (v) => v.toLocaleString(), axis: compact },
+  { key: 'clicks', label: 'Clicks', fmt: (v) => v.toLocaleString(), axis: compact },
+  {
+    key: 'ctr',
+    label: 'CTR',
+    fmt: (v) => (v > 0 ? `${v.toFixed(2)}%` : '—'),
+    axis: (v) => `${v.toFixed(1)}%`,
+  },
 ]
 
 const MAX_BAR_PX = 140
@@ -268,7 +285,7 @@ export default function AdPerformanceSection({ clientId }) {
   const [error, setError] = useState('')
   const [range, setRange] = useState('30')
   const [scope, setScope] = useState('live')
-  const [period, setPeriod] = useState('week')
+  const [period, setPeriod] = useState('day')
   const [metricKey, setMetricKey] = useState('spend')
 
   useEffect(() => {
@@ -296,6 +313,15 @@ export default function AdPerformanceSection({ clientId }) {
 
   const ads = useMemo(() => summariseAds(scoped), [scoped])
   const buckets = useMemo(() => bucketByPeriod(scoped, period), [scoped, period])
+
+  // Lifetime has no fixed start, so it runs from the first day that recorded
+  // anything. Gap-filling then covers every quiet day in between.
+  const daily = useMemo(() => {
+    if (scoped.length === 0) return []
+    const days = RANGES.find((r) => r.key === range)?.days
+    const earliest = scoped.reduce((a, r) => (r.date < a ? r.date : a), scoped[0].date)
+    return buildDailySeries(scoped, days ? daysAgo(days - 1) : earliest, daysAgo(0))
+  }, [scoped, range])
   const campaigns = useMemo(() => groupCampaigns(scoped), [scoped])
 
   const totals = useMemo(() => {
@@ -410,22 +436,30 @@ export default function AdPerformanceSection({ clientId }) {
                 ))}
               </div>
               <div className="flex gap-1 flex-shrink-0">
-                {['week', 'month'].map((p) => (
+                {[
+                  ['day', 'Daily'],
+                  ['week', 'Weekly'],
+                  ['month', 'Monthly'],
+                ].map(([p, label]) => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium capitalize transition ${
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
                       period === p
                         ? 'bg-slate-900 text-white'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    {p}ly
+                    {label}
                   </button>
                 ))}
               </div>
             </div>
-            <Chart buckets={buckets} metric={metric} period={period} />
+            {period === 'day' ? (
+              <DailyChart series={daily} metric={{ ...metric, format: metric.fmt }} />
+            ) : (
+              <Chart buckets={buckets} metric={metric} period={period} />
+            )}
           </div>
 
           <CampaignTree campaigns={campaigns} hasVideo={hasVideo} />

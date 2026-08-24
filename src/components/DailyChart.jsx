@@ -54,6 +54,8 @@ function labelFor(dateStr) {
  * a second scale for the average would let it be drawn anywhere.
  */
 export default function DailyChart({ series, metric, height = 240 }) {
+  // Callers that only have one formatter get to reuse it for the axis.
+  const axisFmt = metric.axis || metric.format
   const [active, setActive] = useState(null)
   const [width, setWidth] = useState(760)
   const wrapRef = useRef(null)
@@ -161,7 +163,7 @@ export default function DailyChart({ series, metric, height = 240 }) {
               fill={AXIS_TEXT}
               style={{ fontVariantNumeric: 'tabular-nums' }}
             >
-              {metric.axis(t)}
+              {axisFmt(t)}
             </text>
           </g>
         ))}

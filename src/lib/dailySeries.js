@@ -28,7 +28,12 @@ export function buildDailySeries(rows, from, to) {
   while (cursor <= end) {
     const key = formatDate(cursor)
     const b = byDate.get(key) || { date: key, spend: 0, leads: 0, clicks: 0, impressions: 0 }
-    out.push({ ...b, cpl: b.leads > 0 ? b.spend / b.leads : 0 })
+    out.push({
+      ...b,
+      // Derived per day from that day's own totals, never averaged across days.
+      cpl: b.leads > 0 ? b.spend / b.leads : 0,
+      ctr: b.impressions > 0 ? (b.clicks / b.impressions) * 100 : 0,
+    })
     cursor.setDate(cursor.getDate() + 1)
   }
   return out
@@ -63,7 +68,11 @@ export function totals(series) {
     }),
     { spend: 0, leads: 0, clicks: 0, impressions: 0 }
   )
-  return { ...t, cpl: t.leads > 0 ? t.spend / t.leads : 0 }
+  return {
+    ...t,
+    cpl: t.leads > 0 ? t.spend / t.leads : 0,
+    ctr: t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0,
+  }
 }
 
 /**
