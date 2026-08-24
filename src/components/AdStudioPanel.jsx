@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabaseClient'
 import { copyText } from '../lib/intakeSummary'
 import { splitOffer } from '../lib/clientChat'
 import { extractPalette } from '../lib/logoColours'
+import SavedAdsGallery from './SavedAdsGallery'
+import { recipeToContent, saveAdRecipe } from '../lib/savedAds'
 import {
   DEFAULT_ACCENT,
   DEFAULT_BADGE,
@@ -47,6 +49,29 @@ function Field({ label, value, onChange, hint }) {
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
       />
+    </div>
+  )
+}
+
+function Tabs({ tab, setTab }) {
+  return (
+    <div className="flex gap-1 border-b border-slate-200 -mt-1">
+      {[
+        ['design', 'Design'],
+        ['saved', 'Saved ads'],
+      ].map(([key, label]) => (
+        <button
+          key={key}
+          onClick={() => setTab(key)}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+            tab === key
+              ? 'border-orange-600 text-orange-700'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   )
 }
@@ -153,6 +178,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // Set once the colours came from the logo, so a later logo change can replace
   // them without stamping over a colour picked by hand.
   const [fromLogo, setFromLogo] = useState(false)
+  const [tab, setTab] = useState('design')
+  // Bumped after a save so the gallery refetches instead of showing a stale list.
+  const [savedAt, setSavedAt] = useState(0)
 
   const [assets, setAssets] = useState({ background: null, logo: null })
   const [error, setError] = useState('')
@@ -272,6 +300,35 @@ export default function AdStudioPanel({ client, intake, seed }) {
     }
   }
 
+  /**
+   * Reopens a saved ad for editing.
+   *
+   * Saving afterwards writes a NEW set rather than replacing the old one. The
+   * old images keep their public URLs, and those URLs may already be attached
+   * to a live Meta ad; overwriting them would change a running ad's creative
+   * with no way to tell it happened.
+   */
+  const editSaved = (row) => {
+    const r = recipeToContent(row)
+    setBadge(r.badge)
+    setHook(r.hook)
+    setOfferAmount(r.offerAmount)
+    setOfferDetail(r.offerDetail)
+    setSubhead(r.subhead)
+    setProof(r.proof)
+    setCta(r.cta)
+    if (r.accent) setAccent(r.accent)
+    if (r.badgeColor) setBadgeColor(r.badgeColor)
+    // Colours came from the saved ad, so a logo reload must not replace them.
+    setFromLogo(false)
+    setBackgroundPath(r.backgroundPath)
+    setLogoPath(r.logoPath)
+    setSafeMode(r.safeMode)
+    setSaved('')
+    setError('')
+    setTab('design')
+  }
+
   const upload = async (file, setPath) => {
     setError('')
     try {
@@ -282,6 +339,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
         client_id: client.id,
         file_name: file.name,
         file_type: file.type,
+        // NOT NULL in the schema. Omitting it fails the insert, which shows up
+        // as a file that uploaded to storage but never appears in the CRM.
+        file_size: file.size,
         storage_path: path,
       })
       setFiles((f) => [...f, { id: path, file_name: file.name, storage_path: path }])
@@ -309,15 +369,32 @@ export default function AdStudioPanel({ client, intake, seed }) {
           .from('client-files')
           .upload(path, blob, { contentType: 'image/png' })
         if (upErr) throw upErr
-        await supabase.from('client_files').insert({
+        const { error: rowErr } = await supabase.from('client_files').insert({
           client_id: client.id,
           file_name: `ad-${stamp}-${SIZES[i].key}.png`,
           file_type: 'image/png',
+          file_size: blob.size,
           storage_path: path,
         })
+        if (rowErr) throw rowErr
         urls.push(publicUrl(path))
       }
-      setSaved(`Saved ${urls.length} sizes. These URLs are what Meta uploads from.`)
+      // The images are the deliverable; the recipe is what makes them editable
+      // later. A missing saved_ads table should not fail a good save.
+      try {
+        await saveAdRecipe({
+          clientId: client.id,
+          stamp,
+          content: { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor },
+          backgroundPath,
+          logoPath,
+          safeMode,
+        })
+      } catch (recipeErr) {
+        console.warn('Ad saved but its recipe was not stored:', recipeErr.message)
+      }
+      setSaved(`Saved ${urls.length} sizes. Find them any time on the Saved ads tab.`)
+      setSavedAt(Date.now())
     } catch (err) {
       setError(err.message)
     } finally {
@@ -372,8 +449,23 @@ export default function AdStudioPanel({ client, intake, seed }) {
     </div>
   )
 
+  if (tab === 'saved') {
+    return (
+      <div className="space-y-4">
+        <Tabs tab={tab} setTab={setTab} />
+        <SavedAdsGallery
+          key={savedAt}
+          clientId={client.id}
+          clientName={client.name}
+          onEdit={editSaved}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
+      <Tabs tab={tab} setTab={setTab} />
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
           {error}
