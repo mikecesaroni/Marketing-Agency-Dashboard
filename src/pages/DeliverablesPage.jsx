@@ -4,6 +4,7 @@ import Modal from '../components/Modal'
 import DeliverableForm from '../components/DeliverableForm'
 import LsaSetupPanel from '../components/LsaSetupPanel'
 import MetaSetupPanel from '../components/MetaSetupPanel'
+import GbpSetupPanel from '../components/GbpSetupPanel'
 import { supabase } from '../lib/supabaseClient'
 import { fetchDeliverables, hasInternalColumn, today } from '../lib/queries'
 
@@ -130,6 +131,7 @@ export default function DeliverablesPage() {
 
       <MetaSetupPanel />
       <LsaSetupPanel />
+      <GbpSetupPanel />
 
       <div className="flex flex-col md:flex-row gap-2 mb-4">
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">

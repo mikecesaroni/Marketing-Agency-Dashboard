@@ -3,7 +3,16 @@ import { supabase } from '../lib/supabaseClient'
 
 // "Live" vs "Not yet" for a single channel on a single client. Writes straight
 // to the clients row so every screen reads the same flag.
-export default function LiveToggle({ clientId, field, label, value, onChange, size = 'md' }) {
+export default function LiveToggle({
+  clientId,
+  field,
+  label,
+  value,
+  onChange,
+  size = 'md',
+  // Ads go live; a profile gets optimized. Same switch, different verb.
+  doneWord = 'live',
+}) {
   const [saving, setSaving] = useState(false)
   const [live, setLive] = useState(!!value)
 
@@ -28,7 +37,7 @@ export default function LiveToggle({ clientId, field, label, value, onChange, si
     <button
       onClick={toggle}
       disabled={saving}
-      title={`${label}: ${live ? 'live' : 'not live yet'} — click to change`}
+      title={`${label}: ${live ? doneWord : `not ${doneWord} yet`} — click to change`}
       className={`${pad} rounded-lg font-semibold transition disabled:opacity-60 ${
         live
           ? 'bg-green-100 text-green-800 hover:bg-green-200'
@@ -36,7 +45,7 @@ export default function LiveToggle({ clientId, field, label, value, onChange, si
       }`}
     >
       {live ? '● ' : '○ '}
-      {label} {live ? 'live' : 'not yet'}
+      {label} {live ? doneWord : 'not yet'}
     </button>
   )
 }

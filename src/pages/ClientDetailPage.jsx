@@ -281,6 +281,15 @@ export default function ClientDetailPage() {
                 label="Google LSA"
                 value={client.lsa_active}
                 onChange={loadClientData}
+                doneWord="optimized"
+              />
+              <LiveToggle
+                clientId={client.id}
+                field="gbp_optimized"
+                label="Google Business Profile"
+                value={client.gbp_optimized}
+                onChange={loadClientData}
+                doneWord="optimized"
               />
             </div>
             <button

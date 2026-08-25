@@ -189,7 +189,7 @@ export async function fetchDeliverables() {
 export async function fetchChannelSetupNeeded(field) {
   let q = supabase
     .from('clients')
-    .select('id, name, meta_ads_active, lsa_active, meta_ad_account_id')
+    .select('id, name, meta_ads_active, lsa_active, gbp_optimized, meta_ad_account_id')
     .eq('archived', false)
     .eq(field, false)
     .order('name')

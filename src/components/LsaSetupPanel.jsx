@@ -25,9 +25,9 @@ export default function LsaSetupPanel() {
       otherField="meta_ads_active"
       otherLabel="Meta"
       icon="📍"
-      title="LSA setup still needed"
-      markLabel="Mark LSA live"
-      allLiveMessage="Google LSA is live for every client."
+      title="LSA not optimized yet"
+      markLabel="Mark LSA optimized"
+      allLiveMessage="Google LSA is optimized for every client."
       action={
         <div className="flex items-center gap-2">
           {missing && (

@@ -190,3 +190,12 @@ create policy "Authenticated users can do everything with client_files"
   to authenticated
   using (true)
   with check (true);
+
+-- ---------------------------------------------------------------------------
+-- GOOGLE BUSINESS PROFILE OPTIMISATION
+--
+-- Tracked as its own flag rather than folded into lsa_active. They are separate
+-- pieces of work on separate Google products, and a client can easily have one
+-- done and not the other.
+-- ---------------------------------------------------------------------------
+alter table clients add column if not exists gbp_optimized boolean not null default false;

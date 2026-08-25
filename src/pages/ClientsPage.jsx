@@ -9,8 +9,10 @@ const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'meta-live', label: 'Meta live' },
   { key: 'meta-not', label: 'Meta not yet' },
-  { key: 'lsa-live', label: 'LSA live' },
+  { key: 'lsa-live', label: 'LSA optimized' },
   { key: 'lsa-not', label: 'LSA not yet' },
+  { key: 'gbp-live', label: 'GBP optimized' },
+  { key: 'gbp-not', label: 'GBP not yet' },
   { key: 'archived', label: 'Archived' },
 ]
 
@@ -56,6 +58,7 @@ function ChannelBadges({ client }) {
     <span className="inline-flex gap-1.5">
       <LiveBadge live={client.meta_ads_active} label="Meta" />
       <LiveBadge live={client.lsa_active} label="LSA" />
+      <LiveBadge live={client.gbp_optimized} label="GBP" />
     </span>
   )
 }
@@ -95,6 +98,8 @@ export default function ClientsPage() {
         if (statusFilter === 'meta-not' && c.meta_ads_active) return false
         if (statusFilter === 'lsa-live' && !c.lsa_active) return false
         if (statusFilter === 'lsa-not' && c.lsa_active) return false
+        if (statusFilter === 'gbp-live' && !c.gbp_optimized) return false
+        if (statusFilter === 'gbp-not' && c.gbp_optimized) return false
       }
       if (!term) return true
       return [c.name, c.ownerName, c.industry, c.market].some((f) =>
