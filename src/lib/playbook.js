@@ -8,7 +8,7 @@
 // urgency, creative count) are ALSO encoded in clientBrief.js, so the brief
 // states the decision as a fact rather than asking the model to re-derive it.
 
-export const PLAYBOOK = `META ADS PLAYBOOK — SERVICE BUSINESSES (HQ REFERENCE)
+export const PLAYBOOK = `META ADS PLAYBOOK: SERVICE BUSINESSES (HQ REFERENCE)
 Focus: hooks, creative testing, keeping it simple, spending toward LTV.
 Applies to every client.
 
@@ -22,11 +22,11 @@ Why it compounds: a better hook gets more engagement, Meta rewards engaging
 creative with cheaper delivery, so a 2x better hook can cut cost per lead 30-40%.
 
 === THE 5-PART AD STRUCTURE (every service ad uses this) ===
-1. HOOK — call out the homeowner and the problem
-2. AGITATE — name the cost of doing nothing
-3. OFFER — make the next step cheap and easy
-4. PROOF — a number, a rating, or a name
-5. CTA — tell them exactly what tapping does
+1. HOOK: call out the homeowner and the problem
+2. AGITATE: name the cost of doing nothing
+3. OFFER: make the next step cheap and easy
+4. PROOF: a number, a rating, or a name
+5. CTA: tell them exactly what tapping does
 
 Example (HVAC):
 Hook: "Buffalo homeowners: is your AC already struggling before summer?"
@@ -37,13 +37,14 @@ CTA: "Tap Book Now to grab a slot."
 
 === HOOK FORMULAS THAT WORK ===
 Always drop in the real city and real service.
-1. LOCAL CALL-OUT: "Attention [City] homeowners..."
+1. LOCAL CALL-OUT: "Attention Raleigh homeowners..."
+   (Raleigh is the example. Use this client's own city.)
 2. PROBLEM QUESTION: "Furnace won't turn on?"
 3. SYMPTOM CHECKLIST: "Weak water pressure? Rattling pipes? Higher bills? Here's why."
 4. COST-OF-WAITING: "That small roof leak is a $9,000 problem in six months."
-5. SEASONAL / URGENCY: "Book your AC tune-up before the first heatwave hits [City]."
-6. BOLD LOCAL OFFER: "$79 drain cleaning for [City] homeowners this week only."
-7. TRUST / PROOF-LED: "600+ [City] families trust us with their heating."
+5. SEASONAL / URGENCY: "Book your AC tune-up before the first heatwave hits Raleigh."
+6. BOLD LOCAL OFFER: "$79 drain cleaning for Raleigh homeowners this week only."
+7. TRUST / PROOF-LED: "600+ Raleigh families trust us with their heating."
 
 Avoid: vague brand fluff, anything a renter would click, claims you can't back up.
 
@@ -81,9 +82,9 @@ than a $120 diagnostic, so once an account has data, weight budget toward the
 highest-LTV work.
 
 === HIGH / MID / LOW LTV STRUCTURE (Stage 2 only) ===
-CAMPAIGN "HIGH-LTV — REPLACEMENT"  (most budget) — replacements, installs
-CAMPAIGN "MID-LTV — MAINTENANCE"   (steady)      — plans, tune-ups
-CAMPAIGN "LOW-LTV — SERVICE CALLS" (lean)        — diagnostic, repair
+CAMPAIGN "HIGH-LTV: REPLACEMENT"  (most budget): replacements, installs
+CAMPAIGN "MID-LTV: MAINTENANCE"   (steady)     , plans, tune-ups
+CAMPAIGN "LOW-LTV: SERVICE CALLS" (lean)       , diagnostic, repair
 
 Starting split once tiered: 50% High / 30% Mid / 20% Low, then let numbers move it.
 
@@ -94,12 +95,12 @@ Tier templates for other trades:
 - Lawn: High = installs, hardscaping / Mid = recurring contracts / Low = one-time cleanups
 
 === STAGING RULE (the most important part) ===
-STAGE 1 — LAUNCH LEAN (default for every new client):
+STAGE 1: LAUNCH LEAN (default for every new client):
 - One broad ad set, 5-6 stacked creatives, let Meta optimize.
 - Any client under roughly $75-100/day lives here.
 - Goal: find the winning hook and offer. Do not split yet.
 
-STAGE 2 — GRADUATE TO TIERS:
+STAGE 2: GRADUATE TO TIERS:
 - Only once EACH campaign can clear ~50 conversions on its own.
 - Split off the High-LTV campaign first, keep the rest broad, add Mid and Low as
   volume grows.

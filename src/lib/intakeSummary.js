@@ -105,7 +105,7 @@ function displayValue(value) {
 }
 
 // Builds the pasteable summary. Empty fields are dropped rather than listed as
-// blanks — the point is something you can drop into a brief or an email, and a
+// blanks, the point is something you can drop into a brief or an email, and a
 // wall of "Phone:" with nothing after it is just noise.
 export function formatIntake(formData, clientName) {
   const blocks = []
@@ -116,7 +116,7 @@ export function formatIntake(formData, clientName) {
     for (const [key, label] of section.fields) {
       const value = displayValue(formData[key])
       if (!value) continue
-      // Checkboxes answered "No" are still worth stating — "no logo file" is a
+      // Checkboxes answered "No" are still worth stating, "no logo file" is a
       // real finding, unlike an unanswered text box.
       if (typeof formData[key] !== 'boolean' && value === '') continue
       lines.push(value.includes('\n') ? `${label}:\n${value}` : `${label}: ${value}`)
@@ -127,7 +127,7 @@ export function formatIntake(formData, clientName) {
     }
   }
 
-  const header = clientName ? `CLIENT INTAKE — ${clientName}` : 'CLIENT INTAKE'
+  const header = clientName ? `CLIENT INTAKE: ${clientName}` : 'CLIENT INTAKE'
   return `${header}\n${'='.repeat(header.length)}\n\n${blocks.join('\n\n')}\n`
 }
 
