@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { copyText } from '../lib/intakeSummary'
 import { money } from '../lib/queries'
+import StripeImportPanel from './StripeImportPanel'
 import {
   assignUnmatched,
   clientLink,
@@ -127,6 +128,8 @@ export default function StripePanel() {
               {saved ? '✓ Saved' : 'Save links'}
             </button>
           </div>
+
+          <StripeImportPanel clients={clients} onDone={load} />
 
           <div className="pt-3 border-t border-slate-200">
             <h3 className="text-sm font-semibold text-slate-900 mb-1">Unmatched payments</h3>
