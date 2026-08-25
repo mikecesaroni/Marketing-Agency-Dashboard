@@ -193,6 +193,7 @@ export default function StripeImportPanel({ clients, onDone }) {
                           {clients.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.name}
+                              {c.archived ? ' (archived)' : ''}
                             </option>
                           ))}
                         </select>

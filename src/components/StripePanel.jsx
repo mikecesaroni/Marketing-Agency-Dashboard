@@ -28,7 +28,16 @@ export default function StripePanel() {
       const [l, u, c] = await Promise.all([
         fetchStripeLinks(),
         fetchUnmatched(),
-        supabase.from('clients').select('id, name').eq('archived', false).order('name'),
+        // Archived clients are included on purpose. Both of the things this
+        // panel does are historical — importing an old export, and assigning a
+        // payment that arrived unmatched — and a churned client is exactly who
+        // an unallocated payment tends to belong to. Sorted so the active ones
+        // stay at the top of the list.
+        supabase
+          .from('clients')
+          .select('id, name, archived')
+          .order('archived')
+          .order('name'),
       ])
       setLinks(l)
       setDraft(l)
@@ -165,6 +174,7 @@ export default function StripePanel() {
                       {clients.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
+                          {c.archived ? ' (archived)' : ''}
                         </option>
                       ))}
                     </select>
