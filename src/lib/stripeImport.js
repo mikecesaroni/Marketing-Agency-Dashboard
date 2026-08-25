@@ -13,7 +13,11 @@ export function parseCsv(text) {
   let row = []
   let field = ''
   let quoted = false
-  const src = String(text || '').replace(/\r\n?/g, '\n')
+  // Exports opened in Excel and re-saved carry a UTF-8 BOM, which would make
+  // the first header "\ufeffid" and stop it matching anything.
+  const src = String(text || '')
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n?/g, '\n')
 
   for (let i = 0; i < src.length; i++) {
     const c = src[i]
@@ -59,6 +63,35 @@ const FIELDS = {
   refunded: ['amount refunded', 'refunded'],
 }
 
+// Deliberately a deny-list rather than an allow-list.
+//
+// The first version allowed paid/succeeded/true and dropped everything else,
+// which meant an export format it had not seen rejected every row and reported
+// "no settled payments" — the Checkout Sessions export that Payment Links
+// produce uses "complete", so it discarded the entire file. Listing what is NOT
+// revenue fails safe: an unfamiliar status is surfaced rather than silently
+// deleted.
+const NOT_REVENUE = new Set([
+  'failed',
+  'refunded',
+  'canceled',
+  'cancelled',
+  'incomplete',
+  'incomplete_expired',
+  'uncaptured',
+  'blocked',
+  'disputed',
+  'unpaid',
+  'draft',
+  'void',
+  'open',
+  'past_due',
+  'expired',
+  'pending',
+  'false',
+  'no',
+])
+
 function pick(headers, names) {
   for (const name of names) {
     const i = headers.indexOf(name)
@@ -81,18 +114,33 @@ export function normaliseStripeCsv(text) {
   }
 
   const out = []
+  // Counted so an empty result can say which rule emptied it, rather than
+  // leaving the file looking unreadable.
+  const skipped = { zeroAmount: 0, notRevenue: 0, refunded: 0 }
+  const statuses = new Set()
+
   for (const raw of rows.slice(1)) {
     const at = (i) => (i === -1 ? '' : (raw[i] ?? '').trim())
 
     const amount = Number(at(idx.amount).replace(/[^0-9.-]/g, ''))
-    if (!Number.isFinite(amount) || amount === 0) continue
+    if (!Number.isFinite(amount) || amount === 0) {
+      skipped.zeroAmount++
+      continue
+    }
 
-    // Failed and fully refunded charges are not revenue, and importing them
-    // would settle scheduled payments that were never actually paid.
     const status = at(idx.status).toLowerCase()
-    if (status && !['paid', 'succeeded', 'true'].includes(status)) continue
+    if (status) statuses.add(status)
+    if (NOT_REVENUE.has(status)) {
+      skipped.notRevenue++
+      continue
+    }
+
+    // A full refund is not revenue; a partial one still is.
     const refunded = Number(at(idx.refunded).replace(/[^0-9.-]/g, ''))
-    if (Number.isFinite(refunded) && refunded > 0 && refunded >= amount) continue
+    if (Number.isFinite(refunded) && refunded > 0 && refunded >= amount) {
+      skipped.refunded++
+      continue
+    }
 
     const created = at(idx.created)
     out.push({
@@ -105,7 +153,24 @@ export function normaliseStripeCsv(text) {
       description: at(idx.description) || '',
     })
   }
-  return { rows: out.sort((a, b) => a.date.localeCompare(b.date)), error: '' }
+  const sorted = out.sort((a, b) => a.date.localeCompare(b.date))
+  if (sorted.length === 0) {
+    const why = []
+    if (skipped.notRevenue) why.push(`${skipped.notRevenue} were not settled`)
+    if (skipped.refunded) why.push(`${skipped.refunded} were fully refunded`)
+    if (skipped.zeroAmount) why.push(`${skipped.zeroAmount} had no amount`)
+    return {
+      rows: [],
+      error:
+        `Read ${rows.length - 1} rows but none look like settled payments` +
+        (why.length ? ` — ${why.join(', ')}.` : '.') +
+        (statuses.size ? ` Statuses seen: ${[...statuses].join(', ')}.` : '') +
+        ` Columns found: ${headers.join(', ')}.`,
+      diagnostics: { headers, skipped, statuses: [...statuses] },
+    }
+  }
+
+  return { rows: sorted, error: '', diagnostics: { headers, skipped, statuses: [...statuses] } }
 }
 
 /**

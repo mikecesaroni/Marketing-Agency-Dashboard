@@ -21,6 +21,7 @@ export default function StripeImportPanel({ clients, onDone }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState('')
+  const [dragging, setDragging] = useState(false)
   const fileRef = useRef(null)
 
   const read = async (file) => {
@@ -30,6 +31,9 @@ export default function StripeImportPanel({ clients, onDone }) {
     try {
       const text = await file.text()
       const { rows: parsed, error: parseError } = normaliseStripeCsv(text)
+      // The parser explains an empty result itself, naming the statuses and
+      // columns it saw, which is the difference between fixing the export and
+      // guessing at it.
       if (parseError) throw new Error(parseError)
       if (parsed.length === 0) throw new Error('No settled payments found in that file.')
 
@@ -100,13 +104,40 @@ export default function StripeImportPanel({ clients, onDone }) {
         </div>
       )}
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".csv,text/csv"
-        onChange={(e) => read(e.target.files?.[0])}
-        className="text-xs"
-      />
+      <label
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragging(false)
+          // Ignore anything that is not the export: dropping a PDF here should
+          // say so rather than being read as an empty CSV.
+          const file = e.dataTransfer.files?.[0]
+          if (!file) return
+          if (!/\.csv$/i.test(file.name) && file.type !== 'text/csv') {
+            setError(`${file.name} is not a CSV. Export payments from Stripe as CSV.`)
+            return
+          }
+          read(file)
+        }}
+        className={`block rounded-lg border-2 border-dashed p-4 text-center cursor-pointer transition ${
+          dragging ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-slate-300'
+        }`}
+      >
+        <p className="text-sm text-slate-600">
+          Drop the CSV here, or <span className="text-blue-600 font-medium">choose a file</span>
+        </p>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,text/csv"
+          onChange={(e) => read(e.target.files?.[0])}
+          className="hidden"
+        />
+      </label>
 
       {rows && (
         <div className="mt-3">
