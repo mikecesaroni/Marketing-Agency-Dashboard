@@ -5,9 +5,17 @@ import {
   creativeSetToStudio,
   extractCreativeSets,
   fetchChatHistory,
+  imageUrls,
   renderBlocks,
   sendChatMessage,
 } from '../lib/clientChat'
+import {
+  MAX_ATTACHMENTS,
+  imagesFromDataTransfer,
+  isImageFile,
+  prepareImage,
+  uploadChatImage,
+} from '../lib/chatImages'
 import { copyText } from '../lib/intakeSummary'
 
 // Starters for the things actually asked for most often, so the blank box
@@ -53,9 +61,10 @@ function CreativeSetCard({ set, index, onUse }) {
   )
 }
 
-function Bubble({ role, text, onUseSet }) {
+function Bubble({ role, text, images, onUseSet }) {
   const mine = role === 'user'
   const sets = useMemo(() => (mine ? null : extractCreativeSets(text)), [mine, text])
+  const shots = images || []
 
   return (
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
@@ -64,6 +73,19 @@ function Bubble({ role, text, onUseSet }) {
           mine ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'
         }`}
       >
+        {shots.length > 0 && (
+          <div className={`flex flex-wrap gap-1.5 ${text ? 'mb-2' : ''}`}>
+            {shots.map((url) => (
+              <a key={url} href={url} target="_blank" rel="noreferrer">
+                <img
+                  src={url}
+                  alt="Attached screenshot"
+                  className="max-h-40 rounded border border-white/30 object-cover"
+                />
+              </a>
+            ))}
+          </div>
+        )}
         {text}
         {sets && sets.length > 0 && (
           <div className="mt-2 pt-2 border-t border-slate-300 space-y-1.5">
@@ -86,7 +108,14 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  // Screenshots staged for the next message: { id, name, previewUrl, prepared }.
+  const [attachments, setAttachments] = useState([])
+  const [dragging, setDragging] = useState(false)
   const bottomRef = useRef(null)
+  const fileRef = useRef(null)
+  // Drag events fire on every child element, so a plain boolean flickers as the
+  // pointer crosses the bubbles. Counting enter/leave is what keeps it steady.
+  const dragDepth = useRef(0)
 
   // Rebuilt every render from current CRM data, so the model is never working
   // from a snapshot taken when the conversation started.
@@ -96,7 +125,13 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
     fetchChatHistory(client.id)
       .then(({ chatId: id, messages: rows }) => {
         setChatId(id)
-        setMessages(rows.map((m) => ({ role: m.role, text: renderBlocks(m.content) })))
+        setMessages(
+          rows.map((m) => ({
+            role: m.role,
+            text: renderBlocks(m.content),
+            images: imageUrls(m.content),
+          }))
+        )
       })
       .catch((err) => setError(err.message))
   }, [client.id])
@@ -105,28 +140,130 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
 
+  // Object URLs are the thumbnails; without this every dropped screenshot stays
+  // in memory for as long as the tab is open.
+  useEffect(() => {
+    return () => attachments.forEach((a) => URL.revokeObjectURL(a.previewUrl))
+    // Intentionally on unmount only. Revoking on every change would kill the
+    // preview of an attachment that is still staged.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const addFiles = async (files) => {
+    const images = [...files].filter(isImageFile)
+    if (images.length === 0) return
+    setError('')
+
+    const room = MAX_ATTACHMENTS - attachments.length
+    if (room <= 0) {
+      setError(`You can attach up to ${MAX_ATTACHMENTS} screenshots per message`)
+      return
+    }
+    if (images.length > room) {
+      setError(`Only the first ${room} were attached. Limit is ${MAX_ATTACHMENTS} per message.`)
+    }
+
+    for (const file of images.slice(0, room)) {
+      try {
+        // Shrunk here rather than on upload: a 4K screenshot is several MB of
+        // pixels Claude would only scale back down anyway.
+        const prepared = await prepareImage(file)
+        setAttachments((a) => [
+          ...a,
+          {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name: file.name || 'Screenshot',
+            previewUrl: URL.createObjectURL(prepared.blob),
+            prepared,
+          },
+        ])
+      } catch (err) {
+        setError(err.message)
+      }
+    }
+  }
+
+  const removeAttachment = (id) => {
+    setAttachments((a) => {
+      const hit = a.find((x) => x.id === id)
+      if (hit) URL.revokeObjectURL(hit.previewUrl)
+      return a.filter((x) => x.id !== id)
+    })
+  }
+
+  const onDrop = (e) => {
+    const images = imagesFromDataTransfer(e.dataTransfer)
+    dragDepth.current = 0
+    setDragging(false)
+    if (images.length === 0) return
+    e.preventDefault()
+    addFiles(images)
+  }
+
+  const onDragEnter = (e) => {
+    if (![...(e.dataTransfer?.types || [])].includes('Files')) return
+    dragDepth.current += 1
+    setDragging(true)
+  }
+
+  const onDragLeave = () => {
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragging(false)
+  }
+
+  const onPaste = (e) => {
+    // A screenshot from the OS clipboard arrives here, not through the drop
+    // handler, and it is the fastest way to get one into the chat.
+    const images = imagesFromDataTransfer(e.clipboardData)
+    if (images.length === 0) return
+    e.preventDefault()
+    addFiles(images)
+  }
+
   const send = async (text) => {
     const trimmed = (text ?? input).trim()
-    if (!trimmed || sending) return
+    const staged = attachments
+    if ((!trimmed && staged.length === 0) || sending) return
 
     setInput('')
     setError('')
-    setMessages((m) => [...m, { role: 'user', text: trimmed }])
+    setAttachments([])
+    setMessages((m) => [
+      ...m,
+      { role: 'user', text: trimmed, images: staged.map((a) => a.previewUrl) },
+    ])
     setSending(true)
 
     try {
+      const uploaded = []
+      for (let i = 0; i < staged.length; i++) {
+        uploaded.push(await uploadChatImage(client.id, staged[i].prepared, i))
+      }
+
       const res = await sendChatMessage({
         clientId: client.id,
         chatId,
         system: brief,
         message: trimmed,
+        images: uploaded.map((u) => ({ url: u.url, media_type: u.mediaType })),
       })
       setChatId(res.chat_id)
+      // Swap the local blob previews for the stored URLs, so the thumbnails
+      // survive a reload instead of turning into broken images.
+      if (uploaded.length > 0) {
+        setMessages((m) =>
+          m.map((msg, i) =>
+            i === m.length - 1 ? { ...msg, images: uploaded.map((u) => u.url) } : msg
+          )
+        )
+        staged.forEach((a) => URL.revokeObjectURL(a.previewUrl))
+      }
       setMessages((m) => [...m, { role: 'assistant', text: renderBlocks(res.content) }])
     } catch (err) {
       setError(err.message)
       // Put the message back so a failed send isn't lost work.
       setInput(trimmed)
+      setAttachments(staged)
       setMessages((m) => m.slice(0, -1))
     } finally {
       setSending(false)
@@ -135,14 +272,34 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
 
   const handleClear = async () => {
     await clearChat(client.id)
+    attachments.forEach((a) => URL.revokeObjectURL(a.previewUrl))
+    setAttachments([])
     setMessages([])
     setChatId(null)
   }
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
 
+  const canSend = Boolean(input.trim()) || attachments.length > 0
+
   return (
-    <div className="flex flex-col h-[70vh]">
+    <div
+      className="relative flex flex-col h-[70vh]"
+      onDragEnter={onDragEnter}
+      onDragOver={(e) => {
+        // Without this the browser navigates to the dropped file instead of
+        // giving it to us.
+        if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault()
+      }}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {dragging && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-500 bg-blue-50/90 pointer-events-none">
+          <p className="text-sm font-medium text-blue-700">Drop screenshots here</p>
+        </div>
+      )}
+
       {error && (
         <div className="p-3 mb-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
           {error}
@@ -173,7 +330,13 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
         )}
 
         {messages.map((m, i) => (
-          <Bubble key={i} role={m.role} text={m.text} onUseSet={onUseCreativeSet} />
+          <Bubble
+            key={i}
+            role={m.role}
+            text={m.text}
+            images={m.images}
+            onUseSet={onUseCreativeSet}
+          />
         ))}
 
         {sending && (
@@ -187,10 +350,52 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
       </div>
 
       <div className="pt-3 border-t border-slate-200 mt-3">
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {attachments.map((a) => (
+              <div key={a.id} className="relative">
+                <img
+                  src={a.previewUrl}
+                  alt={a.name}
+                  className="h-16 w-16 rounded border border-slate-300 object-cover"
+                />
+                <button
+                  onClick={() => removeAttachment(a.id)}
+                  aria-label={`Remove ${a.name}`}
+                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-slate-800 text-white text-xs leading-none hover:bg-red-600 transition"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              addFiles(e.target.files)
+              // Reset, or picking the same screenshot twice in a row is ignored.
+              e.target.value = ''
+            }}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            title="Attach a screenshot"
+            aria-label="Attach a screenshot"
+            className="px-3 py-2 border border-slate-300 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition self-end"
+          >
+            📎
+          </button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={onPaste}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -203,14 +408,16 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
           />
           <button
             onClick={() => send()}
-            disabled={sending || !input.trim()}
+            disabled={sending || !canSend}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition self-end"
           >
             Send
           </button>
         </div>
         <div className="flex items-center justify-between mt-2">
-          <span className="text-[11px] text-slate-400">Enter to send, Shift+Enter for a new line</span>
+          <span className="text-[11px] text-slate-400">
+            Enter to send. Drop or paste a screenshot to attach it.
+          </span>
           <div className="flex gap-3">
             {lastAssistant && (
               <button

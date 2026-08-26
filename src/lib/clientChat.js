@@ -19,6 +19,15 @@ export function renderBlocks(content) {
     .join('\n\n')
 }
 
+// Screenshots attached to a turn, so reopening a chat shows what was actually
+// asked about rather than a question with no picture.
+export function imageUrls(content) {
+  if (!Array.isArray(content)) return []
+  return content
+    .filter((b) => b?.type === 'image' && b.source?.type === 'url' && b.source.url)
+    .map((b) => b.source.url)
+}
+
 // Pulls the creative_sets JSON the brief asks for out of a reply, so the copy
 // can be read structurally later instead of re-keyed. Returns null when the
 // reply has no JSON block, which is the normal case for ordinary chat turns.
@@ -164,9 +173,17 @@ export async function fetchChatHistory(clientId) {
   return { chatId, messages: data || [] }
 }
 
-export async function sendChatMessage({ clientId, chatId, system, message }) {
+export async function sendChatMessage({ clientId, chatId, system, message, images }) {
   const { data, error } = await supabase.functions.invoke('client-chat', {
-    body: { client_id: clientId, chat_id: chatId, system, message },
+    body: {
+      client_id: clientId,
+      chat_id: chatId,
+      system,
+      message,
+      // [{ url, media_type }] for any screenshots attached to this turn. Sent
+      // as URLs so the stored history stays small enough to replay.
+      images: images?.length ? images : undefined,
+    },
   })
 
   if (error) {

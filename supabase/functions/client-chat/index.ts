@@ -20,11 +20,17 @@ const MODEL = 'claude-opus-5'
 // used regardless so a slow generation cannot hit the HTTP timeout.
 const MAX_TOKENS = 16000
 
+type ChatImage = { url: string; media_type?: string }
+
 type Incoming = {
   chat_id?: string
   client_id: string
   system: string
   message: string
+  // Screenshots attached to this turn. URLs into the public client-files
+  // bucket, which Anthropic fetches directly; nothing is sent as base64 so the
+  // stored history stays cheap to replay on every later turn.
+  images?: ChatImage[]
 }
 
 function json(body: unknown, status = 200) {
@@ -67,8 +73,13 @@ Deno.serve(async (req) => {
     return json({ error: 'Expected a JSON body' }, 400)
   }
 
-  if (!body.client_id || !body.message?.trim()) {
-    return json({ error: 'client_id and message are required' }, 400)
+  const attached = (body.images || []).filter((i) => typeof i?.url === 'string' && i.url)
+  const text = body.message?.trim() || ''
+
+  // A screenshot on its own is a real question ("what is wrong here?"), so
+  // either half is enough.
+  if (!body.client_id || (!text && attached.length === 0)) {
+    return json({ error: 'client_id and a message or an image are required' }, 400)
   }
 
   // One conversation per client unless a specific chat is named.
@@ -104,7 +115,14 @@ Deno.serve(async (req) => {
     role: m.role,
     content: m.content,
   }))
-  messages.push({ role: 'user', content: body.message })
+  // Images go before the text. Claude reads the picture first and then the
+  // question about it, which is the order that gets the better answer.
+  const userContent: unknown[] = [
+    ...attached.map((img) => ({ type: 'image', source: { type: 'url', url: img.url } })),
+    ...(text ? [{ type: 'text', text }] : []),
+  ]
+
+  messages.push({ role: 'user', content: userContent })
 
   // Meta tools, only when the MCP server is configured. The connector needs
   // BOTH halves — the server entry and a matching mcp_toolset in tools — or the
@@ -149,7 +167,7 @@ Deno.serve(async (req) => {
     // Store the full content blocks, not just text. Tool calls and results have
     // to be replayed to the API verbatim on the next turn.
     const rows = [
-      { chat_id: chatId, role: 'user', content: body.message },
+      { chat_id: chatId, role: 'user', content: userContent },
       { chat_id: chatId, role: 'assistant', content: reply.content },
     ]
 
