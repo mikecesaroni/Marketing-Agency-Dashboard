@@ -174,6 +174,23 @@ export default function PaymentsPage() {
     loadData()
   }
 
+  // Deleting is scoped to overdue rows on purpose — a paid payment is a real
+  // record and an upcoming one is a real future date, but an overdue row is
+  // usually one that should never have been scheduled (a client who churned,
+  // a duplicate, a schedule that outlived the client relationship).
+  const handleDeletePayment = async (payment) => {
+    if (
+      !confirm(
+        `Delete this overdue ${payment.payment_type} payment (${money(payment.amount)}, due ${payment.due_date}) for ${payment.clients?.name || 'this client'}? This cannot be undone.`
+      )
+    )
+      return
+
+    const { error: err } = await supabase.from('payments').delete().eq('id', payment.id)
+    if (err) return setError(err.message)
+    loadData()
+  }
+
   const { mrr, count: billingCount } = calcMRR(clients, payments)
 
   // Deliberately all-time. Scoping this to the current calendar month meant it
@@ -274,6 +291,14 @@ export default function PaymentsPage() {
               className="px-2.5 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
             >
               Mark Paid
+            </button>
+          )}
+          {late && (
+            <button
+              onClick={() => handleDeletePayment(p)}
+              className="px-2.5 py-1.5 text-xs font-medium bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
+            >
+              Delete
             </button>
           )}
         </div>
