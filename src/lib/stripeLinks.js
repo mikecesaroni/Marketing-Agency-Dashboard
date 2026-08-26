@@ -1,18 +1,28 @@
 import { supabase } from './supabaseClient'
 
 export const SETUP_KEY = 'stripe_setup_link'
+// The original monthly link — the $998/mo plan. Key kept as-is so existing
+// Stripe payment link config in app_settings does not need to move.
 export const MONTHLY_KEY = 'stripe_monthly_link'
+// The newer, higher-tier plan. A separate Payment Link in Stripe (its own
+// price), so it needs its own slot rather than overloading the first one.
+export const MONTHLY_1500_KEY = 'stripe_monthly_1500_link'
 
 export async function fetchStripeLinks() {
   const { data } = await supabase.from('app_settings').select('key, value')
   const map = Object.fromEntries((data || []).map((r) => [r.key, r.value || '']))
-  return { setup: map[SETUP_KEY] || '', monthly: map[MONTHLY_KEY] || '' }
+  return {
+    setup: map[SETUP_KEY] || '',
+    monthly: map[MONTHLY_KEY] || '',
+    monthly1500: map[MONTHLY_1500_KEY] || '',
+  }
 }
 
-export async function saveStripeLinks({ setup, monthly }) {
+export async function saveStripeLinks({ setup, monthly, monthly1500 }) {
   const rows = [
     { key: SETUP_KEY, value: setup || '', updated_at: new Date().toISOString() },
     { key: MONTHLY_KEY, value: monthly || '', updated_at: new Date().toISOString() },
+    { key: MONTHLY_1500_KEY, value: monthly1500 || '', updated_at: new Date().toISOString() },
   ]
   const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
   if (error) throw error

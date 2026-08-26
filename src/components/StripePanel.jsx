@@ -14,8 +14,8 @@ import {
 // Stripe setup and the money that could not be matched to anyone. Both live on
 // the Payments page because that is where you go when the books look wrong.
 export default function StripePanel() {
-  const [links, setLinks] = useState({ setup: '', monthly: '' })
-  const [draft, setDraft] = useState({ setup: '', monthly: '' })
+  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '' })
+  const [draft, setDraft] = useState({ setup: '', monthly: '', monthly1500: '' })
   const [unmatched, setUnmatched] = useState([])
   const [clients, setClients] = useState([])
   const [open, setOpen] = useState(false)
@@ -79,7 +79,7 @@ export default function StripePanel() {
     }
   }
 
-  const configured = links.setup || links.monthly
+  const configured = links.setup || links.monthly || links.monthly1500
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl mb-4 overflow-hidden">
@@ -111,12 +111,14 @@ export default function StripePanel() {
 
           <div className="space-y-2">
             <p className="text-xs text-slate-500">
-              Paste the two Payment Link URLs from Stripe. The CRM stamps each client&rsquo;s ID onto
-              them, which is how a payment finds its way back to the right client.
+              Paste the Payment Link URLs from Stripe. The CRM stamps each client&rsquo;s ID onto
+              them, which is how a payment finds its way back to the right client. Use the $998
+              link for the original monthly plan and the $1,500 link for the higher tier.
             </p>
             {[
               ['Setup fee link', 'setup'],
-              ['Monthly subscription link', 'monthly'],
+              ['Monthly subscription link ($998)', 'monthly'],
+              ['Monthly subscription link ($1,500)', 'monthly1500'],
             ].map(([label, key]) => (
               <div key={key}>
                 <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
@@ -191,7 +193,7 @@ export default function StripePanel() {
 
 // The per-client copy buttons, used on the client's own Payments card.
 export function StripeLinkButtons({ clientId, stripeCustomerId }) {
-  const [links, setLinks] = useState({ setup: '', monthly: '' })
+  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '' })
   const [copied, setCopied] = useState('')
 
   useEffect(() => {
@@ -206,7 +208,8 @@ export function StripeLinkButtons({ clientId, stripeCustomerId }) {
 
   const buttons = [
     ['setup', 'Setup fee link', links.setup],
-    ['monthly', 'Subscription link', links.monthly],
+    ['monthly', '$998/mo link', links.monthly],
+    ['monthly1500', '$1,500/mo link', links.monthly1500],
   ].filter(([, , base]) => base)
 
   if (buttons.length === 0) return null
