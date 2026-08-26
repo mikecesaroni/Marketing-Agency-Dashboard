@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { readFunctionError } from './functionError'
 
 // Flattens Anthropic content blocks to what the chat bubble should show.
 // Thinking blocks are dropped and tool calls are summarised rather than dumped:
@@ -187,10 +188,10 @@ export async function sendChatMessage({ clientId, chatId, system, message, image
   })
 
   if (error) {
+    const { status, detail } = await readFunctionError(error)
     // A 404 here means the function was never deployed, which is a different
     // problem from the model refusing or the key being missing.
-    const detail = data?.error || error.message || ''
-    if (/not found|404/i.test(detail)) {
+    if (status === 404 || /not found|404/i.test(detail)) {
       throw new Error(
         'The client-chat function is not deployed yet. Deploy supabase/functions/client-chat.'
       )

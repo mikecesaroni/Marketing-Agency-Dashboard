@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { readFunctionError } from './functionError'
 
 export async function fetchTasks(clientId) {
   const { data, error } = await supabase
@@ -51,8 +52,8 @@ export async function extractTasksFromChat(clientId) {
   })
 
   if (error) {
-    const detail = data?.error || error.message || ''
-    if (/not found|404/i.test(detail)) {
+    const { status, detail } = await readFunctionError(error)
+    if (status === 404 || /not found|404/i.test(detail)) {
       throw new Error('The extract-tasks function is not deployed yet. Deploy supabase/functions/extract-tasks.')
     }
     throw new Error(detail || 'Could not pull tasks from chat')
