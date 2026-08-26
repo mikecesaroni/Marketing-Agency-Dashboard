@@ -72,6 +72,10 @@ export default function ClientDetailPage() {
   const [showCreativeModal, setShowCreativeModal] = useState(false)
   const [showBriefModal, setShowBriefModal] = useState(false)
   const [showChatModal, setShowChatModal] = useState(false)
+  // Set when the chat is opened from a task rather than the button, so it
+  // knows to open straight into a conversation about that task instead of a
+  // blank box. Null on the ordinary open.
+  const [chatSeed, setChatSeed] = useState(null)
   const [showStudioModal, setShowStudioModal] = useState(false)
   const [intake, setIntake] = useState(null)
   const [briefAds, setBriefAds] = useState([])
@@ -189,6 +193,14 @@ export default function ClientDetailPage() {
     }
   }
 
+  // Opens the chat already talking about one task, instead of a blank box the
+  // agency has to re-explain the task into.
+  const handleAskAboutTask = (task) => {
+    const context = task.notes ? `\n\nContext: ${task.notes}` : ''
+    setChatSeed(`How do I complete "${task.task_name}" and do it well?${context}`)
+    setShowChatModal(true)
+  }
+
   // Reads the client's chat history — Fireflies summaries pasted in, "remember
   // this" asides — and turns whatever is still actionable into rows here.
   const handleExtractTasks = async () => {
@@ -272,7 +284,10 @@ export default function ClientDetailPage() {
         🎨 Ad Studio
       </button>
       <button
-        onClick={() => setShowChatModal(true)}
+        onClick={() => {
+          setChatSeed(null)
+          setShowChatModal(true)
+        }}
         className="w-full md:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
       >
         💬 Ask about {client.name}
@@ -442,9 +457,15 @@ export default function ClientDetailPage() {
                     className="w-4 h-4 rounded mt-0.5 flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <span className={task.done ? 'line-through text-slate-400' : 'text-slate-700'}>
+                    <button
+                      onClick={() => handleAskAboutTask(task)}
+                      title="Ask the chat how to do this well"
+                      className={`text-left hover:text-blue-600 hover:underline ${
+                        task.done ? 'line-through text-slate-400' : 'text-slate-700'
+                      }`}
+                    >
                       {task.task_name}
-                    </span>
+                    </button>
                     {task.source === 'chat' && (
                       <span className="ml-1.5 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-semibold align-middle">
                         from chat
@@ -618,7 +639,10 @@ export default function ClientDetailPage() {
 
         <Modal
           isOpen={showChatModal}
-          onClose={() => setShowChatModal(false)}
+          onClose={() => {
+            setShowChatModal(false)
+            setChatSeed(null)
+          }}
           title={`${client.name} — Chat`}
           wide
         >
@@ -628,6 +652,7 @@ export default function ClientDetailPage() {
             ads={briefAds}
             onUseCreativeSet={handleUseCreativeSet}
             onTasksAdded={(newTasks) => setTasks((prev) => [...prev, ...newTasks])}
+            autoPrompt={chatSeed}
           />
         </Modal>
 

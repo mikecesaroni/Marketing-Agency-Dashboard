@@ -103,9 +103,17 @@ function Bubble({ role, text, images, onUseSet }) {
   )
 }
 
-export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet, onTasksAdded }) {
+export default function ClientChatPanel({
+  client,
+  intake,
+  ads,
+  onUseCreativeSet,
+  onTasksAdded,
+  autoPrompt,
+}) {
   const [messages, setMessages] = useState([])
   const [chatId, setChatId] = useState(null)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
@@ -121,6 +129,10 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet,
   // Stops two extraction passes overlapping if a reply lands while the
   // previous one is still reading the transcript.
   const extractingRef = useRef(false)
+  // Fires the seeded question once per open, not once per render — the panel
+  // remounts fresh every time the modal opens (Modal unmounts its children on
+  // close), so this only needs to survive one mount's worth of re-renders.
+  const autoSentRef = useRef(false)
 
   // Rebuilt every render from current CRM data, so the model is never working
   // from a snapshot taken when the conversation started.
@@ -139,7 +151,19 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet,
         )
       })
       .catch((err) => setError(err.message))
+      .finally(() => setHistoryLoaded(true))
   }, [client.id])
+
+  // Waits for history so the seeded question lands after whatever was already
+  // said, rather than racing the history fetch and getting overwritten by it.
+  useEffect(() => {
+    if (!autoPrompt || !historyLoaded || autoSentRef.current) return
+    autoSentRef.current = true
+    send(autoPrompt)
+    // send() is recreated every render; the ref guard is what keeps this to
+    // one call, so it does not need to be a dependency here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPrompt, historyLoaded])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
