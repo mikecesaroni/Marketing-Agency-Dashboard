@@ -6,6 +6,7 @@ import StripeImportPanel from './StripeImportPanel'
 import {
   assignUnmatched,
   clientLink,
+  dismissUnmatched,
   fetchStripeLinks,
   fetchUnmatched,
   saveStripeLinks,
@@ -71,6 +72,22 @@ export default function StripePanel() {
     setError('')
     try {
       await assignUnmatched(row, clientId)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const dismiss = async (row) => {
+    const label = row.customer_email || row.stripe_customer_id || 'this customer'
+    if (!confirm(`Mark ${label} as a different business? Future payments from them will stop showing up here.`))
+      return
+    setBusy(row.id)
+    setError('')
+    try {
+      await dismissUnmatched(row)
       await load()
     } catch (err) {
       setError(err.message)
@@ -166,20 +183,30 @@ export default function StripePanel() {
                         {row.paid_date && ` · ${row.paid_date}`}
                       </p>
                     </div>
-                    <select
-                      defaultValue=""
-                      disabled={busy === row.id}
-                      onChange={(e) => assign(row, e.target.value)}
-                      className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white"
-                    >
-                      <option value="">Assign to client...</option>
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                          {c.archived ? ' (archived)' : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <select
+                        defaultValue=""
+                        disabled={busy === row.id}
+                        onChange={(e) => assign(row, e.target.value)}
+                        className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white"
+                      >
+                        <option value="">Assign to client...</option>
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                            {c.archived ? ' (archived)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => dismiss(row)}
+                        disabled={busy === row.id}
+                        title="Not one of our clients — a different business on this Stripe account"
+                        className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition whitespace-nowrap"
+                      >
+                        Not this business
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

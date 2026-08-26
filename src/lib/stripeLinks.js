@@ -121,3 +121,27 @@ export async function assignUnmatched(row, clientId) {
     .eq('id', row.id)
   if (error) throw error
 }
+
+/**
+ * Marks a parked payment as belonging to a different business entirely.
+ *
+ * Some Stripe accounts on this connection bill for more than one business.
+ * A payment like that will never match a client here — remembering the
+ * customer or email is what stops it from reappearing in the queue on every
+ * future invoice, rather than having to dismiss the same subscription again
+ * each month.
+ */
+export async function dismissUnmatched(row) {
+  if (row.stripe_customer_id || row.customer_email) {
+    const { error: ignoreErr } = await supabase.from('stripe_ignored_customers').insert({
+      stripe_customer_id: row.stripe_customer_id || null,
+      customer_email: row.customer_email || null,
+      reason: 'Marked not this business from the unmatched payments queue',
+    })
+    // Already on the ignore list is fine — anything else is worth surfacing.
+    if (ignoreErr && ignoreErr.code !== '23505') throw ignoreErr
+  }
+
+  const { error } = await supabase.from('stripe_unmatched').delete().eq('id', row.id)
+  if (error) throw error
+}

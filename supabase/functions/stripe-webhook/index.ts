@@ -135,6 +135,32 @@ export async function findClient(
 }
 
 /**
+ * True when this customer or email was marked "not this business" from the
+ * Unmatched payments queue — some Stripe accounts on this connection bill
+ * for more than one business. Checked before parking anything, so a
+ * recurring subscription that isn't ours stops cluttering the queue after
+ * being dismissed once, rather than reappearing on every invoice.
+ */
+async function isIgnoredCustomer(
+  db: Db,
+  { customerId, email }: { customerId?: string | null; email?: string | null }
+) {
+  if (customerId) {
+    const rows = await db.get(
+      `stripe_ignored_customers?stripe_customer_id=eq.${encodeURIComponent(customerId)}&select=id&limit=1`
+    )
+    if (rows?.[0]) return true
+  }
+  if (email) {
+    const rows = await db.get(
+      `stripe_ignored_customers?customer_email=ilike.${encodeURIComponent(email)}&select=id&limit=1`
+    )
+    if (rows?.[0]) return true
+  }
+  return false
+}
+
+/**
  * Marks money as received.
  *
  * The CRM already generates a 12-month schedule of pending rows, so the right
@@ -217,6 +243,10 @@ export async function handleEvent(db: Db, event: any) {
         return { status: 'ignored', note: 'unmatched subscription checkout, waiting for the invoice' }
       }
 
+      if (await isIgnoredCustomer(db, { customerId, email })) {
+        return { status: 'ignored', note: 'customer marked not this business' }
+      }
+
       await parkUnmatched(db, event, {
         customerId,
         email,
@@ -277,6 +307,10 @@ export async function handleEvent(db: Db, event: any) {
     const { client, via } = await findClient(db, { customerId, email })
 
     if (!client) {
+      if (await isIgnoredCustomer(db, { customerId, email })) {
+        return { status: 'ignored', note: 'customer marked not this business' }
+      }
+
       await parkUnmatched(db, event, {
         customerId,
         email,
