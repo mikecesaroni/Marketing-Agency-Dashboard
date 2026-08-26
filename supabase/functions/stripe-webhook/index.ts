@@ -207,12 +207,22 @@ export async function handleEvent(db: Db, event: any) {
     })
 
     if (!client) {
+      // A brand-new subscription's checkout.session.completed carries the
+      // same dollar amount as the invoice.paid event that always follows for
+      // that same first period. Parking both double-counts one payment as
+      // two the moment they both land in the unmatched queue. This mirrors
+      // the matched-client branch just below, which never records money for
+      // a subscription checkout either — only invoice.paid ever does that.
+      if (obj.mode === 'subscription') {
+        return { status: 'ignored', note: 'unmatched subscription checkout, waiting for the invoice' }
+      }
+
       await parkUnmatched(db, event, {
         customerId,
         email,
         name: obj.customer_details?.name,
         amount: centsToAmount(obj.amount_total),
-        type: obj.mode === 'subscription' ? 'monthly' : 'setup',
+        type: 'setup',
         method: methodFrom(obj.payment_method_types),
         description: 'Checkout session with no matching client',
       })
