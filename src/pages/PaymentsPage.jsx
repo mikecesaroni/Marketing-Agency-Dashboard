@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import StripePanel from '../components/StripePanel'
+import EthanPayoutPanel from '../components/EthanPayoutPanel'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
 import { calcMRR, fetchPayments, hasInternalColumn, isOverdue, money, today } from '../lib/queries'
@@ -339,6 +340,7 @@ export default function PaymentsPage() {
       </div>
 
       <StripePanel />
+      <EthanPayoutPanel payments={payments} onChange={loadData} />
 
       <div className="flex flex-col md:flex-row gap-2 mb-4">
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">
