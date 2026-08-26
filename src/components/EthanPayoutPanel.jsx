@@ -58,11 +58,13 @@ export default function EthanPayoutPanel({ payments, onChange }) {
   )
   const owedIds = owed.map((p) => p.id).join(',')
 
-  // Reselects everything whenever the owed list changes shape — a fresh
-  // payment landing, or one just getting marked and dropping out — so the
-  // list is always "everything still open" unless someone has touched a box.
+  // Clears selection whenever the owed list changes shape — a fresh payment
+  // landing, or one just getting marked and dropping out — rather than
+  // carrying a stale selection forward. Nothing is pre-checked: marking
+  // something paid out is a real transfer of money, so it starts as an
+  // explicit choice each time rather than a default to opt out of.
   useEffect(() => {
-    setSelected(new Set(owed.map((p) => p.id)))
+    setSelected(new Set())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [owedIds])
 
