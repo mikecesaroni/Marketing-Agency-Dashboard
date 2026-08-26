@@ -17,6 +17,7 @@ import {
   uploadChatImage,
 } from '../lib/chatImages'
 import { copyText } from '../lib/intakeSummary'
+import { extractTasksFromChat } from '../lib/clientTasks'
 
 // Starters for the things actually asked for most often, so the blank box
 // isn't the first thing you have to solve.
@@ -102,7 +103,7 @@ function Bubble({ role, text, images, onUseSet }) {
   )
 }
 
-export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet }) {
+export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet, onTasksAdded }) {
   const [messages, setMessages] = useState([])
   const [chatId, setChatId] = useState(null)
   const [input, setInput] = useState('')
@@ -111,11 +112,15 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
   // Screenshots staged for the next message: { id, name, previewUrl, prepared }.
   const [attachments, setAttachments] = useState([])
   const [dragging, setDragging] = useState(false)
+  const [taskNote, setTaskNote] = useState('')
   const bottomRef = useRef(null)
   const fileRef = useRef(null)
   // Drag events fire on every child element, so a plain boolean flickers as the
   // pointer crosses the bubbles. Counting enter/leave is what keeps it steady.
   const dragDepth = useRef(0)
+  // Stops two extraction passes overlapping if a reply lands while the
+  // previous one is still reading the transcript.
+  const extractingRef = useRef(false)
 
   // Rebuilt every render from current CRM data, so the model is never working
   // from a snapshot taken when the conversation started.
@@ -220,6 +225,31 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
     addFiles(images)
   }
 
+  // Runs after every turn rather than waiting for a button — this is exactly
+  // where a pasted Fireflies summary or a "remember this" aside lands, so
+  // there's no reason to make someone ask for the check separately. Fired
+  // without awaiting: it reads the transcript fresh from the DB, so it does
+  // not need anything send() is holding, and the reply the user is looking at
+  // should not wait on it.
+  const autoExtract = () => {
+    if (extractingRef.current) return
+    extractingRef.current = true
+    extractTasksFromChat(client.id)
+      .then((res) => {
+        if (res.inserted > 0) {
+          onTasksAdded?.(res.tasks)
+          setTaskNote(`+${res.inserted} task${res.inserted === 1 ? '' : 's'} added to the task list`)
+          setTimeout(() => setTaskNote(''), 5000)
+        }
+      })
+      // Silent on failure — a missed pass here just means the next message
+      // triggers another, not a broken chat.
+      .catch(() => {})
+      .finally(() => {
+        extractingRef.current = false
+      })
+  }
+
   const send = async (text) => {
     const trimmed = (text ?? input).trim()
     const staged = attachments
@@ -259,6 +289,7 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
         staged.forEach((a) => URL.revokeObjectURL(a.previewUrl))
       }
       setMessages((m) => [...m, { role: 'assistant', text: renderBlocks(res.content) }])
+      autoExtract()
     } catch (err) {
       setError(err.message)
       // Put the message back so a failed send isn't lost work.
@@ -415,8 +446,8 @@ export default function ClientChatPanel({ client, intake, ads, onUseCreativeSet 
           </button>
         </div>
         <div className="flex items-center justify-between mt-2">
-          <span className="text-[11px] text-slate-400">
-            Enter to send. Drop or paste a screenshot to attach it.
+          <span className={`text-[11px] ${taskNote ? 'text-green-600 font-medium' : 'text-slate-400'}`}>
+            {taskNote || 'Enter to send. Drop or paste a screenshot to attach it.'}
           </span>
           <div className="flex gap-3">
             {lastAssistant && (

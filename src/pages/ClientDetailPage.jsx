@@ -374,11 +374,17 @@ export default function ClientDetailPage() {
             <button
               onClick={handleExtractTasks}
               disabled={extracting}
+              title="The chat already checks itself after every message — use this to re-check on demand, or to pull from a conversation that happened before that started."
               className="w-full md:w-auto px-3 py-2 md:py-1.5 text-sm bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition"
             >
-              {extracting ? 'Reading chat...' : '✨ Pull from chat'}
+              {extracting ? 'Reading chat...' : '✨ Check chat now'}
             </button>
           </div>
+
+          <p className="text-xs text-slate-400 mb-3">
+            New tasks get pulled in automatically after every chat message — this button is only for
+            a re-check on demand.
+          </p>
 
           {extractNote && <p className="text-xs text-slate-500 mb-3">{extractNote}</p>}
 
@@ -621,6 +627,7 @@ export default function ClientDetailPage() {
             intake={intake}
             ads={briefAds}
             onUseCreativeSet={handleUseCreativeSet}
+            onTasksAdded={(newTasks) => setTasks((prev) => [...prev, ...newTasks])}
           />
         </Modal>
 
