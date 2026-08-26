@@ -53,6 +53,18 @@ function SetupFeeBadge({ status, amount, paidAmount }) {
   )
 }
 
+function MonthlySubBadge({ subscribed }) {
+  return (
+    <span
+      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${
+        subscribed ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-500'
+      }`}
+    >
+      {subscribed ? '✓ Subscribed' : 'Not yet'}
+    </span>
+  )
+}
+
 function ChannelBadges({ client }) {
   return (
     <span className="inline-flex gap-1.5">
@@ -192,7 +204,7 @@ export default function ClientsPage() {
                     'No intake filled in yet'}
                 </p>
                 {client.setupFeeStatus && (
-                  <p className="mb-3">
+                  <p className="mb-1.5">
                     <span className="text-xs text-slate-500 mr-1.5">Setup fee:</span>
                     <SetupFeeBadge
                       status={client.setupFeeStatus}
@@ -201,6 +213,10 @@ export default function ClientsPage() {
                     />
                   </p>
                 )}
+                <p className="mb-3">
+                  <span className="text-xs text-slate-500 mr-1.5">Monthly:</span>
+                  <MonthlySubBadge subscribed={client.monthlySubscribed} />
+                </p>
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
                     <p className="font-semibold text-slate-900">
@@ -237,6 +253,7 @@ export default function ClientsPage() {
                     <th className="px-4 py-3 text-left font-semibold">Market</th>
                     <th className="px-4 py-3 text-left font-semibold">Channels</th>
                     <th className="px-4 py-3 text-left font-semibold">Setup Fee</th>
+                    <th className="px-4 py-3 text-left font-semibold">Monthly Sub</th>
                     <th className="px-4 py-3 text-right font-semibold">Meta $/day</th>
                     <th className="px-4 py-3 text-right font-semibold">Wk Spend</th>
                     <th className="px-4 py-3 text-right font-semibold">Wk Leads</th>
@@ -271,6 +288,9 @@ export default function ClientsPage() {
                           amount={client.setupFeeAmount}
                           paidAmount={client.setupFeePaidAmount}
                         />
+                      </td>
+                      <td className="px-4 py-3">
+                        <MonthlySubBadge subscribed={client.monthlySubscribed} />
                       </td>
                       <td className="px-4 py-3 text-right text-slate-600">
                         {money(client.meta_budget_per_day)}

@@ -89,7 +89,7 @@ export async function fetchClientsWithKPIs() {
   let clientsQuery = supabase.from('clients').select('*').order('date_added', { ascending: false })
   if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
 
-  const [clientsRes, kpisRes, intakeRes, setupRes] = await Promise.all([
+  const [clientsRes, kpisRes, intakeRes, setupRes, monthlyRes] = await Promise.all([
     clientsQuery,
     supabase.from('weekly_kpis').select('*').eq('week_of', thisMonday),
     supabase.from('onboarding_intake').select('client_id, owner_name, industry_trade, service_area'),
@@ -97,6 +97,7 @@ export async function fetchClientsWithKPIs() {
       .from('payments')
       .select('client_id, amount, status, due_date')
       .eq('payment_type', 'setup'),
+    supabase.from('payments').select('client_id, status').eq('payment_type', 'monthly'),
   ])
 
   if (clientsRes.error) throw clientsRes.error
@@ -116,6 +117,13 @@ export async function fetchClientsWithKPIs() {
   for (const row of intakeRes.data || []) {
     intakeByClient[row.client_id] = row
   }
+
+  // A paid monthly row only exists once a Stripe subscription invoice has
+  // actually been paid — the scheduler seeds 12 pending rows on setup, so
+  // "has a monthly row" isn't enough, it has to have landed as paid.
+  const monthlySubscribed = new Set(
+    (monthlyRes.data || []).filter((p) => p.status === 'paid').map((p) => p.client_id)
+  )
 
   const kpisByClient = {}
   for (const kpi of kpisRes.data || []) {
@@ -153,6 +161,7 @@ export async function fetchClientsWithKPIs() {
       setupFeeStatus,
       setupFeeAmount: setup.reduce((sum, p) => sum + (p.amount || 0), 0) || null,
       setupFeePaidAmount: paidParts.reduce((sum, p) => sum + (p.amount || 0), 0),
+      monthlySubscribed: monthlySubscribed.has(client.id),
       ...client,
       industry: intake?.industry_trade || client.industry || '',
       market: intake?.service_area || client.market || '',
