@@ -17,6 +17,13 @@ import AddWorkLogForm from '../components/AddWorkLogForm'
 import AddCreativeForm from '../components/AddCreativeForm'
 import ClientFilesSection from '../components/ClientFilesSection'
 import PaymentTracker from '../components/PaymentTracker'
+import {
+  addTask,
+  deleteTask,
+  extractTasksFromChat,
+  fetchTasks,
+  toggleTask as toggleTaskRow,
+} from '../lib/clientTasks'
 
 // Deep links like /client/:id#ad-performance come from the Reports table.
 // The ad section renders nothing until its own fetch resolves, so scrolling on
@@ -50,7 +57,10 @@ function useHashScroll(ready) {
 export default function ClientDetailPage() {
   const { clientId } = useParams()
   const [client, setClient] = useState(null)
-  const [onboardingTasks, setOnboardingTasks] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [newTask, setNewTask] = useState('')
+  const [extracting, setExtracting] = useState(false)
+  const [extractNote, setExtractNote] = useState('')
   const [weeklyKPIs, setWeeklyKPIs] = useState([])
   const [workLogs, setWorkLogs] = useState([])
   const [creativeLogs, setCreativeLogs] = useState([])
@@ -84,13 +94,7 @@ export default function ClientDetailPage() {
 
       if (clientError) throw clientError
 
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('onboarding_tasks')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('task_name')
-
-      if (tasksError) throw tasksError
+      const tasksData = await fetchTasks(clientId)
 
       const { data: kpisData, error: kpisError } = await supabase
         .from('weekly_kpis')
@@ -125,7 +129,7 @@ export default function ClientDetailPage() {
       setBriefAds(summariseAds(adRows || []))
 
       setClient(clientData)
-      setOnboardingTasks(tasksData)
+      setTasks(tasksData)
       setWeeklyKPIs(kpisData)
       setWorkLogs(logsData)
       setCreativeLogs(creativesData)
@@ -145,29 +149,65 @@ export default function ClientDetailPage() {
     else loadClientData()
   }
 
-  const toggleTask = async (taskId, currentDone) => {
-    const { error } = await supabase
-      .from('onboarding_tasks')
-      .update({
-        done: !currentDone,
-        date_completed: !currentDone ? new Date().toISOString().split('T')[0] : null,
-      })
-      .eq('id', taskId)
-
-    if (!error) {
-      setOnboardingTasks((prev) =>
+  const handleToggleTask = async (taskId, currentDone) => {
+    try {
+      await toggleTaskRow(taskId, currentDone)
+      setTasks((prev) =>
         prev.map((t) =>
           t.id === taskId
             ? {
                 ...t,
                 done: !currentDone,
-                date_completed: !currentDone
-                  ? new Date().toISOString().split('T')[0]
-                  : null,
+                date_completed: !currentDone ? new Date().toISOString().split('T')[0] : null,
               }
             : t
         )
       )
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const handleAddTask = async () => {
+    const name = newTask.trim()
+    if (!name) return
+    setNewTask('')
+    try {
+      const row = await addTask(clientId, name)
+      setTasks((prev) => [...prev, row])
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const handleDeleteTask = async (taskId) => {
+    try {
+      await deleteTask(taskId)
+      setTasks((prev) => prev.filter((t) => t.id !== taskId))
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  // Reads the client's chat history — Fireflies summaries pasted in, "remember
+  // this" asides — and turns whatever is still actionable into rows here.
+  const handleExtractTasks = async () => {
+    setExtracting(true)
+    setExtractNote('')
+    setError('')
+    try {
+      const res = await extractTasksFromChat(clientId)
+      if (res.inserted > 0) {
+        setTasks((prev) => [...prev, ...res.tasks])
+        setExtractNote(`Added ${res.inserted} task${res.inserted === 1 ? '' : 's'} from the chat.`)
+      } else {
+        setExtractNote(res.note || 'Nothing new to pull from the chat.')
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setExtracting(false)
+      setTimeout(() => setExtractNote(''), 5000)
     }
   }
 
@@ -213,9 +253,12 @@ export default function ClientDetailPage() {
     )
   }
 
-  const progressDone = onboardingTasks.filter((t) => t.done).length
-  const progressTotal = onboardingTasks.length
+  const progressDone = tasks.filter((t) => t.done).length
+  const progressTotal = tasks.length
   const progressPercent = progressTotal > 0 ? Math.round((progressDone / progressTotal) * 100) : 0
+  // Open tasks first, done ones sink to the bottom struck through — this is a
+  // working list, not a log, so what still needs doing should be on top.
+  const sortedTasks = [...tasks].sort((a, b) => Number(a.done) - Number(b.done))
 
   const intakeButton = (
     <div className="flex flex-col md:flex-row gap-2">
@@ -324,35 +367,96 @@ export default function ClientDetailPage() {
           </div>
         </div>
 
-        {/* ONBOARDING CHECKLIST */}
+        {/* TASKS */}
         <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 mb-6 md:mb-8">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Onboarding Checklist</h2>
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-500 transition-all"
-                style={{ width: `${progressPercent}%` }}
-              ></div>
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4">
+            <h2 className="text-xl font-bold text-slate-900">Tasks</h2>
+            <button
+              onClick={handleExtractTasks}
+              disabled={extracting}
+              className="w-full md:w-auto px-3 py-2 md:py-1.5 text-sm bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition"
+            >
+              {extracting ? 'Reading chat...' : '✨ Pull from chat'}
+            </button>
+          </div>
+
+          {extractNote && <p className="text-xs text-slate-500 mb-3">{extractNote}</p>}
+
+          {progressTotal > 0 && (
+            <div className="mb-4 flex items-center gap-2">
+              <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 transition-all"
+                  style={{ width: `${progressPercent}%` }}
+                ></div>
+              </div>
+              <span className="text-sm font-semibold text-slate-600">
+                {progressDone}/{progressTotal}
+              </span>
             </div>
-            <span className="text-sm font-semibold text-slate-600">
-              {progressDone}/{progressTotal}
-            </span>
+          )}
+
+          <div className="flex gap-2 mb-3">
+            <input
+              value={newTask}
+              onChange={(e) => setNewTask(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleAddTask()
+                }
+              }}
+              placeholder="Add a task..."
+              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <button
+              onClick={handleAddTask}
+              disabled={!newTask.trim()}
+              className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+            >
+              Add
+            </button>
           </div>
-          <div className="space-y-2">
-            {onboardingTasks.map((task) => (
-              <label key={task.id} className="flex items-center gap-3 p-2 rounded hover:bg-slate-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={task.done}
-                  onChange={() => toggleTask(task.id, task.done)}
-                  className="w-4 h-4 rounded"
-                />
-                <span className={task.done ? 'line-through text-slate-400' : 'text-slate-700'}>
-                  {task.task_name}
-                </span>
-              </label>
-            ))}
-          </div>
+
+          {sortedTasks.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No tasks yet. Add one, or pull from what&rsquo;s already been discussed in the chat.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {sortedTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="group flex items-start gap-3 p-2 rounded hover:bg-slate-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={task.done}
+                    onChange={() => handleToggleTask(task.id, task.done)}
+                    className="w-4 h-4 rounded mt-0.5 flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className={task.done ? 'line-through text-slate-400' : 'text-slate-700'}>
+                      {task.task_name}
+                    </span>
+                    {task.source === 'chat' && (
+                      <span className="ml-1.5 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-semibold align-middle">
+                        from chat
+                      </span>
+                    )}
+                    {task.notes && <p className="text-xs text-slate-400 mt-0.5">{task.notes}</p>}
+                  </div>
+                  <button
+                    onClick={() => handleDeleteTask(task.id)}
+                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 text-sm flex-shrink-0 transition"
+                    aria-label={`Delete ${task.task_name}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* WEEKLY KPIs */}
