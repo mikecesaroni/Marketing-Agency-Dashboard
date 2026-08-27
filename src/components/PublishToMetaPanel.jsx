@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import LocationPicker from './LocationPicker'
+import LeadFormPicker from './LeadFormPicker'
 import {
   CTA_OPTIONS,
   OBJECTIVES,
@@ -169,7 +170,10 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
   const [cta, setCta] = useState('LEARN_MORE')
   const [linkUrl, setLinkUrl] = useState(client.website_url || '')
 
-  const [objective, setObjective] = useState('OUTCOME_TRAFFIC')
+  // Instant form is the default: no landing page to build, and Meta prefills
+  // the fields, so it is both less setup and a better mobile conversion rate.
+  const [objective, setObjective] = useState('LEADS_FORM')
+  const [leadForm, setLeadForm] = useState(null)
   const [specialCategory, setSpecialCategory] = useState('')
 
   const [reuseCampaign, setReuseCampaign] = useState(false)
@@ -217,6 +221,11 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
     return gaps
   }, [client, chosenObjective])
 
+  // Switching objective can strand a form on an ad that no longer uses one.
+  useEffect(() => {
+    if (!chosenObjective?.needsForm) setLeadForm(null)
+  }, [chosenObjective?.needsForm])
+
   // Lazily: this is a live call to Meta, not worth making unless the existing
   // campaigns are actually being looked at.
   useEffect(() => {
@@ -244,7 +253,8 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
   if (missing.length > 0) blockers.push('missing client details')
   if (!chosen) blockers.push('no image picked')
   if (!primaryText.trim()) blockers.push('no primary text')
-  if (!linkUrl.trim()) blockers.push('no landing page')
+  if (chosenObjective?.needsLink && !linkUrl.trim()) blockers.push('no landing page')
+  if (chosenObjective?.needsForm && !leadForm) blockers.push('no instant form picked')
   if (locations.length === 0) blockers.push('no locations')
   if (budgetCents < 100) blockers.push('budget under $1.00')
   if (reuseCampaign && !campaignId) blockers.push('no campaign picked')
@@ -275,6 +285,8 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
         description: description.trim() || undefined,
         cta,
         link_url: linkUrl.trim(),
+        lead_form_id: leadForm?.id,
+        lead_form_name: leadForm?.name,
       })
       setResult(data)
       onPublished?.()
@@ -379,13 +391,22 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
               ))}
             </select>
           </div>
-          <Text
-            label="Landing page"
-            value={linkUrl}
-            onChange={setLinkUrl}
-            placeholder="https://…"
-            hint={client.website_url ? 'from the client' : 'not set on the client'}
-          />
+          {chosenObjective?.needsLink ? (
+            <Text
+              label="Landing page"
+              value={linkUrl}
+              onChange={setLinkUrl}
+              placeholder="https://…"
+              hint={client.website_url ? 'from the client' : 'not set on the client'}
+            />
+          ) : (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Destination</label>
+              <p className="px-3 py-2 border border-dashed border-slate-300 rounded text-sm text-slate-500">
+                The instant form — no landing page
+              </p>
+            </div>
+          )}
         </div>
       </Section>
 
@@ -431,8 +452,18 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
         </div>
       </Section>
 
+      {chosenObjective?.needsForm && (
+        <Section
+          step="4"
+          title="The instant form"
+          hint="Where the leads actually land. Reuse one where you can — a form owns its leads."
+        >
+          <LeadFormPicker client={client} value={leadForm} onChange={setLeadForm} />
+        </Section>
+      )}
+
       <Section
-        step="4"
+        step={chosenObjective?.needsForm ? '5' : '4'}
         title="Campaign"
         hint="Reusing a campaign keeps its learning; a new one starts cold."
       >
@@ -496,7 +527,11 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
         )}
       </Section>
 
-      <Section step="5" title="Ad set" hint="Budget, who sees it, and where.">
+      <Section
+        step={chosenObjective?.needsForm ? '6' : '5'}
+        title="Ad set"
+        hint="Budget, who sees it, and where."
+      >
         <div className="grid md:grid-cols-2 gap-2">
           <Text
             label="Ad set name"
@@ -552,7 +587,14 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
 
       <div className="pt-3 border-t border-slate-200 space-y-2">
         <p className="text-xs text-slate-600">
-          {summarisePlan({ objective, dailyBudget, locations, campaignName, reuseCampaign })}
+          {summarisePlan({
+            objective,
+            dailyBudget,
+            locations,
+            campaignName,
+            reuseCampaign,
+            formName: leadForm?.name,
+          })}
         </p>
         <div className="flex items-center gap-3">
           <button

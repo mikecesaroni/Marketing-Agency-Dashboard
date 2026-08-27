@@ -23,6 +23,9 @@
 //
 //   search_locations  {query}                 -> Meta's geo targeting keys
 //   list_campaigns    {client_id}             -> existing campaigns, to reuse
+//   discover_assets   {client_id}             -> the Page and pixel to use
+//   list_lead_forms   {client_id}             -> instant forms on the Page
+//   create_lead_form  {client_id, ...}        -> a new instant form
 //   publish           {client_id, ...}        -> campaign/adset/creative/ad
 
 const META_API_VERSION = 'v21.0'
@@ -32,32 +35,85 @@ const GRAPH = `https://graph.facebook.com/${META_API_VERSION}`
 // typo — a budget entered in dollars where cents were meant.
 const MIN_DAILY_BUDGET_CENTS = 100
 
-type Objective = 'OUTCOME_TRAFFIC' | 'OUTCOME_LEADS'
+type Objective = 'TRAFFIC' | 'LEADS_WEBSITE' | 'LEADS_FORM'
 
-// Each objective needs a matching optimisation goal and, for conversions, a
-// promoted object. Getting this combination wrong is the single most common
-// way an ad set create fails, so the valid pairings live here rather than
-// being assembled ad hoc at the call site.
-const OBJECTIVES: Record<
-  Objective,
-  { optimization_goal: string; billing_event: string; needs_pixel: boolean; label: string }
-> = {
-  OUTCOME_TRAFFIC: {
+type ObjectiveSpec = {
+  // What the CAMPAIGN is created with. Two of the three share OUTCOME_LEADS
+  // and differ only at the ad set, which is exactly why these are keyed by an
+  // internal name rather than by Meta's objective enum.
+  campaign_objective: string
+  optimization_goal: string
+  billing_event: string
+  destination_type?: string
+  needs_pixel: boolean
+  needs_form: boolean
+  label: string
+}
+
+// Each objective needs a matching optimisation goal and, depending on where
+// the lead lands, a promoted object. Getting this combination wrong is the
+// single most common way an ad set create fails, so the valid pairings live
+// here rather than being assembled ad hoc at the call site.
+const OBJECTIVES: Record<Objective, ObjectiveSpec> = {
+  TRAFFIC: {
+    campaign_objective: 'OUTCOME_TRAFFIC',
     optimization_goal: 'LANDING_PAGE_VIEWS',
     billing_event: 'IMPRESSIONS',
     needs_pixel: false,
+    needs_form: false,
     label: 'Traffic',
   },
-  OUTCOME_LEADS: {
-    // Optimising against the pixel's Lead event. The lead-form flavour of this
-    // objective lives on the Page rather than the ad account and is its own
-    // build; this is the website-lead path.
+  LEADS_WEBSITE: {
+    // Optimising against the pixel's Lead event, with the form on the
+    // advertiser's own site.
+    campaign_objective: 'OUTCOME_LEADS',
     optimization_goal: 'OFFSITE_CONVERSIONS',
     billing_event: 'IMPRESSIONS',
+    destination_type: 'WEBSITE',
     needs_pixel: true,
+    needs_form: false,
     label: 'Leads (website)',
   },
+  LEADS_FORM: {
+    // The form opens inside Facebook and Meta prefills what it knows, so
+    // there is no landing page and no page load to lose people at. The form
+    // itself lives on the Page, not the ad account.
+    campaign_objective: 'OUTCOME_LEADS',
+    optimization_goal: 'LEAD_GENERATION',
+    billing_event: 'IMPRESSIONS',
+    destination_type: 'ON_AD',
+    needs_pixel: false,
+    needs_form: true,
+    label: 'Leads (instant form)',
+  },
 }
+
+// The first deployment sent Meta's raw enum. Nothing has been published with
+// it yet, but accepting both costs one lookup and means an older cached bundle
+// cannot start failing mid-session.
+const OBJECTIVE_ALIASES: Record<string, Objective> = {
+  OUTCOME_TRAFFIC: 'TRAFFIC',
+  OUTCOME_LEADS: 'LEADS_WEBSITE',
+}
+
+// Standard fields Meta prefills from the viewer's profile, plus CUSTOM for
+// anything asked in the advertiser's own words. Prefilled answers are why an
+// instant form converts: most people submit without typing anything.
+const STANDARD_QUESTIONS = new Set([
+  'FULL_NAME',
+  'FIRST_NAME',
+  'LAST_NAME',
+  'EMAIL',
+  'PHONE',
+  'STREET_ADDRESS',
+  'CITY',
+  'STATE',
+  'ZIP',
+  'POST_CODE',
+  'COUNTRY',
+  'COMPANY_NAME',
+  'JOB_TITLE',
+])
 
 // Meta rejects anything outside its own enum, and the wrong one is a rejected
 // creative rather than a soft failure.
@@ -187,6 +243,60 @@ function actId(raw: string): string {
 }
 
 /**
+ * Trades the System User token for a Page token.
+ *
+ * Lead forms are a Page resource, not an ad account one, and most Page write
+ * endpoints will not take a user-level token. Assigning the Page to the system
+ * user in Business Settings is what makes this exchange work; without it Meta
+ * returns a permissions error here rather than at form creation, which is the
+ * clearer place to fail.
+ *
+ * Falls back to the original token: some system user setups do accept it
+ * directly, and a working call is better than a pre-emptive refusal.
+ */
+async function pageToken(pageId: string, token: string): Promise<string> {
+  try {
+    const res = await graphGet(pageId, { fields: 'access_token' }, token)
+    return res?.access_token || token
+  } catch {
+    return token
+  }
+}
+
+/**
+ * Turns the CRM's question list into the shape Meta's form builder expects.
+ *
+ * Standard types are prefilled from the viewer's profile, which is the entire
+ * reason an instant form converts — most people submit without typing. A
+ * custom question is a real question and costs completions, so the UI keeps
+ * them to a minimum.
+ */
+function buildQuestions(questions: any[]): Record<string, string>[] {
+  const built: Record<string, string>[] = []
+
+  for (const q of questions || []) {
+    const type = String(q?.type || '').toUpperCase()
+    if (STANDARD_QUESTIONS.has(type)) {
+      built.push({ type })
+    } else if (type === 'CUSTOM' && q?.label) {
+      built.push({
+        type: 'CUSTOM',
+        label: String(q.label),
+        // Meta keys the answer by this, and it is what shows up in the CSV
+        // export, so it has to be stable and free of punctuation.
+        key: String(q.key || q.label)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .slice(0, 60),
+      })
+    }
+  }
+
+  return built
+}
+
+/**
  * Builds the targeting spec.
  *
  * Locations arrive as the rows Meta's own geo search returned, so the keys are
@@ -304,7 +414,7 @@ Deno.serve(async (req) => {
     if (!clientId) return json({ error: 'client_id is required.' }, 400)
 
     const clientRes = await fetch(
-      `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id,meta_page_id,meta_pixel_id,website_url&id=eq.${encodeURIComponent(clientId)}`,
+      `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id,meta_page_id,meta_pixel_id,website_url,privacy_policy_url&id=eq.${encodeURIComponent(clientId)}`,
       { headers: dbHeaders }
     )
     const client = (await clientRes.json())?.[0]
@@ -341,6 +451,154 @@ Deno.serve(async (req) => {
       return json({ campaigns })
     }
 
+    // -----------------------------------------------------------------------
+    // Asset discovery. The token can already see which Page and pixel belong
+    // to this ad account, so there is no reason to make anyone copy IDs out of
+    // Business Settings by hand.
+    // -----------------------------------------------------------------------
+    if (action === 'discover_assets') {
+      const pages = new Map<string, { id: string; name: string; ads_using: number }>()
+
+      // The strongest signal by far: the Page this account's existing ads
+      // already post as. Whatever Business Settings says is assignable, THIS is
+      // what the client actually advertises with.
+      try {
+        const creatives = await graphGet(
+          `${account}/adcreatives`,
+          { fields: 'object_story_spec{page_id}', limit: '100' },
+          token
+        )
+        for (const c of creatives.data || []) {
+          const id = c?.object_story_spec?.page_id
+          if (!id) continue
+          const seen = pages.get(id)
+          pages.set(id, { id, name: '', ads_using: (seen?.ads_using || 0) + 1 })
+        }
+      } catch {
+        // A brand new account has no creatives to learn from. Not an error —
+        // the fallback below still finds assignable Pages.
+      }
+
+      // Everything the token can manage, so a client with no ads yet still has
+      // something to pick from.
+      try {
+        const owned = await graphGet('me/accounts', { fields: 'id,name', limit: '100' }, token)
+        for (const p of owned.data || []) {
+          if (!pages.has(p.id)) pages.set(p.id, { id: p.id, name: p.name || '', ads_using: 0 })
+        }
+      } catch {
+        // Some system user tokens cannot enumerate Pages this way. The
+        // creative-derived list above is the one that matters.
+      }
+
+      // Fill in names for anything discovered from a creative, which only
+      // carries the bare ID.
+      for (const page of pages.values()) {
+        if (page.name) continue
+        try {
+          const detail = await graphGet(page.id, { fields: 'name' }, token)
+          page.name = detail?.name || ''
+        } catch {
+          // A Page the token can advertise for but not read is still usable.
+        }
+      }
+
+      let pixels: { id: string; name: string }[] = []
+      try {
+        const found = await graphGet(`${account}/adspixels`, { fields: 'id,name', limit: '25' }, token)
+        pixels = (found.data || []).map((x: any) => ({ id: x.id, name: x.name || '' }))
+      } catch {
+        // No pixel is a normal state, and only the website-lead objective
+        // needs one.
+      }
+
+      // Most-used Page first: that is the suggestion, and the count is what
+      // justifies it to whoever is looking at the screen.
+      const ranked = [...pages.values()].sort((a, b) => b.ads_using - a.ads_using)
+
+      return json({
+        pages: ranked,
+        pixels,
+        suggested_page_id: ranked[0]?.id || null,
+        suggested_pixel_id: pixels.length === 1 ? pixels[0].id : null,
+      })
+    }
+
+    // -----------------------------------------------------------------------
+    // Instant forms. Both of these are Page operations, not ad account ones,
+    // which is why they take a Page token.
+    // -----------------------------------------------------------------------
+    if (action === 'list_lead_forms' || action === 'create_lead_form') {
+      if (!client.meta_page_id) {
+        return json(
+          {
+            error: `${client.name} has no Facebook Page ID set. Instant forms live on the Page, so there is nowhere to put one yet.`,
+          },
+          400
+        )
+      }
+
+      const pToken = await pageToken(client.meta_page_id, token)
+
+      if (action === 'list_lead_forms') {
+        // leads_count is the reason to reuse a form rather than make a new one
+        // per ad: a form owns its leads, and five near-identical forms means
+        // five places to go looking for them.
+        const found = await graphGet(
+          `${client.meta_page_id}/leadgen_forms`,
+          { fields: 'id,name,status,leads_count,created_time', limit: '50' },
+          pToken
+        )
+        return json({ forms: found.data || [] })
+      }
+
+      const questions = buildQuestions(body.questions)
+      if (questions.length === 0) {
+        return json({ error: 'A form needs at least one question.' }, 400)
+      }
+
+      const privacyUrl = body.privacy_policy_url || client.privacy_policy_url
+      if (!privacyUrl) {
+        return json(
+          {
+            error: `Meta requires a privacy policy URL on every instant form. Add one for ${client.name} on their Meta card, or type one on the form.`,
+          },
+          400
+        )
+      }
+
+      const form = await graphPost(
+        `${client.meta_page_id}/leadgen_forms`,
+        {
+          name: body.form_name || `${client.name} — enquiries`,
+          questions,
+          privacy_policy: { url: privacyUrl, link_text: 'Privacy Policy' },
+          // Where the thank-you screen's button goes. Meta wants somewhere to
+          // send people after they submit; the client's own site is the
+          // natural answer, and the privacy page is a valid fallback.
+          follow_up_action_url: body.follow_up_url || client.website_url || privacyUrl,
+          locale: 'EN_US',
+          // The form is only reachable from the ad, so there is no reason to
+          // hide it from people the ad was not targeted at.
+          block_display_for_non_targeted_viewer: false,
+          ...(body.thank_you_message
+            ? {
+                thank_you_page: {
+                  title: 'Thanks — we got it',
+                  body: body.thank_you_message,
+                  button_type: 'VIEW_WEBSITE',
+                  website_url: body.follow_up_url || client.website_url || privacyUrl,
+                },
+              }
+            : {}),
+        },
+        pToken,
+        'create instant form'
+      )
+
+      return json({ ok: true, form_id: form.id, name: body.form_name || null })
+    }
+
     if (action !== 'publish') return json({ error: `Unknown action "${action}".` }, 400)
 
     // -----------------------------------------------------------------------
@@ -362,6 +620,8 @@ Deno.serve(async (req) => {
       description,
       cta = 'LEARN_MORE',
       link_url: linkUrlIn,
+      lead_form_id: leadFormId,
+      lead_form_name: leadFormName,
       special_ad_categories: specialAdCategories = [],
       start_time: startTime,
       stamp,
@@ -369,7 +629,8 @@ Deno.serve(async (req) => {
       published_by: publishedBy,
     } = body
 
-    const spec = OBJECTIVES[objective as Objective]
+    const objectiveKey = (OBJECTIVE_ALIASES[objective] || objective) as Objective
+    const spec = OBJECTIVES[objectiveKey]
     if (!spec) {
       return json({ error: `Unsupported objective "${objective}".` }, 400)
     }
@@ -384,10 +645,22 @@ Deno.serve(async (req) => {
     if (!imageUrl) return json({ error: 'No ad image was given to publish.' }, 400)
     if (!primaryText) return json({ error: 'Primary text is required — it is the copy above the image.' }, 400)
 
-    const linkUrl = linkUrlIn || client.website_url
-    if (!linkUrl) {
+    // An instant form has no landing page: the form opens inside Facebook, and
+    // the creative's link is never followed. Meta still wants the field
+    // populated, so it points at the advertiser's own Page.
+    const linkUrl = spec.needs_form
+      ? `https://www.facebook.com/${client.meta_page_id}`
+      : linkUrlIn || client.website_url
+
+    if (!spec.needs_form && !linkUrl) {
       return json(
         { error: `No landing page URL. Set one on ${client.name}'s Meta card, or type one on the publish form.` },
+        400
+      )
+    }
+    if (spec.needs_form && !leadFormId) {
+      return json(
+        { error: 'Pick or create an instant form before publishing a lead-form ad.' },
         400
       )
     }
@@ -421,7 +694,7 @@ Deno.serve(async (req) => {
         `${account}/campaigns`,
         {
           name: campaignName || `${client.name} — ${spec.label}`,
-          objective,
+          objective: spec.campaign_objective,
           status: 'PAUSED',
           // Required by Meta on every campaign create. Housing, employment,
           // credit and social-issue ads have targeting restrictions, and
@@ -449,13 +722,17 @@ Deno.serve(async (req) => {
         // mostly just stops it delivering at all.
         bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
         targeting: buildTargeting(locations, ageMin, ageMax),
+        // A website lead is promoted against the pixel that reports it; a form
+        // lead is promoted against the Page that hosts the form.
         promoted_object: spec.needs_pixel
           ? { pixel_id: client.meta_pixel_id, custom_event_type: 'LEAD' }
-          : undefined,
-        // Stated rather than left to default. OUTCOME_LEADS can also mean an
-        // instant form, a phone call or a Messenger thread, and which one is
-        // meant changes what else the ad set needs.
-        destination_type: spec.needs_pixel ? 'WEBSITE' : undefined,
+          : spec.needs_form
+            ? { page_id: client.meta_page_id }
+            : undefined,
+        // Stated rather than left to default. OUTCOME_LEADS covers instant
+        // forms, website forms, phone calls and Messenger threads, and which
+        // one is meant changes what else the ad set needs.
+        destination_type: spec.destination_type,
         start_time: startTime || undefined,
         status: 'PAUSED',
       },
@@ -482,7 +759,12 @@ Deno.serve(async (req) => {
             name: headline || undefined,
             description: description || undefined,
             image_hash: imageHash,
-            call_to_action: { type: ctaType, value: { link: linkUrl } },
+            // The form id on the CTA is what makes this a lead ad: tapping the
+            // button opens the form in place instead of following the link.
+            call_to_action: {
+              type: ctaType,
+              value: spec.needs_form ? { lead_gen_form_id: leadFormId } : { link: linkUrl },
+            },
           },
         },
         // Opt out of Meta's automatic image and text tweaks. The whole point of
@@ -532,9 +814,11 @@ Deno.serve(async (req) => {
           creative_id: creative.id,
           ad_id: ad.id,
           ad_name: adName || null,
-          objective,
+          objective: objectiveKey,
           daily_budget_cents: budget,
           locations,
+          lead_form_id: leadFormId || null,
+          lead_form_name: leadFormName || null,
           status: 'PAUSED',
           published_by: publishedBy || null,
         }),

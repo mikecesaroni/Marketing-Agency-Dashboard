@@ -84,3 +84,25 @@ create index if not exists published_ads_stamp_idx on published_ads (client_id, 
 -- Same posture as the rest of this schema: the app is behind an auth wall and
 -- the Edge Function writes with the service role.
 alter table published_ads disable row level security;
+
+-- ---------------------------------------------------------------------------
+-- INSTANT FORMS (added after the first publish shipped)
+--
+-- A lead form opens inside Facebook rather than sending people to a landing
+-- page, which for home services is usually the better trade: no page load to
+-- lose people at, and Meta prefills name, phone and email from the profile.
+-- ---------------------------------------------------------------------------
+
+-- 6. Privacy policy URL.
+--
+--    Meta requires one on every instant form and rejects the form without it.
+--    So instant forms do not remove the URL requirement, they change which URL
+--    is needed — and this one is usually a page the client already has.
+alter table clients add column if not exists privacy_policy_url text;
+
+-- 7. Which form an ad was published against.
+--
+--    A form owns its leads, so knowing which form an ad points at is how you
+--    know where its leads went.
+alter table published_ads add column if not exists lead_form_id text;
+alter table published_ads add column if not exists lead_form_name text;

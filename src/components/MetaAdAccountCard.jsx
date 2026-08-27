@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
+import { discoverAssets } from '../lib/metaPublish'
 
 export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate }) {
   const [editing, setEditing] = useState(false)
@@ -19,6 +20,28 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
   const [pageId, setPageId] = useState(client.meta_page_id || '')
   const [pixelId, setPixelId] = useState(client.meta_pixel_id || '')
   const [websiteUrl, setWebsiteUrl] = useState(client.website_url || '')
+  const [privacyUrl, setPrivacyUrl] = useState(client.privacy_policy_url || '')
+
+  // Asset discovery, so nobody copies IDs out of Business Settings by hand.
+  const [detecting, setDetecting] = useState(false)
+  const [detected, setDetected] = useState(null)
+
+  const detect = async () => {
+    setDetecting(true)
+    setError('')
+    try {
+      const found = await discoverAssets(client.id)
+      setDetected(found)
+      // Only fill blanks. A value already typed is a decision, and silently
+      // replacing it would be worse than not detecting at all.
+      if (found.suggested_page_id && !pageId) setPageId(found.suggested_page_id)
+      if (found.suggested_pixel_id && !pixelId) setPixelId(found.suggested_pixel_id)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDetecting(false)
+    }
+  }
 
   const handleSync = async () => {
     setSyncing(true)
@@ -82,11 +105,12 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
         meta_page_id: pageId.trim() || null,
         meta_pixel_id: pixelId.trim() || null,
         website_url: websiteUrl.trim() || null,
+        privacy_policy_url: privacyUrl.trim() || null,
       })
       .eq('id', client.id)
 
     if (err) {
-      const missingPublishColumn = /meta_page_id|meta_pixel_id|website_url/.test(err.message)
+      const missingPublishColumn = /meta_page_id|meta_pixel_id|website_url|privacy_policy_url/.test(err.message)
       setError(
         missingPublishColumn
           ? 'Run supabase/meta-publish.sql in the Supabase SQL Editor to add the publishing fields.'
@@ -128,6 +152,8 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
                 setPageId(client.meta_page_id || '')
                 setPixelId(client.meta_pixel_id || '')
                 setWebsiteUrl(client.website_url || '')
+                setPrivacyUrl(client.privacy_policy_url || '')
+                setDetected(null)
                 setEditing(true)
               }}
               className="flex-1 md:flex-none px-3 py-2 md:py-1.5 text-sm bg-slate-200 text-slate-800 rounded-lg font-medium hover:bg-slate-300 transition"
@@ -204,12 +230,89 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
           </div>
 
           <div className="pt-3 border-t border-slate-200 space-y-3">
-            <div>
-              <p className="text-sm font-medium text-slate-700">Needed to publish ads</p>
-              <p className="text-xs text-slate-500">
-                Only used by the Ad Studio&rsquo;s Publish button. Syncing works without them.
-              </p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-slate-700">Needed to publish ads</p>
+                <p className="text-xs text-slate-500">
+                  Only used by the Ad Studio&rsquo;s Publish button. Syncing works without them.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={detect}
+                disabled={detecting || !value.trim()}
+                title="Ask Meta which Page and pixel this ad account already uses"
+                className="flex-shrink-0 px-3 py-1.5 text-xs bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition"
+              >
+                {detecting ? 'Detecting…' : 'Detect from Meta'}
+              </button>
             </div>
+
+            {detected && (
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg space-y-1.5">
+                {detected.pages?.length > 0 ? (
+                  <>
+                    <p className="text-xs font-medium text-blue-900">
+                      {detected.pages.length === 1
+                        ? 'Found one Page'
+                        : `Found ${detected.pages.length} Pages`}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detected.pages.map((pg) => (
+                        <button
+                          key={pg.id}
+                          type="button"
+                          onClick={() => setPageId(pg.id)}
+                          className={`px-2 py-1 rounded text-[11px] border transition ${
+                            pageId === pg.id
+                              ? 'bg-blue-700 text-white border-blue-700'
+                              : 'bg-white text-blue-800 border-blue-300 hover:bg-blue-100'
+                          }`}
+                        >
+                          {pg.name || pg.id}
+                          {pg.ads_using > 0 && (
+                            <span className="opacity-70">
+                              {' '}
+                              &middot; {pg.ads_using} existing ad{pg.ads_using > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-blue-700">
+                      Ranked by how many of this account&rsquo;s existing ads already post as each
+                      one &mdash; a better signal than what Business Settings merely allows.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-blue-900">
+                    No Pages came back. The system user probably has the ad account but not the
+                    Page assigned &mdash; add it under Business Settings &rsaquo; Accounts &rsaquo;
+                    Pages.
+                  </p>
+                )}
+
+                {detected.pixels?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {detected.pixels.map((px) => (
+                      <button
+                        key={px.id}
+                        type="button"
+                        onClick={() => setPixelId(px.id)}
+                        className={`px-2 py-1 rounded text-[11px] border transition ${
+                          pixelId === px.id
+                            ? 'bg-blue-700 text-white border-blue-700'
+                            : 'bg-white text-blue-800 border-blue-300 hover:bg-blue-100'
+                        }`}
+                      >
+                        Pixel: {px.name || px.id}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-blue-700">Nothing is saved until you hit Save.</p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -242,6 +345,23 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
               <p className="text-xs text-slate-500 mt-1">
                 Where the ad&rsquo;s button sends people. Prefilled on every publish, and editable
                 there.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Privacy policy URL
+              </label>
+              <input
+                type="url"
+                value={privacyUrl}
+                onChange={(e) => setPrivacyUrl(e.target.value)}
+                placeholder="https://example.com/privacy"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Required on every instant form &mdash; Meta rejects the form without one. This is
+                the one URL instant forms still need.
               </p>
             </div>
 

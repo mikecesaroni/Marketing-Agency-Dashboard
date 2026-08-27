@@ -6,18 +6,51 @@ import { readFunctionError } from './functionError'
 // is only what the picker shows and why.
 export const OBJECTIVES = [
   {
-    value: 'OUTCOME_TRAFFIC',
+    value: 'LEADS_FORM',
+    label: 'Leads (instant form)',
+    hint: 'The form opens inside Facebook — no landing page, and Meta prefills name, phone and email.',
+    needsPixel: false,
+    needsForm: true,
+    needsLink: false,
+  },
+  {
+    value: 'TRAFFIC',
     label: 'Traffic',
     hint: 'Sends people to the website. Works with no pixel.',
     needsPixel: false,
+    needsForm: false,
+    needsLink: true,
   },
   {
-    value: 'OUTCOME_LEADS',
+    value: 'LEADS_WEBSITE',
     label: 'Leads (website)',
-    hint: 'Optimises towards the pixel’s Lead event. Needs a pixel ID on the client.',
+    hint: 'Optimises towards the pixel’s Lead event. Needs a pixel ID and a landing page.',
     needsPixel: true,
+    needsForm: false,
+    needsLink: true,
   },
 ]
+
+/**
+ * The fields an instant form can ask for.
+ *
+ * The standard ones are prefilled from the viewer's Facebook profile, which is
+ * the whole reason these convert: most people submit without typing anything.
+ * Every custom question is a real question and costs completions, so the form
+ * builder nudges towards few.
+ */
+export const FORM_QUESTIONS = [
+  { type: 'FULL_NAME', label: 'Full name', prefilled: true },
+  { type: 'PHONE', label: 'Phone number', prefilled: true },
+  { type: 'EMAIL', label: 'Email', prefilled: true },
+  { type: 'STREET_ADDRESS', label: 'Street address', prefilled: true },
+  { type: 'CITY', label: 'City', prefilled: true },
+  { type: 'ZIP', label: 'ZIP code', prefilled: true },
+]
+
+// What a home-services form asks by default. Name and phone are what actually
+// gets someone called back; email is the fallback when nobody picks up.
+export const DEFAULT_FORM_QUESTIONS = ['FULL_NAME', 'PHONE', 'EMAIL']
 
 // Meta's enum, narrowed to the ones that make sense for a home-services ad.
 // BOOK_TRAVEL is not a typo: it is the long-standing enum Meta renders as
@@ -98,6 +131,54 @@ export async function listCampaigns(clientId) {
 }
 
 /**
+ * Works out which Facebook Page and pixel this client advertises with.
+ *
+ * The token can already see both, so nobody should be copying IDs out of
+ * Business Settings. The Page is ranked by how many of the account's existing
+ * creatives already post as it, which is a far better signal than what is
+ * merely assignable.
+ */
+export async function discoverAssets(clientId) {
+  return callFunction({ action: 'discover_assets', client_id: clientId })
+}
+
+/**
+ * Instant forms already on the client's Facebook Page.
+ *
+ * Worth reusing rather than making a new one per ad: a form owns its leads, so
+ * five near-identical forms means five places to go looking for them.
+ */
+export async function listLeadForms(clientId) {
+  const data = await callFunction({ action: 'list_lead_forms', client_id: clientId })
+  return data?.forms || []
+}
+
+/**
+ * Builds a new instant form on the Page, from the CRM.
+ *
+ * `questions` is a list of {type} for standard fields and {type:'CUSTOM',label}
+ * for anything asked in the client's own words.
+ */
+export async function createLeadForm({
+  clientId,
+  formName,
+  questions,
+  privacyPolicyUrl,
+  followUpUrl,
+  thankYouMessage,
+}) {
+  return callFunction({
+    action: 'create_lead_form',
+    client_id: clientId,
+    form_name: formName,
+    questions,
+    privacy_policy_url: privacyPolicyUrl,
+    follow_up_url: followUpUrl,
+    thank_you_message: thankYouMessage,
+  })
+}
+
+/**
  * Creates campaign -> ad set -> creative -> ad, all PAUSED.
  *
  * Nothing this creates can spend money. The last step is deliberately not
@@ -127,9 +208,17 @@ export function dollarsToCents(value) {
 // One line describing what the publish will create, for the review step. The
 // point is that nothing is a surprise: budget, destination and reach read back
 // before the button is pressed rather than after.
-export function summarisePlan({ objective, dailyBudget, locations, campaignName, reuseCampaign }) {
+export function summarisePlan({
+  objective,
+  dailyBudget,
+  locations,
+  campaignName,
+  reuseCampaign,
+  formName,
+}) {
   const obj = OBJECTIVES.find((o) => o.value === objective)
   const where = locations.length === 1 ? locations[0].label : `${locations.length} locations`
   const campaign = reuseCampaign ? 'an existing campaign' : `a new campaign, "${campaignName}"`
-  return `${obj?.label || objective} ad in ${campaign}, $${dailyBudget}/day, targeting ${where}. Created paused.`
+  const form = obj?.needsForm && formName ? ` Leads go to the "${formName}" form.` : ''
+  return `${obj?.label || objective} ad in ${campaign}, $${dailyBudget}/day, targeting ${where}. Created paused.${form}`
 }
