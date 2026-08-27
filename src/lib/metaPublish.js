@@ -86,6 +86,14 @@ async function callFunction(body) {
 
   if (error) {
     const { status, detail } = await readFunctionError(error)
+    // No status means no response reached the browser at all: the function is
+    // either undeployed or not answering the CORS preflight. Both surface as
+    // supabase-js's "Failed to send a request", which names neither.
+    if (!status) {
+      throw new Error(
+        'Could not reach the publish function. It is probably not deployed yet — deploy meta-publish in Supabase and try again.'
+      )
+    }
     if (status === 404) {
       throw new Error(
         'The publish function is not deployed yet. Deploy meta-publish in Supabase, then try again.'

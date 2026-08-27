@@ -6,6 +6,18 @@ async function callFunction(body) {
 
   if (error) {
     const { status, detail } = await readFunctionError(error)
+
+    // No status at all means the browser never got a response — the request
+    // died before any HTTP code came back. For an Edge Function that is almost
+    // always one of two things, and both look identical from here: the
+    // function is not deployed, or it is deployed but does not answer the CORS
+    // preflight. Saying so beats "failed to send a request", which reads like
+    // a network fault and sends people looking at their wifi.
+    if (!status) {
+      throw new Error(
+        'Could not reach the scan function. It is probably not deployed yet — deploy ai-visibility in Supabase and try again.'
+      )
+    }
     if (status === 404) {
       throw new Error(
         'The scan function is not deployed yet. Deploy ai-visibility in Supabase, then try again.'
