@@ -63,12 +63,16 @@ Select the system user → **Generate new token**
 | `business_management` | see the business's assets at all |
 | `pages_show_list` | find the Page an ad posts as |
 | `pages_manage_ads` | create instant forms, which live on the Page |
-| `leads_retrieval` | read the leads a form collects |
 
-The three `pages_*`/`leads_*` scopes are easy to miss because ad-account
-access does not imply Page access. Without them, instant form creation fails
-even when the Page is correctly assigned to the system user — the scopes and
-the asset assignment are two separate gates, and you need both.
+The two `pages_*` scopes are easy to miss because ad-account access does not
+imply Page access. Without them, instant form creation fails even when the
+Page is correctly assigned to the system user — the scopes and the asset
+assignment are two separate gates, and you need both.
+
+`leads_retrieval` is deliberately **not** in that list. It is only needed to
+pull submitted leads back into the CRM, which nothing here does: leads land in
+Meta's Lead Center on the Page, where they can be emailed out or exported. Add
+it only if the CRM ever grows a lead inbox of its own.
 
 The token is shown **once**. Copy it immediately. If the dialog closes, revoke
 it and generate another.
