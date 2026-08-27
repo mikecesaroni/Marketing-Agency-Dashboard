@@ -30,18 +30,56 @@ export async function runMetaSync(clientId) {
   return data
 }
 
-// Turns the function's per-client results into one line for the UI.
+/**
+ * Turns the function's per-client results into a line for the UI.
+ *
+ * Each client produces two independent results: the weekly KPI totals, and the
+ * per-ad daily breakdown. They can fail separately, and conflating them was
+ * actively misleading — an account whose spend and leads landed perfectly well
+ * was still reported as "failed" because its ad-level query came back empty
+ * handed. The two are now counted and worded separately.
+ *
+ * Meta's own error text is included rather than dropped. It names the field or
+ * permission it objected to, which is the difference between a fix and a guess.
+ */
 export function summariseSync(data) {
   const results = data?.results || []
   if (results.length === 0) return 'Nothing to sync — no client has an ad account connected.'
 
+  // The function tags per-ad failures with this prefix; anything else is the
+  // account-level totals, which are what the CRM's KPIs actually run on.
+  const isAdDetail = (r) => String(r.error || '').startsWith('ad detail:')
+
   const failed = results.filter((r) => r.error)
+  const kpiFailed = failed.filter((r) => !isAdDetail(r))
+  const adFailed = failed.filter(isAdDetail)
   const ok = results.filter((r) => !r.error)
+
   const spend = ok.reduce((sum, r) => sum + (r.spend || 0), 0)
   const leads = ok.reduce((sum, r) => sum + (r.leads || 0), 0)
 
   const weeks = data.weeks?.length ? ` across ${data.weeks.length} week(s)` : ''
-  let line = `Synced ${data.synced ?? ok.length} row(s)${weeks} — $${spend.toFixed(2)}, ${leads} leads.`
-  if (failed.length > 0) line += ` ${failed.length} account(s) failed: ${failed.map((f) => f.client).join(', ')}.`
-  return line
+  const parts = [
+    `Synced ${data.synced ?? ok.length} row(s)${weeks} — $${spend.toFixed(2)}, ${leads} leads.`,
+  ]
+
+  // One message per distinct reason. Ten accounts failing for the same reason
+  // is one problem, and listing it ten times buries that.
+  const reasons = (list) => [...new Set(list.map((f) => f.error))].join(' | ')
+
+  if (kpiFailed.length > 0) {
+    parts.push(
+      `${kpiFailed.length} account(s) failed: ${kpiFailed.map((f) => f.client).join(', ')} — ${reasons(kpiFailed)}`
+    )
+  }
+
+  if (adFailed.length > 0) {
+    parts.push(
+      `Spend and leads are fine, but the per-ad breakdown failed for ${adFailed
+        .map((f) => f.client)
+        .join(', ')} — ${reasons(adFailed)}`
+    )
+  }
+
+  return parts.join(' ')
 }
