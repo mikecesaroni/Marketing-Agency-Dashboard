@@ -40,17 +40,35 @@ whole point: nobody has to re-authorise this every 60 days.
 Select the system user → **Assign Assets** → **Ad Accounts** → tick every client
 account the CRM manages → enable **Manage campaigns** (full control).
 
-A token can only reach accounts assigned here. Adding a client later means
-coming back and assigning their account too, or the CRM will report that account
-as unreachable.
+Then do the same for **Pages**: tick each client's Facebook Page and enable
+**Manage Page**. Skipping this is fine for syncing KPIs, but an ad creative is
+a Page post and an instant form is a Page resource, so publishing needs it.
+
+A token can only reach assets assigned here. Adding a client later means coming
+back and assigning both their ad account and their Page, or the CRM will report
+that account as unreachable.
 
 ### 4. Generate the token
 
 Select the system user → **Generate new token**
 
 - App: the one from step 1
-- Permissions: **`ads_management`**, **`ads_read`**, **`business_management`**
 - Expiry: leave it as **never expires** (do not tick the 60-day option)
+- Permissions:
+
+| Scope | Why |
+| --- | --- |
+| `ads_management` | create campaigns, ad sets and ads |
+| `ads_read` | the weekly KPI sync |
+| `business_management` | see the business's assets at all |
+| `pages_show_list` | find the Page an ad posts as |
+| `pages_manage_ads` | create instant forms, which live on the Page |
+| `leads_retrieval` | read the leads a form collects |
+
+The three `pages_*`/`leads_*` scopes are easy to miss because ad-account
+access does not imply Page access. Without them, instant form creation fails
+even when the Page is correctly assigned to the system user — the scopes and
+the asset assignment are two separate gates, and you need both.
 
 The token is shown **once**. Copy it immediately. If the dialog closes, revoke
 it and generate another.
