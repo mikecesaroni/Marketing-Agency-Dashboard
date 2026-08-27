@@ -137,18 +137,38 @@ async function fetchMetaInsight(
   return body.data?.[0] ?? null
 }
 
+// The browser sends Authorization and content-type on an invoke, which makes
+// it a preflighted request. Without these headers the preflight has nothing to
+// approve and the call never leaves the browser — surfacing as supabase-js's
+// "Failed to send a request to the Edge Function", which reads like a network
+// fault rather than a missing header. The scheduled pg_cron run never hit this,
+// which is why the nightly sync worked while the "Sync now" button did not.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body, null, 2), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...CORS },
+  })
+}
+
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return json({}, 200)
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const metaToken = Deno.env.get('META_ACCESS_TOKEN')
 
   if (!metaToken) {
-    return new Response(
-      JSON.stringify({
+    return json(
+      {
         error:
           'META_ACCESS_TOKEN is not set on this project. Add it under Project Settings > Edge Functions > Secrets.',
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      },
+      500
     )
   }
 
@@ -180,10 +200,7 @@ Deno.serve(async (req) => {
   const clients = await clientsRes.json()
 
   if (!clientsRes.ok) {
-    return new Response(JSON.stringify({ error: 'Could not read clients', detail: clients }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return json({ error: 'Could not read clients', detail: clients }, 500)
   }
 
   const rows: Record<string, unknown>[] = []
@@ -240,10 +257,7 @@ Deno.serve(async (req) => {
 
     if (!upsert.ok) {
       const detail = await upsert.text()
-      return new Response(JSON.stringify({ error: 'Upsert failed', detail, weeks }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return json({ error: 'Upsert failed', detail, weeks }, 500)
     }
   }
 
@@ -321,18 +335,11 @@ Deno.serve(async (req) => {
     })
   }
 
-  return new Response(
-    JSON.stringify(
-      {
-        weeks,
-        synced: rows.length,
-        ad_rows: adRows.length,
-        marked_live: toActivate.map((c) => c.name),
-        results,
-      },
-      null,
-      2
-    ),
-    { headers: { 'Content-Type': 'application/json' } }
-  )
+  return json({
+    weeks,
+    synced: rows.length,
+    ad_rows: adRows.length,
+    marked_live: toActivate.map((c) => c.name),
+    results,
+  })
 })

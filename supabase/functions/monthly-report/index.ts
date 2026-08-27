@@ -30,14 +30,27 @@ type Result = {
   spend?: number
 }
 
+// The browser sends Authorization and content-type on an invoke, which makes
+// it a preflighted request. Without these headers the preflight has nothing to
+// approve and the call never leaves the browser — surfacing as supabase-js's
+// "Failed to send a request to the Edge Function", which reads like a network
+// fault rather than a missing header.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body, null, 2), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS },
   })
 }
 
 Deno.serve(async (req) => {
+  // Answered before the POST check below: the preflight is an OPTIONS request,
+  // so rejecting it as "POST only" would block the very call it is clearing.
+  if (req.method === 'OPTIONS') return json({}, 200)
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
