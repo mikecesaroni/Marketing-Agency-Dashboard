@@ -6,6 +6,7 @@ import DeliverablesPage from './pages/DeliverablesPage'
 import PaymentsPage from './pages/PaymentsPage'
 import ReportsPage from './pages/ReportsPage'
 import SopsPage from './pages/SopsPage'
+import AiSearchPage from './pages/AiSearchPage'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
       <Route path="/payments" element={<PaymentsPage />} />
       <Route path="/reports" element={<ReportsPage />} />
       <Route path="/sops" element={<SopsPage />} />
+      <Route path="/ai-search" element={<AiSearchPage />} />
     </Routes>
   )
 }

@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/payments', label: 'Payments', short: 'Money', icon: '💰' },
   { to: '/reports', label: 'Reports', short: 'Reports', icon: '📈' },
   { to: '/sops', label: 'SOPs', short: 'SOPs', icon: '📖' },
+  { to: '/ai-search', label: 'AI Search', short: 'AI', icon: '🔍' },
 ]
 
 export default function Layout({ title, subtitle, actions, children }) {
