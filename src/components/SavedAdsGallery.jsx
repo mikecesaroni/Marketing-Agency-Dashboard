@@ -14,7 +14,7 @@ function when(date) {
 // Everything saved out of the Studio, grouped back into the three-size sets it
 // was saved as. The public URL matters more than the picture: that is the
 // address Meta fetches the image bytes from.
-export default function SavedAdsGallery({ clientId, clientName, onEdit }) {
+export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublish }) {
   const [sets, setSets] = useState(null)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState('')
@@ -91,6 +91,15 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit }) {
                 )}
               </p>
               <div className="flex items-center gap-3 flex-shrink-0">
+              {onPublish && (
+                <button
+                  onClick={() => onPublish(set)}
+                  title="Create this as a paused ad in the client's Meta account"
+                  className="px-2 py-1 rounded bg-blue-600 text-white text-[11px] font-medium hover:bg-blue-700 transition"
+                >
+                  Publish
+                </button>
+              )}
               {set.recipe ? (
                 <button
                   onClick={() => onEdit?.(set.recipe)}

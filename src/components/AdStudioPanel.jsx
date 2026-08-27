@@ -4,6 +4,8 @@ import { copyText } from '../lib/intakeSummary'
 import { splitOffer } from '../lib/clientChat'
 import { extractPalette } from '../lib/logoColours'
 import SavedAdsGallery from './SavedAdsGallery'
+import PublishToMetaPanel from './PublishToMetaPanel'
+import { fetchPublishedAds } from '../lib/metaPublish'
 import { recipeToContent, saveAdRecipe } from '../lib/savedAds'
 import {
   DEFAULT_ACCENT,
@@ -59,6 +61,7 @@ function Tabs({ tab, setTab }) {
       {[
         ['design', 'Design'],
         ['saved', 'Saved ads'],
+        ['publish', 'Publish'],
       ].map(([key, label]) => (
         <button
           key={key}
@@ -168,6 +171,13 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [subhead, setSubhead] = useState('')
   const [proof, setProof] = useState('')
   const [cta, setCta] = useState('Book Today!')
+
+  // Copy that is never painted on the artboard: the primary text sits above
+  // the image in the feed, the headline and description below it. These used to
+  // be display-only in the chat banner — publishing needs them stored.
+  const [primaryText, setPrimaryText] = useState('')
+  const [metaHeadline, setMetaHeadline] = useState('')
+  const [metaDescription, setMetaDescription] = useState('')
   // Off by default: the scrim handles most photos, and a plate on a clean
   // background is just a box.
   const [hookPlate, setHookPlate] = useState(false)
@@ -184,6 +194,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [tab, setTab] = useState('design')
   // Bumped after a save so the gallery refetches instead of showing a stale list.
   const [savedAt, setSavedAt] = useState(0)
+  // The saved set the Publish tab is working on, picked from the gallery.
+  const [publishing, setPublishing] = useState(null)
+  const [published, setPublished] = useState([])
 
   const [assets, setAssets] = useState({ background: null, logo: null })
   const [error, setError] = useState('')
@@ -220,6 +233,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
     setSubhead(seed.subhead || '')
     setProof(seed.proof || '')
     setCta(seed.cta || 'Book Today!')
+    setPrimaryText(seed.primaryText || '')
+    setMetaHeadline(seed.headline || '')
+    setMetaDescription(seed.description || '')
     // Neither the location nor the star rating belongs to a creative set, so
     // the intake stays the source for those unless the brief overrode them.
     if (seed.badge) setBadge(seed.badge)
@@ -232,6 +248,15 @@ export default function AdStudioPanel({ client, intake, seed }) {
       .select('id, file_name, storage_path')
       .eq('client_id', client.id)
       .then(({ data }) => setFiles((data || []).filter((f) => IMAGE_RE.test(f.storage_path))))
+  }, [client.id])
+
+  // What has already gone to Meta, so the Publish tab can warn before creating
+  // a second copy of the same ad. A missing published_ads table means the
+  // migration has not been run yet, which is not worth failing the Studio over.
+  useEffect(() => {
+    fetchPublishedAds(client.id)
+      .then(setPublished)
+      .catch(() => setPublished([]))
   }, [client.id])
 
   // Reload the bitmaps whenever a pick changes.
@@ -320,6 +345,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
     setSubhead(r.subhead)
     setProof(r.proof)
     setCta(r.cta)
+    setPrimaryText(r.primaryText)
+    setMetaHeadline(r.headline)
+    setMetaDescription(r.description)
     if (r.accent) setAccent(r.accent)
     if (r.badgeColor) setBadgeColor(r.badgeColor)
     setHookPlate(Boolean(r.hookPlate))
@@ -392,7 +420,21 @@ export default function AdStudioPanel({ client, intake, seed }) {
         await saveAdRecipe({
           clientId: client.id,
           stamp,
-          content: { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor, hookPlate },
+          content: {
+            badge,
+            hook,
+            offerAmount,
+            offerDetail,
+            subhead,
+            proof,
+            cta,
+            accent,
+            badgeColor,
+            hookPlate,
+            primaryText,
+            headline: metaHeadline,
+            description: metaDescription,
+          },
           backgroundPath,
           logoPath,
           safeMode,
@@ -456,6 +498,14 @@ export default function AdStudioPanel({ client, intake, seed }) {
     </div>
   )
 
+  // Opens the Publish tab on one saved set. Publishing works from a saved ad
+  // rather than the live artboards because Meta fetches the image bytes over
+  // HTTP: the public bucket URL only exists once the ad has been saved.
+  const startPublish = (set) => {
+    setPublishing(set)
+    setTab('publish')
+  }
+
   if (tab === 'saved') {
     return (
       <div className="space-y-4">
@@ -465,7 +515,50 @@ export default function AdStudioPanel({ client, intake, seed }) {
           clientId={client.id}
           clientName={client.name}
           onEdit={editSaved}
+          onPublish={startPublish}
         />
+      </div>
+    )
+  }
+
+  if (tab === 'publish') {
+    return (
+      <div className="space-y-4">
+        <Tabs tab={tab} setTab={setTab} />
+        {publishing ? (
+          <>
+            <button
+              onClick={() => setPublishing(null)}
+              className="text-xs text-slate-500 hover:text-slate-800"
+            >
+              ← Pick a different ad
+            </button>
+            <PublishToMetaPanel
+              client={client}
+              set={publishing}
+              alreadyPublished={published}
+              onPublished={() =>
+                fetchPublishedAds(client.id)
+                  .then(setPublished)
+                  .catch(() => {})
+              }
+            />
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-slate-600">
+              Pick a saved ad to publish. It goes into {client.name}&rsquo;s Meta account paused —
+              nothing spends until you switch it on in Ads Manager.
+            </p>
+            <SavedAdsGallery
+              key={savedAt}
+              clientId={client.id}
+              clientName={client.name}
+              onEdit={editSaved}
+              onPublish={startPublish}
+            />
+          </>
+        )}
       </div>
     )
   }
@@ -580,6 +673,42 @@ export default function AdStudioPanel({ client, intake, seed }) {
           </div>
         </div>
       </div>
+
+      <details className="rounded-lg border border-slate-200 bg-slate-50 p-3" open={Boolean(primaryText)}>
+        <summary className="cursor-pointer text-xs font-medium text-slate-700">
+          Feed copy — goes in Meta, not on the image
+        </summary>
+        <div className="mt-2 space-y-2">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Primary text</label>
+            <textarea
+              value={primaryText}
+              onChange={(e) => setPrimaryText(e.target.value)}
+              rows={3}
+              placeholder="The paragraph above the image in the feed…"
+              className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
+            />
+          </div>
+          <div className="grid md:grid-cols-2 gap-2">
+            <Field
+              label="Headline"
+              value={metaHeadline}
+              onChange={setMetaHeadline}
+              hint="under the image"
+            />
+            <Field
+              label="Description"
+              value={metaDescription}
+              onChange={setMetaDescription}
+              hint="optional"
+            />
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Saved with the ad, and prefilled on the Publish tab. Until now this text only ever
+            appeared in the chat banner and was lost on save.
+          </p>
+        </div>
+      </details>
 
       <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
         <span className="text-xs font-medium text-slate-600">9:16 safe area</span>

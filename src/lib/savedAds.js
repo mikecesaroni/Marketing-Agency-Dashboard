@@ -43,6 +43,12 @@ export async function saveAdRecipe({ clientId, stamp, content, backgroundPath, l
     badge_color: content.badgeColor,
     hook_plate: Boolean(content.hookPlate),
     safe_mode: safeMode,
+    // Copy that never touches the artboard: it goes in the feed above and
+    // below the image. Stored because publishing has to send it, and until
+    // this existed it lived only in a read-only banner and was lost on save.
+    primary_text: content.primaryText || null,
+    headline: content.headline || null,
+    description: content.description || null,
     background_path: backgroundPath || null,
     logo_path: logoPath || null,
   })
@@ -62,6 +68,9 @@ export function recipeToContent(row) {
     accent: row.accent,
     badgeColor: row.badge_color,
     hookPlate: Boolean(row.hook_plate),
+    primaryText: row.primary_text || '',
+    headline: row.headline || '',
+    description: row.description || '',
     backgroundPath: row.background_path || '',
     logoPath: row.logo_path || '',
     safeMode: row.safe_mode || 'reels',
