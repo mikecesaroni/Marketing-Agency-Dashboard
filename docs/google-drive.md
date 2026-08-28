@@ -29,9 +29,9 @@ secret, and the browser only ever talks to the `drive-assets` function.
    access comes from folder sharing, not from IAM roles.
 4. Open the new service account → **Keys → Add key → Create new key → JSON.**
    A file downloads. It contains a private key; treat it like a password.
-5. Copy the service account's email. It looks like
-   `crm-drive@your-project.iam.gserviceaccount.com`. You will paste this into
-   Drive for every client, so keep it somewhere handy.
+5. Copy the service account's email. For this project it is
+   `crm-drive@marketing-dashboard-crm.iam.gserviceaccount.com`. You do not need
+   to keep it handy — the Drive tab shows it and copies it on click.
 6. In Supabase: **Project Settings → Edge Functions → Secrets → Add new
    secret.**
    - Name: `GOOGLE_SERVICE_ACCOUNT_JSON`
@@ -42,7 +42,9 @@ secret, and the browser only ever talks to the `drive-assets` function.
 
 1. In Drive, open the client's folder → **Share**.
 2. Paste the service account email, set it to **Viewer**, and send. Drive may
-   warn that this address is not a Google account; that is expected.
+   warn that this address is not a Google account; that is expected. The Drive
+   tab in the Studio displays the address and copies it when clicked, so it does
+   not have to be typed from memory.
 3. Copy the folder link (`Share → Copy link`).
 4. In the CRM, open the client → Ad Studio → the **Drive** tab on either image
    picker → paste the link → **Link**.
@@ -86,6 +88,18 @@ unaffected — those are PNGs in the bucket.
 | `404` / "check the folder is shared" | The folder was never shared with the service account email, or the Drive API is not enabled. |
 | Folder lists 0 photos | The link pointed at the wrong folder, the images sit in a subfolder, or the files are not images. |
 | "That file is not in this client's Drive folder" | The client's linked folder was changed after the ad was built. Re-pick the photo. |
+
+## Verified
+
+The credential chain (PEM key -> RS256 JWT -> Google token exchange ->
+authenticated Drive call) has been exercised against this project's real
+secret. `whoami` returns the service account address, and a request for a
+folder that does not exist comes back as Drive's own "File not found" rather
+than a credentials error — which is only reachable once Google has accepted the
+token.
+
+Still unproven until a real folder is shared: listing an actual folder,
+thumbnails, and compositing a Drive photo onto an artboard.
 
 ## Shared drives
 

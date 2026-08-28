@@ -50,6 +50,18 @@ async function call(body) {
   return data
 }
 
+/**
+ * The service account's email, so the UI can say who to share a folder with.
+ *
+ * Not a credential — it is the address you paste into Drive's share dialog. The
+ * alternative is going back to the JSON key for every client, which is exactly
+ * the kind of friction that gets a setup step skipped.
+ */
+export async function driveServiceAccount() {
+  const data = await call({ action: 'whoami' })
+  return data.client_email || ''
+}
+
 /** Images in this client's linked folder, newest first. */
 export async function listDriveImages(clientId) {
   const data = await call({ action: 'list', client_id: clientId })

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { copyText } from '../lib/intakeSummary'
 import {
   driveObjectUrl,
   drivePath,
@@ -6,6 +7,7 @@ import {
   isDrivePath,
   listDriveImages,
   saveDriveFolder,
+  driveServiceAccount,
 } from '../lib/driveAssets'
 
 // Picks the background photo or the logo for an ad, from either source.
@@ -79,6 +81,7 @@ export default function AdImagePicker({
   const [driveError, setDriveError] = useState('')
   const [loadingDrive, setLoadingDrive] = useState(false)
   const [folderInput, setFolderInput] = useState('')
+  const [serviceEmail, setServiceEmail] = useState('')
   const [savingFolder, setSavingFolder] = useState(false)
 
   const loadDrive = async () => {
@@ -102,6 +105,15 @@ export default function AdImagePicker({
     if (source === 'drive' && driveFolderId && driveFiles === null) loadDrive()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, driveFolderId])
+
+  useEffect(() => {
+    if (source !== 'drive' || driveFolderId || serviceEmail) return
+    driveServiceAccount()
+      .then(setServiceEmail)
+      // A missing email is not worth an error banner; the docs still say what
+      // to do, and the link box below works either way.
+      .catch(() => {})
+  }, [source, driveFolderId, serviceEmail])
 
   const linkFolder = async () => {
     setSavingFolder(true)
@@ -193,8 +205,20 @@ export default function AdImagePicker({
       ) : !driveFolderId ? (
         <div className="space-y-1.5">
           <p className="text-[11px] text-slate-500 leading-snug">
-            Paste this client&apos;s Drive folder link. Share the folder with the service
-            account as a Viewer first — see docs/google-drive.md.
+            In Drive, share this client&apos;s folder as <strong>Viewer</strong> with{' '}
+            {serviceEmail ? (
+              <button
+                type="button"
+                onClick={() => copyText(serviceEmail)}
+                title="Copy"
+                className="font-mono text-[10px] bg-slate-100 px-1 py-0.5 rounded hover:bg-slate-200 break-all"
+              >
+                {serviceEmail}
+              </button>
+            ) : (
+              'the service account'
+            )}
+            , then paste the folder link here.
           </p>
           <div className="flex gap-2">
             <input

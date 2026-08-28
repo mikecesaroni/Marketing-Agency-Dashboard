@@ -24,6 +24,7 @@
 // one value. See docs/google-drive.md.
 //
 // Actions:
+//   whoami {}                            -> the service account's email
 //   list {client_id}                     -> images in that client's folder
 //   file {client_id, file_id, thumb?}    -> the bytes, as image/*
 //
@@ -163,10 +164,28 @@ Deno.serve(async (req) => {
   }
 
   const action = body.action || 'list'
-  const clientId = body.client_id
-  if (!clientId) return json({ error: 'client_id is required.' }, 400)
 
   try {
+    // Which robot to share a folder with. Deliberately exposed: it is an address
+    // you paste into Drive's share dialog, not a credential, and the alternative
+    // is digging the JSON key back out of a password manager for every client.
+    if (action === 'whoami') {
+      const raw = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+      if (!raw) {
+        return json(
+          {
+            error:
+              'GOOGLE_SERVICE_ACCOUNT_JSON is not set on this project. Add it under Project Settings > Edge Functions > Secrets. See docs/google-drive.md.',
+          },
+          500
+        )
+      }
+      return json({ client_email: JSON.parse(raw)?.client_email || null })
+    }
+
+    const clientId = body.client_id
+    if (!clientId) return json({ error: 'client_id is required.' }, 400)
+
     // The folder is read from the CRM rather than taken from the request, so a
     // caller cannot name a folder of their own and have the service account
     // read it.
@@ -175,7 +194,11 @@ Deno.serve(async (req) => {
       { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
     )
     const client = (await res.json())?.[0]
-    if (!client) return json({ error: 'That client was not found.' }, 404)
+    // 400 rather than 404 on purpose. The browser reads a 404 as "this function
+    // is not deployed", because that is the only 404 the gateway itself
+    // produces; returning one here would report a missing row as a missing
+    // deployment.
+    if (!client) return json({ error: 'That client was not found.' }, 400)
 
     const folderId = (client.drive_folder_id || '').trim()
     if (!folderId) {
