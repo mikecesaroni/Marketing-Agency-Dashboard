@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import GhlSetupFields from '../components/GhlSetupFields'
+import DriveFolderStep from '../components/DriveFolderStep'
 import {
   CLIENT_INTAKE_SECTIONS,
   CLIENT_INTAKE_KEYS,
@@ -117,6 +118,7 @@ export default function ClientOnboardingPage() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [done, setDone] = useState(false)
+  const [driveConnected, setDriveConnected] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -145,6 +147,7 @@ export default function ClientOnboardingPage() {
         })
       }
       if (data.ghl) setGhl((prev) => mergeGhlSetup(prev, data.ghl))
+      setDriveConnected(Boolean(data.drive_connected))
       if (data.intake_submitted_at) setStep(2)
       setLoading(false)
     }
@@ -266,7 +269,10 @@ export default function ClientOnboardingPage() {
 
         <div className="space-y-6">
           {step === 1 ? (
-            <IntakeFields data={intake} onChange={changeIntake} />
+            <>
+              <IntakeFields data={intake} onChange={changeIntake} />
+              <DriveFolderStep token={token} connected={driveConnected} />
+            </>
           ) : (
             <>
               {missing.length > 0 && (

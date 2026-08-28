@@ -40,6 +40,14 @@ secret, and the browser only ever talks to the `drive-assets` function.
 
 ## Setup, per client
 
+Usually the client does this themselves. The onboarding page (`/onboarding/:token`,
+the link the **Send to Client** panel produces) has a "Photos for your ads" step
+that shows them the service account address, explains Viewer access in plain
+words, and takes the folder link. When they paste it there the folder is
+connected automatically — nobody here has to copy anything across.
+
+Do it by hand only when the client has already shared a folder some other way:
+
 1. In Drive, open the client's folder → **Share**.
 2. Paste the service account email, set it to **Viewer**, and send. Drive may
    warn that this address is not a Google account; that is expected. The Drive
