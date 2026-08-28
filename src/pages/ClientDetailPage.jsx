@@ -9,7 +9,6 @@ import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import LiveToggle from '../components/LiveToggle'
 import AdPerformanceSection from '../components/AdPerformanceSection'
 import AdDoctorPanel from '../components/AdDoctorPanel'
-import ClientBriefPanel from '../components/ClientBriefPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
 import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
@@ -75,7 +74,6 @@ export default function ClientDetailPage() {
   const [showKPIsModal, setShowKPIsModal] = useState(false)
   const [showWorkLogModal, setShowWorkLogModal] = useState(false)
   const [showCreativeModal, setShowCreativeModal] = useState(false)
-  const [showBriefModal, setShowBriefModal] = useState(false)
   const [showChatModal, setShowChatModal] = useState(false)
   // Set when the chat is opened from a task rather than the button, so it
   // knows to open straight into a conversation about that task instead of a
@@ -298,12 +296,6 @@ export default function ClientDetailPage() {
         className="w-full md:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
       >
         💬 Ask about {client.name}
-      </button>
-      <button
-        onClick={() => setShowBriefModal(true)}
-        className="w-full md:w-auto px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition"
-      >
-        📋 Client Brief
       </button>
       <button
         onClick={() => setShowIntakeModal(true)}
@@ -683,15 +675,6 @@ export default function ClientDetailPage() {
             onTasksAdded={(newTasks) => setTasks((prev) => [...prev, ...newTasks])}
             autoPrompt={chatSeed}
           />
-        </Modal>
-
-        <Modal
-          isOpen={showBriefModal}
-          onClose={() => setShowBriefModal(false)}
-          title={`Client Brief — ${client.name}`}
-          wide
-        >
-          <ClientBriefPanel client={client} intake={intake} ads={briefAds} />
         </Modal>
 
         <Modal
