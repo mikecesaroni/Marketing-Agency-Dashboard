@@ -39,6 +39,25 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 // Drive, and a token that cannot write cannot damage their files.
 const SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
 
+// What a browser can actually decode in an <img>. HEIC/HEIF is the one that
+// matters: it is the iPhone default, so a folder of job-site photos is mostly
+// HEIC, and no browser can render it. Drive can, so anything outside this set
+// is served as Drive's rendered JPEG instead of the raw bytes.
+const BROWSER_RENDERABLE = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+  'image/avif',
+])
+
+// Longest edge Drive is asked to render to. The artboards top out at 1920, so
+// this leaves room to crop and scale without a visibly soft background, while
+// staying far below the multi-megabyte original.
+const RENDER_PX = 2048
+const THUMB_PX = 400
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -237,6 +256,9 @@ Deno.serve(async (req) => {
         size: Number(f.size) || null,
         modified_time: f.modifiedTime,
         has_thumbnail: Boolean(f.thumbnailLink),
+        // The picker shows this so a HEIC that only works because Drive
+        // converts it is not mistaken for a normal upload.
+        converted: !BROWSER_RENDERABLE.has(String(f.mimeType)),
       }))
 
       return json({ files, folder_id: folderId })
@@ -266,22 +288,47 @@ Deno.serve(async (req) => {
         return json({ error: `"${meta.name}" is not an image.` }, 400)
       }
 
-      // Thumbnails for the grid. Drive renders these itself, so the picker
-      // loads a few hundred KB instead of a folder full of 6MB camera photos.
-      if (body.thumb && meta.thumbnailLink) {
-        const thumbUrl = String(meta.thumbnailLink).replace(/=s\d+$/, '=s400')
-        const thumb = await fetch(thumbUrl)
-        if (thumb.ok) {
-          return new Response(thumb.body, {
-            headers: {
-              'Content-Type': thumb.headers.get('Content-Type') || 'image/jpeg',
-              'Cache-Control': 'private, max-age=300',
-              ...CORS,
-            },
-          })
+      // Two reasons to serve Drive's render rather than the original: the grid
+      // wants a small image, and a format the browser cannot decode has to be
+      // converted by someone. Drive already does both.
+      const unrenderable = !BROWSER_RENDERABLE.has(String(meta.mimeType))
+      if (body.thumb || unrenderable) {
+        if (!meta.thumbnailLink) {
+          // Only fatal for a format we could not have displayed anyway.
+          if (unrenderable) {
+            return json(
+              {
+                error: `"${meta.name}" is ${meta.mimeType}, which browsers cannot display, and Drive has no rendered version of it. Re-save it as a JPEG.`,
+              },
+              415
+            )
+          }
+        } else {
+          const size = body.thumb ? THUMB_PX : RENDER_PX
+          const rendered = await fetch(
+            String(meta.thumbnailLink).replace(/=s\d+$/, `=s${size}`)
+          )
+          if (rendered.ok) {
+            return new Response(rendered.body, {
+              headers: {
+                'Content-Type': rendered.headers.get('Content-Type') || 'image/jpeg',
+                'Cache-Control': 'private, max-age=300',
+                ...CORS,
+              },
+            })
+          }
+          // For a decodable format the original below is a fine fallback. For
+          // HEIC it is not: handing back bytes no browser can read is the bug
+          // this branch exists to prevent, so say so instead.
+          if (unrenderable) {
+            return json(
+              {
+                error: `Drive could not render "${meta.name}" (${meta.mimeType}) for the browser. Re-save it as a JPEG.`,
+              },
+              502
+            )
+          }
         }
-        // Falls through to the full file below. A thumbnail is an optimisation,
-        // not a requirement.
       }
 
       const bytes = await fetch(

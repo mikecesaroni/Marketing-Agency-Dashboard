@@ -61,6 +61,11 @@ Only the ID is stored.
   slow. Keep the ad photos in one folder.
 - **Images only.** The listing filters to `image/*`, and the byte proxy refuses
   anything that is not an image.
+- **iPhone HEIC photos work.** They are the common case for job-site photos and
+  no browser can decode them, so anything outside the set browsers can render
+  (JPEG, PNG, WebP, GIF, BMP, AVIF) is served as Drive's own rendered JPEG at up
+  to 2048px instead of the raw file. Thumbnails always come from Drive's
+  renderer. Nothing needs converting by hand.
 - **Nothing is duplicated.** The source photo stays in Drive and is read on
   demand. Only the *finished composited ad* is written to the Supabase bucket —
   that part is unchanged, and it has to happen because Meta fetches the final
@@ -86,6 +91,7 @@ unaffected — those are PNGs in the bucket.
 | "not valid JSON" | The key file was reformatted on paste. Paste it raw. |
 | "Google refused the service account credentials" | Usually a deleted or disabled key. Create a new JSON key. |
 | `404` / "check the folder is shared" | The folder was never shared with the service account email, or the Drive API is not enabled. |
+| "browsers cannot display ... Re-save it as a JPEG" | A format outside the renderable set that Drive also has no preview for. Rare; re-save the file. |
 | Folder lists 0 photos | The link pointed at the wrong folder, the images sit in a subfolder, or the files are not images. |
 | "That file is not in this client's Drive folder" | The client's linked folder was changed after the ad was built. Re-pick the photo. |
 

@@ -61,6 +61,17 @@ function DriveThumb({ client, file, selected, onPick }) {
           ✓
         </span>
       )}
+      {file.converted && (
+        // iPhone photos are HEIC, which no browser can decode. Drive converts
+        // them on the way through, so these work like any other photo -- the
+        // tag is only here so a 5MB .HEIC appearing in an ad is not a surprise.
+        <span
+          title="Converted from HEIC by Google Drive"
+          className="absolute bottom-0 left-0 right-0 bg-black/55 text-white text-[9px] leading-4 text-center"
+        >
+          HEIC
+        </span>
+      )}
     </button>
   )
 }
