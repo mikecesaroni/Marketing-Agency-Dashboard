@@ -2,7 +2,10 @@
 //
 // Runs on the 1st, covers the calendar month that just ended, and emails every
 // client whose Meta campaigns are still running. Deployed with verify_jwt =
-// false so pg_cron can reach it with a service-role header.
+// true: the browser panel invokes it with the anon key, and pg_cron reaches it
+// with a service-role Authorization header, so both callers already carry a
+// key the gateway accepts. Leaving JWT verification off would make an
+// unauthenticated endpoint that emails clients.
 //
 // Secrets:
 //   RESEND_API_KEY   required

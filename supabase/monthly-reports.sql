@@ -43,8 +43,9 @@ create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
 -- Replace <PROJECT_REF> and <SERVICE_ROLE_KEY> before running this block.
--- The service role key is what lets pg_net call a function deployed with
--- verify_jwt = false without exposing it publicly.
+-- The function is deployed with verify_jwt = true, and the service role key is
+-- a key the gateway accepts, so this call clears verification without the
+-- endpoint being open to anyone who finds the URL.
 --
 -- select cron.unschedule('monthly-client-reports')
 --   where exists (select 1 from cron.job where jobname = 'monthly-client-reports');
