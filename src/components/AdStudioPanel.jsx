@@ -7,6 +7,8 @@ import SavedAdsGallery from './SavedAdsGallery'
 import PublishToMetaPanel from './PublishToMetaPanel'
 import { fetchPublishedAds } from '../lib/metaPublish'
 import { recipeToContent, saveAdRecipe } from '../lib/savedAds'
+import AdImagePicker from './AdImagePicker'
+import { resolveImageSrc } from '../lib/driveAssets'
 import {
   DEFAULT_ACCENT,
   DEFAULT_BADGE,
@@ -159,6 +161,9 @@ function proofFromIntake(intake) {
 
 export default function AdStudioPanel({ client, intake, seed }) {
   const [files, setFiles] = useState([])
+  // Mirrors clients.drive_folder_id so linking a folder updates the pickers
+  // without a page reload.
+  const [driveFolderId, setDriveFolderId] = useState(client.drive_folder_id || '')
   const [backgroundPath, setBackgroundPath] = useState('')
   const [logoPath, setLogoPath] = useState('')
   const [accent, setAccent] = useState(DEFAULT_ACCENT)
@@ -262,10 +267,12 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // Reload the bitmaps whenever a pick changes.
   useEffect(() => {
     let cancelled = false
-    Promise.all([
-      backgroundPath ? loadImage(publicUrl(backgroundPath)) : null,
-      logoPath ? loadImage(publicUrl(logoPath)) : null,
-    ])
+    // A pick is either a storage path or `drive:<fileId>`, so the URL has to be
+    // resolved before the bitmap can load. Drive resolves to a blob: URL, which
+    // is same-origin and so cannot taint the canvas that toBlob() has to read.
+    const bitmap = async (path) => (path ? loadImage(await resolveImageSrc(client.id, path)) : null)
+
+    Promise.all([bitmap(backgroundPath), bitmap(logoPath)])
       .then(([background, logo]) => {
         if (cancelled) return
         setAssets({ background, logo })
@@ -292,7 +299,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
     return () => {
       cancelled = true
     }
-  }, [backgroundPath, logoPath])
+  }, [backgroundPath, logoPath, client.id])
 
   // Repaint every artboard on any change. Fonts must be ready first or the
   // first paint measures with a fallback face and wraps differently.
@@ -469,35 +476,6 @@ export default function AdStudioPanel({ client, intake, seed }) {
     }
   })
 
-  const Picker = ({ label, value, onChange, onUpload }) => (
-    <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-      <div className="flex gap-2">
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-xs"
-        >
-          <option value="">None</option>
-          {files.map((f) => (
-            <option key={f.storage_path} value={f.storage_path}>
-              {f.file_name}
-            </option>
-          ))}
-        </select>
-        <label className="px-2 py-1.5 bg-slate-100 border border-slate-300 rounded text-xs cursor-pointer hover:bg-slate-200 whitespace-nowrap">
-          Upload
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
-          />
-        </label>
-      </div>
-    </div>
-  )
-
   // Opens the Publish tab on one saved set. Publishing works from a saved ad
   // rather than the live artboards because Meta fetches the image bytes over
   // HTTP: the public bucket URL only exists once the ad has been saved.
@@ -580,17 +558,25 @@ export default function AdStudioPanel({ client, intake, seed }) {
       {seed && <SeedBanner seed={seed} />}
 
       <div className="grid md:grid-cols-2 gap-3">
-        <Picker
+        <AdImagePicker
           label="Background photo"
+          client={client}
+          files={files}
           value={backgroundPath}
           onChange={setBackgroundPath}
           onUpload={(f) => upload(f, setBackgroundPath)}
+          driveFolderId={driveFolderId}
+          onFolderSaved={setDriveFolderId}
         />
-        <Picker
+        <AdImagePicker
           label="Logo"
+          client={client}
+          files={files}
           value={logoPath}
           onChange={setLogoPath}
           onUpload={(f) => upload(f, setLogoPath)}
+          driveFolderId={driveFolderId}
+          onFolderSaved={setDriveFolderId}
         />
       </div>
 
