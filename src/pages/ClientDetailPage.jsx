@@ -12,6 +12,8 @@ import ClientBriefPanel from '../components/ClientBriefPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
 import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
+import GhlSetupForm from '../components/GhlSetupForm'
+import OnboardingLinkPanel from '../components/OnboardingLinkPanel'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
 import AddCreativeForm from '../components/AddCreativeForm'
@@ -67,6 +69,8 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showIntakeModal, setShowIntakeModal] = useState(false)
+  const [showGhlModal, setShowGhlModal] = useState(false)
+  const [showLinkModal, setShowLinkModal] = useState(false)
   const [showKPIsModal, setShowKPIsModal] = useState(false)
   const [showWorkLogModal, setShowWorkLogModal] = useState(false)
   const [showCreativeModal, setShowCreativeModal] = useState(false)
@@ -234,6 +238,8 @@ export default function ClientDetailPage() {
   const handleDataAdded = async (type) => {
     if (type === 'intake') {
       setShowIntakeModal(false)
+    } else if (type === 'ghl') {
+      setShowGhlModal(false)
     } else if (type === 'kpis') {
       setShowKPIsModal(false)
     } else if (type === 'worklog') {
@@ -303,6 +309,18 @@ export default function ClientDetailPage() {
         className="w-full md:w-auto px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
       >
         Intake Form
+      </button>
+      <button
+        onClick={() => setShowGhlModal(true)}
+        className="w-full md:w-auto px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition"
+      >
+        GHL Setup
+      </button>
+      <button
+        onClick={() => setShowLinkModal(true)}
+        className="w-full md:w-auto px-4 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition"
+      >
+        Send to Client
       </button>
     </div>
   )
@@ -675,6 +693,26 @@ export default function ClientDetailPage() {
             onSuccess={() => handleDataAdded('intake')}
             onClose={() => setShowIntakeModal(false)}
           />
+        </Modal>
+
+        <Modal
+          isOpen={showGhlModal}
+          onClose={() => setShowGhlModal(false)}
+          title="GoHighLevel Setup"
+        >
+          <GhlSetupForm
+            client={client}
+            onSuccess={() => handleDataAdded('ghl')}
+            onClose={() => setShowGhlModal(false)}
+          />
+        </Modal>
+
+        <Modal
+          isOpen={showLinkModal}
+          onClose={() => setShowLinkModal(false)}
+          title="Send onboarding to client"
+        >
+          <OnboardingLinkPanel client={client} />
         </Modal>
 
         <Modal
