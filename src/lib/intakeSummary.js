@@ -98,6 +98,53 @@ export const INTAKE_SECTIONS = [
   },
 ]
 
+// Input type per field, for anything rendering INTAKE_SECTIONS as a form.
+// Anything not listed is a plain text input.
+export const INTAKE_FIELD_TYPES = {
+  date_filled: 'date',
+  contact_email: 'email',
+  average_job_value: 'number',
+  meta_ad_budget_per_day: 'number',
+  lsa_ad_budget_per_day: 'number',
+  has_before_after_photos: 'checkbox',
+  has_video_footage: 'checkbox',
+  has_logo: 'checkbox',
+  has_meta_access: 'checkbox',
+  has_website_access: 'checkbox',
+  has_google_business: 'checkbox',
+  meta_status: 'status',
+  lsa_status: 'status',
+  google_status: 'status',
+  target_cities: 'textarea',
+  services_offered: 'textarea',
+  most_profitable_service: 'textarea',
+  service_want_more: 'textarea',
+  jobs_to_avoid: 'textarea',
+  current_ads_what_works: 'textarea',
+  ideal_customer: 'textarea',
+  why_people_choose: 'textarea',
+  most_common_objection: 'textarea',
+  cta_offering: 'textarea',
+  current_offers_guarantees: 'textarea',
+  main_goal: 'textarea',
+  success_90_days: 'textarea',
+  competitors_to_beat: 'textarea',
+  bad_experience_past_marketers: 'textarea',
+  call_notes: 'textarea',
+}
+
+export const STATUS_OPTIONS = ['Not started', 'In progress', 'Active', 'Paused', 'Needs work']
+
+// The subset of the intake a client should ever see. Platform access status and
+// call notes are ours to track, not theirs to answer, and date_filled is
+// bookkeeping. Everything else is a question Ethan already asks out loud on
+// onboarding calls, so it is a question a client can answer in writing.
+export const CLIENT_INTAKE_SECTIONS = INTAKE_SECTIONS
+  .filter((s) => s.title !== 'ACCESS & PLATFORM STATUS' && s.title !== 'CALL NOTES')
+  .map((s) => ({ ...s, fields: s.fields.filter(([key]) => key !== 'date_filled') }))
+
+export const CLIENT_INTAKE_KEYS = CLIENT_INTAKE_SECTIONS.flatMap((s) => s.fields.map(([k]) => k))
+
 function displayValue(value) {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (value === null || value === undefined) return ''
