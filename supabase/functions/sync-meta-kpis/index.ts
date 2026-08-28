@@ -90,7 +90,12 @@ async function fetchAdDaily(
   const url = new URL(`https://graph.facebook.com/${META_API_VERSION}/${account}/insights`)
   url.searchParams.set(
     'fields',
-    'ad_id,ad_name,campaign_id,campaign_name,adset_id,adset_name,effective_status,spend,impressions,reach,clicks,actions,video_play_actions,video_thruplay_watched_actions,video_avg_time_watched_actions'
+    // effective_status is deliberately NOT here. It is a field on the ad
+    // object, not on ads-insights, and asking for it makes Meta reject the
+    // whole request with "(#100) effective_status is not valid for fields
+    // param" -- which cost every per-ad row for the account, not just the
+    // status. It comes from fetchAdStatuses() below instead.
+    'ad_id,ad_name,campaign_id,campaign_name,adset_id,adset_name,spend,impressions,reach,clicks,actions,video_play_actions,video_thruplay_watched_actions,video_avg_time_watched_actions'
   )
   url.searchParams.set('level', 'ad')
   url.searchParams.set('time_increment', '1')
@@ -102,6 +107,44 @@ async function fetchAdDaily(
   const body = await res.json()
   if (!res.ok) throw new Error(body?.error?.message || `Meta API returned ${res.status}`)
   return body.data || []
+}
+
+/**
+ * Live/paused status per ad, keyed by ad id.
+ *
+ * A separate call because insights and the ad object are different edges:
+ * insights reports what an ad DID over a date range, the ad object reports what
+ * it IS right now. effective_status only exists on the second.
+ *
+ * Paged, because an account with a long history can hold more ads than one page
+ * returns, and a silently truncated map would mark old ads as unknown rather
+ * than paused.
+ */
+async function fetchAdStatuses(
+  adAccountId: string,
+  token: string
+): Promise<Map<string, string>> {
+  const account = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`
+  const statuses = new Map<string, string>()
+
+  let url: string | null =
+    `https://graph.facebook.com/${META_API_VERSION}/${account}/ads` +
+    `?fields=id,effective_status&limit=500&access_token=${encodeURIComponent(token)}`
+
+  // Bounded rather than while(true): a paging bug on Meta's side should not
+  // turn into an unbounded loop inside an Edge Function.
+  for (let page = 0; page < 20 && url; page++) {
+    const res = await fetch(url)
+    const body = await res.json()
+    if (!res.ok) throw new Error(body?.error?.message || `Meta API returned ${res.status}`)
+
+    for (const ad of body.data || []) {
+      if (ad?.id && ad?.effective_status) statuses.set(String(ad.id), String(ad.effective_status))
+    }
+    url = body.paging?.next || null
+  }
+
+  return statuses
 }
 
 // Meta returns these as [{ action_type, value }] arrays even when there is only
@@ -275,6 +318,19 @@ Deno.serve(async (req) => {
         lastWeek.until
       )
 
+      // Non-fatal on purpose. Spend and leads per ad are the expensive thing to
+      // lose; a missing status only costs the live/paused split. Failing the
+      // whole client over it is what the original bug did.
+      let statuses = new Map<string, string>()
+      try {
+        statuses = await fetchAdStatuses(client.meta_ad_account_id, metaToken)
+      } catch (err) {
+        results.push({
+          client: client.name,
+          error: `ad statuses: ${String(err instanceof Error ? err.message : err)} (spend and leads still synced)`,
+        })
+      }
+
       for (const d of days) {
         const row = d as Record<string, string | unknown>
         const actions = (row.actions as { action_type: string; value: string }[]) || []
@@ -289,7 +345,14 @@ Deno.serve(async (req) => {
           adset_name: row.adset_name,
           // Drives the live/paused split in the CRM. Point-in-time, so it is
           // refreshed on every row the sync touches rather than written once.
-          effective_status: row.effective_status,
+          //
+          // null when the ad is not in the account's current ad list -- it was
+          // deleted since it spent -- or when the status call failed above. The
+          // key is always present rather than conditionally omitted: PostgREST
+          // takes the union of keys across a bulk upsert and fills the gaps with
+          // DEFAULT anyway, so a mixed batch would write null regardless. The
+          // next successful sync puts the real status back.
+          effective_status: statuses.get(String(row.ad_id)) ?? null,
           date: row.date_start,
           spend: Number(row.spend ?? 0),
           impressions: Number(row.impressions ?? 0),
