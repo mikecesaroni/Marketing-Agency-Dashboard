@@ -7,10 +7,19 @@
 //
 // Secrets: ANTHROPIC_API_KEY must be set under Project Settings > Edge Functions.
 //
-// Optional, for Meta tool use: META_MCP_URL (+ META_MCP_TOKEN if the server
-// needs one). With those set, Claude can call the Meta Ads MCP tools directly
-// rather than us reimplementing the Graph API. Without them the chat still
-// works, it just cannot touch the ad account.
+// Meta tool use: with META_ACCESS_TOKEN set, the chat can read and change a
+// client's live ad account through the meta-manage and meta-publish functions.
+// Without it the chat still works, it just cannot touch the ad account.
+//
+// This used to try Meta's hosted MCP server instead, and that never worked:
+// the server expects an interactive OAuth browser login and rejects the System
+// User token an Edge Function can send (see docs/meta-connection.md). The Graph
+// API behind those two functions is the same engine Ads Manager drives and it
+// already works, so the tools call those rather than a third party.
+//
+// client_id is NOT a tool parameter. It is fixed to the client whose chat this
+// is and injected server-side, so no amount of conversation can point a tool at
+// a different client's ad account.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
 
@@ -19,6 +28,156 @@ const MODEL = 'claude-opus-5'
 // Long enough for 5-6 creative sets with copy and design briefs. Streaming is
 // used regardless so a slow generation cannot hit the HTTP timeout.
 const MAX_TOKENS = 16000
+
+// How many times Claude may call tools and come back within one message. Six
+// covers "look at the account, change three things, confirm" comfortably; a
+// model stuck retrying a failing write stops here instead of spending.
+const MAX_TOOL_TURNS = 6
+
+// Which Edge Function and action each tool maps to. A table rather than a
+// switch so the tool list and the routing cannot drift apart.
+const TOOL_ROUTES: Record<string, { fn: string; action: string }> = {
+  meta_overview: { fn: 'meta-manage', action: 'overview' },
+  meta_insights: { fn: 'meta-manage', action: 'insights' },
+  meta_update: { fn: 'meta-manage', action: 'update' },
+  meta_create_campaign: { fn: 'meta-manage', action: 'create_campaign' },
+  meta_create_adset: { fn: 'meta-manage', action: 'create_adset' },
+  meta_duplicate_ad: { fn: 'meta-manage', action: 'duplicate_ad' },
+  meta_search_locations: { fn: 'meta-publish', action: 'search_locations' },
+}
+
+// Note what is absent: client_id (fixed server-side) and anything that deletes.
+// Meta's delete is effectively irreversible, and pausing does everything anyone
+// actually means by "turn it off" while staying undoable.
+const TOOLS = [
+  {
+    name: 'meta_overview',
+    description:
+      'List every campaign, ad set and ad in this client\'s Meta ad account, with status and budget. Call this first when you need IDs — every other tool takes IDs from here.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'meta_insights',
+    description:
+      'Live performance from Meta (spend, impressions, clicks, actions). Fresher than the CRM, which only syncs daily. Omit object_id for the whole account.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        level: { type: 'string', enum: ['campaign', 'adset', 'ad'] },
+        object_id: { type: 'string', description: 'Restrict to one object. Omit for the account.' },
+        date_preset: {
+          type: 'string',
+          description: 'today, yesterday, last_7d, last_14d, last_30d, this_month, last_month',
+        },
+      },
+      required: ['level'],
+    },
+  },
+  {
+    name: 'meta_update',
+    description:
+      'Change something that already exists: pause or activate it, rename it, or change its budget. Budgets are in CENTS. A campaign with its own budget (CBO) rejects budgets on its ad sets, and vice versa.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        level: { type: 'string', enum: ['campaign', 'adset', 'ad'] },
+        object_id: { type: 'string' },
+        status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] },
+        name: { type: 'string' },
+        daily_budget_cents: { type: 'integer', description: 'Cents. 5000 = $50/day.' },
+        lifetime_budget_cents: { type: 'integer' },
+        bid_amount_cents: { type: 'integer' },
+        start_time: { type: 'string', description: 'ISO 8601' },
+        end_time: { type: 'string', description: 'ISO 8601' },
+      },
+      required: ['level', 'object_id'],
+    },
+  },
+  {
+    name: 'meta_create_campaign',
+    description:
+      'Create a campaign. Defaults to PAUSED — pass status ACTIVE only if the person explicitly asked for it to go live.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        objective: {
+          type: 'string',
+          description: 'OUTCOME_LEADS (default), OUTCOME_TRAFFIC, OUTCOME_SALES, OUTCOME_AWARENESS',
+        },
+        daily_budget_cents: {
+          type: 'integer',
+          description: 'Sets campaign budget optimisation. Omit to budget at the ad set instead.',
+        },
+        status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] },
+        special_ad_categories: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'HOUSING, EMPLOYMENT, CREDIT, ISSUES_ELECTIONS_POLITICS. Usually empty.',
+        },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'meta_create_adset',
+    description:
+      'Create an ad set inside a campaign. Locations must be keys from meta_search_locations, not names. Defaults to PAUSED.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        campaign_id: { type: 'string' },
+        name: { type: 'string' },
+        daily_budget_cents: { type: 'integer' },
+        locations: {
+          type: 'array',
+          description: 'From meta_search_locations. e.g. [{"type":"city","key":"2418779","radius":25}]',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['city', 'region', 'zip'] },
+              key: { type: 'string' },
+              radius: { type: 'integer', description: 'Miles, cities only, max 50.' },
+            },
+            required: ['type', 'key'],
+          },
+        },
+        optimization_goal: { type: 'string', description: 'LEAD_GENERATION (default), OFFSITE_CONVERSIONS, LANDING_PAGE_VIEWS' },
+        billing_event: { type: 'string' },
+        age_min: { type: 'integer' },
+        age_max: { type: 'integer' },
+        promoted_page_id: { type: 'string', description: 'Required for instant-form lead ad sets.' },
+        status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] },
+      },
+      required: ['campaign_id', 'name', 'daily_budget_cents', 'locations'],
+    },
+  },
+  {
+    name: 'meta_duplicate_ad',
+    description:
+      'Copy an existing ad into another ad set, reusing its creative. This is the only way to make an ad here — a genuinely new creative needs an image, which is the Ad Studio\'s job.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        ad_id: { type: 'string' },
+        adset_id: { type: 'string', description: 'Where the copy goes.' },
+        name: { type: 'string' },
+        status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] },
+      },
+      required: ['ad_id', 'adset_id'],
+    },
+  },
+  {
+    name: 'meta_search_locations',
+    description:
+      'Turn a place name into the targeting keys Meta will accept. Meta only targets keys it issued, so this is required before creating an ad set.',
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+    },
+  },
+]
 
 type ChatImage = { url: string; media_type?: string }
 
@@ -124,14 +283,32 @@ Deno.serve(async (req) => {
 
   messages.push({ role: 'user', content: userContent })
 
-  // Meta tools, only when the MCP server is configured. The connector needs
-  // BOTH halves — the server entry and a matching mcp_toolset in tools — or the
-  // request is rejected as a validation error.
-  const mcpUrl = Deno.env.get('META_MCP_URL')
-  const mcpToken = Deno.env.get('META_MCP_TOKEN')
-  const useMcp = Boolean(mcpUrl)
-
+  const metaReady = Boolean(Deno.env.get('META_ACCESS_TOKEN'))
   const client = new Anthropic({ apiKey })
+
+  // Runs one tool by calling the Edge Function that owns it. A failure comes
+  // back as a result rather than being thrown: Claude can read "budget must be
+  // at least $1.00", fix the argument and retry, which a thrown 500 would not
+  // allow it to do.
+  const runTool = async (name: string, input: Record<string, unknown>) => {
+    const route = TOOL_ROUTES[name]
+    if (!route) return { error: `Unknown tool ${name}` }
+    try {
+      const res = await fetch(`${supabaseUrl}/functions/v1/${route.fn}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          ...input,
+          action: route.action,
+          // Fixed server-side, never a tool parameter. See the note at the top.
+          client_id: body.client_id,
+        }),
+      })
+      return await res.json()
+    } catch (err) {
+      return { error: String(err instanceof Error ? err.message : err) }
+    }
+  }
 
   try {
     const request: Record<string, unknown> = {
@@ -144,32 +321,80 @@ Deno.serve(async (req) => {
       messages,
     }
 
-    if (useMcp) {
-      request.betas = ['mcp-client-2025-11-20']
-      request.mcp_servers = [
-        {
-          type: 'url',
-          url: mcpUrl,
-          name: 'meta_ads',
-          ...(mcpToken ? { authorization_token: mcpToken } : {}),
-        },
-      ]
-      request.tools = [{ type: 'mcp_toolset', mcp_server_name: 'meta_ads' }]
+    if (metaReady) request.tools = TOOLS
+
+    // The agentic loop. Claude asks for a tool, it runs, the result goes back,
+    // and Claude decides what to do next -- which is what makes "pause the
+    // losing ad set and move its budget to the winner" one instruction instead
+    // of four separate ones.
+    //
+    // Bounded, because every iteration can be a real Meta write and a model
+    // stuck retrying a failing call should give up rather than keep going.
+    const newRows: { chat_id: string; role: string; content: unknown }[] = [
+      { chat_id: chatId, role: 'user', content: userContent },
+    ]
+    let reply
+    let usedTools = false
+
+    for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+      // Streamed server-side purely so a long generation cannot hit the request
+      // timeout; the browser still gets one JSON response.
+      request.messages = messages
+      const stream = client.messages.stream(request as never)
+      reply = await stream.finalMessage()
+
+      messages.push({ role: 'assistant', content: reply.content })
+      newRows.push({ chat_id: chatId, role: 'assistant', content: reply.content })
+
+      if (reply.stop_reason !== 'tool_use') break
+
+      const calls = (
+        reply.content as { type: string; id: string; name: string; input: unknown }[]
+      ).filter((b) => b.type === 'tool_use')
+
+      // Every tool_use block from one assistant turn gets a result, and all of
+      // them go back in a SINGLE user message. Splitting them across messages
+      // quietly teaches the model to stop asking for tools in parallel.
+      const results = await Promise.all(
+        calls.map(async (call) => {
+          usedTools = true
+          const out = await runTool(call.name, (call.input || {}) as Record<string, unknown>)
+          const failed = Boolean(out && typeof out === 'object' && 'error' in out)
+          return {
+            type: 'tool_result',
+            tool_use_id: call.id,
+            // Capped: an overview of a large account is long, and the history
+            // is replayed on every later turn.
+            content: JSON.stringify(out).slice(0, 60000),
+            ...(failed ? { is_error: true } : {}),
+          }
+        })
+      )
+
+      messages.push({ role: 'user', content: results })
+      newRows.push({ chat_id: chatId, role: 'user', content: results })
     }
 
-    // Streamed server-side purely so a long generation cannot hit the request
-    // timeout; the browser still gets one JSON response.
-    const stream = useMcp
-      ? client.beta.messages.stream(request as never)
-      : client.messages.stream(request as never)
-    const reply = await stream.finalMessage()
+    // Running out of turns mid-tool-call would otherwise store an assistant
+    // message whose tool_use blocks have no answer, and the API rejects that
+    // history on the NEXT message ("tool_use ids were found without
+    // tool_result blocks") -- breaking the conversation permanently rather
+    // than just cutting this answer short. Close them out instead.
+    if (reply!.stop_reason === 'tool_use') {
+      const unanswered = (reply!.content as { type: string; id: string }[])
+        .filter((b) => b.type === 'tool_use')
+        .map((call) => ({
+          type: 'tool_result',
+          tool_use_id: call.id,
+          content: `Stopped after ${MAX_TOOL_TURNS} rounds of tool calls without finishing. Nothing further was run. Ask again to continue.`,
+          is_error: true,
+        }))
+      newRows.push({ chat_id: chatId, role: 'user', content: unanswered })
+    }
 
     // Store the full content blocks, not just text. Tool calls and results have
     // to be replayed to the API verbatim on the next turn.
-    const rows = [
-      { chat_id: chatId, role: 'user', content: userContent },
-      { chat_id: chatId, role: 'assistant', content: reply.content },
-    ]
+    const rows = newRows
 
     await fetch(`${supabaseUrl}/rest/v1/chat_messages`, {
       method: 'POST',
@@ -185,15 +410,16 @@ Deno.serve(async (req) => {
 
     return json({
       chat_id: chatId,
-      content: reply.content,
-      stop_reason: reply.stop_reason,
+      content: reply!.content,
+      stop_reason: reply!.stop_reason,
       usage: {
-        input: reply.usage?.input_tokens,
-        output: reply.usage?.output_tokens,
-        cache_read: reply.usage?.cache_read_input_tokens,
-        cache_write: reply.usage?.cache_creation_input_tokens,
+        input: reply!.usage?.input_tokens,
+        output: reply!.usage?.output_tokens,
+        cache_read: reply!.usage?.cache_read_input_tokens,
+        cache_write: reply!.usage?.cache_creation_input_tokens,
       },
-      meta_tools: useMcp,
+      meta_tools: metaReady,
+      used_tools: usedTools,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

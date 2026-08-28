@@ -76,3 +76,36 @@ create table if not exists meta_ad_accounts (
 );
 
 alter table meta_ad_accounts disable row level security;
+
+-- ---------------------------------------------------------------------------
+-- WHAT IS ACTUALLY SCHEDULED (added after finding cron.job empty)
+--
+-- Step 4 above was written as "run this only after deploying the Edge
+-- Function", and then never run -- so for as long as this file has existed the
+-- daily sync only happened when somebody pressed "Sync Now". The job below is
+-- the one now live on the project.
+--
+-- It authenticates with the ANON key rather than the service role. The
+-- function's gateway check is all this has to pass, it already uses the service
+-- role internally for its own writes, and the anon key is public regardless --
+-- it is the same credential the browser's Sync Now button sends. That also
+-- means this block is safe to keep in the repo, which the service-role version
+-- never was. That is probably why the original was left un-run.
+-- ---------------------------------------------------------------------------
+-- select cron.unschedule('meta-daily-sync')
+--   where exists (select 1 from cron.job where jobname = 'meta-daily-sync');
+--
+-- select cron.schedule(
+--   'meta-daily-sync',
+--   '0 8 * * *',                     -- 08:00 UTC / 4am Eastern
+--   $$
+--   select net.http_post(
+--     url := 'https://<PROJECT_REF>.supabase.co/functions/v1/sync-meta-kpis',
+--     headers := '{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
+--     body := '{}'::jsonb,
+--     timeout_milliseconds := 120000
+--   );
+--   $$
+-- );
+--
+-- Check it:  select jobid, jobname, schedule, active from cron.job;
