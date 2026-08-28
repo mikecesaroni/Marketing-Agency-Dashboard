@@ -8,6 +8,7 @@ import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
 import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import LiveToggle from '../components/LiveToggle'
 import AdPerformanceSection from '../components/AdPerformanceSection'
+import AdDoctorPanel from '../components/AdDoctorPanel'
 import ClientBriefPanel from '../components/ClientBriefPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
@@ -610,6 +611,12 @@ export default function ClientDetailPage() {
         {/* AD PERFORMANCE */}
         <div id="ad-performance" className="mt-6 md:mt-8 scroll-mt-4">
           <AdPerformanceSection clientId={clientId} />
+        </div>
+
+        {/* AD DOCTOR — the playbook's kill/scale rules run on the sync data */}
+        <div className="mt-6 md:mt-8 bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-bold text-slate-900 mb-3">Ad Doctor</h2>
+          <AdDoctorPanel client={client} />
         </div>
 
         {/* DELIVERABLES */}

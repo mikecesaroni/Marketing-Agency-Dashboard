@@ -187,6 +187,17 @@ export async function createLeadForm({
 }
 
 /**
+ * Pauses one live ad in the client's account.
+ *
+ * The Ad Doctor's kill verdicts call this when clicked. It is the only write
+ * to an existing Meta object in the whole CRM: spend-reducing, reversible in
+ * Ads Manager, and always behind a human click - never a schedule.
+ */
+export async function pauseAd(clientId, adId) {
+  return callFunction({ action: 'pause_ad', client_id: clientId, ad_id: adId })
+}
+
+/**
  * Creates campaign -> ad set -> creative -> ad, all PAUSED.
  *
  * Nothing this creates can spend money. The last step is deliberately not

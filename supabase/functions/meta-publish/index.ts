@@ -13,9 +13,11 @@
 //     tooling, and rapid unattended ad creation is one of the patterns that
 //     gets accounts flagged.
 //   * One call creates one ad. There is no loop and no batch.
-//   * Nothing existing is ever modified or deleted. The only write to an
-//     object that already exists is attaching a new ad set to a campaign the
-//     caller explicitly picked.
+//   * The only writes to existing objects are attaching a new ad set to a
+//     campaign the caller explicitly picked, and PAUSING an ad the Ad Doctor
+//     flagged. Pausing is the one modification allowed because it only ever
+//     reduces spend and is fully reversible in Ads Manager - and it still
+//     happens behind a human click, never on a schedule.
 //
 // Secrets: META_ACCESS_TOKEN (same System User token the KPI sync uses).
 //
@@ -27,6 +29,7 @@
 //   list_lead_forms   {client_id}             -> instant forms on the Page
 //   create_lead_form  {client_id, ...}        -> a new instant form
 //   publish           {client_id, ...}        -> campaign/adset/creative/ad
+//   pause_ad          {client_id, ad_id}      -> sets one ad to PAUSED
 
 const META_API_VERSION = 'v21.0'
 const GRAPH = `https://graph.facebook.com/${META_API_VERSION}`
@@ -597,6 +600,30 @@ Deno.serve(async (req) => {
       )
 
       return json({ ok: true, form_id: form.id, name: body.form_name || null })
+    }
+
+    // -----------------------------------------------------------------------
+    // Pause one ad. The Ad Doctor's kill verdicts land here when somebody
+    // clicks them. Spend-reducing and reversible - the safe direction.
+    // -----------------------------------------------------------------------
+    if (action === 'pause_ad') {
+      const adId = String(body.ad_id || '').trim()
+      if (!adId) return json({ error: 'ad_id is required.' }, 400)
+
+      await graphPost(adId, { status: 'PAUSED' }, token, 'pause ad')
+
+      // Reflected locally so the CRM shows it paused now rather than after
+      // tomorrow's sync. Best effort - Meta already did the real thing.
+      await fetch(
+        `${supabaseUrl}/rest/v1/ad_daily?client_id=eq.${encodeURIComponent(clientId)}&ad_id=eq.${encodeURIComponent(adId)}`,
+        {
+          method: 'PATCH',
+          headers: { ...dbHeaders, Prefer: 'return=minimal' },
+          body: JSON.stringify({ effective_status: 'PAUSED' }),
+        }
+      ).catch(() => {})
+
+      return json({ ok: true, ad_id: adId, status: 'PAUSED' })
     }
 
     if (action !== 'publish') return json({ error: `Unknown action "${action}".` }, 400)
