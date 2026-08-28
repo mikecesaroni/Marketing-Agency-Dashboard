@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import JSZip from 'jszip'
 import { supabase } from '../lib/supabaseClient'
 import Modal from './Modal'
+import DriveFolderFiles from './DriveFolderFiles'
 
-export default function ClientFilesSection({ clientId, clientName }) {
+export default function ClientFilesSection({ clientId, clientName, driveFolderId }) {
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -376,6 +377,8 @@ export default function ClientFilesSection({ clientId, clientName }) {
           ))}
         </div>
       )}
+
+      <DriveFolderFiles clientId={clientId} driveFolderId={driveFolderId} />
 
       <Modal isOpen={!!renaming} onClose={() => setRenaming(null)} title="Rename File">
         <form

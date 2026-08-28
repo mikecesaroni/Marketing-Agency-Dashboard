@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { copyText } from '../lib/intakeSummary'
+import DriveThumbImage from './DriveThumb'
 import {
-  driveObjectUrl,
   drivePath,
   driveFileId,
   isDrivePath,
@@ -27,19 +27,6 @@ const IMAGE_TYPES = /^image\/(png|jpeg|webp|gif)$/
 
 /** One Drive thumbnail. Loads its own bytes so the grid fills in progressively. */
 function DriveThumb({ client, file, selected, onPick }) {
-  const [url, setUrl] = useState('')
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    driveObjectUrl(client.id, file.id, { thumb: true })
-      .then((u) => !cancelled && setUrl(u))
-      .catch(() => !cancelled && setFailed(true))
-    return () => {
-      cancelled = true
-    }
-  }, [client.id, file.id])
-
   return (
     <button
       type="button"
@@ -49,13 +36,7 @@ function DriveThumb({ client, file, selected, onPick }) {
         selected ? 'border-blue-600 ring-2 ring-blue-200' : 'border-slate-300 hover:border-slate-400'
       }`}
     >
-      {url ? (
-        <img src={url} alt={file.name} className="w-full h-full object-cover" />
-      ) : (
-        <span className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-400 px-1 text-center">
-          {failed ? 'no preview' : '...'}
-        </span>
-      )}
+      <DriveThumbImage clientId={client.id} file={file} />
       {selected && (
         <span className="absolute top-1 right-1 bg-blue-600 text-white rounded-full w-4 h-4 text-[10px] leading-4 text-center">
           ✓

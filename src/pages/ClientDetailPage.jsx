@@ -644,7 +644,11 @@ export default function ClientDetailPage() {
 
         {/* CLIENT FILES */}
         <div className="mt-6 md:mt-8 mb-6 md:mb-8">
-          <ClientFilesSection clientId={clientId} clientName={client.name} />
+          <ClientFilesSection
+            clientId={clientId}
+            clientName={client.name}
+            driveFolderId={client.drive_folder_id}
+          />
         </div>
 
         {/* PAYMENTS */}
