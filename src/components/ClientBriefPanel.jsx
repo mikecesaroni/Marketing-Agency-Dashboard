@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { buildBrief, missingForBrief } from '../lib/clientBrief'
-import { copyText } from '../lib/intakeSummary'
 
 // The assembled working brief for one client.
 //
@@ -9,16 +8,8 @@ import { copyText } from '../lib/intakeSummary'
 // rather than rendering as empty brackets further down, because a blank that
 // looks like a real answer is worse than a blank that announces itself.
 export default function ClientBriefPanel({ client, intake, ads }) {
-  const [copied, setCopied] = useState(false)
-
   const brief = useMemo(() => buildBrief({ client, intake, ads }), [client, intake, ads])
   const missing = useMemo(() => missingForBrief(intake), [intake])
-
-  const handleCopy = async () => {
-    const ok = await copyText(brief)
-    setCopied(ok)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   const words = brief.split(/\s+/).length
 
@@ -53,13 +44,7 @@ export default function ClientBriefPanel({ client, intake, ads }) {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={handleCopy}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
-        >
-          {copied ? '✓ Copied' : 'Copy brief'}
-        </button>
+      <div>
         <span className="text-xs text-slate-500">
           ~{words.toLocaleString()} words · paste as the first message in a new Claude chat
         </span>

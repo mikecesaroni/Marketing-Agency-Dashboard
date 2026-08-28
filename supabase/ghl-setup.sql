@@ -6,10 +6,22 @@
 --   2. onboarding_links - a per-client secret URL so the client can fill it in
 --
 -- Why a token and not a login: clients are not CRM users and never will be.
--- Every table in this project is locked to `authenticated`, so a logged-out
--- client can read and write nothing. The functions at the bottom are
--- `security definer` and are the only door anon gets. They take a token, check
--- it, and touch exactly one client's two rows.
+-- The functions at the bottom are `security definer`, take a token, check it,
+-- and touch exactly one client's two rows. That is what lets a client fill in
+-- a form without an account.
+--
+-- CORRECTION to this file as first written: it assumed every table here is
+-- locked to `authenticated`. They are not. supabase/fix-rls.sql disabled RLS
+-- across the board because the app ships no login and runs entirely as `anon`,
+-- so `authenticated`-only policies matched nobody and every write failed. The
+-- policies below therefore grant `anon` too, or the staff side of this feature
+-- reads nothing: OnboardingLinkPanel queries onboarding_links and GhlSetupForm
+-- queries ghl_setup, both through the browser's anon key.
+--
+-- The token is still the client's credential, but it is not a security
+-- boundary against anyone holding the anon key (it ships in the built JS) --
+-- that person can already read these tables directly. Add a login and the only
+-- change needed here is dropping `anon` from the two policies.
 
 -- 1. THE GHL SETUP TABLE ---------------------------------------------------
 -- Field list is derived from three evidenced sources, not invented:
@@ -81,23 +93,24 @@ create table if not exists onboarding_links (
 create index if not exists onboarding_links_client_id_idx on onboarding_links(client_id);
 
 -- 3. SECURITY --------------------------------------------------------------
--- Same shape as every other table: staff (authenticated) get everything, anon
--- gets nothing directly. Anon reaches these tables only through the functions
--- below, which is what makes the token the whole security boundary.
+-- Same posture as every other table in this project: the app has no login, so
+-- the browser is `anon` and has to be granted directly. RLS stays ENABLED with
+-- explicit policies rather than switched off, so that moving to a real login
+-- later is a one-word edit instead of a rewrite.
 alter table ghl_setup enable row level security;
 alter table onboarding_links enable row level security;
 
 drop policy if exists "Authenticated users can do everything with ghl_setup" on ghl_setup;
 create policy "Authenticated users can do everything with ghl_setup"
   on ghl_setup for all
-  to authenticated
+  to anon, authenticated
   using (true)
   with check (true);
 
 drop policy if exists "Authenticated users can do everything with onboarding_links" on onboarding_links;
 create policy "Authenticated users can do everything with onboarding_links"
   on onboarding_links for all
-  to authenticated
+  to anon, authenticated
   using (true)
   with check (true);
 
@@ -250,7 +263,21 @@ grant execute on function onboarding_link_save_intake(text, jsonb, boolean) to a
 grant execute on function onboarding_link_save_ghl(text, jsonb, boolean) to anon, authenticated;
 
 -- Internal plumbing for the three above. Anon has no reason to resolve a token
--- to a raw client id, or to write to a table without a token check, so neither
--- is granted.
+-- to a raw client id, or to write to a table without a token check.
+--
+-- These MUST revoke from PUBLIC, not just from anon. Postgres grants EXECUTE on
+-- every new function to PUBLIC, and anon inherits it there -- so `revoke ...
+-- from anon` alone removes a grant anon never held directly and changes
+-- nothing. As first written this left onboarding_apply() reachable over
+-- PostgREST: it is `security definer` and takes a client_id with no token
+-- check, i.e. a way to write any client's intake without holding a link.
+--
+-- Safe for the three wrappers above: they are `security definer`, so their
+-- internal calls to these two run as the function owner, not as the caller.
+revoke execute on function onboarding_link_client(text) from public;
 revoke execute on function onboarding_link_client(text) from anon;
+revoke execute on function onboarding_link_client(text) from authenticated;
+
+revoke execute on function onboarding_apply(text, uuid, jsonb) from public;
 revoke execute on function onboarding_apply(text, uuid, jsonb) from anon;
+revoke execute on function onboarding_apply(text, uuid, jsonb) from authenticated;
