@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
+import FormSubmissionAlerts from '../components/FormSubmissionAlerts'
 import { calcMRR, fetchDashboardData, formatDate, isOverdue, money, today } from '../lib/queries'
 
 function StatCard({ label, value, sub, tone = 'slate' }) {
@@ -191,6 +192,13 @@ export default function HomePage() {
         day: 'numeric',
       })}
     >
+      {/* Above the stats: a client waiting on us is more urgent than a number
+          that has not moved since yesterday. Renders nothing when nothing is
+          unread, so it costs no space on a quiet day. */}
+      <div className="mb-6 md:mb-8 empty:mb-0">
+        <FormSubmissionAlerts />
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
         <StatCard
           label="Clients"

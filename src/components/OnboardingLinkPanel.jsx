@@ -16,6 +16,7 @@ export default function OnboardingLinkPanel({ client }) {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(null)
   const [copiedMsg, setCopiedMsg] = useState(null)
+  const [copiedGhl, setCopiedGhl] = useState(null)
   const [serviceEmail, setServiceEmail] = useState('')
 
   const load = async () => {
@@ -78,6 +79,10 @@ export default function OnboardingLinkPanel({ client }) {
   }
 
   const url = link ? `${window.location.origin}/onboarding/${link.token}` : ''
+  // Same token, same link, opened straight on the account-setup form. The two
+  // forms are wanted at different points, and the GHL half was previously only
+  // reachable by walking past the intake.
+  const ghlUrl = url ? `${url}?form=ghl` : ''
 
   /**
    * The whole message, ready to paste into an email or a text.
@@ -126,6 +131,24 @@ export default function OnboardingLinkPanel({ client }) {
     return lines.join('\n')
   }, [url, client.name, serviceEmail])
 
+  const ghlMessage = useMemo(() => {
+    if (!ghlUrl) return ''
+    return [
+      `Hi ${client.name} team,`,
+      '',
+      'To get your account and text messaging set up, we need a few details off',
+      'your business registration -- your EIN, business address and who the',
+      'authorised contact is.',
+      '',
+      ghlUrl,
+      '',
+      'It saves as you go, so you can stop and come back if you need to look',
+      'something up.',
+      '',
+      'Thanks!',
+    ].join('\n')
+  }, [ghlUrl, client.name])
+
   const handleCopy = async () => {
     const ok = await copyText(url)
     setCopied(ok ? 'ok' : 'fail')
@@ -136,6 +159,12 @@ export default function OnboardingLinkPanel({ client }) {
     const ok = await copyText(message)
     setCopiedMsg(ok ? 'ok' : 'fail')
     setTimeout(() => setCopiedMsg(null), 2000)
+  }
+
+  const handleCopyGhl = async () => {
+    const ok = await copyText(ghlMessage)
+    setCopiedGhl(ok ? 'ok' : 'fail')
+    setTimeout(() => setCopiedGhl(null), 2000)
   }
 
   if (loading) return <p className="text-sm text-slate-500">Loading onboarding link...</p>
@@ -210,6 +239,37 @@ export default function OnboardingLinkPanel({ client }) {
                 add the folder request to the message by hand.
               </p>
             )}
+          </div>
+
+          <div className="pt-3 border-t">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-medium text-slate-600">Account setup form only</p>
+                <p className="text-[11px] text-slate-500">
+                  Same link, opens straight on the GHL details. Send this on its own when the
+                  intake is already done.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyGhl}
+                className={`px-2 py-1 rounded text-xs font-medium transition flex-shrink-0 ${
+                  copiedGhl === 'ok'
+                    ? 'bg-green-600 text-white'
+                    : copiedGhl === 'fail'
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {copiedGhl === 'ok' ? '\u2713 Copied' : 'Copy GHL message'}
+              </button>
+            </div>
+            <input
+              readOnly
+              value={ghlUrl}
+              onFocus={(e) => e.target.select()}
+              className="w-full mt-2 px-2 py-1 border rounded text-[11px] bg-slate-50 font-mono"
+            />
           </div>
 
           <div className="flex flex-wrap gap-3 text-xs text-slate-600">

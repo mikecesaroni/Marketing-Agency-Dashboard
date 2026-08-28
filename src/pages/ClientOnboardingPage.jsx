@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import GhlSetupFields from '../components/GhlSetupFields'
 import DriveFolderStep from '../components/DriveFolderStep'
@@ -109,7 +109,14 @@ function IntakeFields({ data, onChange }) {
 export default function ClientOnboardingPage() {
   const { token } = useParams()
 
-  const [step, setStep] = useState(1)
+  // ?form=ghl sends the account-setup half on its own. The two forms are asked
+  // for at different points -- the intake up front, GHL once they are actually
+  // being set up -- and bundling them meant the second could only be reached by
+  // walking past the first.
+  const [params] = useSearchParams()
+  const ghlOnly = params.get('form') === 'ghl'
+
+  const [step, setStep] = useState(ghlOnly ? 2 : 1)
   const [clientName, setClientName] = useState('')
   const [intake, setIntake] = useState(emptyIntake)
   const [ghl, setGhl] = useState(emptyGhlSetup)
@@ -148,7 +155,7 @@ export default function ClientOnboardingPage() {
       }
       if (data.ghl) setGhl((prev) => mergeGhlSetup(prev, data.ghl))
       setDriveConnected(Boolean(data.drive_connected))
-      if (data.intake_submitted_at) setStep(2)
+      if (ghlOnly || data.intake_submitted_at) setStep(2)
       setLoading(false)
     }
 
@@ -156,7 +163,7 @@ export default function ClientOnboardingPage() {
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [token, ghlOnly])
 
   const changeIntake = (e) => {
     const { name, type, value, checked } = e.target
@@ -245,8 +252,8 @@ export default function ClientOnboardingPage() {
       <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-sm p-6 space-y-6">
         <header className="space-y-1">
           <p className="text-xs uppercase tracking-wide text-slate-400">
-            Step {step} of 2
-            {step === 1 ? ' - About your business' : ' - Account setup details'}
+            {ghlOnly ? 'Account setup details' : `Step ${step} of 2`}
+            {ghlOnly ? '' : step === 1 ? ' - About your business' : ' - Account setup details'}
           </p>
           <h1 className="text-2xl font-bold text-slate-900">
             {clientName ? `${clientName} onboarding` : 'Onboarding'}
@@ -297,7 +304,7 @@ export default function ClientOnboardingPage() {
             {saving ? 'Saving...' : 'Save for later'}
           </button>
 
-          {step === 2 && (
+          {step === 2 && !ghlOnly && (
             <button
               type="button"
               onClick={() => setStep(1)}
