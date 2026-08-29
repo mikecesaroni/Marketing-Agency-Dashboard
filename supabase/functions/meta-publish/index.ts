@@ -377,6 +377,23 @@ function buildQuestions(questions: any[]): Record<string, string>[] {
 }
 
 /**
+ * The Instagram account this ad account can advertise as, if there is one.
+ *
+ * Only the per-placement creative needs it, and a client who has never linked
+ * an Instagram account is a normal state rather than an error -- that publish
+ * falls back to the single default image. So this never throws: an empty
+ * string means "no identity", and the caller decides what that costs.
+ */
+async function instagramId(account: string, token: string): Promise<string> {
+  try {
+    const found = await graphGet(`${account}/instagram_accounts`, { fields: 'id' }, token)
+    return String((found?.data || [])[0]?.id || '')
+  } catch {
+    return ''
+  }
+}
+
+/**
  * Pulls a radius into the band Meta accepts.
  *
  * Not a defensive cap. Meta rejects the whole ad set -- "The geographical
@@ -480,6 +497,9 @@ type CreativeInput = {
   ctaType: string
   spec: ObjectiveSpec
   leadFormId?: string
+  // Which Instagram account represents the business on Instagram placements.
+  // Only the per-placement shape needs it; see creativeParams.
+  instagramUserId?: string
   // size_key -> image hash, in the ad account.
   hashes: Record<string, string>
 }
@@ -592,12 +612,32 @@ function creativeParams(input: CreativeInput): Record<string, unknown> {
 
   return {
     name: input.name,
-    // In this shape object_story_spec carries the Page and nothing else: the
-    // link, copy and image all move into the feed spec, and Meta rejects the
-    // creative if they are declared in both places.
-    object_story_spec: { page_id: input.pageId },
+    // In this shape object_story_spec carries the Page and the Instagram
+    // identity and nothing else: the link, copy and image all move into the
+    // feed spec, and Meta rejects the creative if they are declared in both
+    // places.
+    //
+    // The Instagram identity is not optional here the way it is on a plain
+    // single-image ad. Some of the placements these rules name are on
+    // Instagram, and Meta will not infer who the business is there -- without
+    // it the AD fails with "Select an Instagram account or a Facebook Page to
+    // represent your business on Instagram", after the creative already
+    // exists. instagram_user_id is the field; instagram_actor_id is the older
+    // spelling and is refused outright now.
+    object_story_spec: {
+      page_id: input.pageId,
+      ...(input.instagramUserId ? { instagram_user_id: input.instagramUserId } : {}),
+    },
     asset_feed_spec: {
       ad_formats: ['SINGLE_IMAGE'],
+      // Says what these rules ARE. Without it Meta reads any asset_feed_spec
+      // as a Dynamic Creative experiment and rejects the ad on objectives
+      // Dynamic Creative does not cover -- instant-form leads among them:
+      // "The campaign objective is not currently supported by Dynamic
+      // Creative" (subcode 1885392). This is not that; it is one ad with the
+      // right crop per placement. Verified against the live API: identical
+      // payloads pass with PLACEMENT and fail without it.
+      optimization_type: 'PLACEMENT',
       images,
       bodies: [{ text: primaryText, adlabels: [{ name: 'body' }] }],
       titles: headline ? [{ text: headline, adlabels: [{ name: 'title' }] }] : undefined,
@@ -634,6 +674,7 @@ type BuildAdInput = {
   leadFormId?: string
   ctaType: string
   adsetId: string
+  instagramUserId?: string
   // size_key -> public bucket URL. One entry publishes a plain creative;
   // several publish one ad that serves the right crop per placement.
   images: Record<string, string>
@@ -683,6 +724,7 @@ async function buildAd(input: BuildAdInput) {
     ctaType: input.ctaType,
     spec: input.spec,
     leadFormId: input.leadFormId,
+    instagramUserId: input.instagramUserId,
     hashes,
   })
 
@@ -752,6 +794,7 @@ async function buildAd(input: BuildAdInput) {
       ctaType: input.ctaType,
       spec: input.spec,
       leadFormId: input.leadFormId,
+      instagramUserId: input.instagramUserId,
       hashes: { [only]: hashes[only] },
     })
 
@@ -1363,6 +1406,12 @@ Deno.serve(async (req) => {
     // verdict without creating a campaign, an ad set, a creative or an ad.
     // Placement asset customization is the reason this exists: the rules have
     // to be right, and the only authority on that is Meta.
+    // Resolved once for the whole call rather than per ad. Only asked for when
+    // some ad actually carries more than one size, since that is the only
+    // shape that needs it.
+    const wantsPlacements = ads.some((a) => Object.keys(a.images).length > 1)
+    const igUserId = wantsPlacements ? await instagramId(account, token) : ''
+
     if (body.dry_run) {
       const checks = []
       for (const [i, a] of ads.entries()) {
@@ -1381,6 +1430,7 @@ Deno.serve(async (req) => {
             headline: a.headline,
             description: a.description,
             adName: a.ad_name,
+            instagramUserId: igUserId,
             dryRun: true,
           })
           checks.push({ ok: true, ad: i + 1, sizes: built.sizes, sent: built.validated })
@@ -1551,6 +1601,7 @@ Deno.serve(async (req) => {
           headline: a.headline,
           description: a.description,
           adName: a.ad_name,
+          instagramUserId: igUserId,
           into: progress,
         })
         results.push({
