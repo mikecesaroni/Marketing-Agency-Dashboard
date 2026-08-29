@@ -7,6 +7,7 @@ import {
   MAX_BATCH_ADS,
   OBJECTIVES,
   SPECIAL_AD_CATEGORIES,
+  ageFromIntake,
   budgetFromIntake,
   websiteFromIntake,
   dollarsToCents,
@@ -451,8 +452,10 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
 
   const [adsetName, setAdsetName] = useState('')
   const [dailyBudget, setDailyBudget] = useState(() => budgetFromIntake(intake, client) || '20')
-  const [ageMin, setAgeMin] = useState(25)
-  const [ageMax, setAgeMax] = useState(65)
+  // From the intake where it was asked, 25-65 where it was not. Every ad set
+  // this CRM built used to go out at 25-65 regardless of what the client sells.
+  const [ageMin, setAgeMin] = useState(() => ageFromIntake(intake).min)
+  const [ageMax, setAgeMax] = useState(() => ageFromIntake(intake).max)
   const [locations, setLocations] = useState([])
   // Candidate locations read off the intake. Offered, never applied — see
   // locationsFromIntake for why picking the top match silently is dangerous.

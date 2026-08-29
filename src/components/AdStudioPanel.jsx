@@ -13,6 +13,7 @@ import { resolveImageSrc } from '../lib/driveAssets'
 import {
   DEFAULT_ACCENT,
   DEFAULT_BADGE,
+  brandColours,
   SAFE_MODES,
   SIZES,
   canvasToBlob,
@@ -388,8 +389,28 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [driveFolderId, setDriveFolderId] = useState(client.drive_folder_id || '')
   const [backgroundPath, setBackgroundPath] = useState('')
   const [logoPath, setLogoPath] = useState('')
+  // The client's colours where the intake captured them, ours where it did
+  // not. Stated colours are treated as a decision, which is why the logo
+  // sampling below leaves them alone.
+  //
+  // Memoised on the two values rather than on the intake object, which is a
+  // fresh object on every render of the page above and would restart the
+  // effect below forever.
+  const stated = useMemo(
+    () => brandColours(intake),
+    [intake?.brand_color_primary, intake?.brand_color_secondary]
+  )
   const [accent, setAccent] = useState(DEFAULT_ACCENT)
   const [badgeColor, setBadgeColor] = useState(DEFAULT_BADGE)
+
+  // The intake is fetched by the page above, so on first render it is usually
+  // still null -- initialising the state from it would read the defaults and
+  // never look again. Applied when it arrives instead, and only over a colour
+  // nobody has touched, so reopening the Studio does not overwrite a choice.
+  useEffect(() => {
+    if (stated.accent) setAccent((c) => (c === DEFAULT_ACCENT ? stated.accent : c))
+    if (stated.badge) setBadgeColor((c) => (c === DEFAULT_BADGE ? stated.badge : c))
+  }, [stated])
 
   const [badge, setBadge] = useState('')
   const [hook, setHook] = useState('')
@@ -562,9 +583,13 @@ export default function AdStudioPanel({ client, intake, seed }) {
         if (!palette) return
         setSwatches(palette.swatches || [])
         // Only claim the colours if they are still the defaults or came from a
-        // previous logo. A colour the user chose is theirs to keep.
+        // previous logo. A colour the user chose is theirs to keep -- and so is
+        // one the client gave us on the intake, which is a stated brand colour
+        // rather than a guess sampled off an image.
         const untouched =
-          fromLogo || (accent === DEFAULT_ACCENT && badgeColor === DEFAULT_BADGE)
+          !stated.accent &&
+          !stated.badge &&
+          (fromLogo || (accent === DEFAULT_ACCENT && badgeColor === DEFAULT_BADGE))
         if (untouched) {
           setAccent(palette.accent)
           setBadgeColor(palette.badge)

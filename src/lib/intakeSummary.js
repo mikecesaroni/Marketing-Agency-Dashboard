@@ -15,6 +15,7 @@ export const INTAKE_SECTIONS = [
       ['service_area', 'Service Area'],
       ['years_in_business', 'Years in Business'],
       ['target_cities', 'Cities to Target in Ads'],
+      ['service_radius_miles', 'How far out do you travel? (miles)'],
     ],
   },
   {
@@ -30,6 +31,7 @@ export const INTAKE_SECTIONS = [
     title: 'MONEY & BUDGETS',
     fields: [
       ['average_job_value', 'Average Job Value'],
+      ['typical_price_range', 'Typical Price Range For That Job'],
       ['busy_season', 'Busy / Slow Season'],
       ['meta_ad_budget_per_day', 'Meta Ad Budget ($/day)'],
       ['lsa_ad_budget_per_day', 'LSA Ad Budget ($/day)'],
@@ -41,6 +43,8 @@ export const INTAKE_SECTIONS = [
     title: 'CUSTOMER',
     fields: [
       ['ideal_customer', 'Ideal Customer'],
+      ['customer_age_min', 'Typical Customer Age - From'],
+      ['customer_age_max', 'Typical Customer Age - To'],
       ['why_people_choose', 'What Makes Them Better Than Competitors?'],
       ['most_common_objection', 'Most Common Objection'],
     ],
@@ -49,7 +53,13 @@ export const INTAKE_SECTIONS = [
     title: 'OFFER & CTA',
     fields: [
       ['cta_offering', 'What Are We Offering to Get Leads?'],
-      ['current_offers_guarantees', 'Current Offers / Guarantees'],
+      ['offer_headline', 'The Offer In A Few Words (goes big on the ad)'],
+      ['offer_fine_print', 'Any Conditions On It (small print)'],
+      ['guarantee', 'Guarantee In One Line'],
+      ['financing_available', 'Financing available'],
+      ['current_offers_guarantees', 'Other Offers / Guarantees'],
+      ['booking_url', 'Booking or Quote Page URL'],
+      ['phone_for_ads', 'Phone Number To Show On Ads'],
     ],
   },
   {
@@ -60,7 +70,10 @@ export const INTAKE_SECTIONS = [
       ['has_before_after_photos', 'Before/after photos'],
       ['has_video_footage', 'Video footage'],
       ['has_logo', 'Logo file'],
+      ['brand_color_primary', 'Brand Colour (hex or describe it)'],
+      ['brand_color_secondary', 'Second Brand Colour'],
       ['licensed_insured_certified', 'Licensed / Insured / Certified?'],
+      ['license_number', 'Licence Number (if it must appear on ads)'],
     ],
   },
   {
@@ -70,6 +83,7 @@ export const INTAKE_SECTIONS = [
       ['who_answers_leads', 'Who Answers Leads?'],
       ['response_time_to_lead', 'Response Time to New Lead'],
       ['crm_system', 'CRM or Booking System'],
+      ['lead_form_questions', 'What Do You Need To Know From A Lead?'],
     ],
   },
   {
@@ -89,6 +103,7 @@ export const INTAKE_SECTIONS = [
       ['main_goal', 'Main Goal'],
       ['success_90_days', 'Success in 90 Days Looks Like...'],
       ['competitors_to_beat', 'Competitors to Beat'],
+      ['words_to_avoid', 'Anything We Must Not Say'],
       ['bad_experience_past_marketers', 'Bad Experience with Past Marketers?'],
     ],
   },
@@ -106,6 +121,10 @@ export const INTAKE_FIELD_TYPES = {
   average_job_value: 'number',
   meta_ad_budget_per_day: 'number',
   lsa_ad_budget_per_day: 'number',
+  service_radius_miles: 'number',
+  customer_age_min: 'number',
+  customer_age_max: 'number',
+  financing_available: 'checkbox',
   has_before_after_photos: 'checkbox',
   has_video_footage: 'checkbox',
   has_logo: 'checkbox',
@@ -131,17 +150,27 @@ export const INTAKE_FIELD_TYPES = {
   competitors_to_beat: 'textarea',
   bad_experience_past_marketers: 'textarea',
   call_notes: 'textarea',
+  lead_form_questions: 'textarea',
+  words_to_avoid: 'textarea',
+  typical_price_range: 'textarea',
 }
 
 export const STATUS_OPTIONS = ['Not started', 'In progress', 'Active', 'Paused', 'Needs work']
 
+// Ours to track rather than theirs to answer.
+//
+// date_filled is bookkeeping. The past-marketers question is relationship
+// intelligence from a sales call: nothing about the answer makes a better ad,
+// and putting it in writing in front of a client invites a grievance into a
+// document whose whole job is to brief creative.
+const AGENCY_ONLY = new Set(['date_filled', 'bad_experience_past_marketers'])
+
 // The subset of the intake a client should ever see. Platform access status and
-// call notes are ours to track, not theirs to answer, and date_filled is
-// bookkeeping. Everything else is a question Ethan already asks out loud on
-// onboarding calls, so it is a question a client can answer in writing.
+// call notes are ours too. Everything else is a question Ethan already asks out
+// loud on onboarding calls, so it is a question a client can answer in writing.
 export const CLIENT_INTAKE_SECTIONS = INTAKE_SECTIONS
   .filter((s) => s.title !== 'ACCESS & PLATFORM STATUS' && s.title !== 'CALL NOTES')
-  .map((s) => ({ ...s, fields: s.fields.filter(([key]) => key !== 'date_filled') }))
+  .map((s) => ({ ...s, fields: s.fields.filter(([key]) => !AGENCY_ONLY.has(key)) }))
 
 export const CLIENT_INTAKE_KEYS = CLIENT_INTAKE_SECTIONS.flatMap((s) => s.fields.map(([k]) => k))
 

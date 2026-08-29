@@ -46,6 +46,34 @@ import { readableTextOn } from './logoColours'
 export const DEFAULT_ACCENT = '#C81E1E' // offer block
 export const DEFAULT_BADGE = '#1E3A8A' // location badge
 
+/**
+ * The client's own colours, where the intake captured them.
+ *
+ * Every static this Studio has produced has used the red and navy above,
+ * whoever it was for, which makes a set of ads look like our template rather
+ * than like the business paying for them.
+ *
+ * Only a real hex is taken. The intake asks for "hex or describe it" because a
+ * client who does not know theirs should still answer -- but "our blue" cannot
+ * be turned into a colour without guessing, and guessing a brand colour is
+ * worse than the default. Prose still reaches the chat through the brief,
+ * where a human is reading it.
+ */
+export function brandColours(intake) {
+  const hex = (v) => {
+    const raw = String(v || '').trim()
+    if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toUpperCase()
+    // "C81E1E" without the hash is what people paste out of a brand guide.
+    if (/^[0-9a-f]{6}$/i.test(raw)) return `#${raw.toUpperCase()}`
+    return ''
+  }
+
+  return {
+    accent: hex(intake?.brand_color_primary),
+    badge: hex(intake?.brand_color_secondary),
+  }
+}
+
 // Every artboard is 1080 wide, so type is sized in absolute pixels and is the
 // same physical size in all three.
 const FONT = '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'

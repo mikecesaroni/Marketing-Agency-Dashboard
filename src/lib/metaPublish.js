@@ -137,7 +137,10 @@ export function budgetFromIntake(intake, client) {
  * the fallback for a client nobody has filled that in for yet.
  */
 export function websiteFromIntake(intake, client) {
-  for (const raw of [client?.website_url, intake?.website]) {
+  // The booking page comes last but it does count: a client with no marketing
+  // site but a live scheduling page still has somewhere real to point, and a
+  // lead ad is rejected without one.
+  for (const raw of [client?.website_url, intake?.website, intake?.booking_url]) {
     const url = tidyUrl(raw)
     if (url) return url
   }
@@ -231,7 +234,16 @@ export async function locationsFromIntake(intake) {
 
   // A radius stated once usually governs the whole line, so it carries to any
   // term that did not state its own.
-  const stated = radiusFromText(raw)
+  //
+  // The intake now asks for the number outright, and a number somebody typed
+  // into a box marked "miles" beats one pulled out of a sentence with a regular
+  // expression. The prose reading stays as the fallback for every intake filled
+  // in before the field existed.
+  const asked = clampRadius(intake?.service_radius_miles)
+  const stated = Number.isFinite(Number(intake?.service_radius_miles)) &&
+    Number(intake.service_radius_miles) > 0
+    ? asked
+    : radiusFromText(raw)
 
   const entries = []
   for (const term of terms) {
@@ -482,4 +494,33 @@ export function summarisePlan({
   return `${count}${sizes}${sharing} in ${campaign}, $${dailyBudget}/day, targeting ${where}. ${
     obj?.label || objective
   }. Created paused.${form}`
+}
+
+/**
+ * The age band to target, from the intake.
+ *
+ * Every ad set this CRM has built has gone out at 25-65, for every client,
+ * because nobody was ever asked. A roof replacement and a drain unclog are not
+ * the same audience, and the wrong band spends the first week of learning on
+ * people who were never going to book.
+ *
+ * Meta's own bounds are 18 and 65, where 65 means "65 and over" rather than a
+ * ceiling, so a client who says "60 plus" gets 65 and the right thing happens.
+ */
+export const META_AGE_MIN = 18
+export const META_AGE_MAX = 65
+
+export function ageFromIntake(intake) {
+  const clamp = (v, fallback) => {
+    const n = Number(v)
+    if (!Number.isFinite(n) || n <= 0) return fallback
+    return Math.min(Math.max(Math.round(n), META_AGE_MIN), META_AGE_MAX)
+  }
+
+  let min = clamp(intake?.customer_age_min, 25)
+  let max = clamp(intake?.customer_age_max, 65)
+  // Somebody typing the boxes the wrong way round should not produce an ad set
+  // that targets nobody.
+  if (min > max) [min, max] = [max, min]
+  return { min: String(min), max: String(max) }
 }
