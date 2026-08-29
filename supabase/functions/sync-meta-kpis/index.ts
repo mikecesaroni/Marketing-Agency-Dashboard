@@ -110,6 +110,43 @@ async function fetchAdDaily(
 }
 
 /**
+ * The same per-ad window, split by where the ad actually ran.
+ *
+ * A third call rather than a breakdown added to fetchAdDaily, because asking
+ * for breakdowns changes the shape of every row it returns: one ad-day becomes
+ * one row per surface it was delivered on, and the totals in ad_daily would
+ * silently turn into per-surface numbers. Two calls, two tables, neither lying.
+ *
+ * Both breakdowns together, since platform totals are just the sum of their
+ * positions and one call is cheaper than two. Verified against the live API:
+ * facebook, instagram, audience_network, threads and messenger all come back
+ * with real spend, and positions distinguish feed from reels from stories.
+ */
+async function fetchAdPlatformDaily(
+  adAccountId: string,
+  token: string,
+  since: string,
+  until: string
+): Promise<Record<string, unknown>[]> {
+  const account = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`
+  const url = new URL(`https://graph.facebook.com/${META_API_VERSION}/${account}/insights`)
+  url.searchParams.set('fields', 'ad_id,spend,impressions,clicks,actions')
+  url.searchParams.set('level', 'ad')
+  url.searchParams.set('breakdowns', 'publisher_platform,platform_position')
+  url.searchParams.set('time_increment', '1')
+  url.searchParams.set('time_range', JSON.stringify({ since, until }))
+  // Higher than the plain per-ad call: every ad-day multiplies by the surfaces
+  // it ran on, so the same window returns several times the rows.
+  url.searchParams.set('limit', '1000')
+  url.searchParams.set('access_token', token)
+
+  const res = await fetch(url)
+  const body = await res.json()
+  if (!res.ok) throw new Error(body?.error?.message || `Meta API returned ${res.status}`)
+  return body.data || []
+}
+
+/**
  * Live/paused status per ad, keyed by ad id.
  *
  * A separate call because insights and the ad object are different edges:
@@ -383,6 +420,59 @@ Deno.serve(async (req) => {
     })
   }
 
+  // Where each ad ran. Its own loop rather than folded into the one above,
+  // because this call fails independently -- a breakdown Meta will not serve
+  // for one account should cost that account its platform split and nothing
+  // else, least of all its spend and leads.
+  const platformRows: Record<string, unknown>[] = []
+
+  for (const client of clients) {
+    try {
+      const rows = await fetchAdPlatformDaily(
+        client.meta_ad_account_id,
+        metaToken,
+        firstWeek.since,
+        lastWeek.until
+      )
+
+      for (const r of rows) {
+        const row = r as Record<string, string | unknown>
+        const actions = (row.actions as { action_type: string; value: string }[]) || []
+
+        platformRows.push({
+          client_id: client.id,
+          ad_id: row.ad_id,
+          date: row.date_start,
+          // Meta omits the key rather than sending a null when it cannot
+          // attribute a surface, and a missing platform would break the
+          // unique key this upserts on.
+          platform: String(row.publisher_platform || 'unknown'),
+          position: String(row.platform_position || 'unknown'),
+          spend: Number(row.spend ?? 0),
+          impressions: Number(row.impressions ?? 0),
+          clicks: Number(row.clicks ?? 0),
+          leads: leadsFrom({ actions }),
+        })
+      }
+    } catch (err) {
+      results.push({
+        client: client.name,
+        error: `platform split: ${String(err instanceof Error ? err.message : err)} (per-ad totals still synced)`,
+      })
+    }
+  }
+
+  if (platformRows.length > 0) {
+    await fetch(
+      `${supabaseUrl}/rest/v1/ad_platform_daily?on_conflict=client_id,ad_id,date,platform,position`,
+      {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(platformRows),
+      }
+    )
+  }
+
   // A client with recorded spend is demonstrably running ads, so flip the flag
   // rather than making someone tick it by hand. Never flipped back off — a
   // quiet week is not the same as a campaign being switched off.
@@ -402,6 +492,7 @@ Deno.serve(async (req) => {
     weeks,
     synced: rows.length,
     ad_rows: adRows.length,
+    platform_rows: platformRows.length,
     marked_live: toActivate.map((c) => c.name),
     results,
   })
