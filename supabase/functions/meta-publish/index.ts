@@ -59,6 +59,13 @@ const MIN_DAILY_BUDGET_CENTS = 100
 // even a run that is cut short leaves an accurate trail rather than a mystery.
 const MAX_BATCH_ADS = 8
 
+// "Select an Instagram account or a Facebook Page to represent your business on
+// Instagram." Raised at ad creation when a per-placement creative is used and
+// the client has no Instagram identity for the placements the ad set delivers
+// to. A plain single-image ad never hits it, which is why it went unnoticed
+// until all three sizes went into one ad.
+const IG_IDENTITY_SUBCODE = 1772103
+
 type Objective = 'TRAFFIC' | 'LEADS_WEBSITE' | 'LEADS_FORM'
 
 type ObjectiveSpec = {
@@ -232,7 +239,13 @@ async function graphGet(path: string, params: Record<string, string>, token: str
 // Every create goes through here. Meta's write endpoints take form-encoded
 // bodies; nested structures (targeting, object_story_spec) go in as JSON
 // strings, which is why objects are stringified rather than flattened.
-async function graphPost(path: string, params: Record<string, unknown>, token: string, step: string) {
+async function graphPost(
+  path: string,
+  params: Record<string, unknown>,
+  token: string,
+  step: string,
+  method = 'POST'
+) {
   const form = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
     if (v === undefined || v === null || v === '') continue
@@ -241,7 +254,7 @@ async function graphPost(path: string, params: Record<string, unknown>, token: s
   form.set('access_token', token)
 
   const res = await fetch(`${GRAPH}/${path}`, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: form,
   })
@@ -433,11 +446,25 @@ type CreativeInput = {
   hashes: Record<string, string>
 }
 
-// Opting out of Meta's automatic image and text tweaks. The whole point of the
-// Studio is a deliberately composited frame with the copy placed inside the
-// safe area; letting Meta crop it or rewrite the headline undoes that.
+/**
+ * Opting out of Meta's automatic image and text tweaks.
+ *
+ * The whole point of the Studio is a deliberately composited frame with the
+ * copy placed inside the safe area; letting Meta crop it or rewrite the
+ * headline undoes that.
+ *
+ * This used to be one `standard_enhancements` flag. Meta deprecated it, and the
+ * deprecation is a hard rejection rather than a warning — every creative sent
+ * with it comes back "Creative should not include standard enhancements",
+ * which means publishing was failing outright until this changed. The
+ * replacement is per-feature, so each tweak we do not want is named.
+ */
 const NO_ENHANCEMENTS = {
-  creative_features_spec: { standard_enhancements: { enroll_status: 'OPT_OUT' } },
+  creative_features_spec: {
+    image_touchups: { enroll_status: 'OPT_OUT' },
+    text_generation: { enroll_status: 'OPT_OUT' },
+    image_brightness_and_contrast: { enroll_status: 'OPT_OUT' },
+  },
 }
 
 /**
@@ -509,7 +536,14 @@ function creativeParams(input: CreativeInput): Record<string, unknown> {
       link_url_label: { name: 'link' },
     })
   }
+  // The default rule, and Meta is exacting about its shape: `customization_spec`
+  // must be PRESENT and EMPTY, `is_default` must be true, and it must come last
+  // — "Default Asset Customization Rule (with lowest priority) with empty
+  // customization_spec is required". Omitting the key, filling it in, or moving
+  // the flag inside it all fail, and two of those fail with a generic "something
+  // went wrong" that names nothing. Verified against the live API.
   rules.push({
+    customization_spec: {},
     is_default: true,
     image_label: { name: `img_${defaultSize}` },
     body_label: { name: 'body' },
@@ -621,7 +655,7 @@ async function buildAd(input: BuildAdInput) {
     }
   }
 
-  const creative = await graphPost(
+  let creative = await graphPost(
     `${input.account}/adcreatives`,
     params,
     input.token,
@@ -629,27 +663,81 @@ async function buildAd(input: BuildAdInput) {
   )
   if (input.into) input.into.creative_id = creative.id
 
-  const ad = await graphPost(
-    `${input.account}/ads`,
-    {
-      name: input.adName || `${input.client.name} — ${new Date().toISOString().slice(0, 10)}`,
-      adset_id: input.adsetId,
-      creative: { creative_id: creative.id },
-      // Never anything but PAUSED, including into an ad set that is already
-      // running. The ad set keeps delivering what it was delivering; this ad
-      // sits switched off inside it until a human turns it on.
-      status: 'PAUSED',
-    },
-    input.token,
-    'create ad'
-  )
+  const adParams = (creativeId: string) => ({
+    name: input.adName || `${input.client.name} — ${new Date().toISOString().slice(0, 10)}`,
+    adset_id: input.adsetId,
+    creative: { creative_id: creativeId },
+    // Never anything but PAUSED, including into an ad set that is already
+    // running. The ad set keeps delivering what it was delivering; this ad
+    // sits switched off inside it until a human turns it on.
+    status: 'PAUSED',
+  })
+
+  let ad: Record<string, any>
+  let fellBack = false
+  try {
+    ad = await graphPost(`${input.account}/ads`, adParams(creative.id), input.token, 'create ad')
+  } catch (err) {
+    // A per-placement creative needs an Instagram identity to represent the
+    // business wherever the ad set delivers to Instagram, and Meta will not
+    // infer one the way it does for a plain single-image ad. Where the client
+    // has no Instagram account linked, this is the error — and it arrives at
+    // the AD step, after a perfectly valid creative already exists.
+    //
+    // Failing the whole publish over it would be the wrong trade: the ad the
+    // user actually asked for can still be made, just without the per-placement
+    // crops. So it falls back to the default size alone and says so, and starts
+    // working by itself the day an Instagram account is connected.
+    const igIdentity =
+      err instanceof GraphError && Number((err.detail as any)?.subcode) === IG_IDENTITY_SUBCODE
+    if (!igIdentity || Object.keys(hashes).length <= 1) throw err
+
+    const only = DEFAULT_SIZE_ORDER.find((k) => hashes[k]) || Object.keys(hashes)[0]
+    const fallback = creativeParams({
+      name: `${input.adName || input.client.name} — creative`,
+      pageId: input.client.meta_page_id,
+      linkUrl: input.linkUrl,
+      primaryText: input.primaryText,
+      headline: input.headline,
+      description: input.description,
+      ctaType: input.ctaType,
+      spec: input.spec,
+      leadFormId: input.leadFormId,
+      hashes: { [only]: hashes[only] },
+    })
+
+    const plain = await graphPost(
+      `${input.account}/adcreatives`,
+      fallback,
+      input.token,
+      'create creative'
+    )
+    ad = await graphPost(`${input.account}/ads`, adParams(plain.id), input.token, 'create ad')
+
+    // The per-placement creative was never attached to anything and never will
+    // be. Deleting it is safe in a way deleting campaigns and ad sets is not:
+    // this call made it seconds ago, no ad references it, so nothing live can
+    // come down with it. Left alone it would pile up one orphan per publish.
+    await graphPost(String(creative.id), {}, input.token, 'discard creative', 'DELETE').catch(
+      () => {}
+    )
+
+    creative = plain
+    fellBack = true
+    if (input.into) input.into.creative_id = plain.id
+  }
+
   if (input.into) input.into.ad_id = ad.id
 
   return {
     creative_id: creative.id as string,
     ad_id: ad.id as string,
     image_hashes: hashes,
-    sizes: Object.keys(hashes),
+    // What the ad ACTUALLY carries, which after a fallback is one size, not
+    // three. This is what gets recorded, so it has to be the truth.
+    sizes: fellBack ? [DEFAULT_SIZE_ORDER.find((k) => hashes[k]) as string] : Object.keys(hashes),
+    per_placement: Object.keys(hashes).length > 1 && !fellBack,
+    needs_instagram: fellBack,
     validated: undefined as Record<string, unknown> | undefined,
   }
 }
@@ -1409,6 +1497,11 @@ Deno.serve(async (req) => {
           creative_id: built.creative_id,
           ad_id: built.ad_id,
           sizes: built.sizes,
+          // Whether this ad really does serve a different crop per placement,
+          // and if not, why not. A publish that quietly dropped two of three
+          // sizes must not read as an unqualified success.
+          per_placement: built.per_placement,
+          needs_instagram: built.needs_instagram,
           recorded: await record(a, built),
         })
       } catch (err) {
@@ -1438,6 +1531,10 @@ Deno.serve(async (req) => {
       ok: succeeded.length > 0,
       status: 'PAUSED',
       recorded: succeeded.every((r) => r.recorded !== false),
+      // Set when any ad had to drop back to one image because the client has no
+      // Instagram identity. The Studio says so rather than letting someone
+      // believe their Stories crop went live.
+      needs_instagram: succeeded.some((r) => r.needs_instagram),
       ...created,
       campaign_id: campaignId,
       adset_id: adsetId,

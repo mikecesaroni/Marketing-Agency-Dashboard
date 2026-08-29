@@ -180,6 +180,21 @@ function Published({ result, onAnother }) {
         ))}
       </dl>
 
+      {(result.needs_instagram || rows.some((r) => r.needs_instagram)) && (
+        <div className="p-2 bg-white border border-amber-300 rounded">
+          <p className="text-xs font-medium text-amber-900">
+            Published with one image instead of a crop per placement
+          </p>
+          <p className="text-[11px] text-amber-800 mt-1">
+            Serving a different crop to Stories and to feed makes the ad represent the business on
+            Instagram, and Meta will not do that without an Instagram account connected to this
+            client&rsquo;s Page or ad account. The 4:5 image went out everywhere instead. Connect an
+            Instagram account in Business Settings and the next publish will use all three sizes on
+            its own — nothing here needs changing.
+          </p>
+        </div>
+      )}
+
       {result.recorded === false && (
         <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
           The ads were created, but the CRM could not record them. Run supabase/meta-publish.sql if
