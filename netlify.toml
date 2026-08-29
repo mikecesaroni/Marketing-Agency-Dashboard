@@ -2,6 +2,15 @@
   command = "npm run build"
   publish = "dist"
 
+# The privacy policy is a real static file rather than an app route, because
+# Meta's app review fetches it with a crawler that does not reliably run
+# JavaScript and the SPA catch-all below would hand it an empty shell. Order
+# matters: first match wins.
+[[redirects]]
+  from = "/privacy"
+  to = "/privacy.html"
+  status = 200
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

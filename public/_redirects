@@ -1,1 +1,6 @@
+# The privacy policy is a real static file, not an app route: Meta and other
+# reviewers fetch it with crawlers that do not run JavaScript. This must come
+# before the SPA catch-all below, which matches everything.
+/privacy   /privacy.html   200
+
 /*   /index.html   200
