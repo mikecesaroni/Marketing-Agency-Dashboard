@@ -139,6 +139,25 @@ export async function listCampaigns(clientId) {
 }
 
 /**
+ * Ad sets inside one campaign, so a new creative can go into one that is
+ * already built rather than into a new one beside it.
+ *
+ * This is what lets the chat and the Studio meet: the chat puts up a campaign
+ * and an ad set with the budget and targeting, and the Studio drops the
+ * creative straight into it. It is also how a second image gets tested against
+ * the first inside a single ad set, which is the only way the comparison means
+ * anything — two ad sets is two auctions.
+ */
+export async function listAdsets(clientId, campaignId) {
+  const data = await callFunction({
+    action: 'list_adsets',
+    client_id: clientId,
+    campaign_id: campaignId,
+  })
+  return data?.adsets || []
+}
+
+/**
  * Works out which Facebook Page and pixel this client advertises with.
  *
  * The token can already see both, so nobody should be copying IDs out of
@@ -207,6 +226,41 @@ export async function publishAd(payload) {
   return callFunction({ action: 'publish', ...payload })
 }
 
+/**
+ * Several creatives into ONE ad set, in one call.
+ *
+ * What a launch actually looks like: four statics, three sizes each. Publishing
+ * them one at a time built four ad sets, which splits the budget four ways and
+ * gives each a quarter of the data to learn from — so the test that was
+ * supposed to compare four hooks instead compares four under-fed ad sets. Here
+ * the campaign and ad set are made once and every ad lands inside.
+ *
+ * `ads` carries its own copy per creative, because four hooks that share one
+ * primary text are not four hooks.
+ *
+ * The response is per ad: one rejected creative does not lose the other three,
+ * and each is recorded the moment it exists.
+ */
+export async function publishAdBatch({ ads, ...shared }) {
+  return callFunction({ action: 'publish_batch', ads, ...shared })
+}
+
+// How many creatives one publish will take. Mirrors MAX_BATCH_ADS in the Edge
+// Function, which is the one that enforces it.
+export const MAX_BATCH_ADS = 8
+
+/**
+ * Every artboard a saved set has, keyed by size, ready to send as one ad.
+ *
+ * The Studio renders each ad at three ratios and publishing used to throw two
+ * away — one publish, one image, so covering feed and Stories meant two
+ * separate ads. Meta can hold all three in a single ad and serve the right one
+ * per placement, so this hands over the whole set.
+ */
+export function imagesFromSet(set) {
+  return Object.fromEntries((set.ordered || []).map(({ size, file }) => [size.key, file.url]))
+}
+
 // What has already been sent to Meta, so the Studio can say so rather than
 // letting the same creative be published twice by accident.
 export async function fetchPublishedAds(clientId) {
@@ -234,10 +288,30 @@ export function summarisePlan({
   campaignName,
   reuseCampaign,
   formName,
+  // How many creatives, and how many sizes each carries. One ad per creative
+  // regardless: the sizes ride inside it, one per placement.
+  adCount = 1,
+  sizeCount = 1,
+  // Set when publishing into an ad set that already exists, in which case the
+  // budget and targeting below are not ours to state — they are its.
+  reuseAdset = null,
 }) {
   const obj = OBJECTIVES.find((o) => o.value === objective)
+  const form = obj?.needsForm && formName ? ` Leads go to the "${formName}" form.` : ''
+  const count = adCount === 1 ? '1 ad' : `${adCount} ads`
+  const sizes = sizeCount > 1 ? `, each carrying ${sizeCount} sizes across placements` : ''
+
+  // Reusing an ad set: everything about budget and targeting was decided when
+  // it was built, so claiming a budget here would be inventing one.
+  if (reuseAdset) {
+    const live = reuseAdset.live ? ' That ad set is live, so switch each ad on only when you mean it.' : ''
+    return `${count}${sizes} into the existing ad set "${reuseAdset.name}", which keeps its own budget and targeting. Created paused.${form}${live}`
+  }
+
   const where = locations.length === 1 ? locations[0].label : `${locations.length} locations`
   const campaign = reuseCampaign ? 'an existing campaign' : `a new campaign, "${campaignName}"`
-  const form = obj?.needsForm && formName ? ` Leads go to the "${formName}" form.` : ''
-  return `${obj?.label || objective} ad in ${campaign}, $${dailyBudget}/day, targeting ${where}. Created paused.${form}`
+  const sharing = adCount > 1 ? ' sharing one ad set' : ''
+  return `${count}${sizes}${sharing} in ${campaign}, $${dailyBudget}/day, targeting ${where}. ${
+    obj?.label || objective
+  }. Created paused.${form}`
 }

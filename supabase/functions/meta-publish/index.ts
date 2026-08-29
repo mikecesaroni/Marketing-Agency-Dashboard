@@ -11,12 +11,21 @@
 //     status=PAUSED, so nothing can spend money until a human opens Ads
 //     Manager and switches it on. That is Meta's own guidance for automated
 //     tooling, and rapid unattended ad creation is one of the patterns that
-//     gets accounts flagged.
-//   * One call creates one ad. There is no loop and no batch.
+//     gets accounts flagged. This holds even when the new ad is dropped into
+//     an ad set that is already running: the ad set keeps delivering whatever
+//     it was delivering, and the new ad sits switched off inside it.
+//   * A call creates at most MAX_BATCH_ADS ads, all into one ad set, all from
+//     creatives a human composed and saved. It was one ad per call until
+//     launching a client meant four statics and three sizes each; what stops
+//     this being unattended ad generation is not the count but that every
+//     image already exists in the bucket, the objects are all paused, and a
+//     person pressed the button. There is no retry loop and no schedule.
 //   * The only writes to existing objects are attaching a new ad set to a
-//     campaign the caller explicitly picked, and PAUSING an ad the Ad Doctor
-//     flagged. Pausing is the one modification allowed because it only ever
-//     reduces spend and is fully reversible in Ads Manager - and it still
+//     campaign the caller explicitly picked, attaching a new ad to an ad set
+//     the caller explicitly picked, and PAUSING an ad the Ad Doctor flagged.
+//     All three are additive or spend-reducing: nothing already in the account
+//     changes shape. Pausing is the one modification allowed because it only
+//     ever reduces spend and is fully reversible in Ads Manager - and it still
 //     happens behind a human click, never on a schedule.
 //
 // Secrets: META_ACCESS_TOKEN (same System User token the KPI sync uses).
@@ -25,11 +34,16 @@
 //
 //   search_locations  {query}                 -> Meta's geo targeting keys
 //   list_campaigns    {client_id}             -> existing campaigns, to reuse
+//   list_adsets       {client_id, campaign_id}-> existing ad sets, to reuse
 //   discover_assets   {client_id}             -> the Page and pixel to use
 //   list_lead_forms   {client_id}             -> instant forms on the Page
 //   create_lead_form  {client_id, ...}        -> a new instant form
 //   publish           {client_id, ...}        -> campaign/adset/creative/ad
+//   publish_batch     {client_id, ads:[...]}  -> several ads into ONE ad set
 //   pause_ad          {client_id, ad_id}      -> sets one ad to PAUSED
+//
+// Either publish action takes dry_run:true to have Meta check the creative
+// payload and save nothing.
 
 const META_API_VERSION = 'v21.0'
 const GRAPH = `https://graph.facebook.com/${META_API_VERSION}`
@@ -37,6 +51,13 @@ const GRAPH = `https://graph.facebook.com/${META_API_VERSION}`
 // Meta will not create an ad set below this. Well under it is almost always a
 // typo — a budget entered in dollars where cents were meant.
 const MIN_DAILY_BUDGET_CENTS = 100
+
+// How many creatives one batch may publish. Each one is three image uploads, a
+// creative and an ad — roughly eight seconds — and an Edge Function does not
+// run forever. Eight is comfortably inside the limit and well past the four or
+// five a launch actually needs. Each ad is recorded the moment it exists, so
+// even a run that is cut short leaves an accurate trail rather than a mystery.
+const MAX_BATCH_ADS = 8
 
 type Objective = 'TRAFFIC' | 'LEADS_WEBSITE' | 'LEADS_FORM'
 
@@ -97,6 +118,30 @@ const OBJECTIVES: Record<Objective, ObjectiveSpec> = {
 const OBJECTIVE_ALIASES: Record<string, Objective> = {
   OUTCOME_TRAFFIC: 'TRAFFIC',
   OUTCOME_LEADS: 'LEADS_WEBSITE',
+}
+
+/**
+ * Reads an existing ad set back into one of the three objectives above.
+ *
+ * When an ad is published into an ad set that already exists, the objective is
+ * not the caller's to choose — it was fixed when the campaign was created, and
+ * the ad set's optimisation goal is what actually decides the shape of the
+ * creative. An instant-form ad set needs a creative whose button carries a
+ * lead_gen_form_id; a traffic ad set needs one that carries a link. Sending
+ * the wrong one is a rejected creative, so this reads the truth off the ad set
+ * rather than trusting what the form was left set to.
+ *
+ * LEAD_GENERATION is the goal on an instant-form ad set; ON_AD is the
+ * destination that says the form opens inside Facebook. Either one alone is
+ * enough to know a form is required.
+ */
+function adsetObjective(adset: Record<string, any>): Objective {
+  const goal = String(adset?.optimization_goal || '').toUpperCase()
+  const destination = String(adset?.destination_type || '').toUpperCase()
+
+  if (goal === 'LEAD_GENERATION' || destination === 'ON_AD') return 'LEADS_FORM'
+  if (goal === 'OFFSITE_CONVERSIONS') return 'LEADS_WEBSITE'
+  return 'TRAFFIC'
 }
 
 // Standard fields Meta prefills from the viewer's profile, plus CUSTOM for
@@ -339,6 +384,276 @@ function buildTargeting(locations: any[], ageMin?: number, ageMax?: number) {
   }
 }
 
+/**
+ * Which placements each artboard is actually shaped for.
+ *
+ * The Studio renders every ad at three aspect ratios, and until now publishing
+ * threw two of them away: one publish sent one image, so covering feed and
+ * Stories meant two separate ads, which means two sets of results to read and
+ * a budget split across them. Meta's answer is placement asset customization —
+ * one ad holding all three images, each mapped to the placements it fits.
+ *
+ * `feed` is deliberately absent: it is the default rule, so it catches every
+ * placement the two entries below do not claim. That matters because the rules
+ * have to cover everything the ad set can deliver to, and new placements keep
+ * appearing — a default rule cannot go stale, an exhaustive list can.
+ */
+const PLACEMENTS: Record<string, Record<string, string[]>> = {
+  // 9:16. Both story surfaces and both reels surfaces, which since Meta's 2026
+  // unification share one safe area.
+  story: {
+    publisher_platforms: ['facebook', 'instagram'],
+    facebook_positions: ['story', 'facebook_reels'],
+    instagram_positions: ['story', 'reels'],
+  },
+  // 1:1. The placements that crop a tall image badly or refuse it outright —
+  // right column is the strict one, it has never accepted vertical.
+  square: {
+    publisher_platforms: ['facebook', 'instagram'],
+    facebook_positions: ['right_hand_column', 'marketplace', 'search'],
+    instagram_positions: ['explore', 'explore_home'],
+  },
+}
+
+// Which image stands in as the default rule, best first. 4:5 is Meta's own
+// recommendation for feed and is the least bad thing to show anywhere else.
+const DEFAULT_SIZE_ORDER = ['feed', 'square', 'story']
+
+type CreativeInput = {
+  name: string
+  pageId: string
+  linkUrl: string
+  primaryText: string
+  headline?: string
+  description?: string
+  ctaType: string
+  spec: ObjectiveSpec
+  leadFormId?: string
+  // size_key -> image hash, in the ad account.
+  hashes: Record<string, string>
+}
+
+// Opting out of Meta's automatic image and text tweaks. The whole point of the
+// Studio is a deliberately composited frame with the copy placed inside the
+// safe area; letting Meta crop it or rewrite the headline undoes that.
+const NO_ENHANCEMENTS = {
+  creative_features_spec: { standard_enhancements: { enroll_status: 'OPT_OUT' } },
+}
+
+/**
+ * Builds the POST body for one ad creative.
+ *
+ * Two shapes come out of here, and which one depends only on how many sizes
+ * were saved:
+ *
+ *   * One image — the plain object_story_spec creative. Unchanged from before
+ *     this function existed, and the fallback whenever there is nothing to
+ *     customise between placements.
+ *   * Two or three — asset_feed_spec with one customisation rule per size, so
+ *     a single ad serves the right crop to each placement.
+ *
+ * The copy is the same in both, and in the multi-image shape it is declared
+ * once and referenced by label from every rule rather than repeated per rule.
+ */
+function creativeParams(input: CreativeInput): Record<string, unknown> {
+  const { hashes, spec, leadFormId, linkUrl, primaryText, headline, description, ctaType } = input
+  const sizeKeys = Object.keys(hashes)
+
+  // Single image: the long-proven path, and the one lead-form ads have always
+  // published through.
+  if (sizeKeys.length <= 1) {
+    return {
+      name: input.name,
+      object_story_spec: {
+        page_id: input.pageId,
+        link_data: {
+          link: linkUrl,
+          message: primaryText,
+          name: headline || undefined,
+          description: description || undefined,
+          image_hash: hashes[sizeKeys[0]],
+          // The form id on the CTA is what makes this a lead ad: tapping the
+          // button opens the form in place instead of following the link.
+          call_to_action: {
+            type: ctaType,
+            value: spec.needs_form ? { lead_gen_form_id: leadFormId } : { link: linkUrl },
+          },
+        },
+      },
+      degrees_of_freedom_spec: NO_ENHANCEMENTS,
+    }
+  }
+
+  // The default rule's image. Whichever of feed/square/story is present and
+  // highest in DEFAULT_SIZE_ORDER; there is always one, because two or more
+  // sizes got us here.
+  const defaultSize = DEFAULT_SIZE_ORDER.find((k) => hashes[k]) as string
+
+  const images = sizeKeys.map((key) => ({
+    hash: hashes[key],
+    adlabels: [{ name: `img_${key}` }],
+  }))
+
+  const rules: Record<string, unknown>[] = []
+  for (const key of sizeKeys) {
+    // The default goes last, after every rule that claims specific placements,
+    // so it is unambiguous which one is the catch-all.
+    if (key === defaultSize) continue
+    if (!PLACEMENTS[key]) continue
+    rules.push({
+      customization_spec: PLACEMENTS[key],
+      image_label: { name: `img_${key}` },
+      body_label: { name: 'body' },
+      title_label: headline ? { name: 'title' } : undefined,
+      description_label: description ? { name: 'desc' } : undefined,
+      link_url_label: { name: 'link' },
+    })
+  }
+  rules.push({
+    is_default: true,
+    image_label: { name: `img_${defaultSize}` },
+    body_label: { name: 'body' },
+    title_label: headline ? { name: 'title' } : undefined,
+    description_label: description ? { name: 'desc' } : undefined,
+    link_url_label: { name: 'link' },
+  })
+
+  return {
+    name: input.name,
+    // In this shape object_story_spec carries the Page and nothing else: the
+    // link, copy and image all move into the feed spec, and Meta rejects the
+    // creative if they are declared in both places.
+    object_story_spec: { page_id: input.pageId },
+    asset_feed_spec: {
+      ad_formats: ['SINGLE_IMAGE'],
+      images,
+      bodies: [{ text: primaryText, adlabels: [{ name: 'body' }] }],
+      titles: headline ? [{ text: headline, adlabels: [{ name: 'title' }] }] : undefined,
+      descriptions: description ? [{ text: description, adlabels: [{ name: 'desc' }] }] : undefined,
+      link_urls: [{ website_url: linkUrl, adlabels: [{ name: 'link' }] }],
+      call_to_action_types: [ctaType],
+      // A form ad's destination is the form itself rather than a URL. In the
+      // single-image shape this rides on the CTA; asset_feed_spec has no room
+      // for a value there, so it goes in its own list.
+      onsite_destinations: spec.needs_form ? [{ lead_gen_form_id: leadFormId }] : undefined,
+      asset_customization_rules: rules,
+    },
+    degrees_of_freedom_spec: NO_ENHANCEMENTS,
+  }
+}
+
+type BuildAdInput = {
+  account: string
+  token: string
+  client: Record<string, any>
+  spec: ObjectiveSpec
+  linkUrl: string
+  leadFormId?: string
+  ctaType: string
+  adsetId: string
+  // size_key -> public bucket URL. One entry publishes a plain creative;
+  // several publish one ad that serves the right crop per placement.
+  images: Record<string, string>
+  primaryText: string
+  headline?: string
+  description?: string
+  adName?: string
+  // Filled in as each object comes into existence, so a failure halfway can
+  // report what is already sitting in the account.
+  into?: Record<string, string>
+  // Ask Meta to check the creative and throw it away rather than save it.
+  // Placement asset customization has a fussy payload and the useful feedback
+  // comes from Meta itself, so there has to be a way to get that feedback
+  // without leaving half-built objects in a client's real ad account.
+  dryRun?: boolean
+}
+
+/**
+ * Images -> creative -> ad, for one ad.
+ *
+ * Pulled out of the publish action because the batch path needs exactly the
+ * same three steps, once per creative, into the same ad set. Everything it
+ * touches is passed in: it creates nothing that outlives the ad set it is
+ * given, and it never decides which ad set that is.
+ */
+async function buildAd(input: BuildAdInput) {
+  const entries = Object.entries(input.images).filter(([, url]) => Boolean(url))
+  if (entries.length === 0) {
+    throw new GraphError('No ad image was given to publish.', { step: 'upload image' })
+  }
+
+  // In parallel: three artboards is three round trips to Meta, and they do not
+  // depend on each other. Sequentially this is the slowest part of a publish.
+  const uploaded = await Promise.all(
+    entries.map(async ([key, url]) => [key, await uploadImage(input.account, url, input.token)] as const)
+  )
+  const hashes = Object.fromEntries(uploaded)
+  if (input.into) input.into.image_hash = uploaded[0][1]
+
+  const params = creativeParams({
+    name: `${input.adName || input.client.name} — creative`,
+    pageId: input.client.meta_page_id,
+    linkUrl: input.linkUrl,
+    primaryText: input.primaryText,
+    headline: input.headline,
+    description: input.description,
+    ctaType: input.ctaType,
+    spec: input.spec,
+    leadFormId: input.leadFormId,
+    hashes,
+  })
+
+  // A dry run stops here: Meta validates the creative and saves nothing, so
+  // there is no ad to create and nothing to clean up afterwards.
+  if (input.dryRun) {
+    await graphPost(
+      `${input.account}/adcreatives`,
+      { ...params, execution_options: ['validate_only'] },
+      input.token,
+      'validate creative'
+    )
+    return {
+      creative_id: '',
+      ad_id: '',
+      image_hashes: hashes,
+      sizes: Object.keys(hashes),
+      validated: params,
+    }
+  }
+
+  const creative = await graphPost(
+    `${input.account}/adcreatives`,
+    params,
+    input.token,
+    'create creative'
+  )
+  if (input.into) input.into.creative_id = creative.id
+
+  const ad = await graphPost(
+    `${input.account}/ads`,
+    {
+      name: input.adName || `${input.client.name} — ${new Date().toISOString().slice(0, 10)}`,
+      adset_id: input.adsetId,
+      creative: { creative_id: creative.id },
+      // Never anything but PAUSED, including into an ad set that is already
+      // running. The ad set keeps delivering what it was delivering; this ad
+      // sits switched off inside it until a human turns it on.
+      status: 'PAUSED',
+    },
+    input.token,
+    'create ad'
+  )
+  if (input.into) input.into.ad_id = ad.id
+
+  return {
+    creative_id: creative.id as string,
+    ad_id: ad.id as string,
+    image_hashes: hashes,
+    sizes: Object.keys(hashes),
+    validated: undefined as Record<string, unknown> | undefined,
+  }
+}
+
 // ---------------------------------------------------------------------------
 
 Deno.serve(async (req) => {
@@ -452,6 +767,51 @@ Deno.serve(async (req) => {
         campaign_budget: Boolean(c.daily_budget || c.lifetime_budget),
       }))
       return json({ campaigns })
+    }
+
+    // -----------------------------------------------------------------------
+    // Existing ad sets, so a new creative can be dropped into one that is
+    // already built — the same ad set the chat made, or a live one that is to
+    // be tested against a second image.
+    //
+    // Scoped to a campaign when one is given. An ad set belongs to exactly one
+    // campaign, so picking the campaign first is what makes the list short
+    // enough to read.
+    // -----------------------------------------------------------------------
+    if (action === 'list_adsets') {
+      const campaignId = String(body.campaign_id || '').trim()
+
+      const found = await graphGet(
+        campaignId ? `${campaignId}/adsets` : `${account}/adsets`,
+        {
+          // optimization_goal and destination_type are what decide whether the
+          // creative needs a lead form; daily_budget and status are what the
+          // picker shows so nobody drops an ad into a live $200/day ad set by
+          // accident.
+          fields:
+            'id,name,status,effective_status,account_id,campaign_id,daily_budget,lifetime_budget,optimization_goal,destination_type',
+          limit: '100',
+        },
+        token
+      )
+
+      const adsets = (found.data || [])
+        // campaign_id arrives in the request, and the token can see every
+        // client's account. Filtering by the account this client is actually
+        // connected to means a campaign ID from somewhere else lists nothing
+        // rather than another client's ad sets.
+        .filter((a: any) => actId(String(a.account_id || '')) === account)
+        .map((a: any) => ({
+          ...a,
+          // Read back the same way publish will read it, so the picker and the
+          // publish cannot disagree about what kind of ad set this is.
+          objective: adsetObjective(a),
+          // Live means the new ad lands next to ads that are already spending.
+          // Worth saying out loud in the picker.
+          live: String(a.effective_status || a.status || '').toUpperCase() === 'ACTIVE',
+        }))
+
+      return json({ adsets })
     }
 
     // -----------------------------------------------------------------------
@@ -626,16 +986,36 @@ Deno.serve(async (req) => {
       return json({ ok: true, ad_id: adId, status: 'PAUSED' })
     }
 
-    if (action !== 'publish') return json({ error: `Unknown action "${action}".` }, 400)
+    if (action !== 'publish' && action !== 'publish_batch') {
+      return json({ error: `Unknown action "${action}".` }, 400)
+    }
 
     // -----------------------------------------------------------------------
     // Publish.
+    //
+    // Two entry points, one path. `publish` sends one creative at the top
+    // level; `publish_batch` sends an `ads` array. Everything below the point
+    // where they are normalised into one list is shared, which is the whole
+    // reason batching is worth having: the campaign and ad set are resolved
+    // once and every creative lands in that same ad set, rather than four
+    // separate publishes building four ad sets that split the budget and each
+    // learn from a quarter of the data.
     // -----------------------------------------------------------------------
+    const batch = action === 'publish_batch'
     const {
       image_url: imageUrl,
+      // {square: url, feed: url, story: url} — every artboard the Studio saved
+      // for this creative, so one ad can serve the right one per placement.
+      images,
       objective = 'OUTCOME_TRAFFIC',
       campaign_id: existingCampaignId,
       campaign_name: campaignName,
+      // Publishes into an ad set that already exists instead of building one.
+      // The point of it: the chat can put up a campaign and an ad set with the
+      // right budget and targeting, and the Studio's creative then lands in
+      // that exact ad set rather than in a second one beside it. Also how a
+      // second image gets tested against the first inside one ad set.
+      adset_id: targetAdsetId,
       adset_name: adsetName,
       ad_name: adName,
       daily_budget_cents: dailyBudgetCents,
@@ -656,7 +1036,93 @@ Deno.serve(async (req) => {
       published_by: publishedBy,
     } = body
 
-    const objectiveKey = (OBJECTIVE_ALIASES[objective] || objective) as Objective
+    // One ad, or a list of them, normalised to the same shape. Copy lives on
+    // the ad rather than on the call: four statics in a launch are four
+    // different hooks, and making them share one primary text would defeat the
+    // point of testing them against each other. The top-level copy is the
+    // fallback for anything an ad leaves out.
+    type AdInput = {
+      stamp?: string
+      size_key?: string
+      images?: Record<string, string>
+      image_url?: string
+      primary_text?: string
+      headline?: string
+      description?: string
+      cta?: string
+      ad_name?: string
+      link_url?: string
+      lead_form_id?: string
+      lead_form_name?: string
+    }
+
+    const adInputs: AdInput[] = batch
+      ? Array.isArray(body.ads)
+        ? body.ads
+        : []
+      : [
+          {
+            stamp,
+            size_key: sizeKey,
+            images,
+            image_url: imageUrl,
+            primary_text: primaryText,
+            headline,
+            description,
+            cta,
+            ad_name: adName,
+            link_url: linkUrlIn,
+            lead_form_id: leadFormId,
+            lead_form_name: leadFormName,
+          },
+        ]
+
+    if (adInputs.length === 0) {
+      return json({ error: 'No ads to publish — pick at least one saved creative.' }, 400)
+    }
+    if (adInputs.length > MAX_BATCH_ADS) {
+      return json(
+        {
+          error: `That is ${adInputs.length} ads in one go; ${MAX_BATCH_ADS} is the most one publish will do. Send the rest as a second batch into the same ad set.`,
+        },
+        400
+      )
+    }
+
+    const reuseAdsetId = String(targetAdsetId || '').trim()
+
+    // Publishing into an existing ad set means the ad set decides the
+    // objective, the budget and the targeting — all three were settled when it
+    // was built, and none of them are this call's to change. So it is read
+    // first, and what it says overrides whatever the form was left set to.
+    let existingAdset: Record<string, any> | null = null
+    if (reuseAdsetId) {
+      existingAdset = await graphGet(
+        reuseAdsetId,
+        {
+          fields:
+            'id,name,status,effective_status,account_id,campaign_id,daily_budget,lifetime_budget,optimization_goal,destination_type',
+        },
+        token
+      )
+
+      // The ad set ID comes from the request, and the System User token can
+      // write to every client's account. Without this check, a wrong or
+      // tampered ID would publish one client's creative into another client's
+      // ad set — and spend their budget on it.
+      if (actId(String(existingAdset?.account_id || '')) !== account) {
+        return json(
+          {
+            error: `That ad set does not belong to ${client.name}'s ad account. Pick one from the list rather than pasting an ID.`,
+          },
+          400
+        )
+      }
+    }
+
+    const objectiveKey = existingAdset
+      ? adsetObjective(existingAdset)
+      : ((OBJECTIVE_ALIASES[objective] || objective) as Objective)
     const spec = OBJECTIVES[objectiveKey]
     if (!spec) {
       return json({ error: `Unsupported objective "${objective}".` }, 400)
@@ -669,53 +1135,138 @@ Deno.serve(async (req) => {
         400
       )
     }
-    if (!imageUrl) return json({ error: 'No ad image was given to publish.' }, 400)
-    if (!primaryText) return json({ error: 'Primary text is required — it is the copy above the image.' }, 400)
+    // Every ad resolved and checked before ANY of them is created. The
+    // alternative is discovering that the fourth creative has no copy once
+    // three real ads are already sitting in the account.
+    const ads = adInputs.map((a) => ({
+      stamp: a.stamp ?? stamp,
+      size_key: a.size_key ?? sizeKey,
+      // Whatever sizes this creative saved. A single image_url still works and
+      // becomes a one-entry map.
+      images:
+        a.images && typeof a.images === 'object' && Object.keys(a.images).length > 0
+          ? (a.images as Record<string, string>)
+          : a.image_url
+            ? { [String(a.size_key || sizeKey || 'feed')]: a.image_url }
+            : {},
+      primary_text: a.primary_text ?? primaryText,
+      headline: a.headline ?? headline,
+      description: a.description ?? description,
+      cta: String(a.cta || cta).toUpperCase(),
+      ad_name: a.ad_name ?? adName,
+      lead_form_id: a.lead_form_id ?? leadFormId,
+      lead_form_name: a.lead_form_name ?? leadFormName,
+      // An instant form has no landing page: the form opens inside Facebook,
+      // and the creative's link is never followed. Meta still wants the field
+      // populated, so it points at the advertiser's own Page.
+      link_url: spec.needs_form
+        ? `https://www.facebook.com/${client.meta_page_id}`
+        : a.link_url || linkUrlIn || client.website_url,
+    }))
 
-    // An instant form has no landing page: the form opens inside Facebook, and
-    // the creative's link is never followed. Meta still wants the field
-    // populated, so it points at the advertiser's own Page.
-    const linkUrl = spec.needs_form
-      ? `https://www.facebook.com/${client.meta_page_id}`
-      : linkUrlIn || client.website_url
+    for (const [i, a] of ads.entries()) {
+      // Named so a rejected batch says which creative to go and fix.
+      const which = batch ? `Ad ${i + 1}${a.ad_name ? ` ("${a.ad_name}")` : ''}` : 'This ad'
 
-    if (!spec.needs_form && !linkUrl) {
-      return json(
-        { error: `No landing page URL. Set one on ${client.name}'s Meta card, or type one on the publish form.` },
-        400
-      )
+      if (Object.keys(a.images).length === 0) {
+        return json({ error: `${which} has no image to publish.` }, 400)
+      }
+      if (!a.primary_text) {
+        return json(
+          { error: `${which} has no primary text — that is the copy above the image.` },
+          400
+        )
+      }
+      if (!CTA_TYPES.has(a.cta)) {
+        return json({ error: `"${a.cta}" is not a call-to-action Meta accepts.` }, 400)
+      }
+      if (!spec.needs_form && !a.link_url) {
+        return json(
+          {
+            error: `${which} has no landing page URL. Set one on ${client.name}'s Meta card, or type one on the publish form.`,
+          },
+          400
+        )
+      }
+      if (spec.needs_form && !a.lead_form_id) {
+        return json(
+          { error: `${which} needs an instant form — pick or create one before publishing.` },
+          400
+        )
+      }
     }
-    if (spec.needs_form && !leadFormId) {
-      return json(
-        { error: 'Pick or create an instant form before publishing a lead-form ad.' },
-        400
-      )
-    }
-    if (spec.needs_pixel && !client.meta_pixel_id) {
-      return json(
-        {
-          error: `Optimising for leads needs a pixel: Meta has to be told which conversion event to chase. Add ${client.name}'s pixel ID, or publish this as a Traffic campaign instead.`,
-        },
-        400
-      )
+    // Budget, targeting and the pixel are properties of an ad set. When one is
+    // being reused they are already set on it and are not asked for, so these
+    // three checks would reject a perfectly valid publish. The lead-form check
+    // above stays either way: the form ID lives on the CREATIVE, so a form ad
+    // set still needs one supplied here.
+    if (!existingAdset && !body.dry_run) {
+      if (spec.needs_pixel && !client.meta_pixel_id) {
+        return json(
+          {
+            error: `Optimising for leads needs a pixel: Meta has to be told which conversion event to chase. Add ${client.name}'s pixel ID, or publish this as a Traffic campaign instead.`,
+          },
+          400
+        )
+      }
+      if (Math.round(Number(dailyBudgetCents) || 0) < MIN_DAILY_BUDGET_CENTS) {
+        return json({ error: `Daily budget must be at least $${(MIN_DAILY_BUDGET_CENTS / 100).toFixed(2)}.` }, 400)
+      }
+      if (!Array.isArray(locations) || locations.length === 0) {
+        return json({ error: 'Pick at least one location to target.' }, 400)
+      }
     }
     const budget = Math.round(Number(dailyBudgetCents) || 0)
-    if (budget < MIN_DAILY_BUDGET_CENTS) {
-      return json({ error: `Daily budget must be at least $${(MIN_DAILY_BUDGET_CENTS / 100).toFixed(2)}.` }, 400)
-    }
-    if (!Array.isArray(locations) || locations.length === 0) {
-      return json({ error: 'Pick at least one location to target.' }, 400)
-    }
-    const ctaType = String(cta).toUpperCase()
-    if (!CTA_TYPES.has(ctaType)) {
-      return json({ error: `"${cta}" is not a call-to-action Meta accepts.` }, 400)
+
+    // A dry run checks the creative payload against Meta and returns its
+    // verdict without creating a campaign, an ad set, a creative or an ad.
+    // Placement asset customization is the reason this exists: the rules have
+    // to be right, and the only authority on that is Meta.
+    if (body.dry_run) {
+      const checks = []
+      for (const [i, a] of ads.entries()) {
+        try {
+          const built = await buildAd({
+            account,
+            token,
+            client,
+            spec,
+            linkUrl: a.link_url,
+            leadFormId: a.lead_form_id,
+            ctaType: a.cta,
+            adsetId: '',
+            images: a.images,
+            primaryText: a.primary_text,
+            headline: a.headline,
+            description: a.description,
+            adName: a.ad_name,
+            dryRun: true,
+          })
+          checks.push({ ok: true, ad: i + 1, sizes: built.sizes, sent: built.validated })
+        } catch (err) {
+          checks.push({
+            ok: false,
+            ad: i + 1,
+            error: err instanceof Error ? err.message : String(err),
+            detail: err instanceof GraphError ? err.detail : undefined,
+          })
+        }
+      }
+      return json({ ok: checks.every((c) => c.ok), dry_run: true, objective: objectiveKey, checks })
     }
 
     // 1. Campaign. Reused when one was picked, so a client's ads can share a
-    //    campaign and its learning rather than each starting cold.
-    let campaignId = existingCampaignId
+    //    campaign and its learning rather than each starting cold. An existing
+    //    ad set brings its own campaign with it and settles the question.
+    //
+    //    Note what does NOT go into `created`: it is the list of objects this
+    //    call brought into existence, and it is what the UI offers to clean up
+    //    after a half-failed publish. A campaign or ad set that was already
+    //    there must never appear in it — deleting those would take live ads
+    //    down with them.
+    let campaignId = existingAdset ? String(existingAdset.campaign_id) : existingCampaignId
     if (campaignId) {
-      created.campaign_id = campaignId
+      // Already exists, whether picked directly or inherited from the ad set.
     } else {
       const campaign = await graphPost(
         `${account}/campaigns`,
@@ -737,133 +1288,172 @@ Deno.serve(async (req) => {
     }
 
     // 2. Ad set — budget, schedule and, the point of the exercise, targeting.
-    const adset = await graphPost(
-      `${account}/adsets`,
-      {
-        name: adsetName || `${client.name} — ${new Date().toISOString().slice(0, 10)}`,
-        campaign_id: campaignId,
-        daily_budget: budget,
-        billing_event: spec.billing_event,
-        optimization_goal: spec.optimization_goal,
-        // No bid cap. A cap on a brand new ad set with no delivery history
-        // mostly just stops it delivering at all.
-        bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-        targeting: buildTargeting(locations, ageMin, ageMax),
-        // A website lead is promoted against the pixel that reports it; a form
-        // lead is promoted against the Page that hosts the form.
-        promoted_object: spec.needs_pixel
-          ? { pixel_id: client.meta_pixel_id, custom_event_type: 'LEAD' }
-          : spec.needs_form
-            ? { page_id: client.meta_page_id }
-            : undefined,
-        // Stated rather than left to default. OUTCOME_LEADS covers instant
-        // forms, website forms, phone calls and Messenger threads, and which
-        // one is meant changes what else the ad set needs.
-        destination_type: spec.destination_type,
-        start_time: startTime || undefined,
-        status: 'PAUSED',
-      },
-      token,
-      'create ad set'
-    )
-    created.adset_id = adset.id
-
-    // 3. The image, uploaded into the account so the ad does not depend on the
-    //    bucket URL surviving.
-    const imageHash = await uploadImage(account, imageUrl, token)
-    created.image_hash = imageHash
-
-    // 4. Creative.
-    const creative = await graphPost(
-      `${account}/adcreatives`,
-      {
-        name: `${adName || client.name} — creative`,
-        object_story_spec: {
-          page_id: client.meta_page_id,
-          link_data: {
-            link: linkUrl,
-            message: primaryText,
-            name: headline || undefined,
-            description: description || undefined,
-            image_hash: imageHash,
-            // The form id on the CTA is what makes this a lead ad: tapping the
-            // button opens the form in place instead of following the link.
-            call_to_action: {
-              type: ctaType,
-              value: spec.needs_form ? { lead_gen_form_id: leadFormId } : { link: linkUrl },
-            },
-          },
-        },
-        // Opt out of Meta's automatic image and text tweaks. The whole point of
-        // the Studio is a deliberately composited frame with the copy placed
-        // inside the safe area; letting Meta crop it or rewrite the headline
-        // undoes that.
-        degrees_of_freedom_spec: {
-          creative_features_spec: { standard_enhancements: { enroll_status: 'OPT_OUT' } },
-        },
-      },
-      token,
-      'create creative'
-    )
-    created.creative_id = creative.id
-
-    // 5. The ad itself.
-    const ad = await graphPost(
-      `${account}/ads`,
-      {
-        name: adName || `${client.name} — ${new Date().toISOString().slice(0, 10)}`,
-        adset_id: adset.id,
-        creative: { creative_id: creative.id },
-        status: 'PAUSED',
-      },
-      token,
-      'create ad'
-    )
-    created.ad_id = ad.id
-
-    // Recorded after the fact. A failed insert here does not undo a real ad
-    // that now exists in the account, so it is reported alongside success
-    // rather than turned into a failure.
-    let recorded = true
-    try {
-      const insert = await fetch(`${supabaseUrl}/rest/v1/published_ads`, {
-        method: 'POST',
-        headers: { ...dbHeaders, Prefer: 'return=minimal' },
-        body: JSON.stringify({
-          client_id: clientId,
-          stamp: stamp ? String(stamp) : null,
-          size_key: sizeKey || null,
-          ad_account_id: client.meta_ad_account_id,
+    //    Skipped entirely when publishing into one that already exists: that ad
+    //    set's budget and targeting are the ones that were wanted, and writing
+    //    to them here would silently retarget something already delivering.
+    let adsetId: string
+    if (existingAdset) {
+      adsetId = String(existingAdset.id)
+    } else {
+      const adset = await graphPost(
+        `${account}/adsets`,
+        {
+          name: adsetName || `${client.name} — ${new Date().toISOString().slice(0, 10)}`,
           campaign_id: campaignId,
-          campaign_name: campaignName || null,
-          adset_id: adset.id,
-          adset_name: adsetName || null,
-          creative_id: creative.id,
-          ad_id: ad.id,
-          ad_name: adName || null,
-          objective: objectiveKey,
-          daily_budget_cents: budget,
-          locations,
-          lead_form_id: leadFormId || null,
-          lead_form_name: leadFormName || null,
+          daily_budget: budget,
+          billing_event: spec.billing_event,
+          optimization_goal: spec.optimization_goal,
+          // No bid cap. A cap on a brand new ad set with no delivery history
+          // mostly just stops it delivering at all.
+          bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+          targeting: buildTargeting(locations, ageMin, ageMax),
+          // A website lead is promoted against the pixel that reports it; a
+          // form lead is promoted against the Page that hosts the form.
+          promoted_object: spec.needs_pixel
+            ? { pixel_id: client.meta_pixel_id, custom_event_type: 'LEAD' }
+            : spec.needs_form
+              ? { page_id: client.meta_page_id }
+              : undefined,
+          // Stated rather than left to default. OUTCOME_LEADS covers instant
+          // forms, website forms, phone calls and Messenger threads, and which
+          // one is meant changes what else the ad set needs.
+          destination_type: spec.destination_type,
+          start_time: startTime || undefined,
           status: 'PAUSED',
-          published_by: publishedBy || null,
-        }),
-      })
-      recorded = insert.ok
-    } catch {
-      recorded = false
+        },
+        token,
+        'create ad set'
+      )
+      adsetId = adset.id
+      created.adset_id = adset.id
     }
 
+    // 3-5. Images, creative, ad — once per creative, all into the ad set
+    //      resolved above. Each creative's saved sizes go into ONE ad rather
+    //      than one ad per size: see creativeParams.
+    //
+    //      Recorded as each ad comes into existence rather than all at the end.
+    //      A batch is a long invocation, and if it is cut short the account
+    //      still contains whatever was made — so the CRM has to know about each
+    //      ad the moment it is real, not once the last one finishes.
+    const record = async (a: (typeof ads)[number], built: { creative_id: string; ad_id: string; sizes: string[] }) => {
+      try {
+        const insert = await fetch(`${supabaseUrl}/rest/v1/published_ads`, {
+          method: 'POST',
+          headers: { ...dbHeaders, Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            client_id: clientId,
+            stamp: a.stamp ? String(a.stamp) : null,
+            // Every size this ad carries, not one of them. Comma-joined so it
+            // still reads as a size in the one-image case and the column does
+            // not have to change type.
+            size_key: built.sizes.join(',') || null,
+            ad_account_id: client.meta_ad_account_id,
+            campaign_id: campaignId,
+            campaign_name: campaignName || null,
+            adset_id: adsetId,
+            // When the ad set was reused, its real name and real budget are the
+            // truthful record — the form's ad set fields were not even shown.
+            adset_name: existingAdset ? existingAdset.name || null : adsetName || null,
+            creative_id: built.creative_id,
+            ad_id: built.ad_id,
+            ad_name: a.ad_name || null,
+            objective: objectiveKey,
+            daily_budget_cents: existingAdset ? Number(existingAdset.daily_budget) || null : budget,
+            // Targeting belongs to the reused ad set and was not sent, so there
+            // is nothing honest to record here. Null, not an empty list, which
+            // would read as "targeted nowhere".
+            locations: existingAdset ? null : locations,
+            lead_form_id: a.lead_form_id || null,
+            lead_form_name: a.lead_form_name || null,
+            status: 'PAUSED',
+            published_by: publishedBy || null,
+          }),
+        })
+        return insert.ok
+      } catch {
+        // A failed insert does not undo a real ad that now exists in the
+        // account, so it is reported alongside success rather than turned into
+        // a failure.
+        return false
+      }
+    }
+
+    const results: Record<string, unknown>[] = []
+    for (const [i, a] of ads.entries()) {
+      // Only the single-ad path writes into `created`: in a batch the
+      // half-finished-object story is per ad and lives in `results`, and a
+      // shared accumulator would attribute one ad's creative to another.
+      const progress: Record<string, string> = batch ? {} : created
+      try {
+        const built = await buildAd({
+          account,
+          token,
+          client,
+          spec,
+          linkUrl: a.link_url,
+          leadFormId: a.lead_form_id,
+          ctaType: a.cta,
+          adsetId,
+          images: a.images,
+          primaryText: a.primary_text,
+          headline: a.headline,
+          description: a.description,
+          adName: a.ad_name,
+          into: progress,
+        })
+        results.push({
+          ok: true,
+          stamp: a.stamp ?? null,
+          ad_name: a.ad_name ?? null,
+          creative_id: built.creative_id,
+          ad_id: built.ad_id,
+          sizes: built.sizes,
+          recorded: await record(a, built),
+        })
+      } catch (err) {
+        // One bad creative must not cost the other three. In a batch the
+        // failure is collected and the loop carries on; on a single publish
+        // there is nothing to carry on to, so it rethrows into the handler
+        // below and keeps the error shape the Studio already expects.
+        if (!batch) throw err
+        results.push({
+          ok: false,
+          stamp: a.stamp ?? null,
+          ad_name: a.ad_name ?? `Ad ${i + 1}`,
+          error: err instanceof Error ? err.message : String(err),
+          detail: err instanceof GraphError ? err.detail : undefined,
+          // What this ad left behind before it failed, so it can be cleaned up.
+          created: Object.keys(progress).length > 0 ? progress : undefined,
+        })
+      }
+    }
+
+    const succeeded = results.filter((r) => r.ok)
+
     return json({
-      ok: true,
+      // A batch where every ad failed is a failed publish, even though the ad
+      // set may have been created. Saying ok:true there would be a lie the UI
+      // would repeat.
+      ok: succeeded.length > 0,
       status: 'PAUSED',
-      recorded,
+      recorded: succeeded.every((r) => r.recorded !== false),
       ...created,
       campaign_id: campaignId,
+      adset_id: adsetId,
+      ...(batch
+        ? { results, published: succeeded.length, failed: results.length - succeeded.length }
+        : {}),
+      // Whether the ad landed in something that already existed. The success
+      // screen says a very different thing in that case: the ad set may
+      // already be live, so only the new ad is switched off.
+      reused_adset: Boolean(existingAdset),
+      adset_live:
+        String(existingAdset?.effective_status || existingAdset?.status || '').toUpperCase() ===
+        'ACTIVE',
       // Deep link to the new ad set in Ads Manager, which is where the human
       // approval step actually happens.
-      ads_manager_url: `https://adsmanager.facebook.com/adsmanager/manage/ads?act=${client.meta_ad_account_id}&selected_adset_ids=${adset.id}`,
+      ads_manager_url: `https://adsmanager.facebook.com/adsmanager/manage/ads?act=${client.meta_ad_account_id}&selected_adset_ids=${adsetId}`,
     })
   } catch (err) {
     // Nothing is rolled back. Deleting objects is itself a destructive write,
