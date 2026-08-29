@@ -94,7 +94,10 @@ function Artboard({ size, canvasRef, onZoom, onUnzoom, onPin }) {
         onMouseEnter={onZoom}
         onMouseLeave={onUnzoom}
         onClick={onPin}
-        title="Hover to see it full size"
+        // Deliberately no title attribute: a native tooltip paints above every
+        // layer on the page, including the zoom overlay this hover just opened,
+        // so it lands in the middle of the enlarged ad. The overlay captions
+        // itself instead.
         className="border border-slate-300 rounded bg-slate-100 cursor-zoom-in transition hover:border-orange-400 hover:ring-2 hover:ring-orange-200"
         style={{ width: size.w / 5, height: size.h / 5 }}
       />
