@@ -10,6 +10,7 @@ import {
   STATUS_OPTIONS,
 } from '../lib/intakeSummary'
 import { emptyGhlSetup, mergeGhlSetup, missingRequired, GHL_SETUP_KEYS } from '../lib/ghlSetupFields'
+import { Button, Card, Field, Input, Textarea, Select } from '../components/ui'
 
 // The client-facing onboarding page. No login: the token in the URL is the
 // credential, and it only ever reaches the three `onboarding_link_*` functions,
@@ -57,46 +58,35 @@ function IntakeFields({ data, onChange }) {
               }
 
               return (
-                <div key={key}>
-                  <label className="text-xs font-medium text-slate-600 block mb-1" htmlFor={id}>
-                    {label}
-                  </label>
+                <Field key={key} label={label} htmlFor={id}>
                   {type === 'textarea' ? (
-                    <textarea
+                    <Textarea
                       id={id}
                       name={key}
-                      rows="2"
+                      rows={2}
                       value={data[key] ?? ''}
                       onChange={onChange}
                       onInput={autoExpand}
-                      className="w-full px-2 py-1 border rounded text-sm"
                     />
                   ) : type === 'status' ? (
-                    <select
-                      id={id}
-                      name={key}
-                      value={data[key] ?? ''}
-                      onChange={onChange}
-                      className="w-full px-2 py-1 border rounded text-sm"
-                    >
+                    <Select id={id} name={key} value={data[key] ?? ''} onChange={onChange}>
                       <option value="">Select...</option>
                       {STATUS_OPTIONS.map((o) => (
                         <option key={o} value={o}>
                           {o}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   ) : (
-                    <input
+                    <Input
                       id={id}
                       type={type === 'number' ? 'number' : type === 'email' ? 'email' : 'text'}
                       name={key}
                       value={data[key] ?? ''}
                       onChange={onChange}
-                      className="w-full px-2 py-1 border rounded text-sm"
                     />
                   )}
-                </div>
+                </Field>
               )
             })}
           </div>
@@ -238,9 +228,9 @@ export default function ClientOnboardingPage() {
   if (error && !clientName) {
     return (
       <div className="min-h-screen grid place-items-center p-6">
-        <div className="max-w-md p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+        <Card tone="danger" className="max-w-md text-sm text-red-700">
           {error}
-        </div>
+        </Card>
       </div>
     )
   }
@@ -291,12 +281,14 @@ export default function ClientOnboardingPage() {
         </header>
 
         {notice && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded text-green-800 text-sm">
+          <Card tone="success" padding="sm" className="text-sm text-green-800">
             {notice}
-          </div>
+          </Card>
         )}
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">{error}</div>
+          <Card tone="danger" padding="sm" className="text-sm text-red-700">
+            {error}
+          </Card>
         )}
 
         <div className="space-y-6">
@@ -308,11 +300,11 @@ export default function ClientOnboardingPage() {
           ) : (
             <>
               {missing.length > 0 && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-xs">
+                <Card tone="warning" padding="sm" className="text-xs text-amber-800">
                   Fields marked <span className="text-red-500">*</span> are needed before we can
                   register you for text messaging. You can save and come back if you need to look
                   something up.
-                </div>
+                </Card>
               )}
               <GhlSetupFields data={ghl} onChange={changeGhl} />
             </>
@@ -320,38 +312,28 @@ export default function ClientOnboardingPage() {
         </div>
 
         <div className="flex flex-wrap gap-2 pt-2 border-t">
-          <button
-            type="button"
-            onClick={() => save(false)}
-            disabled={saving}
-            className="px-4 py-2 rounded-lg bg-slate-200 text-slate-900 text-sm font-medium hover:bg-slate-300 disabled:opacity-50 transition"
-          >
+          <Button variant="secondary" size="lg" onClick={() => save(false)} disabled={saving}>
             {saving ? 'Saving...' : 'Save for later'}
-          </button>
+          </Button>
 
           {step === 2 && !ghlOnly && (
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              disabled={saving}
-              className="px-4 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 transition"
-            >
+            <Button variant="outline" size="lg" onClick={() => setStep(1)} disabled={saving}>
               Back
-            </button>
+            </Button>
           )}
 
-          <button
-            type="button"
+          <Button
+            size="lg"
             onClick={() => save(true)}
             disabled={saving}
-            className="flex-1 min-w-[10rem] px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+            className="flex-1 min-w-[10rem]"
           >
             {saving
               ? 'Saving...'
               : step === 1 && !intakeOnly
                 ? 'Continue to account setup'
                 : 'Submit'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
