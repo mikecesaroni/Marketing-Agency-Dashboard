@@ -603,11 +603,22 @@ function creativeParams(input: CreativeInput): Record<string, unknown> {
       titles: headline ? [{ text: headline, adlabels: [{ name: 'title' }] }] : undefined,
       descriptions: description ? [{ text: description, adlabels: [{ name: 'desc' }] }] : undefined,
       link_urls: [{ website_url: linkUrl, adlabels: [{ name: 'link' }] }],
-      call_to_action_types: [ctaType],
-      // A form ad's destination is the form itself rather than a URL. In the
-      // single-image shape this rides on the CTA; asset_feed_spec has no room
-      // for a value there, so it goes in its own list.
-      onsite_destinations: spec.needs_form ? [{ lead_gen_form_id: leadFormId }] : undefined,
+      // A link ad names the call-to-action TYPE and lets Meta build the button
+      // from the link assets. A form ad cannot: the button's value is the form
+      // ID, so the whole call-to-action has to be handed over built.
+      //
+      // This was onsite_destinations, which is the obvious-looking field and is
+      // not for this at all -- it rejected lead_gen_form_id, lead_form_id,
+      // form_id, leadgen_form_id and onsite_destination_id alike, which is what
+      // "Invalid keys ... in asset_feed_spec[onsite_destinations][0]" meant.
+      // call_to_actions is what Meta accepts, unlabelled: adding a
+      // call_to_action_label to the rules flips them into targeting rules and
+      // it then demands a geolocation on every non-default one. Verified
+      // against the live API.
+      call_to_action_types: spec.needs_form ? undefined : [ctaType],
+      call_to_actions: spec.needs_form
+        ? [{ type: ctaType, value: { lead_gen_form_id: leadFormId } }]
+        : undefined,
       asset_customization_rules: rules,
     },
     degrees_of_freedom_spec: NO_ENHANCEMENTS,
