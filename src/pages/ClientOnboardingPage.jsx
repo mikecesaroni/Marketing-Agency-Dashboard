@@ -109,12 +109,22 @@ function IntakeFields({ data, onChange }) {
 export default function ClientOnboardingPage() {
   const { token } = useParams()
 
-  // ?form=ghl sends the account-setup half on its own. The two forms are asked
-  // for at different points -- the intake up front, GHL once they are actually
-  // being set up -- and bundling them meant the second could only be reached by
-  // walking past the first.
+  // Which halves this link is asking for. The two forms are wanted at
+  // different points and not by everyone: the intake goes out up front to
+  // every client, the account setup only once they are actually being set up,
+  // and clients who are not doing that side with us should never be shown it
+  // at all.
+  //
+  //   ?form=ghl     the account setup on its own
+  //   ?form=intake  the onboarding on its own, finishing at the end of it
+  //   (no param)    both, the intake then the setup -- what already went out
+  //
+  // No param has to keep meaning both, because links sent before this existed
+  // carry no param and still have to behave the way their recipient was told.
   const [params] = useSearchParams()
-  const ghlOnly = params.get('form') === 'ghl'
+  const only = params.get('form')
+  const ghlOnly = only === 'ghl'
+  const intakeOnly = only === 'intake'
 
   const [step, setStep] = useState(ghlOnly ? 2 : 1)
   const [clientName, setClientName] = useState('')
@@ -155,7 +165,9 @@ export default function ClientOnboardingPage() {
       }
       if (data.ghl) setGhl((prev) => mergeGhlSetup(prev, data.ghl))
       setDriveConnected(Boolean(data.drive_connected))
-      if (ghlOnly || data.intake_submitted_at) setStep(2)
+      // A returning visitor picks up where they left off, except on an
+      // intake-only link, where step 2 is not theirs to see.
+      if (ghlOnly || (data.intake_submitted_at && !intakeOnly)) setStep(2)
       setLoading(false)
     }
 
@@ -163,7 +175,7 @@ export default function ClientOnboardingPage() {
     return () => {
       cancelled = true
     }
-  }, [token, ghlOnly])
+  }, [token, ghlOnly, intakeOnly])
 
   const changeIntake = (e) => {
     const { name, type, value, checked } = e.target
@@ -197,7 +209,9 @@ export default function ClientOnboardingPage() {
           p_submit: submit,
         })
         if (rpcError) throw rpcError
-        if (submit) setStep(2)
+        // On an intake-only link this IS the end. Sending them to a form we
+        // told them they did not have to fill in would undo the point of it.
+        if (submit) intakeOnly ? setDone(true) : setStep(2)
         else setNotice('Saved. You can close this and come back to it later.')
       } else {
         const { error: rpcError } = await supabase.rpc('onboarding_link_save_ghl', {
@@ -237,8 +251,14 @@ export default function ClientOnboardingPage() {
         <div className="max-w-md text-center space-y-3">
           <h1 className="text-2xl font-bold text-slate-900">Thank you.</h1>
           <p className="text-slate-600 text-sm">
-            We have everything we need to start setting up your account. If anything is missing we
-            will come back to you directly rather than sending this form again.
+            {/* "Setting up your account" is the account-setup half talking. On
+                an onboarding-only link there is no account being set up, and
+                saying so would leave them waiting for a step never coming. */}
+            {intakeOnly
+              ? 'We have what we need to get started on your ads.'
+              : 'We have everything we need to start setting up your account.'}{' '}
+            If anything is missing we will come back to you directly rather than sending this form
+            again.
           </p>
         </div>
       </div>
@@ -252,8 +272,13 @@ export default function ClientOnboardingPage() {
       <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-sm p-6 space-y-6">
         <header className="space-y-1">
           <p className="text-xs uppercase tracking-wide text-slate-400">
-            {ghlOnly ? 'Account setup details' : `Step ${step} of 2`}
-            {ghlOnly ? '' : step === 1 ? ' - About your business' : ' - Account setup details'}
+            {/* A one-form link should not announce a step 2 that is never
+                coming. Only the both-forms link counts steps. */}
+            {ghlOnly
+              ? 'Account setup details'
+              : intakeOnly
+                ? 'About your business'
+                : `Step ${step} of 2${step === 1 ? ' - About your business' : ' - Account setup details'}`}
           </p>
           <h1 className="text-2xl font-bold text-slate-900">
             {clientName ? `${clientName} onboarding` : 'Onboarding'}
@@ -321,7 +346,11 @@ export default function ClientOnboardingPage() {
             disabled={saving}
             className="flex-1 min-w-[10rem] px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
           >
-            {saving ? 'Saving...' : step === 1 ? 'Continue to account setup' : 'Submit'}
+            {saving
+              ? 'Saving...'
+              : step === 1 && !intakeOnly
+                ? 'Continue to account setup'
+                : 'Submit'}
           </button>
         </div>
       </div>

@@ -16,7 +16,10 @@ export default function OnboardingLinkPanel({ client }) {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(null)
   const [copiedMsg, setCopiedMsg] = useState(null)
-  const [copiedGhl, setCopiedGhl] = useState(null)
+  // Which halves to send. Not every client is doing the account setup side
+  // with us, and marching one of those through a form full of EIN and
+  // registration questions is a good way to lose them.
+  const [mode, setMode] = useState('both')
   const [serviceEmail, setServiceEmail] = useState('')
 
   const load = async () => {
@@ -79,10 +82,16 @@ export default function OnboardingLinkPanel({ client }) {
   }
 
   const url = link ? `${window.location.origin}/onboarding/${link.token}` : ''
-  // Same token, same link, opened straight on the account-setup form. The two
-  // forms are wanted at different points, and the GHL half was previously only
-  // reachable by walking past the intake.
-  const ghlUrl = url ? `${url}?form=ghl` : ''
+
+  // One token, three ways in. The bare URL keeps meaning both forms, because
+  // links already sent carry no parameter and have to keep behaving the way
+  // their recipient was told they would.
+  const MODES = {
+    both: { param: '', label: 'Onboarding + account setup' },
+    intake: { param: '?form=intake', label: 'Onboarding only' },
+    ghl: { param: '?form=ghl', label: 'Account setup only' },
+  }
+  const activeUrl = url ? `${url}${MODES[mode].param}` : ''
 
   /**
    * The whole message, ready to paste into an email or a text.
@@ -97,16 +106,44 @@ export default function OnboardingLinkPanel({ client }) {
    * there is no folder ID to put in the CRM, and the share sits unused.
    */
   const message = useMemo(() => {
-    if (!url) return ''
+    if (!activeUrl) return ''
+
+    // The account setup on its own is a different ask to a different person on
+    // a different day: it is registration paperwork, not "tell us about your
+    // business", and none of the photo instructions belong anywhere near it.
+    if (mode === 'ghl') {
+      return [
+        `Hi ${client.name} team,`,
+        '',
+        'To get your account and text messaging set up, we need a few details off',
+        'your business registration -- your EIN, business address and who the',
+        'authorised contact is.',
+        '',
+        activeUrl,
+        '',
+        'It saves as you go, so you can stop and come back if you need to look',
+        'something up.',
+        '',
+        'Thanks!',
+      ].join('\n')
+    }
+
     const lines = [
       `Hi ${client.name} team,`,
       '',
       'Two quick things and we can get your ads moving.',
       '',
       '1) Your onboarding details:',
-      url,
+      activeUrl,
       'It saves as you go, so you can stop and come back to it.',
     ]
+
+    // Said out loud only when it is true. The onboarding-only link ends at the
+    // end of the onboarding, and promising a second part that never arrives is
+    // its own small broken promise.
+    if (mode === 'both') {
+      lines.push('There is a short account setup section after it.')
+    }
 
     if (serviceEmail) {
       lines.push(
@@ -129,28 +166,10 @@ export default function OnboardingLinkPanel({ client }) {
 
     lines.push('', 'Thanks!')
     return lines.join('\n')
-  }, [url, client.name, serviceEmail])
-
-  const ghlMessage = useMemo(() => {
-    if (!ghlUrl) return ''
-    return [
-      `Hi ${client.name} team,`,
-      '',
-      'To get your account and text messaging set up, we need a few details off',
-      'your business registration -- your EIN, business address and who the',
-      'authorised contact is.',
-      '',
-      ghlUrl,
-      '',
-      'It saves as you go, so you can stop and come back if you need to look',
-      'something up.',
-      '',
-      'Thanks!',
-    ].join('\n')
-  }, [ghlUrl, client.name])
+  }, [activeUrl, mode, client.name, serviceEmail])
 
   const handleCopy = async () => {
-    const ok = await copyText(url)
+    const ok = await copyText(activeUrl)
     setCopied(ok ? 'ok' : 'fail')
     setTimeout(() => setCopied(null), 2000)
   }
@@ -159,12 +178,6 @@ export default function OnboardingLinkPanel({ client }) {
     const ok = await copyText(message)
     setCopiedMsg(ok ? 'ok' : 'fail')
     setTimeout(() => setCopiedMsg(null), 2000)
-  }
-
-  const handleCopyGhl = async () => {
-    const ok = await copyText(ghlMessage)
-    setCopiedGhl(ok ? 'ok' : 'fail')
-    setTimeout(() => setCopiedGhl(null), 2000)
   }
 
   if (loading) return <p className="text-sm text-slate-500">Loading onboarding link...</p>
@@ -184,10 +197,34 @@ export default function OnboardingLinkPanel({ client }) {
 
       {link ? (
         <>
+          <div className="flex flex-wrap gap-1">
+            {Object.entries(MODES).map(([key, m]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMode(key)}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                  mode === key
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-500">
+            {mode === 'both'
+              ? 'Both forms, the onboarding first. This is what the plain link has always done.'
+              : mode === 'intake'
+                ? 'The onboarding on its own, finishing at the end of it. For clients not doing the account setup side with us.'
+                : 'Opens straight on the account setup. Send when the onboarding is already done.'}
+          </p>
+
           <div className="flex gap-2">
             <input
               readOnly
-              value={url}
+              value={activeUrl}
               onFocus={(e) => e.target.select()}
               className="flex-1 px-2 py-1 border rounded text-xs bg-slate-50 font-mono"
             />
@@ -239,37 +276,6 @@ export default function OnboardingLinkPanel({ client }) {
                 add the folder request to the message by hand.
               </p>
             )}
-          </div>
-
-          <div className="pt-3 border-t">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs font-medium text-slate-600">Account setup form only</p>
-                <p className="text-[11px] text-slate-500">
-                  Same link, opens straight on the GHL details. Send this on its own when the
-                  intake is already done.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleCopyGhl}
-                className={`px-2 py-1 rounded text-xs font-medium transition flex-shrink-0 ${
-                  copiedGhl === 'ok'
-                    ? 'bg-green-600 text-white'
-                    : copiedGhl === 'fail'
-                      ? 'bg-red-100 text-red-700'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                {copiedGhl === 'ok' ? '\u2713 Copied' : 'Copy GHL message'}
-              </button>
-            </div>
-            <input
-              readOnly
-              value={ghlUrl}
-              onFocus={(e) => e.target.select()}
-              className="w-full mt-2 px-2 py-1 border rounded text-[11px] bg-slate-50 font-mono"
-            />
           </div>
 
           <div className="flex flex-wrap gap-3 text-xs text-slate-600">
