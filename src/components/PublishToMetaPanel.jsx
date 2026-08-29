@@ -381,8 +381,8 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
   const [ageMin, setAgeMin] = useState(25)
   const [ageMax, setAgeMax] = useState(65)
   const [locations, setLocations] = useState([])
-  // What the intake prefill found, and what it could not match, so a city that
-  // did not resolve is reported rather than quietly missing from the targeting.
+  // Candidate locations read off the intake. Offered, never applied — see
+  // locationsFromIntake for why picking the top match silently is dangerous.
   const [prefill, setPrefill] = useState(null)
 
   const [publishing, setPublishing] = useState(false)
@@ -470,22 +470,15 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
       })
   }, [reuseCampaign, campaigns, client.id])
 
-  // Locations the client already named on their intake, turned into real Meta
-  // targeting keys. Runs once, and only while the picker is still empty, so it
-  // can never overwrite a choice somebody made by hand. Skipped entirely when
-  // an existing ad set is being reused, since that ad set brought its own
-  // targeting and the picker is not even shown.
+  // Candidate locations from the intake. Fetched once, never applied: Meta's
+  // geo search matches names worldwide, so "Long Island" comes back as Maine
+  // before New York. Applying the top hit silently is how an ad set ends up
+  // targeting the wrong state while looking like the client asked for it.
   useEffect(() => {
-    if (!intake || prefill || reuseAdset || locations.length > 0) return
+    if (!intake || prefill || reuseAdset) return
     let cancelled = false
     locationsFromIntake(intake)
-      .then((found) => {
-        if (cancelled || found.locations.length === 0) return
-        // Re-checked inside the promise: the lookups take a moment, and a
-        // location picked while they were in flight has to win.
-        setLocations((prev) => (prev.length > 0 ? prev : found.locations))
-        setPrefill(found)
-      })
+      .then((found) => !cancelled && found.entries.length > 0 && setPrefill(found))
       .catch(() => {})
     return () => {
       cancelled = true
@@ -948,18 +941,61 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Locations</label>
               {prefill && (
-                <p className="text-[11px] text-slate-500 mb-1">
-                  Filled in from the intake form
-                  {prefill.source === 'service_area' ? ' (service area)' : ' (cities to target)'}.
-                  Edit or remove any of them.
-                  {prefill.unmatched.length > 0 && (
-                    <span className="text-amber-700">
-                      {' '}
-                      Meta had no match for {prefill.unmatched.join(', ')}, so add{' '}
-                      {prefill.unmatched.length > 1 ? 'those' : 'that one'} by hand.
-                    </span>
-                  )}
-                </p>
+                <div className="mb-2 p-2 rounded border border-slate-200 bg-slate-50">
+                  <p className="text-[11px] text-slate-600">
+                    From the intake form
+                    {prefill.source === 'service_area' ? ' (service area)' : ' (cities to target)'}.
+                    Click the right one — the same city name exists in several states, so these are
+                    suggestions rather than picks.
+                  </p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {prefill.entries.map((entry) => (
+                      <li key={entry.query}>
+                        <span className="text-[11px] text-slate-500">
+                          &ldquo;{entry.query}&rdquo; · {entry.radius} mi
+                        </span>
+                        {entry.candidates.length === 0 ? (
+                          <span className="ml-1 text-[11px] text-amber-700">
+                            no match, add it by hand
+                          </span>
+                        ) : (
+                          <span className="flex flex-wrap gap-1 mt-0.5">
+                            {entry.candidates.map((c) => {
+                              const already = locations.some((l) => l.key === c.key)
+                              return (
+                                <button
+                                  key={c.key}
+                                  disabled={already}
+                                  onClick={() =>
+                                    setLocations((prev) =>
+                                      prev.some((l) => l.key === c.key)
+                                        ? prev
+                                        : [
+                                            ...prev,
+                                            {
+                                              ...c,
+                                              radius: c.type === 'city' ? entry.radius : undefined,
+                                            },
+                                          ]
+                                    )
+                                  }
+                                  className={`px-2 py-0.5 rounded-full border text-[11px] transition ${
+                                    already
+                                      ? 'border-slate-200 bg-slate-100 text-slate-400'
+                                      : 'border-slate-300 bg-white text-slate-700 hover:border-orange-400 hover:bg-orange-50'
+                                  }`}
+                                >
+                                  {already ? '\u2713 ' : '+ '}
+                                  {c.label}
+                                </button>
+                              )
+                            })}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               <LocationPicker picked={locations} onChange={setLocations} />
             </div>

@@ -104,51 +104,78 @@ export function budgetFromIntake(intake, client) {
 }
 
 /**
- * Turns the intake's "Cities to Target in Ads" into real Meta targeting keys.
+ * Reads a radius out of the intake's own words.
  *
- * The intake holds what somebody typed. Meta only targets keys it issued
- * itself, so every line has to go through its geo search before it means
- * anything, and the top match is taken for each.
+ * People write it into the free-text box: "40 mile radius Raleigh", "30 mile
+ * radius from garden city". That is the number the client actually asked for,
+ * and defaulting to 25 while it sits right there in the text ignores an answer
+ * we already have.
  *
- * Returns what resolved AND what did not. A city that silently vanished from
- * the targeting is worse than one reported as unmatched, because the ad still
- * publishes and nobody finds out until the delivery looks wrong.
+ * A range takes the lower end. "40-50 mile radius" is somebody being loose, and
+ * the smaller circle stays closer to where they really work.
+ */
+export function radiusFromText(text) {
+  const found = String(text || '').match(/(\d{1,3})\s*(?:-\s*\d{1,3})?\s*mi(?:le)?s?\b/i)
+  if (!found) return null
+  const miles = Number(found[1])
+  if (!Number.isFinite(miles) || miles < 1) return null
+  return Math.min(miles, MAX_RADIUS_MILES)
+}
+
+// Instruction rather than place name. Left in, the whole phrase goes to Meta's
+// geo search and matches nothing: "40 mile radius Raleigh" returns zero results
+// where "Raleigh" returns seven.
+const NOT_A_PLACE =
+  /\b(\d{1,3}\s*(?:-\s*\d{1,3})?\s*mi(?:le)?s?|radius|around|within|from|of|surrounding|areas?)\b/gi
+
+/**
+ * Turns the intake's "Cities to Target in Ads" into CANDIDATE locations.
+ *
+ * It suggests rather than selects, and that is the whole design. Meta's geo
+ * search is a fuzzy name match over the entire world: "Long Island" comes back
+ * as Long Island, Maine before the New York one, and "garden city" as Garden
+ * City, Kansas. Taking the top hit and applying it silently is how an ad set
+ * ends up targeting the wrong state while looking like it came straight from
+ * the client's own intake, which makes it more trusted rather than less.
+ *
+ * So every candidate keeps its state in the label, three are offered per term,
+ * and a human clicks the right one. The radius parsed out of the text rides
+ * along, so the click applies the number the client asked for.
  */
 export async function locationsFromIntake(intake) {
   const raw = String(intake?.target_cities || intake?.service_area || '').trim()
-  if (!raw) return { locations: [], unmatched: [], source: null }
+  if (!raw) return { entries: [], source: null }
 
-  const wanted = raw
-    .split(/[\n,;]+/)
-    .map((s) => s.replace(/^[-•\s]+/, '').trim())
-    .filter((s) => s.length > 1)
+  // Full stops too: "Long Island. 30 mile radius from garden city" is two
+  // places on one line, and splitting on commas alone leaves them stuck.
+  const terms = raw
+    .split(/[\n,;.]+/)
+    .map((line) => line.trim())
+    .map((line) => ({
+      radius: radiusFromText(line),
+      query: line.replace(NOT_A_PLACE, ' ').replace(/\s+/g, ' ').trim(),
+    }))
+    .filter((term) => term.query.length > 1)
     .slice(0, MAX_PREFILL_CITIES)
 
-  const locations = []
-  const unmatched = []
+  // A radius stated once usually governs the whole line, so it carries to any
+  // term that did not state its own.
+  const stated = radiusFromText(raw)
 
-  for (const name of wanted) {
+  const entries = []
+  for (const term of terms) {
+    const radius = term.radius ?? stated ?? DEFAULT_RADIUS_MILES
     try {
-      const found = await searchLocations(name)
-      const best = found[0]
-      // Meta issues one key per place, and the same city can arrive from two
-      // spellings on the intake. Deduped here so the picker does not show it
-      // twice and the ad set does not target it twice.
-      if (best && !locations.some((l) => l.key === best.key)) {
-        locations.push({
-          ...best,
-          radius: best.type === 'city' ? DEFAULT_RADIUS_MILES : undefined,
-        })
-      } else if (!best) {
-        unmatched.push(name)
-      }
+      const found = await searchLocations(term.query)
+      // Three is enough to show the real one without turning this into a
+      // second search box.
+      entries.push({ query: term.query, radius, candidates: found.slice(0, 3) })
     } catch {
-      // One failed lookup should not cost the rest of the list.
-      unmatched.push(name)
+      entries.push({ query: term.query, radius, candidates: [] })
     }
   }
 
-  return { locations, unmatched, source: intake?.target_cities ? 'target_cities' : 'service_area' }
+  return { entries, source: intake?.target_cities ? 'target_cities' : 'service_area' }
 }
 
 async function callFunction(body) {
