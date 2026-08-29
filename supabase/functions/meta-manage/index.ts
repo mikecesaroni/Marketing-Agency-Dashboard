@@ -19,6 +19,7 @@
 //   create_campaign {client_id, name, objective, ...}
 //   create_adset    {client_id, campaign_id, name, daily_budget_cents, ...}
 //   duplicate_ad    {client_id, ad_id, adset_id, name?}
+//   ad_preview      {client_id, ad_id}         -> the creative and rendered previews
 //
 // What it will NOT do, and why: it cannot delete anything. Meta's own delete is
 // effectively irreversible and pausing achieves everything a person actually
@@ -197,6 +198,80 @@ Deno.serve(async (req) => {
       return json({ error: `${client.name} has no Meta ad account connected.` }, 400)
     }
     const account = actId(client.meta_ad_account_id)
+
+    // -----------------------------------------------------------------------
+    // AD PREVIEW — what the ad actually looks like.
+    //
+    // Fetched on demand rather than synced, because Meta's creative and
+    // preview URLs are signed and expire. Storing one would mean a reports
+    // page full of broken images a day later; asking at the moment somebody
+    // clicks an ad costs one call and is always right.
+    //
+    // Three things come back, best first. The rendered preview is the real
+    // article — Meta draws the ad as it appears in the feed, chrome and all.
+    // image_url is the creative's own image, which is what the Studio
+    // composited. thumbnail_url is small and exists for nearly everything, so
+    // it is the last resort rather than the first choice.
+    // -----------------------------------------------------------------------
+    if (action === 'ad_preview') {
+      const adId = String(body.ad_id || '').trim()
+      if (!adId) return json({ error: 'ad_id is required.' }, 400)
+
+      const ad = await graphGet(
+        encodeURIComponent(adId),
+        {
+          fields:
+            'id,name,account_id,effective_status,creative{id,name,thumbnail_url,image_url,body,title}',
+        },
+        token
+      )
+
+      // The ad id arrives in the request and this token can read every
+      // client's account, so the account it belongs to is checked against the
+      // client the caller named -- the same rule publishing uses.
+      if (actId(String(ad?.account_id || '')) !== account) {
+        return json({ error: `That ad does not belong to ${client.name}'s ad account.` }, 400)
+      }
+
+      // Which surfaces to render. All three verified against the live API on a
+      // real ad -- each comes back as an embeddable iframe rather than a login
+      // wall. Feed and story are the two the Studio crops differently, so
+      // seeing both side by side is the point; desktop is there because it is
+      // the one a client is most likely to be shown on a call.
+      const FORMATS = [
+        { key: 'feed', format: 'MOBILE_FEED_STANDARD' },
+        { key: 'story', format: 'INSTAGRAM_STORY' },
+        { key: 'desktop', format: 'DESKTOP_FEED_STANDARD' },
+      ]
+
+      const previews: Record<string, unknown>[] = []
+      for (const f of FORMATS) {
+        try {
+          const res = await graphGet(
+            `${encodeURIComponent(adId)}/previews`,
+            { ad_format: f.format },
+            token
+          )
+          const body = (res?.data || [])[0]?.body
+          if (body) previews.push({ key: f.key, format: f.format, iframe: body })
+        } catch {
+          // A format Meta will not render for this creative is not an error,
+          // it is one fewer preview. The image below still shows the ad.
+        }
+      }
+
+      return json({
+        ad_id: ad.id,
+        name: ad.name,
+        status: ad.effective_status,
+        creative_id: ad.creative?.id || null,
+        image_url: ad.creative?.image_url || null,
+        thumbnail_url: ad.creative?.thumbnail_url || null,
+        body: ad.creative?.body || null,
+        title: ad.creative?.title || null,
+        previews,
+      })
+    }
 
     // -----------------------------------------------------------------------
     // OVERVIEW — the whole account structure in one call.
