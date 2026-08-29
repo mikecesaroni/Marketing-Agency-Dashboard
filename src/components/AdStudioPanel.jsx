@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { copyText } from '../lib/intakeSummary'
 import { splitOffer } from '../lib/clientChat'
+import { FIELD_LABELS, groupByField, suggestCopy } from '../lib/adCopy'
 import { extractPalette } from '../lib/logoColours'
 import SavedAdsGallery from './SavedAdsGallery'
 import PublishToMetaPanel from './PublishToMetaPanel'
@@ -104,6 +105,154 @@ function Artboard({ size, canvasRef, onZoom, onUnzoom, onPin }) {
       <p className="text-[11px] text-slate-500 mt-1">
         {size.label} {size.w}&times;{size.h}
       </p>
+    </div>
+  )
+}
+
+/**
+ * Ask for better copy without leaving the artboard.
+ *
+ * Deliberately returns options rather than rewriting the ad in place. The model
+ * never touches the fields; it proposes, and a click applies one value to one
+ * slot. That keeps it out of the position of quietly editing an ad somebody is
+ * halfway through building, and it makes every change one undo away.
+ */
+function CopyAssistant({ client, current, onApply, undoable, onUndo }) {
+  const [open, setOpen] = useState(false)
+  const [instruction, setInstruction] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [reply, setReply] = useState(null)
+  const [error, setError] = useState('')
+
+  const ask = async (text) => {
+    const asked = (text ?? instruction).trim()
+    if (!asked || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      setReply(await suggestCopy({ client, current, instruction: asked }))
+      setInstruction('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full text-left px-3 py-2 rounded-lg border border-dashed border-slate-300 text-xs text-slate-600 hover:border-orange-400 hover:text-slate-900 transition"
+      >
+        Ask Claude for better copy — sharper hooks, a subhead that adds something
+      </button>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border border-orange-200 bg-orange-50/50 p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-800">Ask for better copy</p>
+        <button onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:text-slate-800">
+          Close
+        </button>
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && ask()}
+          placeholder="Give me three sharper hooks…"
+          disabled={busy}
+          className="flex-1 px-3 py-2 border border-slate-300 rounded text-sm disabled:bg-slate-100"
+        />
+        <button
+          onClick={() => ask()}
+          disabled={busy || !instruction.trim()}
+          className="px-3 py-2 bg-slate-900 text-white rounded text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition"
+        >
+          {busy ? 'Thinking…' : 'Ask'}
+        </button>
+      </div>
+
+      {/* The three things anyone asks for, one click instead of typing them. */}
+      {!busy && !reply && (
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            ['Sharper hooks', 'Give me three sharper hooks. Same offer, same facts.'],
+            [
+              'Fix the subhead',
+              'The subhead should add a different fact than the hook, not restate it. Three options.',
+            ],
+            [
+              'Rewrite for Meta',
+              'Rewrite the primary text, headline and description for the feed. The first line of the primary text has to carry the hook on its own.',
+            ],
+          ].map(([label, prompt]) => (
+            <button
+              key={label}
+              onClick={() => ask(prompt)}
+              className="px-2.5 py-1 rounded-full bg-white border border-slate-300 text-[11px] text-slate-700 hover:border-slate-500 transition"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+          {error}
+        </p>
+      )}
+
+      {reply && (
+        <div className="space-y-2">
+          {reply.note && <p className="text-xs text-slate-700 whitespace-pre-wrap">{reply.note}</p>}
+
+          {groupByField(reply.options).map((group) => (
+            <div key={group.field}>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                {FIELD_LABELS[group.field] || group.field}
+              </p>
+              <ul className="space-y-1">
+                {group.options.map((option, i) => (
+                  <li key={i}>
+                    <button
+                      onClick={() => onApply(group.field, option.value)}
+                      className="w-full text-left px-2.5 py-1.5 rounded border border-slate-200 bg-white hover:border-orange-400 hover:bg-orange-50 transition"
+                    >
+                      <span className="block text-xs text-slate-900">{option.value}</span>
+                      {option.why && (
+                        <span className="block text-[11px] text-slate-500 mt-0.5">{option.why}</span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={() => setReply(null)}
+              className="text-[11px] text-slate-500 underline hover:text-slate-800"
+            >
+              Clear suggestions
+            </button>
+            {undoable && (
+              <button
+                onClick={onUndo}
+                className="text-[11px] text-orange-700 underline hover:text-orange-900"
+              >
+                Undo “{FIELD_LABELS[undoable.field] || undoable.field}”
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -289,6 +438,44 @@ export default function AdStudioPanel({ client, intake, seed }) {
 
   const refs = useRef(SIZES.map(() => null))
   const intakeProof = useMemo(() => proofFromIntake(intake), [intake])
+
+  // Every slot the copy assistant is allowed to write, and the setter for each.
+  // Nothing outside this map can be applied, whatever comes back.
+  const SLOT_SETTERS = {
+    badge: setBadge,
+    hook: setHook,
+    offerAmount: setOfferAmount,
+    offerDetail: setOfferDetail,
+    subhead: setSubhead,
+    proof: setProof,
+    cta: setCta,
+    primaryText: setPrimaryText,
+    headline: setMetaHeadline,
+    description: setMetaDescription,
+  }
+  const slots = {
+    badge,
+    hook,
+    offerAmount,
+    offerDetail,
+    subhead,
+    proof,
+    cta,
+    primaryText,
+    headline: metaHeadline,
+    description: metaDescription,
+  }
+
+  // One level, and only for suggestions: what a click replaced, so a hook you
+  // liked better is one click back rather than retyped from memory.
+  const [undoSlot, setUndoSlot] = useState(null)
+
+  const applySuggestion = (field, value) => {
+    const set = SLOT_SETTERS[field]
+    if (!set) return
+    setUndoSlot({ field, previous: slots[field] ?? '' })
+    set(value)
+  }
 
   // Prefill from intake so the first render is a real ad, not empty boxes.
   // Skipped when the chat handed us copy: that copy is the whole point.
@@ -826,6 +1013,17 @@ export default function AdStudioPanel({ client, intake, seed }) {
           The guides are preview only and never end up in a saved PNG.
         </p>
       </div>
+
+      <CopyAssistant
+        client={client}
+        current={slots}
+        onApply={applySuggestion}
+        undoable={undoSlot}
+        onUndo={() => {
+          SLOT_SETTERS[undoSlot.field]?.(undoSlot.previous)
+          setUndoSlot(null)
+        }}
+      />
 
       <div className="flex gap-4 overflow-x-auto pb-2 pt-1">
         {SIZES.map((size, i) => (
