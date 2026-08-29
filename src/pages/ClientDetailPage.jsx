@@ -360,6 +360,30 @@ export default function ClientDetailPage() {
                 onChange={loadClientData}
                 doneWord="optimized"
               />
+              {/* Two switches, because GHL is the one service here that not
+                  every client buys. The first says whether we are building it
+                  at all; the second only exists once they are on the plan,
+                  since "is it live" is not a question about a client who was
+                  never having one. */}
+              <LiveToggle
+                clientId={client.id}
+                field="ghl_plan"
+                label="GHL build"
+                value={client.ghl_plan}
+                onChange={loadClientData}
+                doneWord="on plan"
+                clearsWhenOff={['ghl_active']}
+              />
+              {client.ghl_plan && (
+                <LiveToggle
+                  clientId={client.id}
+                  field="ghl_active"
+                  label="GHL account"
+                  value={client.ghl_active}
+                  onChange={loadClientData}
+                  doneWord="live"
+                />
+              )}
             </div>
             <button
               onClick={handleToggleArchive}

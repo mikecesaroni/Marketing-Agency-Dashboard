@@ -25,6 +25,12 @@ const FILTERS = [
   { key: 'lsa-not', label: 'LSA not yet' },
   { key: 'gbp-live', label: 'GBP optimized' },
   { key: 'gbp-not', label: 'GBP not yet' },
+  // Two GHL filters rather than the live/not-yet pair the others use. "Not
+  // live" is meaningless for an opt-in service -- most clients are not on it at
+  // all -- so the useful questions are "who is on the plan" and "whose build is
+  // outstanding".
+  { key: 'ghl-plan', label: 'On GHL plan' },
+  { key: 'ghl-todo', label: 'GHL to build' },
   { key: 'archived', label: 'Archived' },
 ]
 
@@ -70,11 +76,20 @@ function MonthlySubBadge({ subscribed }) {
 }
 
 function ChannelBadges({ client }) {
+  const ghl = client.ghlStage
   return (
-    <span className="inline-flex gap-1.5">
+    <span className="inline-flex flex-wrap gap-1.5">
       <LiveBadge live={client.meta_ads_active} label="Meta" />
       <LiveBadge live={client.lsa_active} label="LSA" />
       <LiveBadge live={client.gbp_optimized} label="GBP" />
+      {/* Only for clients on the plan. Meta and LSA are sold to everyone, so a
+          dim badge there reads as "not yet"; a dim GHL badge on a client who
+          was never buying it would read as work outstanding. */}
+      {ghl && ghl.key !== 'off' && (
+        <Badge tone={ghl.tone} className="whitespace-nowrap">
+          {ghl.key === 'live' ? '● GHL' : ghl.key === 'ready' ? '◐ GHL' : '○ GHL'}
+        </Badge>
+      )}
     </span>
   )
 }
@@ -116,6 +131,10 @@ export default function ClientsPage() {
         if (statusFilter === 'lsa-not' && c.lsa_active) return false
         if (statusFilter === 'gbp-live' && !c.gbp_optimized) return false
         if (statusFilter === 'gbp-not' && c.gbp_optimized) return false
+        if (statusFilter === 'ghl-plan' && !c.ghl_plan) return false
+        // Everything on the plan that is not yet live, whether it is blocked on
+        // the client or sitting in our queue.
+        if (statusFilter === 'ghl-todo' && !(c.ghl_plan && !c.ghl_active)) return false
       }
       if (!term) return true
       return [c.name, c.ownerName, c.industry, c.market].some((f) =>

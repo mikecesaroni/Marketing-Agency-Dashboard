@@ -176,3 +176,37 @@ export function formatGhlSetup(data, clientName) {
   const header = clientName ? `GHL SETUP: ${clientName}` : 'GHL SETUP'
   return `${header}\n${'='.repeat(header.length)}\n\n${blocks.join('\n\n')}\n`
 }
+
+/**
+ * Where a client is in the GoHighLevel build.
+ *
+ * Derived rather than stored. The two booleans on the client say whether we
+ * are building it and whether it is live; everything between those is knowable
+ * from the setup row that already exists, so there is no third status column to
+ * keep in sync and nothing that can quietly go stale.
+ *
+ * Four states, and each one names a different next action:
+ *
+ *   off       not on the plan. They run their own GHL, or none. Shows nothing
+ *             anywhere, which is the point of having the flag at all.
+ *   waiting   on the plan, and we cannot start: the EIN, the legal name or the
+ *             timezone is missing. The action is to chase the client, and the
+ *             account-setup link is the thing to send.
+ *   ready     on the plan, everything needed is in. The action is ours.
+ *   live      built and running.
+ */
+export const GHL_STAGES = {
+  off: { key: 'off', label: 'Not on GHL', tone: 'dim' },
+  waiting: { key: 'waiting', label: 'GHL — waiting on client', tone: 'warning' },
+  ready: { key: 'ready', label: 'GHL — ready to build', tone: 'info' },
+  live: { key: 'live', label: 'GHL live', tone: 'success' },
+}
+
+export function ghlStage(client, setup) {
+  if (!client?.ghl_plan) return GHL_STAGES.off
+  if (client.ghl_active) return GHL_STAGES.live
+  // No setup row at all is the same situation as an empty one: nothing has
+  // been answered, so nothing can be built.
+  if (!setup || missingRequired(setup).length > 0) return GHL_STAGES.waiting
+  return GHL_STAGES.ready
+}

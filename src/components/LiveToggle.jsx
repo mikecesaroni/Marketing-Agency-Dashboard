@@ -12,6 +12,11 @@ export default function LiveToggle({
   size = 'md',
   // Ads go live; a profile gets optimized. Same switch, different verb.
   doneWord = 'live',
+  // Fields to switch off alongside this one when it is switched off. Taking a
+  // client off the GHL plan has to take their account down with it, or the
+  // database refuses the write: a live account on no plan is a contradiction
+  // the schema will not store.
+  clearsWhenOff = [],
 }) {
   const [saving, setSaving] = useState(false)
   const [live, setLive] = useState(!!value)
@@ -21,7 +26,10 @@ export default function LiveToggle({
     setLive(next)
     setSaving(true)
 
-    const { error } = await supabase.from('clients').update({ [field]: next }).eq('id', clientId)
+    const patch = { [field]: next }
+    if (!next) for (const other of clearsWhenOff) patch[other] = false
+
+    const { error } = await supabase.from('clients').update(patch).eq('id', clientId)
 
     setSaving(false)
     if (error) {

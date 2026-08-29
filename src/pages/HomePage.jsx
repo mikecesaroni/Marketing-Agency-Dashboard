@@ -13,6 +13,7 @@ import {
   IconDeliverables,
   IconLaunch,
   IconPin,
+  IconSops,
   StatCard,
 } from '../components/ui'
 import {
@@ -135,6 +136,12 @@ export default function HomePage() {
   const metaNotYet = live.filter((c) => !c.meta_ads_active)
   const lsaNotYet = live.filter((c) => !c.lsa_active)
 
+  // Split by who is holding it up, because the two need opposite actions: one
+  // is an email to the client, the other is a job for us. Lumping them into
+  // "GHL outstanding" would hide which.
+  const ghlWaiting = live.filter((c) => c.ghlStage?.key === 'waiting')
+  const ghlReady = live.filter((c) => c.ghlStage?.key === 'ready')
+
   const { mrr, count: billingCount } = calcMRR(clients, payments)
 
   // All-time, matching the Payments tab — a month-scoped total read $0 on the
@@ -216,6 +223,28 @@ export default function HomePage() {
         to: `/client/${c.id}`,
         label: c.name,
         meta: `added ${c.date_added}`,
+      })),
+    },
+    {
+      Icon: IconSops,
+      title: 'GHL ready to build',
+      tone: 'info',
+      items: ghlReady.map((c) => ({
+        key: `ghl-ready-${c.id}`,
+        to: `/client/${c.id}`,
+        label: c.name,
+        meta: 'details are in',
+      })),
+    },
+    {
+      Icon: IconClipboard,
+      title: 'GHL waiting on the client',
+      tone: 'warning',
+      items: ghlWaiting.map((c) => ({
+        key: `ghl-wait-${c.id}`,
+        to: `/client/${c.id}`,
+        label: c.name,
+        meta: 'send setup form',
       })),
     },
     {

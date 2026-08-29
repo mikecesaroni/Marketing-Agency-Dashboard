@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
-const TYPES = ['creative', 'campaign', 'report', 'landing page', 'other']
+// 'ghl setup' is a real unit of work with a due date and an owner, so it
+// belongs in the same list as the rest rather than living only as a flag on
+// the client. The dashboard surfaces the queue automatically either way --
+// this is for when a build needs scheduling against a date.
+const TYPES = ['creative', 'campaign', 'report', 'landing page', 'ghl setup', 'other']
 const STATUSES = ['todo', 'in progress', 'review', 'done']
 const PRIORITIES = ['low', 'normal', 'high']
 

@@ -23,6 +23,7 @@ const TYPE_ICONS = {
   campaign: '🚀',
   report: '📄',
   'landing page': '🖥️',
+  'ghl setup': '🔧',
   other: '📌',
 }
 

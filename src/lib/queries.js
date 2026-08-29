@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { GHL_REQUIRED_KEYS, ghlStage } from './ghlSetupFields'
 
 // `is_internal` arrives with supabase/internal-businesses.sql. Until that runs,
 // filtering on it makes PostgREST return 400 and every page listing clients
@@ -89,7 +90,7 @@ export async function fetchClientsWithKPIs() {
   let clientsQuery = supabase.from('clients').select('*').order('date_added', { ascending: false })
   if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
 
-  const [clientsRes, kpisRes, intakeRes, setupRes, monthlyRes] = await Promise.all([
+  const [clientsRes, kpisRes, intakeRes, setupRes, monthlyRes, ghlRes] = await Promise.all([
     clientsQuery,
     supabase.from('weekly_kpis').select('*').eq('week_of', thisMonday),
     supabase.from('onboarding_intake').select('client_id, owner_name, industry_trade, service_area'),
@@ -98,6 +99,10 @@ export async function fetchClientsWithKPIs() {
       .select('client_id, amount, status, due_date')
       .eq('payment_type', 'setup'),
     supabase.from('payments').select('client_id, status').eq('payment_type', 'monthly'),
+    // Only the fields that decide whether a build can start. Selecting the
+    // whole setup row would pull EINs and phone numbers into a list that only
+    // needs to know "is it complete".
+    supabase.from('ghl_setup').select(`client_id, ${GHL_REQUIRED_KEYS.join(', ')}`),
   ])
 
   if (clientsRes.error) throw clientsRes.error
@@ -124,6 +129,13 @@ export async function fetchClientsWithKPIs() {
   const monthlySubscribed = new Set(
     (monthlyRes.data || []).filter((p) => p.status === 'paid').map((p) => p.client_id)
   )
+
+  // Keyed by client so the stage can be worked out per row below without a
+  // second query per client.
+  const ghlByClient = {}
+  for (const row of ghlRes?.data || []) {
+    ghlByClient[row.client_id] = row
+  }
 
   const kpisByClient = {}
   for (const kpi of kpisRes.data || []) {
@@ -177,6 +189,9 @@ export async function fetchClientsWithKPIs() {
       // haven't launched has no KPIs to be missing.
       hasMissingKPIs:
         client.meta_ads_active && !client.archived && totalSpend === 0 && totalLeads === 0,
+      // Off, waiting on the client, ours to build, or live. Derived from the
+      // plan flag and the setup row rather than stored, so it cannot go stale.
+      ghlStage: ghlStage(client, ghlByClient[client.id]),
     }
   })
 }
