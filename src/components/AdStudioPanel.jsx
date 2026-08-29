@@ -790,6 +790,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
             <PublishToMetaPanel
               client={client}
               set={publishing}
+              intake={intake}
               alreadyPublished={published}
               onPublished={() =>
                 fetchPublishedAds(client.id)

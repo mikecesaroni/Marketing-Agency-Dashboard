@@ -81,6 +81,76 @@ export const SPECIAL_AD_CATEGORIES = [
 export const DEFAULT_RADIUS_MILES = 25
 export const MAX_RADIUS_MILES = 50
 
+// Each city is a live geo lookup against Meta, so a long list is a lot of round
+// trips before the form is even usable. Eight is well past what a home services
+// client actually targets, and anything beyond it is a list to prune by hand.
+const MAX_PREFILL_CITIES = 8
+
+/**
+ * The daily budget the client already agreed to, in dollars.
+ *
+ * Asked on the intake form and then retyped into the publish form every time,
+ * which is both a wasted step and a chance to fat-finger a number that spends
+ * real money. The intake is the more specific answer; the client record is what
+ * the CRM has been running on.
+ */
+export function budgetFromIntake(intake, client) {
+  const candidates = [intake?.meta_ad_budget_per_day, client?.meta_budget_per_day]
+  for (const raw of candidates) {
+    const n = Number(String(raw ?? '').replace(/[^\d.]/g, ''))
+    if (Number.isFinite(n) && n > 0) return String(n)
+  }
+  return ''
+}
+
+/**
+ * Turns the intake's "Cities to Target in Ads" into real Meta targeting keys.
+ *
+ * The intake holds what somebody typed. Meta only targets keys it issued
+ * itself, so every line has to go through its geo search before it means
+ * anything, and the top match is taken for each.
+ *
+ * Returns what resolved AND what did not. A city that silently vanished from
+ * the targeting is worse than one reported as unmatched, because the ad still
+ * publishes and nobody finds out until the delivery looks wrong.
+ */
+export async function locationsFromIntake(intake) {
+  const raw = String(intake?.target_cities || intake?.service_area || '').trim()
+  if (!raw) return { locations: [], unmatched: [], source: null }
+
+  const wanted = raw
+    .split(/[\n,;]+/)
+    .map((s) => s.replace(/^[-•\s]+/, '').trim())
+    .filter((s) => s.length > 1)
+    .slice(0, MAX_PREFILL_CITIES)
+
+  const locations = []
+  const unmatched = []
+
+  for (const name of wanted) {
+    try {
+      const found = await searchLocations(name)
+      const best = found[0]
+      // Meta issues one key per place, and the same city can arrive from two
+      // spellings on the intake. Deduped here so the picker does not show it
+      // twice and the ad set does not target it twice.
+      if (best && !locations.some((l) => l.key === best.key)) {
+        locations.push({
+          ...best,
+          radius: best.type === 'city' ? DEFAULT_RADIUS_MILES : undefined,
+        })
+      } else if (!best) {
+        unmatched.push(name)
+      }
+    } catch {
+      // One failed lookup should not cost the rest of the list.
+      unmatched.push(name)
+    }
+  }
+
+  return { locations, unmatched, source: intake?.target_cities ? 'target_cities' : 'service_area' }
+}
+
 async function callFunction(body) {
   const { data, error } = await supabase.functions.invoke('meta-publish', { body })
 

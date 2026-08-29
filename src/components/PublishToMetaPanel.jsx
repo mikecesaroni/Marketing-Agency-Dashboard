@@ -7,8 +7,10 @@ import {
   MAX_BATCH_ADS,
   OBJECTIVES,
   SPECIAL_AD_CATEGORIES,
+  budgetFromIntake,
   dollarsToCents,
   imagesFromSet,
+  locationsFromIntake,
   listAdsets,
   listCampaigns,
   publishAd,
@@ -347,7 +349,7 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
  *     against each other, and that test only means anything inside a single ad
  *     set — four ad sets is four auctions and a quarter of the data each.
  */
-export default function PublishToMetaPanel({ client, set, alreadyPublished = [], onPublished }) {
+export default function PublishToMetaPanel({ client, set, intake, alreadyPublished = [], onPublished }) {
   // Every saved creative for this client, so a launch can pick several without
   // going back to the gallery one at a time. The set that opened this panel is
   // the one that starts ticked.
@@ -375,10 +377,13 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
   const [adsetId, setAdsetId] = useState('')
 
   const [adsetName, setAdsetName] = useState('')
-  const [dailyBudget, setDailyBudget] = useState('20')
+  const [dailyBudget, setDailyBudget] = useState(() => budgetFromIntake(intake, client) || '20')
   const [ageMin, setAgeMin] = useState(25)
   const [ageMax, setAgeMax] = useState(65)
   const [locations, setLocations] = useState([])
+  // What the intake prefill found, and what it could not match, so a city that
+  // did not resolve is reported rather than quietly missing from the targeting.
+  const [prefill, setPrefill] = useState(null)
 
   const [publishing, setPublishing] = useState(false)
   const [progress, setProgress] = useState('')
@@ -464,6 +469,29 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
         setCampaigns([])
       })
   }, [reuseCampaign, campaigns, client.id])
+
+  // Locations the client already named on their intake, turned into real Meta
+  // targeting keys. Runs once, and only while the picker is still empty, so it
+  // can never overwrite a choice somebody made by hand. Skipped entirely when
+  // an existing ad set is being reused, since that ad set brought its own
+  // targeting and the picker is not even shown.
+  useEffect(() => {
+    if (!intake || prefill || reuseAdset || locations.length > 0) return
+    let cancelled = false
+    locationsFromIntake(intake)
+      .then((found) => {
+        if (cancelled || found.locations.length === 0) return
+        // Re-checked inside the promise: the lookups take a moment, and a
+        // location picked while they were in flight has to win.
+        setLocations((prev) => (prev.length > 0 ? prev : found.locations))
+        setPrefill(found)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intake, reuseAdset])
 
   // An ad set belongs to exactly one campaign, so the list follows whichever
   // campaign is picked and is thrown away when that changes.
@@ -919,6 +947,20 @@ export default function PublishToMetaPanel({ client, set, alreadyPublished = [],
 
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Locations</label>
+              {prefill && (
+                <p className="text-[11px] text-slate-500 mb-1">
+                  Filled in from the intake form
+                  {prefill.source === 'service_area' ? ' (service area)' : ' (cities to target)'}.
+                  Edit or remove any of them.
+                  {prefill.unmatched.length > 0 && (
+                    <span className="text-amber-700">
+                      {' '}
+                      Meta had no match for {prefill.unmatched.join(', ')}, so add{' '}
+                      {prefill.unmatched.length > 1 ? 'those' : 'that one'} by hand.
+                    </span>
+                  )}
+                </p>
+              )}
               <LocationPicker picked={locations} onChange={setLocations} />
             </div>
           </>
