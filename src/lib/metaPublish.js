@@ -125,6 +125,52 @@ export function budgetFromIntake(intake, client) {
 }
 
 /**
+ * The client's website, for the creative's link.
+ *
+ * Asked on the intake form and then retyped into the publish form every time,
+ * which is the same wasted step the budget had. It matters more here than it
+ * looks: a lead ad is REJECTED without an external URL, so an empty field is
+ * not a cosmetic gap, it is a publish that fails at the last step.
+ *
+ * The client record wins when it has one -- that value was set deliberately in
+ * the CRM, and it is the one already pointed at a working page. The intake is
+ * the fallback for a client nobody has filled that in for yet.
+ */
+export function websiteFromIntake(intake, client) {
+  for (const raw of [client?.website_url, intake?.website]) {
+    const url = tidyUrl(raw)
+    if (url) return url
+  }
+  return ''
+}
+
+// "we dont have one", "n/a", "-". People answer the question even when the
+// answer is no, and any of these sent to Meta is a rejected ad rather than an
+// empty field somebody notices and fills in.
+const NOT_A_URL = /^(n\/?a|none|no|nope|tbd|na|-+|\.+)$/i
+
+/**
+ * Makes what somebody typed into something Meta will accept, or nothing.
+ *
+ * Scheme included, because "summitwaterpros.com" is what people write and a
+ * bare domain is not a URL as far as the API is concerned.
+ */
+function tidyUrl(raw) {
+  const text = String(raw ?? '').trim()
+  if (!text || NOT_A_URL.test(text)) return ''
+
+  const withScheme = /^https?:\/\//i.test(text) ? text : `https://${text}`
+  try {
+    const url = new URL(withScheme)
+    // A hostname with no dot is a typo or a note to self, not a domain.
+    if (!url.hostname.includes('.')) return ''
+    return url.toString()
+  } catch {
+    return ''
+  }
+}
+
+/**
  * Reads a radius out of the intake's own words.
  *
  * People write it into the free-text box: "40 mile radius Raleigh", "30 mile

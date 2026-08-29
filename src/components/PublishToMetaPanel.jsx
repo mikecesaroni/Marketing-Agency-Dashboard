@@ -8,6 +8,7 @@ import {
   OBJECTIVES,
   SPECIAL_AD_CATEGORIES,
   budgetFromIntake,
+  websiteFromIntake,
   dollarsToCents,
   imagesFromSet,
   locationsFromIntake,
@@ -431,7 +432,7 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
   const [openCopy, setOpenCopy] = useState(String(set.stamp))
 
   const [cta, setCta] = useState('LEARN_MORE')
-  const [linkUrl, setLinkUrl] = useState(client.website_url || '')
+  const [linkUrl, setLinkUrl] = useState(() => websiteFromIntake(intake, client))
 
   // Instant form is the default: no landing page to build, and Meta prefills
   // the fields, so it is both less setup and a better mobile conversion rate.
@@ -788,7 +789,9 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
                 ? 'Nobody follows it — the form opens in place. Meta rejects lead ads that link to a Facebook Page.'
                 : client.website_url
                   ? 'from the client'
-                  : 'not set on the client'
+                  : intake?.website
+                    ? 'from the intake form'
+                    : 'not set on the client'
             }
           />
         </div>
