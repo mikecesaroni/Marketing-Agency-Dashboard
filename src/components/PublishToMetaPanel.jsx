@@ -211,6 +211,54 @@ function Published({ result, onAnother }) {
   )
 }
 
+/**
+ * Meta errors that are really a one-time setting somebody has to go and click.
+ *
+ * These read like failures of the publish but are nothing to do with it: the
+ * payload was fine, the account just has not been switched on for something
+ * yet. They will happen once per client and then never again, which is exactly
+ * the kind of thing nobody remembers the fix for -- so the fix is written here,
+ * next to the error, with the link already pointed at the right Page.
+ */
+function setupFix(message, client) {
+  const text = String(message || '')
+
+  // Lead ads are gated on the PAGE accepting Meta's Lead Generation Terms,
+  // separately from anything the ad account has agreed to. It has to be a Page
+  // admin who clicks it; an ad account role is not enough.
+  if (/lead\s*gen(eration)?\s*terms|leadgen.{0,20}terms of service/i.test(text)) {
+    return {
+      title: 'The Page has not accepted Meta\u2019s Lead Generation Terms yet.',
+      body: `A Page admin for ${client.name} has to accept them once, and every lead ad for this client works afterwards. Nothing about the ad needs changing.`,
+      href: client.meta_page_id
+        ? `https://www.facebook.com/ads/leadgen/tos?page_id=${client.meta_page_id}`
+        : 'https://www.facebook.com/ads/leadgen/tos',
+      cta: 'Open the Lead Generation Terms',
+    }
+  }
+
+  return null
+}
+
+function SetupFix({ error, client }) {
+  const fix = setupFix(error, client)
+  if (!fix) return null
+  return (
+    <div className="mt-2 pt-2 border-t border-red-200 space-y-1">
+      <p className="text-xs font-medium text-red-800">{fix.title}</p>
+      <p className="text-[11px] text-red-700">{fix.body}</p>
+      <a
+        href={fix.href}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-block text-[11px] font-medium text-red-800 underline hover:text-red-900"
+      >
+        {fix.cta} &rarr;
+      </a>
+    </div>
+  )
+}
+
 // A publish that died partway leaves paused objects behind. Deleting them
 // automatically would be a destructive write on a failure path, so they are
 // named instead and the human decides.
@@ -640,6 +688,7 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
           {error}
+          <SetupFix error={error} client={client} />
           <PartialWarning partial={partial} />
         </div>
       )}
