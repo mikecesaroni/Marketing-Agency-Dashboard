@@ -306,20 +306,39 @@ function actId(raw: string): string {
 /**
  * Trades the System User token for a Page token.
  *
- * Lead forms are a Page resource, not an ad account one, and most Page write
- * endpoints will not take a user-level token. Assigning the Page to the system
- * user in Business Settings is what makes this exchange work; without it Meta
- * returns a permissions error here rather than at form creation, which is the
- * clearer place to fail.
+ * Lead forms are a Page resource, not an ad account one, and Page endpoints
+ * will not take a user-level token.
  *
- * Falls back to the original token: some system user setups do accept it
- * directly, and a working call is better than a pre-emptive refusal.
+ * This asks /me/accounts rather than the Page directly, and the difference is
+ * the whole feature. Reading access_token off /{page-id} needs
+ * pages_read_engagement; this System User token does not have it, so that call
+ * fails, the catch below hands back the original token, and Meta then rejects
+ * the form call with "(#190) This method must be called with a Page Access
+ * Token" — an error about the wrong thing entirely, at a later step, which is
+ * exactly how it went unnoticed. /me/accounts needs only pages_show_list, which
+ * the token does have, and returns the same access_token for every Page the
+ * system user has a role on.
+ *
+ * The direct read stays as a second attempt: on a setup that does carry
+ * pages_read_engagement it works, and on one where the Page is reachable but
+ * not enumerable it is the only thing that does.
  */
 async function pageToken(pageId: string, token: string): Promise<string> {
+  try {
+    const owned = await graphGet('me/accounts', { fields: 'id,access_token', limit: '100' }, token)
+    const match = (owned?.data || []).find((p: any) => String(p.id) === String(pageId))
+    if (match?.access_token) return match.access_token
+  } catch {
+    // Not fatal on its own — the direct read below may still work.
+  }
+
   try {
     const res = await graphGet(pageId, { fields: 'access_token' }, token)
     return res?.access_token || token
   } catch {
+    // Handing back the System User token means the caller fails with #190
+    // rather than something that names the Page. Better than refusing outright:
+    // some setups do accept it, and a working call beats a pre-emptive no.
     return token
   }
 }
