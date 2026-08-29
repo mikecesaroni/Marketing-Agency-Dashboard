@@ -208,7 +208,16 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
 
   let logoBox = null
   if (logo) {
-    const box = 112
+    // The square the logo is fitted inside, on a 1080-wide artboard, so about a
+    // seventh of the width. It was 112 and read as an afterthought at feed size,
+    // where the whole frame is a couple of inches on a phone.
+    //
+    // Whatever this is set to, the footer stays out of its way on its own: the
+    // gutter below is subtracted from the width the offer block, subhead and CTA
+    // are measured against, so a bigger logo reflows the text rather than
+    // colliding with it. A wide logo still lands wide and short, since the fit
+    // is by the longer edge.
+    const box = 160
     const scale = Math.min(box / logo.width, box / logo.height)
     logoBox = { w: logo.width * scale, h: logo.height * scale }
   }

@@ -26,12 +26,76 @@ function publicUrl(path) {
   return supabase.storage.from('client-files').getPublicUrl(path).data.publicUrl
 }
 
-function Artboard({ size, canvasRef }) {
+/**
+ * The full-size artboard, over everything else, while the thumbnail is hovered.
+ *
+ * The thumbnail is a fifth of the real thing, which is too small to judge a
+ * headline wrap or read the proof strip, and the artboards are the whole
+ * product. Nothing is re-rendered to show this: the source canvas is already
+ * painted at its true 1080px width and only displayed small, so this copies
+ * those exact pixels across with one drawImage. Blitting rather than scaling a
+ * thumbnail is what makes it sharp, and it means the zoom can never drift out
+ * of step with what the artboard actually says.
+ *
+ * Fixed to the viewport rather than scaled in place because the artboards live
+ * in a horizontally scrolling strip inside a modal; anything enlarged in flow
+ * gets clipped by one or the other.
+ */
+function ZoomedArtboard({ source, size, pinned, onClose }) {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const dst = ref.current
+    if (!dst || !source) return
+    // Match the source exactly, then let CSS fit it to the viewport. Sizing the
+    // bitmap to the display size instead would throw away the resolution this
+    // exists to show.
+    dst.width = size.w
+    dst.height = size.h
+    dst.getContext('2d').drawImage(source, 0, 0)
+  }, [source, size])
+
+  // Escape closes a pinned preview, which is where a hover-only version gets
+  // frustrating: you pin it to read something and then cannot get rid of it.
+  useEffect(() => {
+    if (!pinned) return
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [pinned, onClose])
+
+  return (
+    <div
+      // Transparent to the mouse unless pinned, so hovering the thumbnail is
+      // never interrupted by the thing that hover just opened.
+      className={`fixed inset-0 z-[60] flex flex-col items-center justify-center gap-2 bg-slate-900/80 p-4 ${
+        pinned ? '' : 'pointer-events-none'
+      }`}
+      onClick={pinned ? onClose : undefined}
+    >
+      <canvas
+        ref={ref}
+        className="rounded shadow-2xl bg-slate-100"
+        style={{ maxHeight: '86vh', maxWidth: '94vw', width: 'auto', height: 'auto' }}
+      />
+      <p className="text-xs text-white/80">
+        {size.label} · {size.w}&times;{size.h} ·{' '}
+        {pinned ? 'click anywhere or press Escape to close' : 'click to keep it open'}
+      </p>
+    </div>
+  )
+}
+
+function Artboard({ size, canvasRef, onZoom, onUnzoom, onPin }) {
   return (
     <div className="flex-shrink-0">
       <canvas
         ref={canvasRef}
-        className="border border-slate-300 rounded bg-slate-100"
+        onMouseEnter={onZoom}
+        onMouseLeave={onUnzoom}
+        onClick={onPin}
+        title="Hover to see it full size"
+        className="border border-slate-300 rounded bg-slate-100 cursor-zoom-in transition hover:border-orange-400 hover:ring-2 hover:ring-orange-200"
         style={{ width: size.w / 5, height: size.h / 5 }}
       />
       <p className="text-[11px] text-slate-500 mt-1">
@@ -208,6 +272,12 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // The saved set the Publish tab is working on, picked from the gallery.
   const [publishing, setPublishing] = useState(null)
   const [published, setPublished] = useState([])
+
+  // Which artboard is showing full size, and whether it was clicked open
+  // rather than hovered. Pinning matters for the 9:16: reading the bottom of a
+  // tall frame means moving the mouse off the thumbnail that opened it.
+  const [zoom, setZoom] = useState(null)
+  const [zoomPinned, setZoomPinned] = useState(false)
 
   const [assets, setAssets] = useState({ background: null, logo: null })
   const [error, setError] = useState('')
@@ -757,7 +827,16 @@ export default function AdStudioPanel({ client, intake, seed }) {
       <div className="flex gap-4 overflow-x-auto pb-2 pt-1">
         {SIZES.map((size, i) => (
           <div key={size.key} className="flex-shrink-0">
-            <Artboard size={size} canvasRef={(el) => (refs.current[i] = el)} />
+            <Artboard
+              size={size}
+              canvasRef={(el) => (refs.current[i] = el)}
+              onZoom={() => !zoomPinned && setZoom(i)}
+              onUnzoom={() => !zoomPinned && setZoom(null)}
+              onPin={() => {
+                setZoom(i)
+                setZoomPinned(true)
+              }}
+            />
             <button
               onClick={() => download(i)}
               className="mt-1 text-[11px] text-blue-600 hover:text-blue-800 underline"
@@ -767,6 +846,18 @@ export default function AdStudioPanel({ client, intake, seed }) {
           </div>
         ))}
       </div>
+
+      {zoom !== null && refs.current[zoom] && (
+        <ZoomedArtboard
+          source={refs.current[zoom]}
+          size={SIZES[zoom]}
+          pinned={zoomPinned}
+          onClose={() => {
+            setZoomPinned(false)
+            setZoom(null)
+          }}
+        />
+      )}
 
       <div className="flex items-center gap-3 pt-2 border-t border-slate-200">
         <button
