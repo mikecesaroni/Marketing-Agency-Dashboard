@@ -13,6 +13,7 @@ import {
   IconDeliverables,
   IconLaunch,
   IconPin,
+  StatCard,
 } from '../components/ui'
 import {
   calcMRR,
@@ -23,33 +24,6 @@ import {
   money,
   today,
 } from '../lib/queries'
-
-/**
- * One headline number.
- *
- * The tone used to colour the whole card, which meant a normal week showed
- * four differently coloured boxes and none of them meant anything. Now the
- * card is white unless something is actually wrong, so when one does go red it
- * is the only thing on the row that is.
- */
-function StatCard({ label, value, sub, delta, alert }) {
-  return (
-    <Card tone={alert ? 'danger' : 'default'} className="min-w-0">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p
-        className={`mt-1 text-2xl font-semibold tabular-nums tracking-tight ${
-          alert ? 'text-red-700' : 'text-slate-900'
-        }`}
-      >
-        {value}
-      </p>
-      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-        {sub && <p className="text-xs text-slate-500">{sub}</p>}
-        {delta}
-      </div>
-    </Card>
-  )
-}
 
 /**
  * A pile of things that need doing, of one kind.

@@ -99,7 +99,7 @@ export default function Layout({ title, subtitle, actions, children }) {
         </nav>
 
         <div className="border-t border-white/5 px-5 py-3">
-          <p className="text-[11px] text-slate-500">The Working Class</p>
+          <p className="text-[11px] text-slate-500">Roundtable Marketing</p>
         </div>
       </aside>
 

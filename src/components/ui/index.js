@@ -6,6 +6,7 @@ export { default as Field, Input, Textarea, Select } from './Field'
 export { default as Badge } from './Badge'
 export { default as Section } from './Section'
 export { default as Stat } from './Stat'
+export { default as StatCard } from './StatCard'
 export {
   IconDashboard,
   IconClients,

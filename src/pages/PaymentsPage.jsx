@@ -6,28 +6,10 @@ import EthanPayoutPanel from '../components/EthanPayoutPanel'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
 import { calcMRR, fetchPayments, hasInternalColumn, isOverdue, money, today } from '../lib/queries'
+import { Badge, Button, Card, Input, Select, StatCard, Textarea } from '../components/ui'
 
 const FILTERS = ['paid', 'overdue', 'upcoming', 'all']
 const METHODS = ['card', 'ach', 'check', 'paypal', 'other']
-
-const inputClass =
-  'w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
-
-function StatCard({ label, value, sub, tone = 'slate' }) {
-  const tones = {
-    slate: 'bg-white border-slate-200',
-    green: 'bg-green-50 border-green-200',
-    blue: 'bg-blue-50 border-blue-200',
-    red: 'bg-red-50 border-red-200',
-  }
-  return (
-    <div className={`rounded-xl border p-4 ${tones[tone]}`}>
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</p>
-      <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
-      {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
-    </div>
-  )
-}
 
 /**
  * Payments gathered under the client who owes them.
@@ -42,7 +24,7 @@ function ByClient({ groups, expanded, toggle, renderRow }) {
       {groups.map((g) => {
         const open = expanded.has(g.id)
         return (
-          <div key={g.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <Card key={g.id} padding="none" className="overflow-hidden">
             <button
               onClick={() => toggle(g.id)}
               className="w-full flex flex-col sm:flex-row sm:items-center gap-2 p-3 md:p-4 text-left hover:bg-slate-50 transition"
@@ -51,17 +33,12 @@ function ByClient({ groups, expanded, toggle, renderRow }) {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-slate-900">{g.name}</span>
                   {g.stripeLinked && (
-                    <span
-                      title={g.stripeLinked}
-                      className="px-1.5 py-0.5 rounded bg-green-50 border border-green-200 text-green-700 text-[10px] font-semibold"
-                    >
+                    <Badge tone="success" title={g.stripeLinked}>
                       Stripe linked
-                    </span>
+                    </Badge>
                   )}
                   {g.overdue > 0 && (
-                    <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 text-[10px] font-bold">
-                      {g.overdue} overdue
-                    </span>
+                    <Badge tone="danger">{g.overdue} overdue</Badge>
                   )}
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -75,11 +52,11 @@ function ByClient({ groups, expanded, toggle, renderRow }) {
             </button>
 
             {open && (
-              <div className="border-t border-slate-200 p-2 md:p-3 space-y-2 bg-slate-50/60">
+              <div className="space-y-2 border-t border-slate-200 bg-slate-50/60 p-2 md:p-3">
                 {g.rows.map(renderRow)}
               </div>
             )}
-          </div>
+          </Card>
         )
       })}
     </div>
@@ -251,9 +228,9 @@ export default function PaymentsPage() {
             >
               {p.clients?.name || 'Unknown client'}
             </Link>
-            <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-bold uppercase">
+            <Badge tone="neutral" className="uppercase">
               {p.payment_type}
-            </span>
+            </Badge>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
             <span className={late ? 'text-red-600 font-semibold' : ''}>
@@ -268,38 +245,29 @@ export default function PaymentsPage() {
           <p className="text-lg font-bold text-slate-900 mr-1">
             ${p.amount.toFixed(2)}
           </p>
-          <button
-            onClick={() => openEdit(p)}
-            className="px-2.5 py-1.5 text-xs font-medium bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition"
-          >
+          <Button variant="secondary" size="sm" onClick={() => openEdit(p)}>
             Edit
-          </button>
+          </Button>
           {p.status === 'paid' ? (
-            <button
-              onClick={() => handleUnmarkPaid(p)}
-              className="px-2.5 py-1.5 text-xs font-medium bg-green-100 text-green-800 rounded-lg hover:bg-green-200 transition"
-            >
+            <Button variant="success" size="sm" onClick={() => handleUnmarkPaid(p)}>
               ✓ Paid
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
+              size="sm"
               onClick={() => {
                 setPaidDate(today())
                 setMethod('card')
                 setMarkingPaid(p)
               }}
-              className="px-2.5 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
             >
               Mark Paid
-            </button>
+            </Button>
           )}
           {late && (
-            <button
-              onClick={() => handleDeletePayment(p)}
-              className="px-2.5 py-1.5 text-xs font-medium bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
-            >
+            <Button variant="danger" size="sm" onClick={() => handleDeletePayment(p)}>
               Delete
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -370,17 +338,14 @@ export default function PaymentsPage() {
       <div className="flex flex-col md:flex-row gap-2 mb-4">
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">
           {FILTERS.map((f) => (
-            <button
+            <Button
               key={f}
+              variant={filter === f ? 'dark' : 'outline'}
               onClick={() => setFilter(f)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition ${
-                filter === f
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
-              }`}
+              className="capitalize whitespace-nowrap"
             >
               {f}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="md:ml-auto flex gap-1.5">
@@ -388,23 +353,20 @@ export default function PaymentsPage() {
             ['client', 'By client'],
             ['date', 'By date'],
           ].map(([key, label]) => (
-            <button
+            <Button
               key={key}
+              variant={view === key ? 'dark' : 'outline'}
               onClick={() => setView(key)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
-                view === key
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
-              }`}
+              className="whitespace-nowrap"
             >
               {label}
-            </button>
+            </Button>
           ))}
         </div>
-        <select
+        <Select
           value={clientFilter}
           onChange={(e) => setClientFilter(e.target.value)}
-          className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+          className="w-auto"
         >
           <option value="all">All clients</option>
           {clients.map((c) => (
@@ -412,19 +374,19 @@ export default function PaymentsPage() {
               {c.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {loading ? (
         <p className="text-slate-500">Loading...</p>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
+        <Card padding="lg" className="text-center">
           <p className="text-slate-500">
             {payments.length === 0
               ? 'No payments yet. Open a client, then use Billing Setup to enter their setup fee and monthly amount.'
               : 'Nothing matches these filters.'}
           </p>
-        </div>
+        </Card>
       ) : (
         view === 'client' ? (
           <ByClient
@@ -458,42 +420,42 @@ export default function PaymentsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Date paid</label>
-              <input
+              <Input
                 type="date"
+                size="lg"
                 value={paidDate}
                 onChange={(e) => setPaidDate(e.target.value)}
-                className={inputClass}
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Payment method
               </label>
-              <select
+              <Select
+                size="lg"
                 value={method}
                 onChange={(e) => setMethod(e.target.value)}
-                className={`${inputClass} capitalize`}
+                className="capitalize"
               >
                 {METHODS.map((m) => (
                   <option key={m} value={m}>
                     {m}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleMarkPaid}
-                className="flex-1 bg-green-600 text-white py-2.5 rounded-lg font-medium hover:bg-green-700 transition"
-              >
+              <Button variant="success" size="lg" onClick={handleMarkPaid} className="flex-1">
                 Confirm Paid
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
                 onClick={() => setMarkingPaid(null)}
-                className="flex-1 bg-slate-200 text-slate-900 py-2.5 rounded-lg font-medium hover:bg-slate-300 transition"
+                className="flex-1"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -502,46 +464,45 @@ export default function PaymentsPage() {
       <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit Payment">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount</label>
-            <input
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Amount</label>
+            <Input
               type="number"
               step="0.01"
+              size="lg"
               value={editForm.amount}
               onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
-              className={inputClass}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Due date</label>
-            <input
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Due date</label>
+            <Input
               type="date"
+              size="lg"
               value={editForm.due_date}
               onChange={(e) => setEditForm((f) => ({ ...f, due_date: e.target.value }))}
-              className={inputClass}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Notes</label>
-            <textarea
-              rows="3"
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Notes</label>
+            <Textarea
+              rows={3}
+              size="lg"
               value={editForm.notes}
               onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
-              className={inputClass}
             />
           </div>
           <div className="flex gap-2 pt-2">
-            <button
-              onClick={handleSaveEdit}
-              className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition"
-            >
+            <Button size="lg" onClick={handleSaveEdit} className="flex-1">
               Save Changes
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
               onClick={() => setEditing(null)}
-              className="flex-1 bg-slate-200 text-slate-900 py-2.5 rounded-lg font-medium hover:bg-slate-300 transition"
+              className="flex-1"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
