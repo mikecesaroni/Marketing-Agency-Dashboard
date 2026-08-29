@@ -4,6 +4,18 @@ import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import AddClientForm from '../components/AddClientForm'
 import { fetchClientsWithKPIs, money } from '../lib/queries'
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  Table,
+  THead,
+  TBody,
+  Tr,
+  Th,
+  Td,
+} from '../components/ui'
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -18,50 +30,42 @@ const FILTERS = [
 
 function LiveBadge({ live, label }) {
   return (
-    <span
-      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${
-        live ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-500'
-      }`}
-    >
+    <Badge tone={live ? 'success' : 'dim'} className="whitespace-nowrap">
       {live ? '● ' : '○ '}
       {label}
-    </span>
+    </Badge>
   )
 }
 
 const SETUP_FEE_STYLES = {
-  paid: { label: '✓ Paid', className: 'bg-green-100 text-green-800' },
-  partial: { label: 'Part paid', className: 'bg-blue-100 text-blue-800' },
-  unpaid: { label: 'Unpaid', className: 'bg-amber-100 text-amber-800' },
-  overdue: { label: 'Overdue', className: 'bg-red-100 text-red-800' },
+  paid: { label: '✓ Paid', tone: 'success' },
+  partial: { label: 'Part paid', tone: 'info' },
+  unpaid: { label: 'Unpaid', tone: 'warning' },
+  overdue: { label: 'Overdue', tone: 'danger' },
 }
 
 function SetupFeeBadge({ status, amount, paidAmount }) {
   if (!status) return <span className="text-slate-400">—</span>
 
-  const { label, className } = SETUP_FEE_STYLES[status]
+  const { label, tone } = SETUP_FEE_STYLES[status]
   // A split fee needs both numbers to mean anything — "Part paid · $2,500"
   // doesn't say how much of it actually landed.
   const detail =
     status === 'partial' ? `${money(paidAmount)} of ${money(amount)}` : amount ? money(amount) : ''
 
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${className}`}>
+    <Badge tone={tone}>
       {label}
       {detail ? ` · ${detail}` : ''}
-    </span>
+    </Badge>
   )
 }
 
 function MonthlySubBadge({ subscribed }) {
   return (
-    <span
-      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${
-        subscribed ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-500'
-      }`}
-    >
+    <Badge tone={subscribed ? 'success' : 'dim'} className="whitespace-nowrap">
       {subscribed ? '✓ Subscribed' : 'Not yet'}
-    </span>
+    </Badge>
   )
 }
 
@@ -121,12 +125,9 @@ export default function ClientsPage() {
   }, [clients, search, statusFilter])
 
   const addButton = (
-    <button
-      onClick={() => setShowAddModal(true)}
-      className="w-full md:w-auto px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition"
-    >
+    <Button variant="dark" size="lg" onClick={() => setShowAddModal(true)} className="w-full md:w-auto">
       + New Client
-    </button>
+    </Button>
   )
 
   return (
@@ -136,32 +137,30 @@ export default function ClientsPage() {
       actions={addButton}
     >
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 mb-4">
+        <Card tone="danger" className="mb-4 text-red-700">
           Error: {error}
-        </div>
+        </Card>
       )}
 
       <div className="flex flex-col md:flex-row gap-2 mb-4">
-        <input
+        <Input
           type="search"
+          size="lg"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search business, client, industry, or market..."
-          className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="flex-1"
         />
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">
           {FILTERS.map((f) => (
-            <button
+            <Button
               key={f.key}
+              variant={statusFilter === f.key ? 'dark' : 'outline'}
               onClick={() => setStatusFilter(f.key)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
-                statusFilter === f.key
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
-              }`}
+              className="whitespace-nowrap"
             >
               {f.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -169,13 +168,13 @@ export default function ClientsPage() {
       {loading ? (
         <p className="text-slate-500">Loading...</p>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
+        <Card padding="lg" className="text-center">
           <p className="text-slate-500">
             {clients.length === 0
               ? 'No clients yet. Create one to get started.'
               : 'No clients match this search.'}
           </p>
-        </div>
+        </Card>
       ) : (
         <>
           {/* MOBILE CARDS */}
@@ -242,75 +241,68 @@ export default function ClientsPage() {
           </div>
 
           {/* DESKTOP TABLE */}
-          <div className="hidden md:block bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-900">
-                    <th className="px-4 py-3 text-left font-semibold">Business</th>
-                    <th className="px-4 py-3 text-left font-semibold">Client</th>
-                    <th className="px-4 py-3 text-left font-semibold">Industry</th>
-                    <th className="px-4 py-3 text-left font-semibold">Market</th>
-                    <th className="px-4 py-3 text-left font-semibold">Channels</th>
-                    <th className="px-4 py-3 text-left font-semibold">Setup Fee</th>
-                    <th className="px-4 py-3 text-left font-semibold">Monthly Sub</th>
-                    <th className="px-4 py-3 text-right font-semibold">Meta $/day</th>
-                    <th className="px-4 py-3 text-right font-semibold">Wk Spend</th>
-                    <th className="px-4 py-3 text-right font-semibold">Wk Leads</th>
-                    <th className="px-4 py-3 text-right font-semibold">Cost/Lead</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((client) => (
-                    <tr
-                      key={client.id}
-                      className={`border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition ${
-                        client.hasMissingKPIs ? 'bg-amber-50' : ''
-                      }`}
-                    >
-                      <td className="px-4 py-3">
-                        <Link
-                          to={`/client/${client.id}`}
-                          className="font-medium text-blue-600 hover:text-blue-800"
-                        >
-                          {client.name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{client.ownerName || '—'}</td>
-                      <td className="px-4 py-3 text-slate-600">{client.industry || '—'}</td>
-                      <td className="px-4 py-3 text-slate-600">{client.market || '—'}</td>
-                      <td className="px-4 py-3">
-                        <ChannelBadges client={client} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <SetupFeeBadge
-                          status={client.setupFeeStatus}
-                          amount={client.setupFeeAmount}
-                          paidAmount={client.setupFeePaidAmount}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <MonthlySubBadge subscribed={client.monthlySubscribed} />
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-600">
-                        {money(client.meta_budget_per_day)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {money(client.thisWeekTotalSpend)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {client.thisWeekTotalLeads}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {client.thisWeekCostPerLead > 0
-                          ? `$${client.thisWeekCostPerLead.toFixed(2)}`
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="hidden md:block">
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Business</Th>
+                  <Th>Client</Th>
+                  <Th>Industry</Th>
+                  <Th>Market</Th>
+                  <Th>Channels</Th>
+                  <Th>Setup Fee</Th>
+                  <Th>Monthly Sub</Th>
+                  <Th numeric>Meta $/day</Th>
+                  <Th numeric>Wk Spend</Th>
+                  <Th numeric>Wk Leads</Th>
+                  <Th numeric>Cost/Lead</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {filtered.map((client) => (
+                  <Tr key={client.id} tone={client.hasMissingKPIs ? 'warning' : undefined}>
+                    <Td>
+                      <Link
+                        to={`/client/${client.id}`}
+                        className="font-medium text-blue-600 hover:text-blue-800"
+                      >
+                        {client.name}
+                      </Link>
+                    </Td>
+                    <Td muted>{client.ownerName || '—'}</Td>
+                    <Td muted>{client.industry || '—'}</Td>
+                    <Td muted>{client.market || '—'}</Td>
+                    <Td>
+                      <ChannelBadges client={client} />
+                    </Td>
+                    <Td>
+                      <SetupFeeBadge
+                        status={client.setupFeeStatus}
+                        amount={client.setupFeeAmount}
+                        paidAmount={client.setupFeePaidAmount}
+                      />
+                    </Td>
+                    <Td>
+                      <MonthlySubBadge subscribed={client.monthlySubscribed} />
+                    </Td>
+                    <Td numeric muted>
+                      {money(client.meta_budget_per_day)}
+                    </Td>
+                    <Td numeric className="font-medium">
+                      {money(client.thisWeekTotalSpend)}
+                    </Td>
+                    <Td numeric className="font-medium">
+                      {client.thisWeekTotalLeads}
+                    </Td>
+                    <Td numeric className="font-medium">
+                      {client.thisWeekCostPerLead > 0
+                        ? `$${client.thisWeekCostPerLead.toFixed(2)}`
+                        : '—'}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
           </div>
         </>
       )}

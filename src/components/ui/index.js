@@ -14,4 +14,14 @@ export {
   IconReports,
   IconSops,
   IconAiSearch,
+  IconAlert,
+  IconClock,
+  IconClipboard,
+  IconLaunch,
+  IconPin,
+  IconCheckCircle,
+  IconTrendUp,
+  IconTrendDown,
 } from './icons'
+export { Table, THead, TBody, Tr, Th, Td } from './Table'
+export { default as Delta } from './Delta'

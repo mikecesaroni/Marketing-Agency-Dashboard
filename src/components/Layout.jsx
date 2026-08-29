@@ -45,16 +45,15 @@ export default function Layout({ title, subtitle, actions, children }) {
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 bg-slate-950 text-white">
         <div className="px-5 py-5">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-start gap-2.5">
             {/* A mark rather than a word. It is the one spot of brand colour in
                 the chrome, which is what makes the rest read as calm. */}
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold">
-              A
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold">
+              R
             </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold leading-tight tracking-tight">Agency CRM</p>
-              <p className="text-[11px] text-slate-500 leading-tight">Meta Ads + Google LSA</p>
-            </div>
+            <p className="min-w-0 text-sm font-semibold leading-snug tracking-tight text-balance">
+              Roundtable Marketing Agency CRM
+            </p>
           </div>
         </div>
 

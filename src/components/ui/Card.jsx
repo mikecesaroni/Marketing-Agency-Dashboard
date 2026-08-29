@@ -13,8 +13,8 @@ import { cn } from './cn'
  */
 
 const TONES = {
-  default: 'bg-white border-slate-200',
-  muted: 'bg-slate-50 border-slate-200',
+  default: 'bg-white border-slate-200/80',
+  muted: 'bg-slate-50 border-slate-200/80',
   info: 'bg-blue-50 border-blue-200',
   success: 'bg-green-50 border-green-200',
   warning: 'bg-amber-50 border-amber-200',
@@ -33,7 +33,11 @@ export default function Card({
   return (
     <div
       className={cn(
-        'rounded-xl border',
+        // The shadow is deliberately almost nothing: one pixel, four percent
+        // black. Enough to lift a white card off a near-white page, not enough
+        // to read as a drop shadow. Anything heavier and a screen full of
+        // cards turns into a screen full of shadows.
+        'rounded-xl border shadow-[0_1px_2px_0_rgb(15_23_42_/_0.04)]',
         TONES[tone] || TONES.default,
         PADDING[padding] ?? PADDING.md,
         className
@@ -54,7 +58,7 @@ export function CardHeader({ title, subtitle, actions, className }) {
   return (
     <div className={cn('flex items-start justify-between gap-3', className)}>
       <div className="min-w-0">
-        <h2 className="text-sm font-semibold text-slate-900 truncate">{title}</h2>
+        <h2 className="truncate text-sm font-semibold tracking-tight text-slate-900">{title}</h2>
         {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}

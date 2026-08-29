@@ -22,7 +22,9 @@ export default function Section({ step, title, hint, actions, className, childre
               </span>
             )}
             <div className="min-w-0">
-              {title && <h3 className="text-sm font-semibold text-slate-900">{title}</h3>}
+              {title && (
+                <h3 className="text-sm font-semibold tracking-tight text-slate-900">{title}</h3>
+              )}
               {hint && <p className="text-xs text-slate-500 mt-0.5">{hint}</p>}
             </div>
           </div>

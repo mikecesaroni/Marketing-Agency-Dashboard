@@ -2,57 +2,127 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import FormSubmissionAlerts from '../components/FormSubmissionAlerts'
-import { calcMRR, fetchDashboardData, formatDate, isOverdue, money, today } from '../lib/queries'
+import {
+  Badge,
+  Card,
+  Delta,
+  IconAlert,
+  IconCheckCircle,
+  IconClipboard,
+  IconClock,
+  IconDeliverables,
+  IconLaunch,
+  IconPin,
+} from '../components/ui'
+import {
+  calcMRR,
+  fetchDashboardData,
+  formatDate,
+  getMonday,
+  isOverdue,
+  money,
+  today,
+} from '../lib/queries'
 
-function StatCard({ label, value, sub, tone = 'slate' }) {
-  const tones = {
-    slate: 'bg-white border-slate-200',
-    green: 'bg-green-50 border-green-200',
-    blue: 'bg-blue-50 border-blue-200',
-    red: 'bg-red-50 border-red-200',
-  }
+/**
+ * One headline number.
+ *
+ * The tone used to colour the whole card, which meant a normal week showed
+ * four differently coloured boxes and none of them meant anything. Now the
+ * card is white unless something is actually wrong, so when one does go red it
+ * is the only thing on the row that is.
+ */
+function StatCard({ label, value, sub, delta, alert }) {
   return (
-    <div className={`rounded-xl border p-4 ${tones[tone]}`}>
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</p>
-      <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
-      {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
-    </div>
+    <Card tone={alert ? 'danger' : 'default'} className="min-w-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p
+        className={`mt-1 text-2xl font-semibold tabular-nums tracking-tight ${
+          alert ? 'text-red-700' : 'text-slate-900'
+        }`}
+      >
+        {value}
+      </p>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        {sub && <p className="text-xs text-slate-500">{sub}</p>}
+        {delta}
+      </div>
+    </Card>
   )
 }
 
-function ActionGroup({ icon, title, tone, items }) {
-  if (items.length === 0) return null
+/**
+ * A pile of things that need doing, of one kind.
+ *
+ * These were whole cards tinted red or amber or blue, six of them at once,
+ * which is a wall of colour that stops meaning urgency. The tint is now a
+ * single bar down the left edge and a coloured icon: enough to sort them at a
+ * glance, quiet enough that six of them still look like a list.
+ */
+const GROUP_TONES = {
+  danger: { rail: 'bg-red-500', icon: 'text-red-600', badge: 'danger' },
+  warning: { rail: 'bg-amber-500', icon: 'text-amber-600', badge: 'warning' },
+  info: { rail: 'bg-blue-500', icon: 'text-blue-600', badge: 'info' },
+}
 
-  const tones = {
-    red: 'border-red-200 bg-red-50',
-    amber: 'border-amber-200 bg-amber-50',
-    blue: 'border-blue-200 bg-blue-50',
-  }
+function ActionGroup({ Icon, title, tone, items }) {
+  if (items.length === 0) return null
+  const t = GROUP_TONES[tone] || GROUP_TONES.info
 
   return (
-    <div className={`rounded-xl border ${tones[tone]} p-4`}>
-      <p className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
-        <span>{icon}</span>
-        {title}
-        <span className="text-xs font-normal text-slate-500">({items.length})</span>
-      </p>
-      <div className="space-y-1.5">
-        {items.slice(0, 6).map((item) => (
-          <Link
-            key={item.key}
-            to={item.to}
-            className="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2 border border-slate-200 hover:border-slate-300 transition"
-          >
-            <span className="text-sm text-slate-900 truncate">{item.label}</span>
-            <span className="text-xs text-slate-500 flex-shrink-0">{item.meta}</span>
-          </Link>
-        ))}
-        {items.length > 6 && (
-          <p className="text-xs text-slate-500 pt-1">+ {items.length - 6} more</p>
-        )}
+    <Card padding="none" className="overflow-hidden">
+      <div className="flex">
+        <span className={`w-1 flex-shrink-0 ${t.rail}`} aria-hidden="true" />
+        <div className="min-w-0 flex-1 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Icon className={`h-[18px] w-[18px] ${t.icon}`} />
+            <h3 className="text-sm font-semibold tracking-tight text-slate-900">{title}</h3>
+            <Badge tone={t.badge}>{items.length}</Badge>
+          </div>
+
+          <ul className="space-y-1">
+            {items.slice(0, 6).map((item) => (
+              <li key={item.key}>
+                <Link
+                  to={item.to}
+                  className="group flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 -mx-2 transition hover:bg-slate-50"
+                >
+                  <span className="truncate text-sm text-slate-700 group-hover:text-slate-900">
+                    {item.label}
+                  </span>
+                  <span className="flex-shrink-0 text-[11px] tabular-nums text-slate-400">
+                    {item.meta}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          {items.length > 6 && (
+            <p className="pt-2 text-[11px] text-slate-400">+ {items.length - 6} more</p>
+          )}
+        </div>
       </div>
-    </div>
+    </Card>
   )
+}
+
+/**
+ * Last week's totals, out of the KPI history the dashboard was already
+ * fetching and then throwing away.
+ *
+ * fetchDashboardData has always asked for two weeks and HomePage destructured
+ * only three of the four things it returned, so every number on this page was
+ * a figure with nothing to compare it to. "$4,200 spent" says nothing on its
+ * own; "$4,200, down 12%" is the whole point of looking.
+ */
+function lastWeekTotals(kpis) {
+  const lastMonday = formatDate(getMonday(new Date(Date.now() - 7 * 86400000)))
+  const rows = (kpis || []).filter((k) => k.week_of === lastMonday)
+
+  const spend = rows.reduce((t, k) => t + (k.ad_spend || 0), 0)
+  const leads = rows.reduce((t, k) => t + (k.leads || 0), 0)
+  return { spend, leads, costPerLead: leads > 0 ? spend / leads : 0 }
 }
 
 export default function HomePage() {
@@ -60,15 +130,17 @@ export default function HomePage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetchDashboardData().then(setData).catch((err) => setError(err.message))
+    fetchDashboardData()
+      .then(setData)
+      .catch((err) => setError(err.message))
   }, [])
 
   if (error) {
     return (
       <Layout title="Dashboard">
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <Card tone="danger" className="text-red-700">
           Error: {error}
-        </div>
+        </Card>
       </Layout>
     )
   }
@@ -81,7 +153,7 @@ export default function HomePage() {
     )
   }
 
-  const { clients, payments, deliverables } = data
+  const { clients, payments, deliverables, kpis } = data
   const now = today()
 
   const live = clients.filter((c) => !c.archived)
@@ -97,8 +169,12 @@ export default function HomePage() {
   const totalCollected = paidPayments.reduce((sum, p) => sum + p.amount, 0)
 
   const overduePayments = payments.filter(isOverdue)
+  const overdueTotal = overduePayments.reduce((s, p) => s + p.amount, 0)
+
   const leadsThisWeek = clients.reduce((sum, c) => sum + c.thisWeekTotalLeads, 0)
   const spendThisWeek = clients.reduce((sum, c) => sum + c.thisWeekTotalSpend, 0)
+  const cplThisWeek = leadsThisWeek > 0 ? spendThisWeek / leadsThisWeek : 0
+  const prev = lastWeekTotals(kpis)
 
   const inSevenDays = new Date()
   inSevenDays.setDate(inSevenDays.getDate() + 7)
@@ -114,9 +190,9 @@ export default function HomePage() {
 
   const actionGroups = [
     {
-      icon: '🔴',
+      Icon: IconAlert,
       title: 'Overdue payments',
-      tone: 'red',
+      tone: 'danger',
       items: overduePayments.map((p) => ({
         key: p.id,
         to: '/payments',
@@ -125,9 +201,9 @@ export default function HomePage() {
       })),
     },
     {
-      icon: '⚠️',
+      Icon: IconClock,
       title: 'Deliverables past due',
-      tone: 'red',
+      tone: 'danger',
       items: lateDeliverables.map((d) => ({
         key: d.id,
         to: '/deliverables',
@@ -136,9 +212,9 @@ export default function HomePage() {
       })),
     },
     {
-      icon: '📋',
+      Icon: IconClipboard,
       title: 'KPIs not logged this week',
-      tone: 'amber',
+      tone: 'warning',
       items: missingKPIs.map((c) => ({
         key: c.id,
         to: `/client/${c.id}`,
@@ -147,9 +223,9 @@ export default function HomePage() {
       })),
     },
     {
-      icon: '📦',
+      Icon: IconDeliverables,
       title: 'Due in the next 7 days',
-      tone: 'blue',
+      tone: 'info',
       items: dueSoon.map((d) => ({
         key: d.id,
         to: '/deliverables',
@@ -158,9 +234,9 @@ export default function HomePage() {
       })),
     },
     {
-      icon: '🚀',
+      Icon: IconLaunch,
       title: 'Meta not live yet',
-      tone: 'blue',
+      tone: 'info',
       items: metaNotYet.map((c) => ({
         key: c.id,
         to: `/client/${c.id}`,
@@ -169,9 +245,9 @@ export default function HomePage() {
       })),
     },
     {
-      icon: '📍',
+      Icon: IconPin,
       title: 'LSA not live yet',
-      tone: 'blue',
+      tone: 'info',
       items: lsaNotYet.map((c) => ({
         key: c.id,
         to: `/client/${c.id}`,
@@ -195,70 +271,86 @@ export default function HomePage() {
       {/* Above the stats: a client waiting on us is more urgent than a number
           that has not moved since yesterday. Renders nothing when nothing is
           unread, so it costs no space on a quiet day. */}
-      <div className="mb-6 md:mb-8 empty:mb-0">
+      <div className="mb-6 empty:mb-0 md:mb-8">
         <FormSubmissionAlerts />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
-        <StatCard
-          label="Clients"
-          value={live.length}
-          sub={`${metaLive.length} with Meta live`}
-        />
+      <div className="mb-6 grid grid-cols-2 gap-3 md:mb-8 md:gap-4 lg:grid-cols-4">
+        <StatCard label="Clients" value={live.length} sub={`${metaLive.length} with Meta live`} />
         <StatCard
           label="MRR"
           value={money(mrr)}
           sub={`${billingCount} ${billingCount === 1 ? 'client' : 'clients'} billing`}
-          tone="blue"
         />
         <StatCard
           label="Collected"
           value={money(totalCollected)}
           sub={`${paidPayments.length} ${paidPayments.length === 1 ? 'payment' : 'payments'} all time`}
-          tone="green"
         />
         <StatCard
           label="Overdue"
-          value={money(overduePayments.reduce((s, p) => s + p.amount, 0))}
-          sub={`${overduePayments.length} payments`}
-          tone={overduePayments.length > 0 ? 'red' : 'slate'}
+          value={money(overdueTotal)}
+          sub={`${overduePayments.length} ${overduePayments.length === 1 ? 'payment' : 'payments'}`}
+          alert={overduePayments.length > 0}
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 mb-6 md:mb-8">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+      {/* The performance strip. Every number carries last week beside it, which
+          is the difference between a dashboard you read and one you glance at
+          and learn nothing from. */}
+      <Card className="mb-6 md:mb-8" padding="lg">
+        <p className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           This week across all clients
         </p>
         <div className="grid grid-cols-3 gap-4">
-          <div>
-            <p className="text-xl md:text-2xl font-bold text-slate-900">{money(spendThisWeek)}</p>
+          <div className="min-w-0">
+            <p className="text-xl font-semibold tabular-nums tracking-tight text-slate-900 md:text-3xl">
+              {money(spendThisWeek)}
+            </p>
             <p className="text-xs text-slate-500">Ad spend</p>
+            {/* Spend going either way is neither good nor bad on its own -- it
+                is the budget doing what it was told. Grey, deliberately. */}
+            <Delta current={spendThisWeek} previous={prev.spend} className="mt-1" />
           </div>
-          <div>
-            <p className="text-xl md:text-2xl font-bold text-slate-900">{leadsThisWeek}</p>
+          <div className="min-w-0">
+            <p className="text-xl font-semibold tabular-nums tracking-tight text-slate-900 md:text-3xl">
+              {leadsThisWeek}
+            </p>
             <p className="text-xs text-slate-500">Leads</p>
+            <Delta
+              current={leadsThisWeek}
+              previous={prev.leads}
+              goodWhen="up"
+              className="mt-1"
+            />
           </div>
-          <div>
-            <p className="text-xl md:text-2xl font-bold text-slate-900">
-              {leadsThisWeek > 0 ? `$${(spendThisWeek / leadsThisWeek).toFixed(2)}` : '—'}
+          <div className="min-w-0">
+            <p className="text-xl font-semibold tabular-nums tracking-tight text-slate-900 md:text-3xl">
+              {cplThisWeek > 0 ? `$${cplThisWeek.toFixed(2)}` : '—'}
             </p>
             <p className="text-xs text-slate-500">Cost per lead</p>
+            <Delta
+              current={cplThisWeek}
+              previous={prev.costPerLead}
+              goodWhen="down"
+              className="mt-1"
+            />
           </div>
         </div>
-      </div>
+      </Card>
 
-      <h2 className="text-lg font-bold text-slate-900 mb-3">What to do today</h2>
+      <h2 className="mb-3 text-lg font-semibold tracking-tight text-slate-900">What to do today</h2>
 
       {nothingToDo ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
-          <p className="text-3xl mb-2">✅</p>
-          <p className="text-slate-900 font-medium">All caught up</p>
-          <p className="text-sm text-slate-500 mt-1">
+        <Card padding="lg" className="text-center">
+          <IconCheckCircle className="mx-auto h-8 w-8 text-green-600" />
+          <p className="mt-2 font-medium text-slate-900">All caught up</p>
+          <p className="mt-1 text-sm text-slate-500">
             No overdue payments, late deliverables, or missing KPIs.
           </p>
-        </div>
+        </Card>
       ) : (
-        <div className="grid md:grid-cols-2 gap-3 md:gap-4">
+        <div className="grid gap-3 md:grid-cols-2 md:gap-4">
           {actionGroups.map((group) => (
             <ActionGroup key={group.title} {...group} />
           ))}

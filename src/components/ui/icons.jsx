@@ -100,3 +100,80 @@ export function IconAiSearch(props) {
     </Icon>
   )
 }
+
+export function IconAlert(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5" />
+      <path d="M12 16h.01" />
+    </Icon>
+  )
+}
+
+export function IconClock(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </Icon>
+  )
+}
+
+export function IconClipboard(props) {
+  return (
+    <Icon {...props}>
+      <path d="M9 4.5H7.5A1.5 1.5 0 0 0 6 6v13a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V6a1.5 1.5 0 0 0-1.5-1.5H15" />
+      <rect x="9" y="3" width="6" height="3.5" rx="1" />
+      <path d="M9.5 11h5" />
+      <path d="M9.5 14.5h3" />
+    </Icon>
+  )
+}
+
+export function IconLaunch(props) {
+  return (
+    <Icon {...props}>
+      <path d="M13.5 4.5c3.5 1 5.5 3.5 6 7-3.5 4-7 6-10.5 6.5" />
+      <path d="M9 18 6 15" />
+      <path d="M4.5 12.5c.5-3.5 2.5-6 6-7L15 9l-2.5 4.5Z" />
+      <circle cx="14" cy="10" r="1.25" />
+    </Icon>
+  )
+}
+
+export function IconPin(props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 21s6.5-5.4 6.5-10.5a6.5 6.5 0 1 0-13 0C5.5 15.6 12 21 12 21Z" />
+      <circle cx="12" cy="10.5" r="2.5" />
+    </Icon>
+  )
+}
+
+export function IconCheckCircle(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12.2 2.4 2.4 4.6-4.9" />
+    </Icon>
+  )
+}
+
+export function IconTrendUp(props) {
+  return (
+    <Icon {...props}>
+      <path d="m4 16 5.5-5.5 3 3L20 6" />
+      <path d="M15 6h5v5" />
+    </Icon>
+  )
+}
+
+export function IconTrendDown(props) {
+  return (
+    <Icon {...props}>
+      <path d="m4 8 5.5 5.5 3-3L20 18" />
+      <path d="M15 18h5v-5" />
+    </Icon>
+  )
+}
