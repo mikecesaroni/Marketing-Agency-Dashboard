@@ -124,6 +124,12 @@ function SeedBanner({ seed }) {
         From chat: {seed.hookAngle || 'creative set'}
       </summary>
       <div className="mt-2 space-y-2 text-xs text-slate-700">
+        {seed.backgroundNote && (
+          <div>
+            <p className="font-semibold text-slate-600">Background photo to look for</p>
+            <p className="whitespace-pre-wrap">{seed.backgroundNote}</p>
+          </div>
+        )}
         {seed.designBrief && (
           <div>
             <p className="font-semibold text-slate-600">Design brief</p>
@@ -245,6 +251,16 @@ export default function AdStudioPanel({ client, intake, seed }) {
     // the intake stays the source for those unless the brief overrode them.
     if (seed.badge) setBadge(seed.badge)
     setProof(seed.proof || intakeProof)
+    // Only when the set actually named a colour. Anything else leaves the
+    // studio default, or a colour already pulled off the logo, alone.
+    if (seed.accent) {
+      setAccent(seed.accent)
+      setFromLogo(false)
+    }
+    if (seed.badgeColor) {
+      setBadgeColor(seed.badgeColor)
+      setFromLogo(false)
+    }
   }, [seed, intakeProof])
 
   useEffect(() => {

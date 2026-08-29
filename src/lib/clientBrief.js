@@ -304,6 +304,16 @@ Then, at the very end of your reply, repeat the full set as one JSON block:
       "headline": "...",
       "description": "...",
       "cta": "GET_QUOTE",
+      "location_badge": "RALEIGH NC",
+      "hook": "...",
+      "offer_amount": "$500",
+      "offer_detail": "OFF ANY NEW INSTALL",
+      "cta_pill": "Get My Quote",
+      "subhead": "...",
+      "proof_strip": "4.9 stars on Google, 600 reviews",
+      "offer_colour": "#E4572E",
+      "badge_colour": "#2B2B2B",
+      "background_note": "...",
       "design_brief": "..."
     }
   ]
@@ -311,8 +321,23 @@ Then, at the very end of your reply, repeat the full set as one JSON block:
 \`\`\`
 
 The JSON is what my CRM reads to build the ads, so it must be valid and must
-match the copy above it exactly. Use Meta's CTA enum values in the JSON
+match the copy above it exactly. Use Meta's CTA enum values for "cta"
 (CALL_NOW, GET_QUOTE, BOOK_NOW, LEARN_MORE, SIGN_UP).
+
+Every key from "location_badge" down is one slot on the artboard, and my studio
+reads them by name. Fill each one with real words or leave it out; a key I do
+not get is a slot that renders empty. Notes on the ones that catch people out:
+
+- "hook" is the big text painted ON the image. "headline" is the separate line
+  Meta shows under the image in the feed. They are usually not the same words.
+- "cta_pill" is what the white button on the image says. "cta" is Meta's enum
+  for the real ad button. Both, every time.
+- "offer_amount" is the number the eye lands on and it keeps its symbol:
+  "$500", "50% off", "Free". "offer_detail" is the rest of the offer, in caps.
+- "proof_strip" is one short line. Give me the rating and the review count as
+  digits and my studio formats the star itself.
+- Colours are six-digit hex or leave them out; a colour name is ignored.
+- "background_note" describes the photo to go and find. It is not painted.
 
 === WHAT I NEED FROM YOU ===
 You handle this client's Meta advertising: audiences, budgets, structure, copy,

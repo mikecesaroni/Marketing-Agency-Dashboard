@@ -120,28 +120,71 @@ function isVideoScript(brief) {
   return /video script|scene \d|hook \(\d/i.test(String(brief || ''))
 }
 
+// A bare number in offer_amount is dollars: the model writes "1200" where the
+// artboard wants "$1,200". Only touched when the value is nothing but digits
+// and separators — "50% off", "$0 Down" and "Free" all have to survive
+// untouched, and guessing a currency onto them would be worse than leaving the
+// number plain.
+export function normaliseAmount(text) {
+  const raw = String(text || '').trim()
+  if (!/^\d[\d,]*(\.\d+)?$/.test(raw)) return raw
+  const [whole, cents] = raw.replace(/,/g, '').split('.')
+  return `$${Number(whole).toLocaleString('en-US')}${cents ? `.${cents}` : ''}`
+}
+
+// Only a real hex colour is worth overriding the studio's default with. The
+// model occasionally writes a colour name, and handing that to a colour input
+// silently resets it to black.
+function hexColour(value) {
+  const raw = String(value || '').trim()
+  return /^#[0-9a-f]{6}$/i.test(raw) ? raw : ''
+}
+
 /**
  * Maps one creative set from the chat onto the slots the compositor paints.
  *
- * The JSON carries the copy; the design brief carries the layout, written to
- * the fixed labels clientBrief.js asks for. Reading them back out is what lets
- * the model fill the whole artboard rather than just the headline.
+ * Two shapes arrive here and both have to work.
+ *
+ * The original one puts the layout in a `design_brief` block written to the
+ * fixed labels clientBrief.js asks for, and this reads the slots back out by
+ * label. The newer one names every slot as its own JSON key — location_badge,
+ * offer_amount, cta_pill and the rest.
+ *
+ * The explicit keys win wherever both exist, because a named key cannot be
+ * lost to a reworded label, and a label this cannot find is a slot that renders
+ * empty. That failure was silent and total: with a set that carried only the
+ * explicit keys, every briefLine call returned nothing, so the badge, offer,
+ * subhead and proof strip all came through blank, the hook fell through to the
+ * feed headline and the button fell through to the Meta enum.
  */
 export function creativeSetToStudio(set) {
   if (!set) return null
   const brief = set.design_brief || ''
   const offer = splitOffer(briefLine(brief, 'OFFER BADGE'))
+
+  // Explicit key first, brief second. Whitespace-only counts as absent, so a
+  // key the model left as "" still falls through to the brief.
+  const slot = (explicit, fromBrief) => String(explicit ?? '').trim() || fromBrief
+
   return {
-    badge: briefLine(brief, 'LOCATION BADGE'),
-    hook: briefLine(brief, 'HEADLINE ON IMAGE') || set.headline || '',
-    offerAmount: offer.amount,
-    offerDetail: offer.detail,
-    subhead: briefLine(brief, 'SUBHEAD'),
-    proof: normaliseProof(briefLine(brief, 'PROOF STRIP')),
-    // The button drawn on the image is whatever the brief says; the enum is
-    // what Meta needs on the ad object, and the two are rarely worded the same.
-    cta: briefLine(brief, 'CTA BUTTON ON IMAGE') || ctaLabel(set.cta),
+    badge: slot(set.location_badge, briefLine(brief, 'LOCATION BADGE')),
+    hook: slot(set.hook, briefLine(brief, 'HEADLINE ON IMAGE')) || set.headline || '',
+    offerAmount: normaliseAmount(slot(set.offer_amount, offer.amount)),
+    offerDetail: slot(set.offer_detail, offer.detail),
+    subhead: slot(set.subhead, briefLine(brief, 'SUBHEAD')),
+    proof: normaliseProof(slot(set.proof_strip, briefLine(brief, 'PROOF STRIP'))),
+    // The button drawn on the image is whatever the set says; the enum is what
+    // Meta needs on the ad object, and the two are rarely worded the same:
+    // "Get My Quote" on the pill, GET_QUOTE on the ad.
+    cta: slot(set.cta_pill, briefLine(brief, 'CTA BUTTON ON IMAGE')) || ctaLabel(set.cta),
     metaCta: ctaLabel(set.cta),
+    // Empty rather than a default, so the Studio can tell "the set chose this
+    // colour" from "the set said nothing" and leave its own default alone.
+    accent: hexColour(set.offer_colour),
+    badgeColor: hexColour(set.badge_colour),
+    // Not a slot on the artboard: it describes the photo to go and find. Shown
+    // in the banner because the picker above it is the next thing to fill in.
+    backgroundNote: slot(set.background_note, briefLine(brief, 'BACKGROUND')),
     isVideo: isVideoScript(brief),
     // Carried through for reference, not painted: the primary text is the ad
     // copy that sits above the image in the feed.
