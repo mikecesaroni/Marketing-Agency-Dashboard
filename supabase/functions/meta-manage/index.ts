@@ -327,7 +327,18 @@ Deno.serve(async (req) => {
           special_ad_categories: body.special_ad_categories || [],
           ...(body.daily_budget_cents !== undefined
             ? { daily_budget: budgetCents(body.daily_budget_cents, 'daily_budget_cents') }
-            : {}),
+            : {
+                // Meta refuses a campaign with no campaign budget unless this
+                // is stated outright. Only sent in that case: with a campaign
+                // budget above, the budget lives on the campaign and there is
+                // nothing for the ad sets to share.
+                //
+                // False, and barely a choice: true asks the ad sets to lend
+                // each other a fifth of their budgets, and Meta only accepts
+                // that alongside a campaign-level bid strategy this does not
+                // set.
+                is_adset_budget_sharing_enabled: false,
+              }),
         },
         token,
         'create campaign'

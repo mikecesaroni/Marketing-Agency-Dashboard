@@ -1386,6 +1386,16 @@ Deno.serve(async (req) => {
           // declaring the wrong thing is a policy violation rather than an
           // error, so it is asked rather than assumed.
           special_ad_categories: specialAdCategories,
+          // Meta now refuses to create a campaign that carries no campaign
+          // budget unless this is stated outright, either way.
+          //
+          // False, and not really a choice: true asks the ad sets to lend each
+          // other a fifth of their budgets, which Meta will only accept
+          // alongside a campaign-level bid strategy this does not set, so it
+          // fails with "cannot enable ad set budget sharing without bid
+          // strategy". False also happens to be the honest answer here — the
+          // budget typed into the publish form is the budget that ad set gets.
+          is_adset_budget_sharing_enabled: false,
         },
         token,
         'create campaign'
