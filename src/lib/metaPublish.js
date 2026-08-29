@@ -8,10 +8,16 @@ export const OBJECTIVES = [
   {
     value: 'LEADS_FORM',
     label: 'Leads (instant form)',
-    hint: 'The form opens inside Facebook — no landing page, and Meta prefills name, phone and email.',
+    hint: 'The form opens inside Facebook and Meta prefills name, phone and email. Still needs the client’s website on the creative — see below.',
     needsPixel: false,
     needsForm: true,
-    needsLink: false,
+    // Counter-intuitive, and it cost three rejected ads to learn. Nobody ever
+    // follows this link -- the button opens the form in place -- but Meta
+    // rejects a lead ad whose creative points anywhere on facebook.com:
+    // "Lead Generation Ads should always link to external content". Verified
+    // by validating the same creative twice, once with the Page URL and once
+    // with a real site: the Page URL fails, the site passes.
+    needsLink: true,
   },
   {
     value: 'TRAFFIC',

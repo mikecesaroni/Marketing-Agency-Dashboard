@@ -1293,12 +1293,14 @@ Deno.serve(async (req) => {
       ad_name: a.ad_name ?? adName,
       lead_form_id: a.lead_form_id ?? leadFormId,
       lead_form_name: a.lead_form_name ?? leadFormName,
-      // An instant form has no landing page: the form opens inside Facebook,
-      // and the creative's link is never followed. Meta still wants the field
-      // populated, so it points at the advertiser's own Page.
-      link_url: spec.needs_form
-        ? `https://www.facebook.com/${client.meta_page_id}`
-        : a.link_url || linkUrlIn || client.website_url,
+      // Form ads included, and that is not obvious. The form opens inside
+      // Facebook and this link is never followed, so it used to be pointed at
+      // the advertiser's own Page -- which Meta rejects at the very last step,
+      // creating the ad: "Lead Generation Ads should always link to external
+      // content ... this ad links to a Facebook page" (subcode 1815316).
+      // Verified by validating the same creative twice, once with the Page URL
+      // and once with a real site: the Page URL fails, the site passes.
+      link_url: a.link_url || linkUrlIn || client.website_url,
     }))
 
     for (const [i, a] of ads.entries()) {
@@ -1317,10 +1319,12 @@ Deno.serve(async (req) => {
       if (!CTA_TYPES.has(a.cta)) {
         return json({ error: `"${a.cta}" is not a call-to-action Meta accepts.` }, 400)
       }
-      if (!spec.needs_form && !a.link_url) {
+      if (!a.link_url) {
         return json(
           {
-            error: `${which} has no landing page URL. Set one on ${client.name}'s Meta card, or type one on the publish form.`,
+            error: spec.needs_form
+              ? `${which} has no website URL. A lead ad still needs one on the creative even though the form opens inside Facebook -- Meta rejects an ad that links to a Page instead. Set ${client.name}'s website on their Meta card, or type one on the publish form.`
+              : `${which} has no landing page URL. Set one on ${client.name}'s Meta card, or type one on the publish form.`,
           },
           400
         )

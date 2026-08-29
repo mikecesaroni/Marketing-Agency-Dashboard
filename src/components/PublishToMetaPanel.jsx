@@ -237,6 +237,28 @@ function setupFix(message, client) {
     }
   }
 
+  // Lead ads are rejected outright if the creative's link points anywhere on
+  // facebook.com, however irrelevant that link is to how the ad works.
+  if (/external url|link to external content/i.test(text)) {
+    return {
+      title: 'Meta wants a real website on the ad, not the Facebook Page.',
+      body: `Put ${client.name}'s website in the Website field above and publish again. Nobody clicks it — the form still opens in place — but Meta refuses a lead ad that links to a Page. If they genuinely have no site, any page they own works: a booking page, a Google Business profile, their privacy policy.`,
+      href: '',
+      cta: '',
+    }
+  }
+
+  // Per-placement creatives need an Instagram identity. Without one the ad
+  // still publishes, carrying the feed image alone.
+  if (/instagram account is missing|represent your business on instagram/i.test(text)) {
+    return {
+      title: 'No Instagram account is connected to this ad account.',
+      body: `An ad carrying a different crop per placement needs one, because some of those placements are on Instagram. Connect an account under Business Settings, or publish one size at a time — a single-image ad does not need it.`,
+      href: 'https://business.facebook.com/settings/instagram-account-v2',
+      cta: 'Open Business Settings',
+    }
+  }
+
   return null
 }
 
@@ -247,14 +269,16 @@ function SetupFix({ error, client }) {
     <div className="mt-2 pt-2 border-t border-red-200 space-y-1">
       <p className="text-xs font-medium text-red-800">{fix.title}</p>
       <p className="text-[11px] text-red-700">{fix.body}</p>
-      <a
-        href={fix.href}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-block text-[11px] font-medium text-red-800 underline hover:text-red-900"
-      >
-        {fix.cta} &rarr;
-      </a>
+      {fix.href && (
+        <a
+          href={fix.href}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block text-[11px] font-medium text-red-800 underline hover:text-red-900"
+        >
+          {fix.cta} &rarr;
+        </a>
+      )}
     </div>
   )
 }
@@ -749,22 +773,24 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
               ))}
             </select>
           </div>
-          {chosenObjective?.needsLink ? (
-            <Text
-              label="Landing page"
-              value={linkUrl}
-              onChange={setLinkUrl}
-              placeholder="https://…"
-              hint={client.website_url ? 'from the client' : 'not set on the client'}
-            />
-          ) : (
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Destination</label>
-              <p className="px-3 py-2 border border-dashed border-slate-300 rounded text-sm text-slate-500">
-                The instant form — no landing page
-              </p>
-            </div>
-          )}
+          {/* A form ad is asked for this too. The button opens the form and the
+              link is never followed, but Meta rejects a lead ad whose creative
+              points at a Facebook Page, so there has to be somewhere real to
+              put. It used to say "no landing page" here and publishing failed
+              at the very last step because of it. */}
+          <Text
+            label={chosenObjective?.needsForm ? 'Website (required by Meta)' : 'Landing page'}
+            value={linkUrl}
+            onChange={setLinkUrl}
+            placeholder="https://…"
+            hint={
+              chosenObjective?.needsForm
+                ? 'Nobody follows it — the form opens in place. Meta rejects lead ads that link to a Facebook Page.'
+                : client.website_url
+                  ? 'from the client'
+                  : 'not set on the client'
+            }
+          />
         </div>
       </Section>
 
