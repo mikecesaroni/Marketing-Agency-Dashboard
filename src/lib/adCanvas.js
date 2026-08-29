@@ -9,9 +9,9 @@
 // lets the Reels safe areas be enforced in real pixels.
 //
 // The layout mirrors the Claude Design Studio ads: a header pinned to the top
-// (location badge, then the hook) and a footer stacked up from the bottom
-// (offer block, subhead, proof, CTA), with the photo breathing in between and
-// the logo in the bottom-right corner.
+// (location badge, the hook, then the subhead as a deck under it) and a footer
+// stacked up from the bottom (offer block, proof, CTA), with the photo
+// breathing in between and the logo in the bottom-right corner.
 
 export const SIZES = [
   { key: 'square', label: 'Feed / Square', w: 1080, h: 1080 },
@@ -213,17 +213,34 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     // where the whole frame is a couple of inches on a phone.
     //
     // Whatever this is set to, the footer stays out of its way on its own: the
-    // gutter below is subtracted from the width the offer block, subhead and CTA
-    // are measured against, so a bigger logo reflows the text rather than
-    // colliding with it. A wide logo still lands wide and short, since the fit
-    // is by the longer edge.
+    // gutter below is subtracted from the width the offer block and CTA are
+    // measured against, so a bigger logo reflows the text rather than colliding
+    // with it. A wide logo still lands wide and short, since the fit is by the
+    // longer edge.
     const box = 160
     const scale = Math.min(box / logo.width, box / logo.height)
     logoBox = { w: logo.width * scale, h: logo.height * scale }
   }
   const logoGutter = logoBox ? logoBox.w + 28 : 0
 
-  const footer = measureFooter(ctx, { offerAmount, offerDetail, subhead, proof, cta }, maxWidth, logoGutter)
+  // The subhead is a deck under the hook, not part of the footer stack.
+  //
+  // Its job is to finish the headline's thought, and in the footer it was
+  // separated from the hook by the whole photo and the offer block, so by the
+  // time it was read it looked like a caption on the price. A feed ad gets one
+  // top-down pass, and a line supporting the hook has to be next to the hook to
+  // be part of it. It also left the bottom of the frame carrying five things:
+  // offer, subhead, proof, button, logo.
+  //
+  // Measured here, before the hook is sized, because the hook takes whatever
+  // room is left over and has to know what the deck is going to use.
+  const deck = subhead?.trim()
+    ? fitText(ctx, typographic(subhead), maxWidth, 3, 30, 23, '500', 0, { lineRatio: 1.34 })
+    : null
+  const deckH = deck ? deck.lines.length * deck.px * 1.34 : 0
+  const deckGap = deck ? 22 : 0
+
+  const footer = measureFooter(ctx, { offerAmount, offerDetail, proof, cta }, maxWidth, logoGutter)
   const footerTop = contentBottom - footer.height
 
   // ---- BACKGROUND ----
@@ -240,7 +257,9 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   ctx.fillStyle = 'rgba(2,6,23,0.20)'
   ctx.fillRect(0, 0, w, h)
 
-  const topEnd = Math.max(h * 0.2, hookTop + 260)
+  // Reaches past the deck as well, or a subhead under a three-line hook falls
+  // off the bottom of the gradient onto the bare photo.
+  const topEnd = Math.max(h * 0.2, hookTop + 260 + deckH + deckGap)
   const topScrim = ctx.createLinearGradient(0, 0, 0, topEnd)
   topScrim.addColorStop(0, 'rgba(2,6,23,0.58)')
   topScrim.addColorStop(0.55, 'rgba(2,6,23,0.28)')
@@ -278,54 +297,101 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   }
 
   // The hook: the largest element on the frame, and the only one allowed to
-  // claim whatever space is left between the badge and the offer block.
+  // claim whatever space is left between the badge and the offer block. The
+  // deck takes its share of that room first, so a long subhead shrinks the hook
+  // instead of pushing it into the footer.
+  let hookLines = null
+  let hookPx = 0
+  let hookFirstBaseline = 0
+  let hookLastBaseline = 0
+  let deckTop = hookTop
+
   if (hook?.trim()) {
-    const room = footerTop - 30 - hookTop
-    const { px, lines } = fitText(ctx, typographic(hook), maxWidth, 3, 60, 38, '800', -0.5, {
+    const room = footerTop - 30 - hookTop - deckH - deckGap
+    const fit = fitText(ctx, typographic(hook), maxWidth, 3, 60, 38, '800', -0.5, {
       maxHeight: room,
       lineRatio: 1.13,
     })
-    const lineH = px * 1.13
-    const firstBaseline = hookTop + px
-    const lastBaseline = firstBaseline + (lines.length - 1) * lineH
+    hookLines = fit.lines
+    hookPx = fit.px
+    hookFirstBaseline = hookTop + hookPx
+    hookLastBaseline = hookFirstBaseline + (hookLines.length - 1) * hookPx * 1.13
+    // Descenders reach about 0.24em below the baseline, so the deck clears
+    // them rather than tucking under a comma.
+    deckTop = hookLastBaseline + hookPx * 0.24 + deckGap
+  }
 
-    // A busy photo behind the hook beats any amount of gradient: faces and
-    // high-contrast detail cut straight through white type. The plate is a flat
-    // panel sized to the text rather than a full-width band, so it reads as
-    // design instead of a bug.
-    if (hookPlate && lines.length) {
-      // Font is still set from fitText, so measuring here is accurate.
-      let widest = 0
-      for (const line of lines) widest = Math.max(widest, ctx.measureText(line).width)
+  // Worked out before anything is painted, so the plate below can cover the
+  // hook and the deck as a single block.
+  const deckBaselines = []
+  if (deck) {
+    let y = deckTop + deck.px
+    for (let i = 0; i < deck.lines.length; i++) {
+      deckBaselines.push(y)
+      y += deck.px * 1.34
+    }
+  }
 
-      const padPlateX = 26
-      const padPlateY = 20
-      // Cap height sits about 0.74em above the baseline for this face, and
-      // descenders about 0.22em below.
-      const top = firstBaseline - px * 0.78 - padPlateY
-      const bottom = lastBaseline + px * 0.24 + padPlateY
-
-      ctx.fillStyle = 'rgba(2,6,23,0.55)'
-      roundRect(
-        ctx,
-        padX - padPlateX,
-        top,
-        Math.min(widest + padPlateX * 2, w - (padX - padPlateX) * 2),
-        bottom - top,
-        14
-      )
-      ctx.fill()
+  // A busy photo behind the hook beats any amount of gradient: faces and
+  // high-contrast detail cut straight through white type. The plate is a flat
+  // panel sized to the text rather than a full-width band, so it reads as
+  // design instead of a bug. It wraps the deck too — a subhead sitting just
+  // outside it would be the one unreadable line on the frame.
+  if (hookPlate && (hookLines?.length || deck)) {
+    let widest = 0
+    if (hookLines?.length) {
+      setFont(ctx, '800', hookPx, -0.5)
+      for (const line of hookLines) widest = Math.max(widest, ctx.measureText(line).width)
+    }
+    if (deck) {
+      setFont(ctx, '500', deck.px, 0)
+      for (const line of deck.lines) widest = Math.max(widest, ctx.measureText(line).width)
     }
 
+    const padPlateX = 26
+    const padPlateY = 20
+    // Cap height sits about 0.74em above the baseline for this face, and
+    // descenders about 0.22em below.
+    const topPx = hookLines?.length ? hookPx : deck.px
+    const topBaseline = hookLines?.length ? hookFirstBaseline : deckBaselines[0]
+    const bottomPx = deckBaselines.length ? deck.px : hookPx
+    const bottomBaseline = deckBaselines.length
+      ? deckBaselines[deckBaselines.length - 1]
+      : hookLastBaseline
+
+    ctx.fillStyle = 'rgba(2,6,23,0.55)'
+    roundRect(
+      ctx,
+      padX - padPlateX,
+      topBaseline - topPx * 0.78 - padPlateY,
+      Math.min(widest + padPlateX * 2, w - (padX - padPlateX) * 2),
+      bottomBaseline + bottomPx * 0.24 + padPlateY - (topBaseline - topPx * 0.78 - padPlateY),
+      14
+    )
+    ctx.fill()
+  }
+
+  if (hookLines?.length) {
+    setFont(ctx, '800', hookPx, -0.5)
     ctx.fillStyle = '#FFFFFF'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
 
-    let y = firstBaseline
-    for (const line of lines) {
+    let y = hookFirstBaseline
+    for (const line of hookLines) {
       ctx.fillText(line, padX, y)
-      y += lineH
+      y += hookPx * 1.13
     }
+  }
+
+  // Lighter and smaller than the hook on purpose: it is support, and matching
+  // the hook's weight would give the frame two things shouting at once.
+  if (deck) {
+    setFont(ctx, '500', deck.px, 0)
+    ctx.fillStyle = '#E2E8F0'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+    deck.lines.forEach((line, i) => ctx.fillText(line, padX, deckBaselines[i]))
   }
 
   // ---- FOOTER ----
@@ -342,7 +408,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
 
 // Works out the footer's total height without drawing, so the hook above it
 // can be sized against real numbers rather than a guess.
-function measureFooter(ctx, { offerAmount, offerDetail, subhead, proof, cta }, maxWidth, logoGutter) {
+function measureFooter(ctx, { offerAmount, offerDetail, proof, cta }, maxWidth, logoGutter) {
   const parts = { height: 0 }
 
   if (cta?.trim()) {
@@ -359,14 +425,6 @@ function measureFooter(ctx, { offerAmount, offerDetail, subhead, proof, cta }, m
   if (proof?.trim()) {
     parts.proof = { text: proof.trim(), px: 23 }
     parts.height += 23 + 22
-  }
-
-  if (subhead?.trim()) {
-    const fit = fitText(ctx, typographic(subhead), maxWidth - logoGutter, 3, 27, 21, '500', 0, {
-      lineRatio: 1.36,
-    })
-    parts.subhead = fit
-    parts.height += fit.lines.length * fit.px * 1.36 + 26
   }
 
   const amount = offerAmount?.trim()
@@ -440,17 +498,6 @@ function drawFooter(ctx, parts, { padX, contentBottom, accent }) {
     ctx.fillStyle = '#FFFFFF'
     ctx.fillText(parts.proof.text, padX, cursor)
     cursor -= parts.proof.px + 22
-  }
-
-  if (parts.subhead) {
-    const { px, lines } = parts.subhead
-    setFont(ctx, '500', px, 0)
-    ctx.fillStyle = '#E2E8F0'
-    for (let i = lines.length - 1; i >= 0; i--) {
-      ctx.fillText(lines[i], padX, cursor)
-      cursor -= px * 1.36
-    }
-    cursor -= 26
   }
 
   if (parts.offer) {
