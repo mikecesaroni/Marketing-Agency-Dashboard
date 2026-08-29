@@ -1,5 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import DailyChart from './DailyChart'
+import AdPreviewModal from './AdPreviewModal'
+import PlatformSplit, { PlatformTable } from './charts/PlatformSplit'
+import { byPlatform, byPosition, fetchPlatformRows } from '../lib/adPlatforms'
 import { buildDailySeries, daysAgo } from '../lib/dailySeries'
 import {
   bucketByPeriod,
@@ -169,7 +172,7 @@ function LiveBadge({ live, total }) {
   )
 }
 
-function CampaignTree({ campaigns, hasVideo }) {
+function CampaignTree({ campaigns, hasVideo, onOpenAd }) {
   // Campaigns start open when there are only a couple, collapsed when the
   // account has a long history — otherwise the table opens to a wall of rows.
   const [open, setOpen] = useState(() =>
@@ -253,11 +256,18 @@ function CampaignTree({ campaigns, hasVideo }) {
 
                         {setOpen2 &&
                           a.ads.map((ad) => (
-                            <tr key={ad.ad_id} className="border-b border-slate-100 hover:bg-slate-50">
-                              <td className="px-3 py-2 pl-14 max-w-[280px]">
-                                <p className="text-slate-800 truncate" title={ad.ad_name}>
+                            <tr
+                              key={ad.ad_id}
+                              onClick={() => onOpenAd?.(ad)}
+                              className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
+                              title="See what this ad looks like"
+                            >
+                              <td className="max-w-[280px] px-3 py-2 pl-14">
+                                <p className="truncate text-slate-800" title={ad.ad_name}>
                                   {ad.isVideo && '🎬 '}
-                                  {ad.ad_name || ad.ad_id}
+                                  <span className="underline decoration-slate-300 underline-offset-2 group-hover:decoration-slate-500">
+                                    {ad.ad_name || ad.ad_id}
+                                  </span>
                                   {!ad.live && (
                                     <span className="ml-2 text-[10px] text-slate-500">
                                       {ad.status?.toLowerCase().replace(/_/g, ' ')}
@@ -283,6 +293,16 @@ function CampaignTree({ campaigns, hasVideo }) {
 export default function AdPerformanceSection({ clientId }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
+  // The ad whose preview is open. Clicking a row is the only way in, which is
+  // why the rows carry a cursor and an underline -- an ad name that opens
+  // something has to look like it does.
+  const [openAd, setOpenAd] = useState(null)
+  // Where this client's ads ran, over the same window as everything else on
+  // the section. Its own state rather than folded into rows: it comes from a
+  // different table and only started being collected recently, so a client
+  // with no rows yet has to read as "not collected yet" rather than as zero.
+  const [platformRows, setPlatformRows] = useState(null)
+  const [showSplitTable, setShowSplitTable] = useState(false)
   const [range, setRange] = useState('30')
   const [scope, setScope] = useState('live')
   const [period, setPeriod] = useState('day')
@@ -302,6 +322,12 @@ export default function AdPerformanceSection({ clientId }) {
         setError('')
       })
       .catch((err) => setError(err.message))
+
+    // Best effort. A missing platform split is a section that shows one card
+    // fewer, not a broken page, so it never touches `error`.
+    fetchPlatformRows({ clientId, since })
+      .then(setPlatformRows)
+      .catch(() => setPlatformRows([]))
   }, [clientId, range])
 
   // One filter feeds the tiles, the chart and the tree, so the headline number
@@ -462,7 +488,54 @@ export default function AdPerformanceSection({ clientId }) {
             )}
           </div>
 
-          <CampaignTree campaigns={campaigns} hasVideo={hasVideo} />
+          {platformRows && platformRows.length > 0 && (
+            <div className="mb-4 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_2px_0_rgb(15_23_42_/_0.04)]">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Where the money went
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowSplitTable((v) => !v)}
+                  className="text-[11px] font-medium text-blue-600 underline underline-offset-2 hover:text-blue-700"
+                >
+                  {showSplitTable ? 'Hide the numbers' : 'Show the numbers'}
+                </button>
+              </div>
+
+              <PlatformSplit data={byPlatform(platformRows, 'spend')} metric="spend" />
+
+              {showSplitTable && (
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <PlatformTable data={byPlatform(platformRows, 'spend')} />
+                </div>
+              )}
+
+              <div className="mt-4 space-y-1.5 border-t border-slate-100 pt-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Top placements
+                </p>
+                {byPosition(platformRows, 'spend', 5).map((p) => (
+                  <div key={p.key} className="flex items-center gap-3">
+                    <span className="w-44 flex-shrink-0 truncate text-xs text-slate-600">
+                      {p.label}
+                    </span>
+                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                      <span
+                        className="block h-full rounded-full bg-slate-400"
+                        style={{ width: `${Math.max(p.share * 100, 1)}%` }}
+                      />
+                    </span>
+                    <span className="w-20 flex-shrink-0 text-right text-xs tabular-nums text-slate-500">
+                      {money(p.value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <CampaignTree campaigns={campaigns} hasVideo={hasVideo} onOpenAd={setOpenAd} />
 
           <p className="text-[11px] text-slate-500 mt-3">
             {scope === 'live'
@@ -479,6 +552,10 @@ export default function AdPerformanceSection({ clientId }) {
             )}
           </p>
         </>
+      )}
+
+      {openAd && (
+        <AdPreviewModal clientId={clientId} ad={openAd} onClose={() => setOpenAd(null)} />
       )}
     </div>
   )
