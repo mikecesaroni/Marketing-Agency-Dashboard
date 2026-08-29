@@ -40,15 +40,64 @@ export async function deleteTask(taskId) {
   if (error) throw error
 }
 
+// Somebody asking for a task outright. The wording people actually use, not a
+// command syntax nobody would remember.
+const ASKS_FOR_A_TASK =
+  /\b(make|add|create|log)\b[^.!?]{0,20}\b(task|to-?do|action item|reminder)|\bremind me\b|\bremember (to|this|that)\b|\bput (this|that|it) on the (task|to-?do)\b|\bfollow[- ]up on\b/i
+
+// The vocabulary of a meeting recap rather than a conversation.
+const SOUNDS_LIKE_A_RECAP =
+  /\b(fireflies|otter\.ai|meeting (summary|notes|recap)|call (summary|notes|recap)|attendees|action items|next steps|transcript|recording|discussion points|agenda)\b/i
+
 /**
- * Asks Claude to read this client's chat history — the Fireflies summaries
- * and "remember this" asides pasted into it — and pull out anything that's
- * still an open action item. Returns however many new rows it found; an
- * empty result is a normal, common outcome, not an error.
+ * Whether a message the agency just sent is one to pull tasks from.
+ *
+ * This used to run after every single turn, which is why the task list filled
+ * up with things nobody meant to commit to: asking the chat to rewrite a hook
+ * five times reads, to an extraction pass, as five action items. A question is
+ * not a commitment, and the chat is mostly questions.
+ *
+ * Two things are: a call summary pasted in, and somebody saying outright that
+ * this should be a task. Everything else goes through the button on the client
+ * page, where a person has decided they want the sweep.
+ *
+ * Returns 'request', 'summary', or null.
  */
-export async function extractTasksFromChat(clientId) {
+export function taskTrigger(text) {
+  const body = String(text || '').trim()
+  if (!body) return null
+
+  if (ASKS_FOR_A_TASK.test(body)) return 'request'
+
+  // A recap is bulk pasted text. The length and the line count are what
+  // separate "here are the notes from the call" from somebody mentioning the
+  // word "recap" in a sentence.
+  const lines = body.split(/\n/).filter((l) => l.trim()).length
+  const looksPasted = body.length > 400 && lines >= 4
+  if (looksPasted && SOUNDS_LIKE_A_RECAP.test(body)) return 'summary'
+
+  // Long enough to be notes and structured like them -- bullets or numbered
+  // lines -- counts even without the vocabulary, since not every recap
+  // announces itself.
+  const bullets = body.split(/\n/).filter((l) => /^\s*([-*\u2022]|\d+[.)])\s+/.test(l)).length
+  if (looksPasted && bullets >= 3) return 'summary'
+
+  return null
+}
+
+/**
+ * Asks Claude to read a call summary, an explicit request, or (from the button
+ * on the client page) the whole chat history, and pull out what is still an
+ * open action item. Returns however many new rows it found; an empty result is
+ * a normal, common outcome, not an error.
+ *
+ * `focus` is the single message that triggered this, when one did. Passing it
+ * keeps the pass to the thing somebody actually meant, instead of re-reading
+ * months of conversation and finding new things to do in it every time.
+ */
+export async function extractTasksFromChat(clientId, { focus, reason } = {}) {
   const { data, error } = await supabase.functions.invoke('extract-tasks', {
-    body: { client_id: clientId },
+    body: { client_id: clientId, focus: focus || undefined, reason: reason || undefined },
   })
 
   if (error) {

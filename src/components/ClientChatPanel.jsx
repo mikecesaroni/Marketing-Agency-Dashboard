@@ -17,7 +17,7 @@ import {
   uploadChatImage,
 } from '../lib/chatImages'
 import { copyText } from '../lib/intakeSummary'
-import { extractTasksFromChat } from '../lib/clientTasks'
+import { extractTasksFromChat, taskTrigger } from '../lib/clientTasks'
 
 // Starters for the things actually asked for most often, so the blank box
 // isn't the first thing you have to solve.
@@ -249,16 +249,26 @@ export default function ClientChatPanel({
     addFiles(images)
   }
 
-  // Runs after every turn rather than waiting for a button — this is exactly
-  // where a pasted Fireflies summary or a "remember this" aside lands, so
-  // there's no reason to make someone ask for the check separately. Fired
-  // without awaiting: it reads the transcript fresh from the DB, so it does
-  // not need anything send() is holding, and the reply the user is looking at
-  // should not wait on it.
-  const autoExtract = () => {
+  // Runs on the turns that are actually about work to be done: a call summary
+  // pasted in, or somebody saying outright to make a task of something.
+  //
+  // It used to run on every turn, and that is what buried the task list. Most
+  // of what happens in this chat is asking questions -- rewrite this hook, what
+  // should the budget be, why did that ad fail -- and an extraction pass reads
+  // every one of those as an intention to do something. Nobody committed to
+  // anything; they were thinking out loud.
+  //
+  // The sweep over the whole history still exists, on the button on the client
+  // page, where somebody has decided they want it.
+  //
+  // Fired without awaiting: it reads from the DB, so it needs nothing send() is
+  // holding, and the reply on screen should not wait on it.
+  const autoExtract = (text) => {
+    const reason = taskTrigger(text)
+    if (!reason) return
     if (extractingRef.current) return
     extractingRef.current = true
-    extractTasksFromChat(client.id)
+    extractTasksFromChat(client.id, { focus: text, reason })
       .then((res) => {
         if (res.inserted > 0) {
           onTasksAdded?.(res.tasks)
@@ -313,7 +323,7 @@ export default function ClientChatPanel({
         staged.forEach((a) => URL.revokeObjectURL(a.previewUrl))
       }
       setMessages((m) => [...m, { role: 'assistant', text: renderBlocks(res.content) }])
-      autoExtract()
+      autoExtract(trimmed)
     } catch (err) {
       setError(err.message)
       // Put the message back so a failed send isn't lost work.
