@@ -377,6 +377,27 @@ function buildQuestions(questions: any[]): Record<string, string>[] {
 }
 
 /**
+ * Pulls a radius into the band Meta accepts.
+ *
+ * Not a defensive cap. Meta rejects the whole ad set -- "The geographical
+ * radius you selected isn't within the specified bounds" -- for anything under
+ * ten miles, verified by sweeping a validate-only ad set from 1 to 51 miles
+ * against a real city key: 1-9 fail, 10-50 pass, 51 fails. The UI holds the
+ * same floor, but a radius can also arrive from the chat or from a saved ad set
+ * built before the floor existed, so it is enforced here too, where every
+ * request goes through.
+ */
+const MIN_RADIUS_MILES = 10
+const MAX_RADIUS_MILES = 50
+const DEFAULT_RADIUS_MILES = 25
+
+function clampRadius(miles: unknown): number {
+  const n = Number(miles)
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_RADIUS_MILES
+  return Math.min(Math.max(Math.round(n), MIN_RADIUS_MILES), MAX_RADIUS_MILES)
+}
+
+/**
  * Builds the targeting spec.
  *
  * Locations arrive as the rows Meta's own geo search returned, so the keys are
@@ -391,9 +412,7 @@ function buildTargeting(locations: any[], ageMin?: number, ageMax?: number) {
     if (loc?.type === 'city') {
       ;(geo.cities ||= []).push({
         key: String(loc.key),
-        // Meta's own default when a city is added without one. Capped at 50,
-        // which is its hard limit.
-        radius: Math.min(Number(loc.radius) || 25, 50),
+        radius: clampRadius(loc.radius),
         distance_unit: 'mile',
       })
     } else if (loc?.type === 'region') {

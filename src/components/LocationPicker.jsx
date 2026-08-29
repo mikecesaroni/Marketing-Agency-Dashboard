@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { DEFAULT_RADIUS_MILES, MAX_RADIUS_MILES, searchLocations } from '../lib/metaPublish'
+import {
+  DEFAULT_RADIUS_MILES,
+  MAX_RADIUS_MILES,
+  MIN_RADIUS_MILES,
+  clampRadius,
+  searchLocations,
+} from '../lib/metaPublish'
 
 const TYPE_LABEL = { city: 'City', region: 'State', zip: 'ZIP', country: 'Country' }
 
@@ -12,6 +18,10 @@ const TYPE_LABEL = { city: 'City', region: 'State', zip: 'ZIP', country: 'Countr
  *
  * Only cities take a radius. A state or a postcode is the area it is, and
  * sending a radius alongside one is rejected.
+ *
+ * The radius slider stops at ten miles because Meta stops there. Tighter than
+ * that and it rejects the ad set outright, so the slider is the place to hold
+ * the line rather than letting a 7 through and surfacing it as a publish error.
  */
 export default function LocationPicker({ picked, onChange }) {
   const [query, setQuery] = useState('')
@@ -49,6 +59,19 @@ export default function LocationPicker({ picked, onChange }) {
 
     return () => clearTimeout(timer)
   }, [query])
+
+  // A location picked before the floor existed -- or prefilled from an intake
+  // that asked for five miles -- is still carrying its old number in the
+  // parent's state, and that number is what gets sent. Showing 10 on the slider
+  // while 7 goes to Meta would be the same failure with a nicer face on it, so
+  // correct the value itself, once, as soon as it is seen.
+  useEffect(() => {
+    const fixed = picked.map((p) =>
+      p.type === 'city' && p.radius !== clampRadius(p.radius) ? { ...p, radius: clampRadius(p.radius) } : p
+    )
+    if (fixed.some((p, i) => p !== picked[i])) onChange(fixed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked])
 
   const add = (loc) => {
     if (picked.some((p) => p.key === loc.key)) return
@@ -120,14 +143,14 @@ export default function LocationPicker({ picked, onChange }) {
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <input
                     type="range"
-                    min={1}
+                    min={MIN_RADIUS_MILES}
                     max={MAX_RADIUS_MILES}
-                    value={loc.radius ?? DEFAULT_RADIUS_MILES}
-                    onChange={(e) => setRadius(loc.key, Number(e.target.value))}
+                    value={clampRadius(loc.radius ?? DEFAULT_RADIUS_MILES)}
+                    onChange={(e) => setRadius(loc.key, clampRadius(e.target.value))}
                     className="w-24"
                   />
                   <span className="text-[11px] text-slate-500 w-12 tabular-nums">
-                    {loc.radius ?? DEFAULT_RADIUS_MILES} mi
+                    {clampRadius(loc.radius ?? DEFAULT_RADIUS_MILES)} mi
                   </span>
                 </div>
               )}

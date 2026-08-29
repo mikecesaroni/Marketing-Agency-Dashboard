@@ -135,6 +135,27 @@ function budgetCents(value: unknown, field: string): number {
   return n
 }
 
+/**
+ * Pulls a radius into the band Meta accepts.
+ *
+ * Not a defensive cap. Meta rejects the whole ad set -- "The geographical
+ * radius you selected isn't within the specified bounds" -- for anything under
+ * ten miles, verified by sweeping a validate-only ad set from 1 to 51 miles
+ * against a real city key: 1-9 fail, 10-50 pass, 51 fails. The UI holds the
+ * same floor, but a radius can also arrive from the chat or from a saved ad set
+ * built before the floor existed, so it is enforced here too, where every
+ * request goes through.
+ */
+const MIN_RADIUS_MILES = 10
+const MAX_RADIUS_MILES = 50
+const DEFAULT_RADIUS_MILES = 25
+
+function clampRadius(miles: unknown): number {
+  const n = Number(miles)
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_RADIUS_MILES
+  return Math.min(Math.max(Math.round(n), MIN_RADIUS_MILES), MAX_RADIUS_MILES)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return json({}, 200)
 
@@ -364,7 +385,7 @@ Deno.serve(async (req) => {
         if (loc?.type === 'city') {
           ;(geo.cities ||= []).push({
             key: String(loc.key),
-            radius: Math.min(Number(loc.radius) || 25, 50),
+            radius: clampRadius(loc.radius),
             distance_unit: 'mile',
           })
         } else if (loc?.type === 'region') {

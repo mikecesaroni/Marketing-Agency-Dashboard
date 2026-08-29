@@ -87,9 +87,9 @@ export default function OnboardingLinkPanel({ client }) {
   // links already sent carry no parameter and have to keep behaving the way
   // their recipient was told they would.
   const MODES = {
-    both: { param: '', label: 'Onboarding + account setup' },
+    both: { param: '', label: 'Onboarding + GHL setup' },
     intake: { param: '?form=intake', label: 'Onboarding only' },
-    ghl: { param: '?form=ghl', label: 'Account setup only' },
+    ghl: { param: '?form=ghl', label: 'GHL setup only' },
   }
   const activeUrl = url ? `${url}${MODES[mode].param}` : ''
 

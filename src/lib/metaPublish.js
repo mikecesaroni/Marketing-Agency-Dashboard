@@ -77,9 +77,24 @@ export const SPECIAL_AD_CATEGORIES = [
   { value: 'ISSUES_ELECTIONS_POLITICS', label: 'Social issues, elections or politics' },
 ]
 
-// Meta's default when a city is added with no radius, and its hard ceiling.
+// Meta's default when a city is added with no radius, and the band it accepts.
+//
+// The floor is not ours -- Meta rejects the whole ad set with "The geographical
+// radius you selected isn't within the specified bounds" for anything under ten
+// miles. Verified by sweeping a validate-only ad set from 1 to 51 miles against
+// a real city key: 1-9 fail, 10-50 pass, 51 fails. So a tighter circle than 10
+// cannot be sent at all, and letting one be typed only produces that error at
+// publish time, after the campaign has already been created.
+export const MIN_RADIUS_MILES = 10
 export const DEFAULT_RADIUS_MILES = 25
 export const MAX_RADIUS_MILES = 50
+
+// Pulls any radius into the band Meta accepts.
+export function clampRadius(miles) {
+  const n = Number(miles)
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_RADIUS_MILES
+  return Math.min(Math.max(Math.round(n), MIN_RADIUS_MILES), MAX_RADIUS_MILES)
+}
 
 // Each city is a live geo lookup against Meta, so a long list is a lot of round
 // trips before the form is even usable. Eight is well past what a home services
@@ -113,13 +128,17 @@ export function budgetFromIntake(intake, client) {
  *
  * A range takes the lower end. "40-50 mile radius" is somebody being loose, and
  * the smaller circle stays closer to where they really work.
+ *
+ * A client who writes "5 mile radius" is asking for something Meta will not
+ * accept, so it comes back as the ten-mile floor rather than as a number that
+ * fails at publish.
  */
 export function radiusFromText(text) {
   const found = String(text || '').match(/(\d{1,3})\s*(?:-\s*\d{1,3})?\s*mi(?:le)?s?\b/i)
   if (!found) return null
   const miles = Number(found[1])
   if (!Number.isFinite(miles) || miles < 1) return null
-  return Math.min(miles, MAX_RADIUS_MILES)
+  return clampRadius(miles)
 }
 
 // Instruction rather than place name. Left in, the whole phrase goes to Meta's
@@ -164,7 +183,7 @@ export async function locationsFromIntake(intake) {
 
   const entries = []
   for (const term of terms) {
-    const radius = term.radius ?? stated ?? DEFAULT_RADIUS_MILES
+    const radius = clampRadius(term.radius ?? stated ?? DEFAULT_RADIUS_MILES)
     try {
       const found = await searchLocations(term.query)
       // Three is enough to show the real one without turning this into a
