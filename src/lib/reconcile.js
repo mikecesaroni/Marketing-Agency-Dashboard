@@ -1,4 +1,7 @@
-import { ghlBilling, ghlMonthlyPortion, totalMonthly } from './ghlSetupFields'
+// The .js extension is deliberate and the only place in src/ that carries one.
+// Vite resolves either form, but node does not, and being importable by a plain
+// node script is the entire reason this module is separate from the data layer.
+import { ghlBilling, ghlMonthlyPortion, totalMonthly } from './ghlSetupFields.js'
 
 /**
  * Checks the CRM's billing config against what Stripe has actually collected.

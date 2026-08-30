@@ -7,24 +7,7 @@
 // Stripe identifiers and neither can see the other's rows.
 
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-// The app imports without file extensions, which Vite resolves and node does
-// not. Rather than bend the codebase to suit this script, the extension is
-// added to a throwaway copy here.
-const lib = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'lib')
-const patched = path.join(os.tmpdir(), `reconcile.${process.pid}.mjs`)
-fs.writeFileSync(
-  patched,
-  fs
-    .readFileSync(path.join(lib, 'reconcile.js'), 'utf8')
-    .replace("from './ghlSetupFields'", `from ${JSON.stringify(path.join(lib, 'ghlSetupFields.js'))}`)
-)
-const { feeMismatches, duplicateSuspects, latestBillingMonth } = await import(`file://${patched}`)
-fs.unlinkSync(patched)
+import { feeMismatches, duplicateSuspects, latestBillingMonth } from '../src/lib/reconcile.js'
 
 const client = (over) => ({
   id: over.name, monthly_fee: 998, ghl_monthly_fee: 399,
@@ -128,6 +111,35 @@ const paid = (id, type, amount, date, stripe) => ({
   const gone = [client({ name: 'old', monthly_fee: 1, archived: true })]
   assert.equal(feeMismatches(gone, [paid('old', 'monthly', 998, '2026-08-01', true)]).length, 0)
   console.log('PASS  clients who never paid, and archived ones, are left out')
+}
+
+// --- partial client rows ---------------------------------------------------
+// The bug that produced a false "Reliable is under-reported by $399" on the
+// Payments page. The page selected five columns and none of them was ghl_plan,
+// so ghlBilling() returned null, totalMonthly() fell back to the bare retainer,
+// and a correctly configured client was reported as disagreeing with Stripe.
+//
+// The real fix is CLIENT_BILLING_COLUMNS in queries.js -- this records the
+// failure so a future projection that drops those columns is caught here
+// rather than by someone reading a wrong number off the page.
+{
+  const full = client({
+    name: 'reliable', ghl_plan: true, ghl_billing: 'separate', ghl_monthly_fee: 399,
+  })
+  const payments = [
+    paid('reliable', 'monthly', 998, '2026-08-28', true),
+    paid('reliable', 'ghl', 399, '2026-08-28', true),
+  ]
+
+  assert.equal(feeMismatches([full], payments).length, 0, 'a complete row reconciles')
+
+  // The old projection: id, name, monthly_fee, status, stripe_customer_id.
+  const partial = { id: full.id, name: full.name, monthly_fee: full.monthly_fee, status: 'active' }
+  const wrong = feeMismatches([partial], payments)
+  assert.equal(wrong.length, 1, 'a row missing ghl_plan is what caused the false alarm')
+  assert.equal(wrong[0].expected, 998, 'and it under-states the client by the GHL fee')
+  console.log('PASS  a complete client row reconciles cleanly')
+  console.log('PASS  the partial-row failure mode is pinned down')
 }
 
 // --- duplicates ------------------------------------------------------------

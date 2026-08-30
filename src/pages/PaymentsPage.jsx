@@ -6,7 +6,15 @@ import StripeReconcilePanel from '../components/StripeReconcilePanel'
 import EthanPayoutPanel from '../components/EthanPayoutPanel'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
-import { calcMRR, fetchPayments, hasInternalColumn, isOverdue, money, today } from '../lib/queries'
+import {
+  CLIENT_BILLING_COLUMNS,
+  calcMRR,
+  fetchPayments,
+  hasInternalColumn,
+  isOverdue,
+  money,
+  today,
+} from '../lib/queries'
 import { Badge, Button, Card, Input, Select, StatCard, Textarea } from '../components/ui'
 
 const FILTERS = ['paid', 'overdue', 'upcoming', 'all']
@@ -90,7 +98,7 @@ export default function PaymentsPage() {
     try {
       let clientsQuery = supabase
         .from('clients')
-        .select('id, name, monthly_fee, status, stripe_customer_id')
+        .select(CLIENT_BILLING_COLUMNS)
         .order('name')
       if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
 

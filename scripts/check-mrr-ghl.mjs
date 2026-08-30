@@ -13,26 +13,7 @@
 // The guarding case is "bundled is not 1500+399" -- it failed on the first
 // version of this code, which is why the check is here.
 
-// calcMRR is lifted out of queries.js rather than imported, because importing
-// that module pulls in the Supabase client and its environment variables.
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const here = path.dirname(fileURLToPath(import.meta.url))
-const lib = path.join(here, '..', 'src', 'lib')
-const source = fs.readFileSync(path.join(lib, 'queries.js'), 'utf8')
-const start = source.indexOf('// Clients start paying')
-const end = source.indexOf('\n}', source.indexOf('return { mrr, count: billing.length')) + 2
-const extracted = path.join(os.tmpdir(), `calcMRR.${process.pid}.mjs`)
-fs.writeFileSync(
-  extracted,
-  `import { ghlBilling, ghlMonthlyPortion } from ${JSON.stringify(path.join(lib, 'ghlSetupFields.js'))}\n` +
-    source.slice(start, end)
-)
-const { calcMRR } = await import(`file://${extracted}`)
-fs.unlinkSync(extracted)
+import { calcMRR } from '../src/lib/billing.js'
 
 let bad = 0
 const check = (name, got, want) => {
