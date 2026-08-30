@@ -92,13 +92,56 @@ export async function fetchScan(scanId) {
 export async function fetchScans(clientId) {
   let query = supabase
     .from('ai_scans')
-    .select('id, business_name, website_url, domain, location, visibility_score, status, created_at')
+    .select(
+      'id, business_name, website_url, domain, location, visibility_score, status, created_at, ' +
+        'client_id, baseline_scan_id'
+    )
     .order('created_at', { ascending: false })
     .limit(50)
   if (clientId) query = query.eq('client_id', clientId)
 
   const { data, error } = await query
   if (error) throw error
+  return data || []
+}
+
+/**
+ * The scan this one is measured against, with its prompts, or null.
+ *
+ * Loaded on demand rather than with every scan: a comparison is opened far
+ * less often than a report is read, and this is a second round trip carrying
+ * every prompt and answer.
+ */
+export async function fetchBaseline(scan) {
+  if (!scan?.baseline_scan_id) return null
+  try {
+    return await fetchScan(scan.baseline_scan_id)
+  } catch {
+    // A deleted baseline is not an error worth breaking the report over; the
+    // comparison simply is not offered.
+    return null
+  }
+}
+
+/**
+ * Earlier complete scans of the same business, newest first.
+ *
+ * Same client and same domain, matching what the scan function itself uses to
+ * pick a baseline — a client whose website changed is a different business as
+ * far as these questions go.
+ */
+export async function fetchComparableScans(scan) {
+  if (!scan?.client_id || !scan?.domain) return []
+  const { data } = await supabase
+    .from('ai_scans')
+    .select('id, created_at, visibility_score')
+    .eq('client_id', scan.client_id)
+    .eq('domain', scan.domain)
+    .eq('status', 'complete')
+    .neq('id', scan.id)
+    .lt('created_at', scan.created_at)
+    .order('created_at', { ascending: false })
+    .limit(10)
   return data || []
 }
 

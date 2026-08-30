@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
 import Layout from '../components/Layout'
 import AiScanReport from '../components/AiScanReport'
+import AiScanComparison from '../components/AiScanComparison'
 import { supabase } from '../lib/supabaseClient'
-import { deleteScan, fetchScan, fetchScans, runScan, scoreBand } from '../lib/aiVisibility'
+import {
+  deleteScan,
+  fetchBaseline,
+  fetchComparableScans,
+  fetchScan,
+  fetchScans,
+  runScan,
+  scoreBand,
+} from '../lib/aiVisibility'
 
 function ScoreChip({ score, status }) {
   if (status !== 'complete') {
@@ -39,6 +48,11 @@ export default function AiSearchPage() {
   const [clients, setClients] = useState([])
   const [scans, setScans] = useState([])
   const [open, setOpen] = useState(null)
+  // The scan `open` is measured against, plus any others it could be compared
+  // with. Loaded only when a report is opened.
+  const [baseline, setBaseline] = useState(null)
+  const [olderScans, setOlderScans] = useState([])
+  const [view, setView] = useState('report')
 
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [businessName, setBusinessName] = useState('')
@@ -80,7 +94,7 @@ export default function AiSearchPage() {
         { businessName, websiteUrl, location, industry, clientId: clientId || null },
         setProgress
       )
-      setOpen(result)
+      await showScan(result)
       await loadScans()
     } catch (err) {
       setError(err.message)
@@ -89,10 +103,37 @@ export default function AiSearchPage() {
     }
   }
 
+  // Loads a report and whatever it can be compared against. Kept in one place
+  // so a scan opened from the list and one just finished behave identically.
+  const showScan = async (scanOrId) => {
+    const scan = typeof scanOrId === 'string' ? await fetchScan(scanOrId) : scanOrId
+    setOpen(scan)
+    const [base, older] = await Promise.all([
+      fetchBaseline(scan),
+      fetchComparableScans(scan),
+    ])
+    setBaseline(base)
+    setOlderScans(older)
+    // A re-scan is opened on the comparison, because that is the reason it was
+    // run. A first scan has nothing to compare and opens on the report.
+    setView(base ? 'compare' : 'report')
+  }
+
   const openScan = async (id) => {
     setError('')
     try {
-      setOpen(await fetchScan(id))
+      await showScan(id)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  // Comparing against a scan other than the recorded baseline.
+  const compareWith = async (id) => {
+    setError('')
+    try {
+      setBaseline(await fetchScan(id))
+      setView('compare')
     } catch (err) {
       setError(err.message)
     }
@@ -102,7 +143,10 @@ export default function AiSearchPage() {
     if (!confirm('Delete this scan and its answers?')) return
     try {
       await deleteScan(id)
-      if (open?.id === id) setOpen(null)
+      if (open?.id === id) {
+        setOpen(null)
+        setBaseline(null)
+      }
       await loadScans()
     } catch (err) {
       setError(err.message)
@@ -247,13 +291,78 @@ export default function AiSearchPage() {
                 </p>
               </div>
               <button
-                onClick={() => setOpen(null)}
+                onClick={() => {
+                  setOpen(null)
+                  setBaseline(null)
+                }}
                 className="text-xs text-slate-500 hover:text-slate-800"
               >
                 Close
               </button>
             </div>
-            <AiScanReport scan={open} />
+
+            {/* Only worth a toggle when there is something on the other side
+                of it. A first scan just shows its report. */}
+            {baseline && (
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                {[
+                  ['compare', 'Before / after'],
+                  ['report', 'This scan'],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setView(key)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                      view === key
+                        ? 'bg-slate-900 text-white'
+                        : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {olderScans.length > 1 && (
+                  <select
+                    value={baseline.id}
+                    onChange={(e) => compareWith(e.target.value)}
+                    className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs"
+                  >
+                    {olderScans.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        vs {new Date(o.created_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                        {o.visibility_score !== null ? ` · scored ${o.visibility_score}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
+            {/* A client with an earlier scan but no baseline recorded: the
+                re-scan predates prompt reuse, or was run for a prospect and
+                only later attached to a client. Offer it rather than hiding
+                that a comparison is possible. */}
+            {!baseline && olderScans.length > 0 && (
+              <button
+                onClick={() => compareWith(olderScans[0].id)}
+                className="mb-4 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Compare with the scan from{' '}
+                {new Date(olderScans[0].created_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </button>
+            )}
+
+            {view === 'compare' && baseline ? (
+              <AiScanComparison baseline={baseline} current={open} />
+            ) : (
+              <AiScanReport scan={open} />
+            )}
           </div>
         )}
 

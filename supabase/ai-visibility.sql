@@ -89,3 +89,23 @@ create index if not exists ai_scan_prompts_scan_idx on ai_scan_prompts (scan_id,
 -- the Edge Function writes with the service role.
 alter table ai_scans disable row level security;
 alter table ai_scan_prompts disable row level security;
+
+-- ---------------------------------------------------------------------------
+-- BEFORE / AFTER
+--
+-- Which earlier scan this one is measured against.
+--
+-- A re-scan only proves a fix worked if it asks the same questions. The prompt
+-- set is written by a model, so left alone every scan asks something different
+-- and a score moving 30 -> 45 could just as easily mean the second set was
+-- easier. When this is set, the scan copied its prompts from that baseline
+-- verbatim, which is what makes a before/after comparison a measurement rather
+-- than a coincidence.
+--
+-- `start` fills it in on its own: the most recent complete scan for the same
+-- client and the same domain. Null for a first scan, a prospect, or a client
+-- whose website changed — all three write a fresh prompt set as before.
+alter table ai_scans
+  add column if not exists baseline_scan_id uuid references ai_scans(id) on delete set null;
+
+create index if not exists ai_scans_baseline_idx on ai_scans (baseline_scan_id);

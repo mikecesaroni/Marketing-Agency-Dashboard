@@ -25,10 +25,20 @@
 // Secrets: ANTHROPIC_API_KEY.
 //
 // Actions:
-//   start  {business_name, website_url, location, industry, client_id?}
+//   start  {business_name, website_url, location, industry, client_id?,
+//           baseline_scan_id?}
 //            -> creates the scan, audits the site, writes the prompt set
 //   run    {scan_id}   -> works through a batch of pending prompts
 //   finish {scan_id}   -> scores the scan and writes the findings
+//
+// RE-SCANS REUSE THE BASELINE'S PROMPTS. A second scan only proves a fix
+// worked if it asks the same questions, and the prompt set is model-written —
+// so left alone every scan asks something different and a score moving 30 -> 45
+// could just mean the second set was easier. When an earlier complete scan of
+// the same client and domain exists, `start` copies its prompts verbatim and
+// records it as baseline_scan_id, which is what makes the before/after report
+// a measurement. A first scan, a prospect, or a changed website writes a fresh
+// set as before.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
 
@@ -110,6 +120,39 @@ function mentions(answer: string, variants: string[]): { hit: boolean; at: numbe
     if (at !== -1 && (earliest === -1 || at < earliest)) earliest = at
   }
   return { hit: earliest !== -1, at: earliest }
+}
+
+/**
+ * The earlier scan a new one should be measured against.
+ *
+ * An explicit id wins, so a report can be re-run against a specific point in
+ * time. Otherwise it is the most recent COMPLETE scan for the same client and
+ * the same domain — complete because a failed or half-finished scan has no
+ * prompt set worth copying, and same-domain because a client who changed
+ * website is a different business as far as these questions go.
+ *
+ * Returns null for a first scan, a prospect, or a changed website, and the
+ * caller then writes a fresh prompt set as before.
+ */
+async function findBaseline(
+  db: { select: (path: string) => Promise<any[]> },
+  { explicitId, clientId, domain }: { explicitId?: string; clientId?: string; domain: string }
+) {
+  if (explicitId) {
+    const [row] = await db.select(
+      `ai_scans?id=eq.${encodeURIComponent(String(explicitId))}&select=id,domain,status&limit=1`
+    )
+    return row && row.status === 'complete' ? row : null
+  }
+
+  if (!clientId) return null
+
+  const rows = await db.select(
+    `ai_scans?client_id=eq.${encodeURIComponent(String(clientId))}` +
+      `&domain=eq.${encodeURIComponent(domain)}` +
+      `&status=eq.complete&select=id,domain,created_at&order=created_at.desc&limit=1`
+  )
+  return rows[0] || null
 }
 
 /**
@@ -285,6 +328,21 @@ Deno.serve(async (req) => {
       const location = String(body.location || '').trim()
       const industry = String(body.industry || '').trim()
 
+      // A re-scan is only evidence if it asks the same questions. Left to
+      // itself the model writes a fresh prompt set every time, so a score
+      // moving 30 -> 45 could just mean the second set was easier. When an
+      // earlier complete scan of this same business exists, its prompts are
+      // reused verbatim and the two become genuinely comparable.
+      //
+      // Matched on the domain rather than the client alone: a client whose
+      // website changed is, for these purposes, a different business, and the
+      // old questions were written about the old site.
+      const baseline = await findBaseline(db, {
+        explicitId: body.baseline_scan_id,
+        clientId: body.client_id,
+        domain,
+      })
+
       const [scan] = await db.insert('ai_scans', {
         client_id: body.client_id || null,
         business_name: businessName,
@@ -293,12 +351,49 @@ Deno.serve(async (req) => {
         location: location || null,
         industry: industry || null,
         status: 'building',
+        baseline_scan_id: baseline?.id || null,
       })
 
       // The site audit doubles as context for prompt writing: the homepage
       // title and H1 say what this business actually sells, which beats
       // guessing from the domain.
       const crawlerAudit = await auditSite(websiteUrl)
+
+      // The whole point of a baseline: same questions, so the difference is
+      // the business changing rather than the questions changing. It also
+      // skips the prompt-writing model call entirely.
+      if (baseline) {
+        const previous = await db.select(
+          `ai_scan_prompts?scan_id=eq.${encodeURIComponent(baseline.id)}` +
+            `&select=prompt,category&order=created_at.asc`
+        )
+
+        if (previous.length > 0) {
+          await db.insert(
+            'ai_scan_prompts',
+            previous.map((p: any) => ({
+              scan_id: scan.id,
+              prompt: p.prompt,
+              category: p.category,
+            })),
+            false
+          )
+          await db.patch(`ai_scans?id=eq.${scan.id}`, {
+            status: 'running',
+            crawler_audit: crawlerAudit,
+          })
+          return json({
+            scan_id: scan.id,
+            total: previous.length,
+            crawler_audit: crawlerAudit,
+            baseline_scan_id: baseline.id,
+            reused_prompts: true,
+          })
+        }
+        // A baseline with no prompts is not a baseline. Fall through and write
+        // a fresh set rather than running a scan with nothing to ask.
+        await db.patch(`ai_scans?id=eq.${scan.id}`, { baseline_scan_id: null })
+      }
 
       // Prompts a real buyer would type. The business is never named — a
       // prompt that names them measures nothing.
