@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import StripePanel from '../components/StripePanel'
 import StripeReconcilePanel from '../components/StripeReconcilePanel'
+import OnboardingMoneyPanel from '../components/OnboardingMoneyPanel'
 import EthanPayoutPanel from '../components/EthanPayoutPanel'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
@@ -347,6 +348,10 @@ export default function PaymentsPage() {
           tone={overdue.length > 0 ? 'red' : 'slate'}
         />
       </div>
+
+      {/* Who owes money that no ledger row makes obvious, before the panels
+          about reconciling and configuring Stripe. */}
+      <OnboardingMoneyPanel clients={clients} payments={payments} todayDate={today()} />
 
       {/* Above the Stripe setup panel on purpose: a disagreement with Stripe
           is something to act on, and pasting in payment links is not. */}

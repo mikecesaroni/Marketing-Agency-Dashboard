@@ -23,7 +23,8 @@ import { ghlBilling, ghlMonthlyPortion } from './ghlSetupFields.js'
  * what stops that happening again.
  */
 export const CLIENT_BILLING_COLUMNS =
-  'id, name, status, monthly_fee, stripe_customer_id, ghl_plan, ghl_billing, ghl_monthly_fee, archived'
+  'id, name, status, setup_fee, monthly_fee, stripe_customer_id, ' +
+  'ghl_plan, ghl_billing, ghl_monthly_fee, archived'
 
 // Dev-only backstop for any caller that builds its own projection anyway.
 // Silent wrong money is worse than a noisy console.
@@ -93,4 +94,85 @@ export function calcMRR(clients, payments) {
   }
 
   return { mrr, count: billing.length, ghl, ghlCount }
+}
+
+const RECURRING = new Set(['monthly', 'ghl'])
+
+const isPaid = (p) => p.status === 'paid'
+
+/**
+ * The two things that hold up a new client's money: the setup fee still
+ * outstanding, and the subscription never actually starting.
+ *
+ * Both are invisible in the payments ledger, which is why they are worth
+ * pulling out. An unpaid setup fee is one unremarkable pending row among a
+ * client's twelve scheduled months, and a client who never subscribed shows
+ * up as nothing at all -- no overdue row, no missing payment, just an absence
+ * that no view was asking about.
+ *
+ * Archived and internal clients are left out: neither is someone to chase.
+ */
+export function onboardingGaps(clients, payments, todayDate) {
+  const byClient = {}
+  for (const p of payments || []) {
+    ;(byClient[p.client_id] ||= []).push(p)
+  }
+
+  const setupUnpaid = []
+  const notSubscribed = []
+
+  for (const client of clients || []) {
+    if (client.archived || client.is_internal) continue
+    const rows = byClient[client.id] || []
+
+    const setupRows = rows.filter((p) => p.payment_type === 'setup')
+    const owing = setupRows.filter((p) => !isPaid(p))
+    const fee = Number(client.setup_fee) || 0
+
+    if (owing.length > 0) {
+      const due = owing.map((p) => p.due_date).filter(Boolean).sort()[0] || ''
+      setupUnpaid.push({
+        client,
+        amount: owing.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
+        dueDate: due,
+        // Compared against a passed-in date so this stays a pure function and
+        // the tests do not drift as the calendar moves.
+        overdue: Boolean(due && todayDate && due < todayDate),
+        reason: 'unpaid',
+      })
+    } else if (setupRows.length === 0 && fee > 0) {
+      // A fee on the client that no schedule ever picked up. Nothing will ever
+      // mark it overdue, so without this it is simply never collected.
+      setupUnpaid.push({
+        client,
+        amount: fee,
+        dueDate: '',
+        overdue: false,
+        reason: 'unscheduled',
+      })
+    }
+
+    const recurring = rows.filter((p) => RECURRING.has(p.payment_type))
+    if (!recurring.some(isPaid)) {
+      notSubscribed.push({
+        client,
+        // A schedule with nothing collected means the plan is set up and the
+        // client has not started paying. No schedule at all means billing was
+        // never set up for them, which is a different job.
+        scheduled: recurring.length > 0,
+        stripeLinked: Boolean(client.stripe_customer_id),
+      })
+    }
+  }
+
+  // Overdue first, then the largest amounts: the order you would chase them in.
+  setupUnpaid.sort(
+    (a, b) => Number(b.overdue) - Number(a.overdue) || b.amount - a.amount
+  )
+  // Clients with a schedule ready are the ones a payment link would fix today.
+  notSubscribed.sort(
+    (a, b) => Number(b.scheduled) - Number(a.scheduled) || a.client.name.localeCompare(b.client.name)
+  )
+
+  return { setupUnpaid, notSubscribed }
 }
