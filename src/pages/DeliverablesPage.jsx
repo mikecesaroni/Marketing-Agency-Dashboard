@@ -7,6 +7,7 @@ import MetaSetupPanel from '../components/MetaSetupPanel'
 import GbpSetupPanel from '../components/GbpSetupPanel'
 import { supabase } from '../lib/supabaseClient'
 import { fetchDeliverables, hasInternalColumn, today } from '../lib/queries'
+import { Badge, Button, Card, Select } from '../components/ui'
 
 const STATUS_FILTERS = ['open', 'todo', 'in progress', 'review', 'done', 'all']
 const STATUSES = ['todo', 'in progress', 'review', 'done']
@@ -99,12 +100,14 @@ export default function DeliverablesPage() {
   const tableMissing = error.toLowerCase().includes('deliverables')
 
   const addButton = (
-    <button
+    <Button
+      variant="dark"
+      size="lg"
       onClick={() => setShowAddModal(true)}
-      className="w-full md:w-auto px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition"
+      className="w-full md:w-auto"
     >
       + New Deliverable
-    </button>
+    </Button>
   )
 
   return (
@@ -137,23 +140,20 @@ export default function DeliverablesPage() {
       <div className="flex flex-col md:flex-row gap-2 mb-4">
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">
           {STATUS_FILTERS.map((s) => (
-            <button
+            <Button
               key={s}
+              variant={statusFilter === s ? 'dark' : 'outline'}
               onClick={() => setStatusFilter(s)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition ${
-                statusFilter === s
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
-              }`}
+              className="capitalize whitespace-nowrap"
             >
               {s}
-            </button>
+            </Button>
           ))}
         </div>
-        <select
+        <Select
           value={clientFilter}
           onChange={(e) => setClientFilter(e.target.value)}
-          className="md:ml-auto px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+          className="w-auto md:ml-auto"
         >
           <option value="all">All clients</option>
           {clients.map((c) => (
@@ -161,29 +161,29 @@ export default function DeliverablesPage() {
               {c.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {loading ? (
         <p className="text-slate-500">Loading...</p>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
+        <Card padding="lg" className="text-center">
           <p className="text-slate-500">
             {deliverables.length === 0
               ? 'No deliverables yet. Add one to start tracking work.'
               : 'Nothing matches these filters.'}
           </p>
-        </div>
+        </Card>
       ) : (
         <div className="space-y-2">
           {filtered.map((d) => {
             const late = d.status !== 'done' && d.due_date && d.due_date < today()
             return (
-              <div
+              <Card
                 key={d.id}
-                className={`rounded-xl border p-3 md:p-4 flex flex-col md:flex-row md:items-center gap-3 ${
-                  late ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'
-                }`}
+                tone={late ? 'danger' : 'default'}
+                padding="sm"
+                className="flex flex-col gap-3 md:flex-row md:items-center md:p-4"
               >
                 <button
                   onClick={() => setEditing(d)}
@@ -195,9 +195,9 @@ export default function DeliverablesPage() {
                       {d.title}
                     </span>
                     {d.priority === 'high' && (
-                      <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold uppercase flex-shrink-0">
+                      <Badge tone="danger" className="flex-shrink-0 uppercase">
                         High
-                      </span>
+                      </Badge>
                     )}
                   </div>
                   <p className="text-xs text-slate-500">
@@ -229,7 +229,7 @@ export default function DeliverablesPage() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </Card>
             )
           })}
         </div>

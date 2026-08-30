@@ -13,6 +13,7 @@ import {
 import { LOWER_IS_BETTER, buildDailySeries, daysAgo, pctChange, totals as sumSeries } from '../lib/dailySeries'
 import DailyChart from '../components/DailyChart'
 import StatTile from '../components/StatTile'
+import { Button, Card, Table, THead, TBody, Tr, Th, Td } from '../components/ui'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
 
 // Live mode reads per-ad rows so it can filter on ad status; All-time reads the
@@ -54,8 +55,8 @@ const METRICS = [
 function ChannelCard({ channel, spend, leads }) {
   const cpl = leads > 0 ? spend / leads : 0
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <p className="font-semibold text-slate-900 mb-3">{channel}</p>
+    <Card>
+      <p className="mb-3 text-sm font-semibold tracking-tight text-slate-900">{channel}</p>
       <div className="grid grid-cols-3 gap-2">
         <div>
           <p className="text-lg font-bold text-slate-900">{money(spend)}</p>
@@ -72,66 +73,68 @@ function ChannelCard({ channel, spend, leads }) {
           <p className="text-xs text-slate-500">Cost/lead</p>
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
 function PerformanceTable({ rows, nameHeader, onOpen, showLsa }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-slate-900">
-              <th className="px-4 py-3 text-left font-semibold">{nameHeader}</th>
-              <th className="px-4 py-3 text-right font-semibold">Meta spend</th>
-              {showLsa && <th className="px-4 py-3 text-right font-semibold">LSA spend</th>}
-              <th className="px-4 py-3 text-right font-semibold">Total spend</th>
-              <th className="px-4 py-3 text-right font-semibold">Leads</th>
-              <th className="px-4 py-3 text-right font-semibold">Cost/lead</th>
-              <th className="px-4 py-3 text-right font-semibold">
-                <span className="sr-only">Ad breakdown</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr
-                key={row.id}
-                onClick={(e) => {
-                  // The name cell is a real link — let it handle its own click
-                  // (and cmd-click) rather than navigating twice.
-                  if (e.target.closest('a')) return
-                  onOpen(row.id)
-                }}
-                className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition cursor-pointer"
+    <Table>
+      <THead>
+        <tr>
+          <Th>{nameHeader}</Th>
+          <Th numeric>Meta spend</Th>
+          {showLsa && <Th numeric>LSA spend</Th>}
+          <Th numeric>Total spend</Th>
+          <Th numeric>Leads</Th>
+          <Th numeric>Cost/lead</Th>
+          <Th numeric>{'\u00a0'}</Th>
+        </tr>
+      </THead>
+      <TBody>
+        {rows.map((row) => (
+          <Tr
+            key={row.id}
+            onClick={(e) => {
+              // The name cell is a real link — let it handle its own click
+              // (and cmd-click) rather than navigating twice.
+              if (e.target.closest('a')) return
+              onOpen(row.id)
+            }}
+            className="cursor-pointer"
+          >
+            <Td>
+              <Link
+                to={`/client/${row.id}#ad-performance`}
+                className="font-medium text-blue-600 hover:text-blue-800"
               >
-                <td className="px-4 py-3">
-                  <Link
-                    to={`/client/${row.id}#ad-performance`}
-                    className="font-medium text-blue-600 hover:text-blue-800"
-                  >
-                    {row.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-right text-slate-600">{money(row.metaSpend)}</td>
-                {showLsa && (
-                  <td className="px-4 py-3 text-right text-slate-600">{money(row.lsaSpend)}</td>
-                )}
-                <td className="px-4 py-3 text-right font-medium">{money(row.spend)}</td>
-                <td className="px-4 py-3 text-right font-medium">{row.leads}</td>
-                <td className="px-4 py-3 text-right font-medium">
-                  {row.cpl > 0 ? `$${row.cpl.toFixed(2)}` : '—'}
-                </td>
-                <td className="px-4 py-3 text-right whitespace-nowrap text-xs font-medium text-blue-600">
-                  View ads →
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+                {row.name}
+              </Link>
+            </Td>
+            <Td numeric muted>
+              {money(row.metaSpend)}
+            </Td>
+            {showLsa && (
+              <Td numeric muted>
+                {money(row.lsaSpend)}
+              </Td>
+            )}
+            <Td numeric className="font-medium">
+              {money(row.spend)}
+            </Td>
+            <Td numeric className="font-medium">
+              {row.leads}
+            </Td>
+            <Td numeric className="font-medium">
+              {row.cpl > 0 ? `$${row.cpl.toFixed(2)}` : '—'}
+            </Td>
+            <Td numeric className="whitespace-nowrap text-xs font-medium text-blue-600">
+              View ads →
+            </Td>
+          </Tr>
+        ))}
+      </TBody>
+    </Table>
   )
 }
 
@@ -300,39 +303,29 @@ export default function ReportsPage() {
     // its content no matter what max-width says, and the whole page goes
     // sideways with it.
     <div className="flex gap-1.5 min-w-0 max-w-full overflow-x-auto pb-1">
-      <button
-        onClick={handleSync}
-        disabled={syncing}
-        className="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 transition"
-      >
+      <Button onClick={handleSync} disabled={syncing} className="whitespace-nowrap">
         {syncing ? 'Syncing...' : '↻ Sync Meta'}
-      </button>
+      </Button>
       {SCOPES.map((sc) => (
-        <button
+        <Button
           key={sc.key}
+          variant={scope === sc.key ? 'primary' : 'outline'}
           onClick={() => setScope(sc.key)}
-          className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
-            scope === sc.key
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
-          }`}
+          className="whitespace-nowrap"
         >
           {sc.label}
-        </button>
+        </Button>
       ))}
       <span className="w-px bg-slate-200 mx-0.5" />
       {RANGES.map((r) => (
-        <button
+        <Button
           key={r.days}
+          variant={days === r.days ? 'dark' : 'outline'}
           onClick={() => setDays(r.days)}
-          className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
-            days === r.days
-              ? 'bg-slate-900 text-white'
-              : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
-          }`}
+          className="whitespace-nowrap"
         >
           {r.label}
-        </button>
+        </Button>
       ))}
     </div>
   )
@@ -388,17 +381,14 @@ export default function ReportsPage() {
               </div>
               <div className="flex gap-1.5">
                 {METRICS.map((m) => (
-                  <button
+                  <Button
                     key={m.key}
+                    size="sm"
+                    variant={metricKey === m.key ? 'primary' : 'secondary'}
                     onClick={() => setMetricKey(m.key)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                      metricKey === m.key
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
                   >
                     {m.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>

@@ -19,6 +19,7 @@ import AddWorkLogForm from '../components/AddWorkLogForm'
 import AddCreativeForm from '../components/AddCreativeForm'
 import ClientFilesSection from '../components/ClientFilesSection'
 import PaymentTracker from '../components/PaymentTracker'
+import { Button, Card } from '../components/ui'
 import {
   addTask,
   deleteTask,
@@ -279,42 +280,55 @@ export default function ClientDetailPage() {
 
   const intakeButton = (
     <div className="flex flex-col md:flex-row gap-2">
-      <button
+      {/* Orange, blue, green, indigo and white, previously, which told a
+          reader nothing except that five different days had gone into it. The
+          two that actually make something are emphasised; the three that open
+          a form recede. */}
+      <Button
+        size="lg"
         onClick={() => {
           setStudioSeed(null)
           setShowStudioModal(true)
         }}
-        className="w-full md:w-auto px-4 py-2.5 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 transition"
+        className="w-full md:w-auto"
       >
-        🎨 Ad Studio
-      </button>
-      <button
+        Ad Studio
+      </Button>
+      <Button
+        variant="dark"
+        size="lg"
         onClick={() => {
           setChatSeed(null)
           setShowChatModal(true)
         }}
-        className="w-full md:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+        className="w-full md:w-auto"
       >
-        💬 Ask about {client.name}
-      </button>
-      <button
+        Ask about {client.name}
+      </Button>
+      <Button
+        variant="outline"
+        size="lg"
         onClick={() => setShowIntakeModal(true)}
-        className="w-full md:w-auto px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
+        className="w-full md:w-auto"
       >
         Intake Form
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="outline"
+        size="lg"
         onClick={() => setShowGhlModal(true)}
-        className="w-full md:w-auto px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition"
+        className="w-full md:w-auto"
       >
         GHL Setup
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="outline"
+        size="lg"
         onClick={() => setShowLinkModal(true)}
-        className="w-full md:w-auto px-4 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition"
+        className="w-full md:w-auto"
       >
         Send to Client
-      </button>
+      </Button>
     </div>
   )
 
@@ -335,7 +349,7 @@ export default function ClientDetailPage() {
         )}
 
         <div className="mb-6 md:mb-8">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 mb-3 flex flex-col sm:flex-row sm:items-center gap-3">
+          <Card className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex gap-2 flex-wrap">
               <LiveToggle
                 clientId={client.id}
@@ -385,15 +399,17 @@ export default function ClientDetailPage() {
                 />
               )}
             </div>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleToggleArchive}
-              className="sm:ml-auto text-xs text-slate-400 hover:text-slate-700 transition text-left"
+              className="text-slate-400 sm:ml-auto"
             >
               {client.archived ? '↩ Restore client' : 'Archive client'}
-            </button>
-          </div>
+            </Button>
+          </Card>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 bg-white rounded-xl border border-slate-200 p-4">
+          <Card className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             <div>
               <p className="text-xs text-slate-500 uppercase font-medium">Industry</p>
               <p className="font-semibold text-slate-900 text-sm md:text-base">{client.industry || '—'}</p>
@@ -414,21 +430,22 @@ export default function ClientDetailPage() {
                 ${client.lsa_budget_per_day ? client.lsa_budget_per_day.toFixed(2) : '0'}
               </p>
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* TASKS */}
-        <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 mb-6 md:mb-8">
+        <Card padding="none" className="mb-6 p-4 md:mb-8 md:p-6">
           <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4">
-            <h2 className="text-xl font-bold text-slate-900">Tasks</h2>
-            <button
+            <h2 className="text-lg font-semibold tracking-tight text-slate-900">Tasks</h2>
+            <Button
+              variant="dark"
               onClick={handleExtractTasks}
               disabled={extracting}
-              title="The chat already checks itself after every message — use this to re-check on demand, or to pull from a conversation that happened before that started."
-              className="w-full md:w-auto px-3 py-2 md:py-1.5 text-sm bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition"
+              title="The chat only makes tasks from call summaries and direct asks now — use this to sweep the whole history on demand."
+              className="w-full md:w-auto"
             >
-              {extracting ? 'Reading chat...' : '✨ Check chat now'}
-            </button>
+              {extracting ? 'Reading chat...' : 'Check chat now'}
+            </Button>
           </div>
 
           <p className="text-xs text-slate-400 mb-3">
@@ -465,13 +482,13 @@ export default function ClientDetailPage() {
               placeholder="Add a task..."
               className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
-            <button
+            <Button
               onClick={handleAddTask}
               disabled={!newTask.trim()}
-              className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+              variant="primary"
             >
               Add
-            </button>
+            </Button>
           </div>
 
           {sortedTasks.length === 0 ? (
@@ -519,18 +536,19 @@ export default function ClientDetailPage() {
               ))}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* WEEKLY KPIs */}
-        <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 mb-6 md:mb-8">
+        <Card padding="none" className="mb-6 p-4 md:mb-8 md:p-6">
           <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
             <h2 className="text-lg md:text-xl font-bold text-slate-900">Weekly KPI History</h2>
-            <button
+            <Button
+              size="sm"
               onClick={() => setShowKPIsModal(true)}
-              className="w-full md:w-auto px-3 py-2 md:py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition touch-none"
+              className="w-full touch-none md:w-auto"
             >
               + Log KPIs
-            </button>
+            </Button>
           </div>
           {weeklyKPIs.length === 0 ? (
             <p className="text-slate-500">No KPI data logged yet.</p>
@@ -566,18 +584,19 @@ export default function ClientDetailPage() {
               </table>
             </div>
           )}
-        </div>
+        </Card>
 
         {/* WORK LOG */}
-        <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 mb-6 md:mb-8">
+        <Card padding="none" className="mb-6 p-4 md:mb-8 md:p-6">
           <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
             <h2 className="text-lg md:text-xl font-bold text-slate-900">Weekly Work Log</h2>
-            <button
+            <Button
+              size="sm"
               onClick={() => setShowWorkLogModal(true)}
-              className="w-full md:w-auto px-3 py-2 md:py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition touch-none"
+              className="w-full touch-none md:w-auto"
             >
               + Add Entry
-            </button>
+            </Button>
           </div>
           {workLogs.length === 0 ? (
             <p className="text-slate-500">No work log entries yet.</p>
@@ -591,18 +610,19 @@ export default function ClientDetailPage() {
               ))}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* CREATIVE LOG */}
-        <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6">
+        <Card padding="none" className="p-4 md:p-6">
           <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
             <h2 className="text-lg md:text-xl font-bold text-slate-900">Creative Log</h2>
-            <button
+            <Button
+              size="sm"
               onClick={() => setShowCreativeModal(true)}
-              className="w-full md:w-auto px-3 py-2 md:py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition touch-none"
+              className="w-full touch-none md:w-auto"
             >
               + Add Entry
-            </button>
+            </Button>
           </div>
           {creativeLogs.length === 0 ? (
             <p className="text-slate-500">No creative entries yet.</p>
@@ -631,7 +651,7 @@ export default function ClientDetailPage() {
               ))}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* META ADS SYNC */}
         <div className="mt-6 md:mt-8">
@@ -648,10 +668,10 @@ export default function ClientDetailPage() {
         </div>
 
         {/* AD DOCTOR — the playbook's kill/scale rules run on the sync data */}
-        <div className="mt-6 md:mt-8 bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-200 p-4 md:p-6">
+        <Card padding="none" className="mt-6 p-4 md:mt-8 md:p-6">
           <h2 className="text-lg md:text-xl font-bold text-slate-900 mb-3">Ad Doctor</h2>
           <AdDoctorPanel client={client} />
-        </div>
+        </Card>
 
         {/* DELIVERABLES */}
         <div className="mt-6 md:mt-8">
