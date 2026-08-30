@@ -11,14 +11,12 @@ import AdPerformanceSection from '../components/AdPerformanceSection'
 import AdDoctorPanel from '../components/AdDoctorPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
-import OnboardingIntakeForm from '../components/OnboardingIntakeForm'
-import GhlSetupForm from '../components/GhlSetupForm'
-import OnboardingLinkPanel from '../components/OnboardingLinkPanel'
 import LogKPIsForm from '../components/LogKPIsForm'
 import AddWorkLogForm from '../components/AddWorkLogForm'
 import AddCreativeForm from '../components/AddCreativeForm'
 import ClientFilesSection from '../components/ClientFilesSection'
 import PaymentTracker from '../components/PaymentTracker'
+import ClientFormsPanel from '../components/ClientFormsPanel'
 import { Button, Card } from '../components/ui'
 import {
   addTask,
@@ -69,9 +67,6 @@ export default function ClientDetailPage() {
   const [creativeLogs, setCreativeLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [showIntakeModal, setShowIntakeModal] = useState(false)
-  const [showGhlModal, setShowGhlModal] = useState(false)
-  const [showLinkModal, setShowLinkModal] = useState(false)
   const [showKPIsModal, setShowKPIsModal] = useState(false)
   const [showWorkLogModal, setShowWorkLogModal] = useState(false)
   const [showCreativeModal, setShowCreativeModal] = useState(false)
@@ -305,30 +300,6 @@ export default function ClientDetailPage() {
       >
         Ask about {client.name}
       </Button>
-      <Button
-        variant="outline"
-        size="lg"
-        onClick={() => setShowIntakeModal(true)}
-        className="w-full md:w-auto"
-      >
-        Intake Form
-      </Button>
-      <Button
-        variant="outline"
-        size="lg"
-        onClick={() => setShowGhlModal(true)}
-        className="w-full md:w-auto"
-      >
-        GHL Setup
-      </Button>
-      <Button
-        variant="outline"
-        size="lg"
-        onClick={() => setShowLinkModal(true)}
-        className="w-full md:w-auto"
-      >
-        Send to Client
-      </Button>
     </div>
   )
 
@@ -433,6 +404,12 @@ export default function ClientDetailPage() {
           </Card>
         </div>
 
+        {/* CLIENT FORMS — what they have sent back, and how to chase the rest.
+            High up on purpose: at the start of a client this is the whole job,
+            and it was previously three buttons in the header that gave no hint
+            whether anything had come back. */}
+        <ClientFormsPanel client={client} intake={intake} onDataChanged={loadClientData} />
+
         {/* TASKS */}
         <Card padding="none" className="mb-6 p-4 md:mb-8 md:p-6">
           <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4">
@@ -448,9 +425,9 @@ export default function ClientDetailPage() {
             </Button>
           </div>
 
-          <p className="text-xs text-slate-400 mb-3">
-            New tasks get pulled in automatically after every chat message — this button is only for
-            a re-check on demand.
+          <p className="mb-3 text-xs text-slate-400">
+            The chat only makes tasks from a pasted call summary or a direct ask. This sweeps the
+            whole history on demand.
           </p>
 
           {extractNote && <p className="text-xs text-slate-500 mb-3">{extractNote}</p>}
@@ -719,38 +696,6 @@ export default function ClientDetailPage() {
             onTasksAdded={(newTasks) => setTasks((prev) => [...prev, ...newTasks])}
             autoPrompt={chatSeed}
           />
-        </Modal>
-
-        <Modal
-          isOpen={showIntakeModal}
-          onClose={() => setShowIntakeModal(false)}
-          title="Client Onboarding Intake"
-        >
-          <OnboardingIntakeForm
-            client={client}
-            onSuccess={() => handleDataAdded('intake')}
-            onClose={() => setShowIntakeModal(false)}
-          />
-        </Modal>
-
-        <Modal
-          isOpen={showGhlModal}
-          onClose={() => setShowGhlModal(false)}
-          title="GoHighLevel Setup"
-        >
-          <GhlSetupForm
-            client={client}
-            onSuccess={() => handleDataAdded('ghl')}
-            onClose={() => setShowGhlModal(false)}
-          />
-        </Modal>
-
-        <Modal
-          isOpen={showLinkModal}
-          onClose={() => setShowLinkModal(false)}
-          title="Send onboarding to client"
-        >
-          <OnboardingLinkPanel client={client} />
         </Modal>
 
         <Modal

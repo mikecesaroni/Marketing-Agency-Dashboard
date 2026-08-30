@@ -9,7 +9,14 @@ import { driveServiceAccount } from '../lib/driveAssets'
 //
 // One live link per client. Generating a new one revokes the old, so a link
 // forwarded to the wrong person can be killed by making a fresh one.
-export default function OnboardingLinkPanel({ client }) {
+//
+// `fixedMode` is how this is normally opened now. It used to carry its own
+// which-halves selector, sitting behind a Send button that had nothing to do
+// with the two form buttons beside it -- so picking what to send happened in a
+// different place from looking at what was in it. Opened from a form's own Send
+// button, the mode is already decided by which form you were looking at, and a
+// selector would only be a chance to contradict yourself.
+export default function OnboardingLinkPanel({ client, fixedMode }) {
   const [link, setLink] = useState(null)
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
@@ -19,7 +26,7 @@ export default function OnboardingLinkPanel({ client }) {
   // Which halves to send. Not every client is doing the account setup side
   // with us, and marching one of those through a form full of EIN and
   // registration questions is a good way to lose them.
-  const [mode, setMode] = useState('both')
+  const [mode, setMode] = useState(fixedMode || 'both')
   const [serviceEmail, setServiceEmail] = useState('')
 
   const load = async () => {
@@ -184,12 +191,14 @@ export default function OnboardingLinkPanel({ client }) {
 
   return (
     <div className="space-y-3">
-      <div>
-        <h3 className="font-bold text-slate-900">Client onboarding link</h3>
-        <p className="text-xs text-slate-500">
-          Send this to the client so they fill in their own onboarding and GHL setup details.
-        </p>
-      </div>
+      {!fixedMode && (
+        <div>
+          <h3 className="font-bold text-slate-900">Client onboarding link</h3>
+          <p className="text-xs text-slate-500">
+            Send this to the client so they fill in their own onboarding and GHL setup details.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="p-2 bg-red-50 border border-red-200 rounded text-red-700 text-xs">{error}</div>
@@ -197,6 +206,7 @@ export default function OnboardingLinkPanel({ client }) {
 
       {link ? (
         <>
+          {!fixedMode && (
           <div className="flex flex-wrap gap-1">
             {Object.entries(MODES).map(([key, m]) => (
               <button
@@ -213,6 +223,7 @@ export default function OnboardingLinkPanel({ client }) {
               </button>
             ))}
           </div>
+          )}
           <p className="text-[11px] text-slate-500">
             {mode === 'both'
               ? 'Both forms, the onboarding first. This is what the plain link has always done.'
