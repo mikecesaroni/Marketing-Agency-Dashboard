@@ -4,6 +4,8 @@ import { money } from '../lib/queries'
 import {
   applyImportedPayment,
   fetchImportedChargeIds,
+  fetchRecordedAmounts,
+  recordedKey,
   guessType,
   normaliseStripeCsv,
   suggestClient,
@@ -18,6 +20,9 @@ export default function StripeImportPanel({ clients, onDone }) {
   const [mapping, setMapping] = useState({})
   const [types, setTypes] = useState({})
   const [imported, setImported] = useState(new Set())
+  // Payments already on the books, keyed by client + amount + day. Catches the
+  // same payment arriving under an identifier the id check cannot match.
+  const [recorded, setRecorded] = useState(new Set())
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState('')
@@ -37,10 +42,12 @@ export default function StripeImportPanel({ clients, onDone }) {
       if (parseError) throw new Error(parseError)
       if (parsed.length === 0) throw new Error('No settled payments found in that file.')
 
-      const [{ data: intakes }, already] = await Promise.all([
+      const [{ data: intakes }, already, onBooks] = await Promise.all([
         supabase.from('onboarding_intake').select('client_id, contact_email'),
         fetchImportedChargeIds(),
+        fetchRecordedAmounts(),
       ])
+      setRecorded(onBooks)
 
       const guessedClients = {}
       const guessedTypes = {}
@@ -83,7 +90,15 @@ export default function StripeImportPanel({ clients, onDone }) {
     }
   }
 
+  // A warning rather than a skip: two genuine identical charges on one day are
+  // possible, so this says what it sees and leaves the call to a person.
+  const looksRecorded = (row, clientId) =>
+    Boolean(clientId) && recorded.has(recordedKey(clientId, row.amount, row.date))
+
   const chosen = rows ? rows.filter((r) => mapping[r.id]?.id && !imported.has(r.id)).length : 0
+  const warned = rows
+    ? rows.filter((r) => !imported.has(r.id) && looksRecorded(r, mapping[r.id]?.id)).length
+    : 0
 
   return (
     <div className="pt-3 border-t border-slate-200">
@@ -174,6 +189,12 @@ export default function StripeImportPanel({ clients, onDone }) {
                       {guess?.via && !isDone && (
                         <p className="text-[11px] text-blue-600">Suggested: {guess.via}</p>
                       )}
+                      {!isDone && looksRecorded(row, guess?.id) && (
+                        <p className="text-[11px] font-medium text-amber-700">
+                          A {money(row.amount)} payment is already recorded for this client on{' '}
+                          {row.date} — importing it again would double-count it.
+                        </p>
+                      )}
                     </div>
 
                     {isDone ? (
@@ -228,6 +249,12 @@ export default function StripeImportPanel({ clients, onDone }) {
             >
               Cancel
             </button>
+            {warned > 0 && (
+              <span className="text-[11px] font-medium text-amber-700">
+                {warned} of these {warned === 1 ? 'looks' : 'look'} already recorded — unassign
+                {warned === 1 ? ' it' : ' them'} unless you know the charge really happened twice.
+              </span>
+            )}
           </div>
         </div>
       )}

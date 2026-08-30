@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import StripePanel from '../components/StripePanel'
+import StripeReconcilePanel from '../components/StripeReconcilePanel'
 import EthanPayoutPanel from '../components/EthanPayoutPanel'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
@@ -339,6 +340,9 @@ export default function PaymentsPage() {
         />
       </div>
 
+      {/* Above the Stripe setup panel on purpose: a disagreement with Stripe
+          is something to act on, and pasting in payment links is not. */}
+      <StripeReconcilePanel clients={clients} payments={payments} onFixed={loadData} />
       <StripePanel />
       <EthanPayoutPanel payments={payments} onChange={loadData} />
 

@@ -45,3 +45,28 @@ alter table clients add constraint clients_ghl_billing_check
 -- the separate arrangement. New clients take the column default instead, since
 -- the combined $1,500 is the going-forward standard.
 update clients set ghl_billing = 'separate' where ghl_plan;
+
+-- ---------------------------------------------------------------------------
+-- Reconciling the existing clients against Stripe, 2026-08-30.
+--
+-- Stripe is the record of what people actually pay, and two clients had moved
+-- onto the combined $1,500 plan without the CRM being told, so MRR was
+-- under-reporting them by $103 each.
+--
+--   Belk, Plumbquick   one $1,500 invoice each -> the combined plan
+--   Reliable           $998 and $399 invoices on the same day -> separate
+--   Summit             only $998 has ever arrived, so GHL is not yet billed
+--                      and attributing a share of it would invent revenue
+update clients set monthly_fee = 1500, ghl_billing = 'bundled'
+where name in ('Belk Heating and Cooling', 'Plumbquick');
+
+update clients set monthly_fee = 998, ghl_billing = 'separate', ghl_monthly_fee = 399
+where name = 'Reliable Heating and Cooling';
+
+update clients set monthly_fee = 998, ghl_monthly_fee = 0
+where name = 'Summit Water Pros';
+
+-- Reliable's $399 was recorded before a 'ghl' payment type existed, so it was
+-- sitting in the monthly schedule where it made the retainer look overpaid.
+update payments set payment_type = 'ghl'
+where stripe_invoice_id = 'in_1U9UOzC9acAUYi639WIIRfqV';

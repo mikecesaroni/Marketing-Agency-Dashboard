@@ -266,11 +266,52 @@ export async function applyImportedPayment({ row, clientId, type }) {
   }
 }
 
-/** Charge ids already imported, so a re-run cannot count a payment twice. */
+/**
+ * Every Stripe identifier already recorded against a payment.
+ *
+ * Charge ids alone were not enough and it cost real money to find out. The
+ * webhook records stripe_invoice_id and never a charge id, so a payment it had
+ * already captured was invisible here and the importer wrote it a second time
+ * -- $399 of revenue that Stripe only ever collected once. Both columns are
+ * collected now, so a row is recognised whichever path recorded it first.
+ */
 export async function fetchImportedChargeIds() {
   const { data } = await supabase
     .from('payments')
-    .select('stripe_charge_id')
-    .not('stripe_charge_id', 'is', null)
-  return new Set((data || []).map((r) => r.stripe_charge_id))
+    .select('stripe_charge_id, stripe_invoice_id')
+
+  const ids = new Set()
+  for (const row of data || []) {
+    if (row.stripe_charge_id) ids.add(row.stripe_charge_id)
+    if (row.stripe_invoice_id) ids.add(row.stripe_invoice_id)
+  }
+  return ids
+}
+
+/**
+ * Payments already recorded for a client on a given day, by amount.
+ *
+ * The id check above only works when the export and the webhook happen to
+ * share an identifier. A subscriptions export carries sub_... ids, which match
+ * nothing, so the same payment can still slip through. Same client, same
+ * amount, same day is the fallback signal -- weak enough that it only warns
+ * rather than skipping, since two genuine identical charges in one day are
+ * possible.
+ */
+export async function fetchRecordedAmounts() {
+  const { data } = await supabase
+    .from('payments')
+    .select('client_id, amount, paid_date')
+    .eq('status', 'paid')
+    .not('paid_date', 'is', null)
+
+  const seen = new Set()
+  for (const row of data || []) {
+    seen.add(recordedKey(row.client_id, row.amount, row.paid_date))
+  }
+  return seen
+}
+
+export function recordedKey(clientId, amount, date) {
+  return `${clientId}|${Number(amount) || 0}|${String(date || '').slice(0, 10)}`
 }
