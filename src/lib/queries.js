@@ -244,12 +244,11 @@ export async function fetchKPIHistory(weeks = 12) {
 
 // ---------- dashboard ----------
 // One round trip for everything the home screen needs to tell you what to do today.
+// No payments: the dashboard is an operations view and does not show money,
+// so pulling every payment row on each load was fetching a few hundred rows to
+// throw them away.
 export async function fetchDashboardData() {
-  const [clients, payments, kpis] = await Promise.all([
-    fetchClientsWithKPIs(),
-    fetchPayments(),
-    fetchKPIHistory(2),
-  ])
+  const [clients, kpis] = await Promise.all([fetchClientsWithKPIs(), fetchKPIHistory(2)])
 
   let deliverables = []
   try {
@@ -259,7 +258,7 @@ export async function fetchDashboardData() {
     deliverables = []
   }
 
-  return { clients, payments, deliverables, kpis }
+  return { clients, deliverables, kpis }
 }
 
 // ---------- per-ad performance ----------

@@ -6,7 +6,6 @@ import {
   Badge,
   Card,
   Delta,
-  IconAlert,
   IconCheckCircle,
   IconClipboard,
   IconClock,
@@ -17,14 +16,47 @@ import {
   StatCard,
 } from '../components/ui'
 import {
-  calcMRR,
   fetchDashboardData,
   formatDate,
   getMonday,
-  isOverdue,
   money,
   today,
 } from '../lib/queries'
+
+/**
+ * One channel's coverage: how many clients have it live, out of how many it
+ * applies to.
+ *
+ * The bar exists because "5 of 10" and "9 of 10" read identically at a glance
+ * and this row is meant to be glanceable. Green only at full coverage, so a
+ * complete channel is visibly finished and the rest stay quiet rather than
+ * turning the row into a traffic light.
+ */
+function Coverage({ label, done, total, empty }) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0
+  const complete = total > 0 && done === total
+  return (
+    <div className="min-w-0">
+      <p className="text-xl font-semibold tabular-nums tracking-tight text-slate-900 md:text-2xl">
+        {total > 0 ? (
+          <>
+            {done}
+            <span className="text-base font-normal text-slate-400"> / {total}</span>
+          </>
+        ) : (
+          <span className="text-base font-normal text-slate-400">—</span>
+        )}
+      </p>
+      <p className="truncate text-xs text-slate-500">{total > 0 ? label : empty || label}</p>
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-200">
+        <div
+          className={`h-full rounded-full ${complete ? 'bg-green-500' : 'bg-slate-700'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
 
 /**
  * A pile of things that need doing, of one kind.
@@ -128,7 +160,7 @@ export default function HomePage() {
     )
   }
 
-  const { clients, payments, deliverables, kpis } = data
+  const { clients, deliverables, kpis } = data
   const now = today()
 
   const live = clients.filter((c) => !c.archived)
@@ -142,15 +174,17 @@ export default function HomePage() {
   const ghlWaiting = live.filter((c) => c.ghlStage?.key === 'waiting')
   const ghlReady = live.filter((c) => c.ghlStage?.key === 'ready')
 
-  const { mrr, count: billingCount } = calcMRR(clients, payments)
+  const lsaLive = live.filter((c) => c.lsa_active)
+  const gbpDone = live.filter((c) => c.gbp_optimized)
+  const ghlOnPlan = live.filter((c) => c.ghl_plan)
+  const ghlLive = ghlOnPlan.filter((c) => c.ghl_active)
 
-  // All-time, matching the Payments tab — a month-scoped total read $0 on the
-  // 1st even when money had just come in.
-  const paidPayments = payments.filter((p) => p.status === 'paid')
-  const totalCollected = paidPayments.reduce((sum, p) => sum + p.amount, 0)
-
-  const overduePayments = payments.filter(isOverdue)
-  const overdueTotal = overduePayments.reduce((s, p) => s + p.amount, 0)
+  // How many arrived this month, which is the onboarding load. The `status`
+  // column would be the obvious thing to break clients down by, but every
+  // client currently sits at 'onboarding' — it is not maintained, so counting
+  // it would say something untrue with great confidence.
+  const thisMonth = now.slice(0, 7)
+  const addedThisMonth = live.filter((c) => String(c.date_added || '').startsWith(thisMonth))
 
   const leadsThisWeek = clients.reduce((sum, c) => sum + c.thisWeekTotalLeads, 0)
   const spendThisWeek = clients.reduce((sum, c) => sum + c.thisWeekTotalSpend, 0)
@@ -170,17 +204,6 @@ export default function HomePage() {
   const missingKPIs = clients.filter((c) => c.hasMissingKPIs)
 
   const actionGroups = [
-    {
-      Icon: IconAlert,
-      title: 'Overdue payments',
-      tone: 'danger',
-      items: overduePayments.map((p) => ({
-        key: p.id,
-        to: '/payments',
-        label: `${p.clients?.name || 'Unknown'} — ${money(p.amount)}`,
-        meta: `due ${p.due_date}`,
-      })),
-    },
     {
       Icon: IconClock,
       title: 'Deliverables past due',
@@ -278,25 +301,56 @@ export default function HomePage() {
         <FormSubmissionAlerts />
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 md:mb-8 md:gap-4 lg:grid-cols-4">
-        <StatCard label="Clients" value={live.length} sub={`${metaLive.length} with Meta live`} />
+      {/* The state of the book of work. Money lives on the Payments tab; this
+          page answers "where does every client stand", which is a different
+          question and the one asked far more often. */}
+      <div className="mb-6 grid grid-cols-2 gap-3 md:mb-8 md:gap-4 lg:grid-cols-3">
         <StatCard
-          label="MRR"
-          value={money(mrr)}
-          sub={`${billingCount} ${billingCount === 1 ? 'client' : 'clients'} billing`}
+          label="Clients"
+          value={live.length}
+          sub={
+            addedThisMonth.length > 0
+              ? `${addedThisMonth.length} added this month`
+              : 'none added this month'
+          }
         />
         <StatCard
-          label="Collected"
-          value={money(totalCollected)}
-          sub={`${paidPayments.length} ${paidPayments.length === 1 ? 'payment' : 'payments'} all time`}
+          label="Open work"
+          value={openDeliverables.length}
+          sub={
+            lateDeliverables.length > 0
+              ? `${lateDeliverables.length} past due`
+              : `${dueSoon.length} due in 7 days`
+          }
+          alert={lateDeliverables.length > 0}
         />
+        {/* No alert flag: unlogged KPIs are a routine mid-week state and the
+            names are listed below anyway. A red card should mean something is
+            wrong, and it only reads that way while it is the only red one. */}
         <StatCard
-          label="Overdue"
-          value={money(overdueTotal)}
-          sub={`${overduePayments.length} ${overduePayments.length === 1 ? 'payment' : 'payments'}`}
-          alert={overduePayments.length > 0}
+          label="KPIs logged"
+          value={`${live.length - missingKPIs.length} of ${live.length}`}
+          sub={missingKPIs.length > 0 ? `${missingKPIs.length} still to log` : 'all in for this week'}
         />
       </div>
+
+      {/* Channel coverage. Every one of these has a matching list further down
+          naming exactly who is missing, so the number is a summary of work that
+          is already broken out rather than a dead end. */}
+      <Card className="mb-6 md:mb-8" padding="lg">
+        <p className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Channels live
+        </p>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Coverage label="Meta ads" done={metaLive.length} total={live.length} />
+          <Coverage label="Google LSA" done={lsaLive.length} total={live.length} />
+          <Coverage label="Google Business" done={gbpDone.length} total={live.length} />
+          {/* Out of the clients who bought GHL, not out of everyone — only some
+              are on the plan, so the whole client count is the wrong
+              denominator and would read as permanent failure. */}
+          <Coverage label="GHL" done={ghlLive.length} total={ghlOnPlan.length} empty="nobody on the plan" />
+        </div>
+      </Card>
 
       {/* The performance strip. Every number carries last week beside it, which
           is the difference between a dashboard you read and one you glance at
@@ -349,7 +403,7 @@ export default function HomePage() {
           <IconCheckCircle className="mx-auto h-8 w-8 text-green-600" />
           <p className="mt-2 font-medium text-slate-900">All caught up</p>
           <p className="mt-1 text-sm text-slate-500">
-            No overdue payments, late deliverables, or missing KPIs.
+            No late deliverables, no missing KPIs, every channel live.
           </p>
         </Card>
       ) : (
