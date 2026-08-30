@@ -129,8 +129,9 @@ export default function StripePanel() {
           <div className="space-y-2">
             <p className="text-xs text-slate-500">
               Paste the Payment Link URLs from Stripe. The CRM stamps each client&rsquo;s ID onto
-              them, which is how a payment finds its way back to the right client. Use the $998
-              link for the original monthly plan and the $1,500 link for the higher tier.
+              them, which is how a payment finds its way back to the right client. The $1,500
+              link is the combined plan that already includes GHL; the $399 link is only for
+              clients billed for GHL as a second, separate subscription.
             </p>
             {[
               ['Setup fee link', 'setup', 'https://buy.stripe.com/...'],
@@ -151,10 +152,11 @@ export default function StripePanel() {
             ))}
             <p className="text-xs text-slate-500">
               The GHL price ID is what tells an incoming invoice apart from the marketing
-              retainer for a client who pays for both. Without it the CRM falls back to
-              matching on the amount, which works as long as the two fees differ. Find it in
-              Stripe under Product catalogue &rarr; the GHL product &rarr; the price
-              (it starts <span className="font-mono">price_</span>).
+              retainer for a client who pays for both separately. Without it the CRM falls
+              back to matching on the amount, which works as long as the two fees differ.
+              Find it in Stripe under Product catalogue &rarr; the GHL product &rarr; the
+              price (it starts <span className="font-mono">price_</span>). Clients on the
+              combined $1,500 plan need neither &mdash; they are invoiced once.
             </p>
             <button
               onClick={save}
@@ -227,8 +229,16 @@ export default function StripePanel() {
   )
 }
 
+// The monthly Payment Links and what each one actually charges. Pairing the
+// two is what lets a client be offered the link that matches their fee rather
+// than every link that happens to be configured.
+const MONTHLY_TIERS = [
+  { key: 'monthly', amount: 998, label: '$998/mo link' },
+  { key: 'monthly1500', amount: 1500, label: '$1,500/mo link' },
+]
+
 // The per-client copy buttons, used on the client's own Payments card.
-export function StripeLinkButtons({ clientId, stripeCustomerId, ghlPlan }) {
+export function StripeLinkButtons({ clientId, stripeCustomerId, ghlSeparate, monthlyFee }) {
   const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '', ghl: '', ghlPriceId: '' })
   const [copied, setCopied] = useState('')
 
@@ -242,13 +252,20 @@ export function StripeLinkButtons({ clientId, stripeCustomerId, ghlPlan }) {
     setTimeout(() => setCopied(''), 2000)
   }
 
+  // Offering a $1,500 client the $998 link is a wrong charge waiting to
+  // happen, so when the fee matches a tier only that tier is shown. An amount
+  // matching neither is left alone: a custom fee is a reason to show the
+  // options, not to guess between them.
+  const matching = MONTHLY_TIERS.filter((t) => t.amount === Number(monthlyFee))
+  const tiers = matching.length > 0 ? matching : MONTHLY_TIERS
+
   const buttons = [
     ['setup', 'Setup fee link', links.setup],
-    ['monthly', '$998/mo link', links.monthly],
-    ['monthly1500', '$1,500/mo link', links.monthly1500],
-    // Only for clients actually on the GHL plan. Sending this to anyone else
-    // signs them up for a subscription nobody sold them.
-    ...(ghlPlan ? [['ghl', 'GHL $399/mo link', links.ghl]] : []),
+    ...tiers.map((t) => [t.key, t.label, links[t.key]]),
+    // Only for clients billed for GHL separately. Sending it to anyone else
+    // signs them up for a subscription nobody sold them — and for a bundled
+    // client it would charge $399 on top of a fee that already includes GHL.
+    ...(ghlSeparate ? [['ghl', 'GHL $399/mo link', links.ghl]] : []),
   ].filter(([, , base]) => base)
 
   if (buttons.length === 0) return null

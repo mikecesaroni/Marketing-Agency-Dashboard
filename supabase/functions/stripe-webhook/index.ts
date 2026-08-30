@@ -79,7 +79,8 @@ function timingSafeEqual(a: string, b: string) {
 
 // Everything the handlers need off a client row: the identity, plus the two
 // fees and the plan flag that decide which schedule a payment settles.
-const CLIENT_FIELDS = 'id,name,stripe_customer_id,ghl_plan,ghl_monthly_fee,monthly_fee'
+const CLIENT_FIELDS =
+  'id,name,stripe_customer_id,ghl_plan,ghl_billing,ghl_monthly_fee,monthly_fee'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -183,13 +184,24 @@ function asPaymentType(v: unknown): PaymentType {
  *
  * The price id is authoritative and is checked first. The amount is a fallback
  * for the case where nobody has pasted the price id in yet: it only fires when
- * the client is actually on the GHL plan and the two fees differ, so it can
- * never misread a retainer as a GHL charge.
+ * the client is on the GHL plan, is billed for it separately, and the two fees
+ * differ -- so it can never misread a retainer as a GHL charge.
+ *
+ * A client on the bundled plan is invoiced once for everything, so nothing
+ * they pay is ever a standalone GHL charge and the fallback must not fire for
+ * them at all. Their ghl_monthly_fee is a share of a larger invoice, not an
+ * amount anyone is billed.
  */
 export async function isGhlInvoice(
   db: Db,
   invoice: any,
-  client: { id: string; ghl_plan?: boolean; ghl_monthly_fee?: number | null; monthly_fee?: number | null },
+  client: {
+    id: string
+    ghl_plan?: boolean
+    ghl_billing?: string | null
+    ghl_monthly_fee?: number | null
+    monthly_fee?: number | null
+  },
   amount: number
 ) {
   const configured = await ghlPriceId(db)
@@ -207,7 +219,7 @@ export async function isGhlInvoice(
     return false
   }
 
-  if (!client.ghl_plan) return false
+  if (!client.ghl_plan || client.ghl_billing !== 'separate') return false
   const ghlFee = Number(client.ghl_monthly_fee ?? 0)
   const retainer = Number(client.monthly_fee ?? 0)
   if (!(ghlFee > 0) || ghlFee === retainer) return false

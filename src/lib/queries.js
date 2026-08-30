@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import { GHL_REQUIRED_KEYS, ghlStage } from './ghlSetupFields'
+import { GHL_REQUIRED_KEYS, ghlBilling, ghlMonthlyPortion, ghlStage } from './ghlSetupFields'
 
 // `is_internal` arrives with supabase/internal-businesses.sql. Until that runs,
 // filtering on it makes PostgREST return 400 and every page listing clients
@@ -65,10 +65,16 @@ export function money(n) {
 // hasn't churned — the schedule existing is what proves they're billing, since
 // monthly_fee carries a column default and is set on every client row.
 //
-// The GHL subscription is counted the same way and for the same reason: it is
-// recurring revenue on its own schedule, so a client paying $998 + $399 is
-// $1,397 of MRR. `count` stays a headcount of billing clients, not of
-// schedules — a client on both plans is one client.
+// GHL is counted through totalMonthly, which is where the two arrangements
+// differ and the one place that difference is allowed to live:
+//
+//   separate  $998 retainer + $399 GHL, two invoices, so $1,397 of MRR.
+//   bundled   one $1,500 invoice that already contains GHL. Adding the GHL
+//             share on top would invent $399 a month that nobody is billed.
+//
+// `ghl` is the slice of that MRR attributable to GHL either way, so the
+// revenue can be tracked whichever way it happens to be invoiced. `count`
+// stays a headcount of billing clients — a client on both plans is one client.
 export function calcMRR(clients, payments) {
   const scheduled = new Set(
     payments.filter((p) => p.payment_type === 'monthly').map((p) => p.client_id)
@@ -78,17 +84,34 @@ export function calcMRR(clients, payments) {
   )
   const live = (c) => !c.archived && !c.is_internal
   const billing = clients.filter((c) => (scheduled.has(c.id) || ghlScheduled.has(c.id)) && live(c))
-  return {
-    mrr: billing.reduce(
-      (sum, c) =>
-        sum +
-        (scheduled.has(c.id) ? c.monthly_fee || 0 : 0) +
-        (ghlScheduled.has(c.id) ? c.ghl_monthly_fee || 0 : 0),
-      0
-    ),
-    count: billing.length,
+
+  let mrr = 0
+  let ghl = 0
+  let ghlCount = 0
+  for (const c of billing) {
+    const separate = ghlBilling(c)?.key === 'separate'
+    // A separate client's GHL money rides on its own schedule, so it counts
+    // only once that schedule exists. A bundled client's is already inside
+    // the retainer they are scheduled for.
+    const retainer = scheduled.has(c.id) ? Number(c.monthly_fee) || 0 : 0
+    const ghlPart = separate
+      ? ghlScheduled.has(c.id)
+        ? ghlMonthlyPortion(c)
+        : 0
+      : scheduled.has(c.id)
+        ? ghlMonthlyPortion(c)
+        : 0
+    // Only a separate client's GHL money is additional revenue. A bundled
+    // client's retainer already contains it, so it is counted in the ghl
+    // slice but never added to the total again.
+    mrr += retainer + (separate ? ghlPart : 0)
+    ghl += ghlPart
+    if (ghlPart > 0) ghlCount++
   }
+
+  return { mrr, count: billing.length, ghl, ghlCount }
 }
+
 
 // A payment counts as overdue when it is unpaid and its due date has passed,
 // regardless of what the stored status column says — nothing sweeps the table.

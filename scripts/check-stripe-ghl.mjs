@@ -62,9 +62,24 @@ const CLIENT = {
   name: 'Acme HVAC',
   stripe_customer_id: 'cus_1',
   ghl_plan: true,
+  ghl_billing: 'separate',
   ghl_monthly_fee: 399,
   monthly_fee: 998,
 }
+
+// The going-forward arrangement: one $1,500 subscription that already includes
+// GHL. One invoice a month, one schedule, and ghl_monthly_fee is a share of
+// that invoice rather than anything separately billed.
+const BUNDLED = {
+  ...CLIENT,
+  ghl_billing: 'bundled',
+  monthly_fee: 1500,
+}
+
+const BUNDLED_SCHEDULE = [
+  { payment_type: 'monthly', amount: 1500, due_date: '2026-09-01', status: 'pending' },
+  { payment_type: 'monthly', amount: 1500, due_date: '2026-10-01', status: 'pending' },
+]
 
 const SCHEDULE = [
   { payment_type: 'monthly', amount: 998, due_date: '2026-09-01', status: 'pending' },
@@ -129,6 +144,42 @@ const settled = (rows) =>
   const { db, rows } = makeFake({ client: CLIENT, payments: structuredClone(SCHEDULE) })
   await handleEvent(db, invoice(99800))
   check('No price id: $998 lands on monthly', settled(rows), ['monthly:2026-09-01'])
+}
+
+// --- 4b. bundled client: the whole $1,500 settles the one monthly row ---
+{
+  const { db, rows } = makeFake({ client: BUNDLED, payments: structuredClone(BUNDLED_SCHEDULE) })
+  await handleEvent(db, invoice(150000))
+  check('Bundled: $1,500 settles the monthly row', settled(rows), ['monthly:2026-09-01'])
+}
+
+// --- 4c. THE OTHER WAY TO BREAK THE BOOKS ---
+// A bundled client's ghl_monthly_fee is a share of a larger invoice, not an
+// amount anyone is billed. If the amount fallback fired on it, a $399 refund
+// top-up or proration would be booked as a GHL subscription payment against a
+// schedule that does not exist.
+{
+  const { db, rows, log } = makeFake({ client: BUNDLED, payments: structuredClone(BUNDLED_SCHEDULE) })
+  await handleEvent(db, invoice(39900))
+  check('Bundled: a $399 invoice is never a GHL payment', settled(rows), ['monthly:2026-09-01'])
+  check('Bundled: no stray ghl row inserted',
+    log.filter((l) => l.op === 'insert' && l.body.payment_type === 'ghl').length, 0)
+}
+
+// --- 4d. bundled client, GHL price id genuinely charged ---
+// Authoritative evidence still wins: if the GHL price really was invoiced, it
+// is a GHL payment, and having no schedule for it is exactly what should make
+// it visible as an unscheduled row.
+{
+  const { db, log } = makeFake({
+    client: BUNDLED,
+    payments: structuredClone(BUNDLED_SCHEDULE),
+    priceId: 'price_ghl',
+  })
+  await handleEvent(db, invoice(39900, 'price_ghl'))
+  check('Bundled: an actual GHL price still books as ghl',
+    log.filter((l) => l.op === 'insert').map((l) => [l.body.payment_type, l.body.amount]),
+    [['ghl', 399]])
 }
 
 // --- 5. client not on the GHL plan: amount fallback must never fire ---
