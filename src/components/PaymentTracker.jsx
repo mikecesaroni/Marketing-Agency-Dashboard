@@ -10,6 +10,10 @@ const METHODS = ['card', 'ach', 'check', 'paypal', 'other']
 // something worth asking about each time.
 const MONTHS = 12
 
+// The list price of the GoHighLevel plan. Only a default for the field --
+// clients.ghl_monthly_fee is what actually bills.
+const GHL_DEFAULT_FEE = 399
+
 const inputClass =
   'w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
 
@@ -21,6 +25,13 @@ function addMonths(dateStr, n) {
   const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
   date.setDate(Math.min(d, lastDay))
   return formatDate(date)
+}
+
+function monthLabel(dueDate) {
+  return new Date(`${dueDate}T00:00:00`).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  })
 }
 
 export default function PaymentTracker({ client, onClientUpdate }) {
@@ -43,6 +54,7 @@ export default function PaymentTracker({ client, onClientUpdate }) {
     setup2Paid: false,
     monthlyFee: '',
     firstPaymentDate: today(),
+    ghlFee: '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -82,6 +94,9 @@ export default function PaymentTracker({ client, onClientUpdate }) {
       setup2Date: second?.due_date || today(),
       setup2Paid: second?.status === 'paid',
       monthlyFee: client.monthly_fee ? String(client.monthly_fee) : '998',
+      // Only clients on the GHL plan get a GHL schedule at all, so an empty
+      // fee here is the normal state for everyone else rather than a gap.
+      ghlFee: client.ghl_plan ? String(client.ghl_monthly_fee ?? GHL_DEFAULT_FEE) : '',
       firstPaymentDate:
         monthlyPayments[0]?.due_date || client.contract_start_date || today(),
     })
@@ -96,6 +111,7 @@ export default function PaymentTracker({ client, onClientUpdate }) {
 
     const setupFee = parseFloat(billing.setupFee) || 0
     const monthlyFee = parseFloat(billing.monthlyFee) || 0
+    const ghlFee = client.ghl_plan ? parseFloat(billing.ghlFee) || 0 : 0
 
     try {
       const { error: delErr } = await supabase
@@ -109,6 +125,9 @@ export default function PaymentTracker({ client, onClientUpdate }) {
       const paidSetupRows = paid.filter((p) => p.payment_type === 'setup')
       const paidMonthlyDates = new Set(
         paid.filter((p) => p.payment_type === 'monthly').map((p) => p.due_date)
+      )
+      const paidGhlDates = new Set(
+        paid.filter((p) => p.payment_type === 'ghl').map((p) => p.due_date)
       )
 
       // One row when the fee is taken in full, two when it's split. Parts the
@@ -172,6 +191,24 @@ export default function PaymentTracker({ client, onClientUpdate }) {
         })
       }
 
+      // A second schedule on the same dates. Kept separate from the retainer so
+      // a $399 invoice settles a $399 row -- the webhook matches on type, and
+      // one combined 'monthly' schedule would have the GHL payment closing out
+      // a retainer month.
+      if (ghlFee > 0) {
+        for (let i = 0; i < MONTHS; i++) {
+          const dueDate = addMonths(billing.firstPaymentDate, i)
+          if (paidGhlDates.has(dueDate)) continue
+          rows.push({
+            client_id: clientId,
+            payment_type: 'ghl',
+            amount: ghlFee,
+            due_date: dueDate,
+            status: 'pending',
+          })
+        }
+      }
+
       if (rows.length > 0) {
         const { error: insErr } = await supabase.from('payments').insert(rows)
         if (insErr) throw insErr
@@ -183,6 +220,7 @@ export default function PaymentTracker({ client, onClientUpdate }) {
           setup_fee: setupFee,
           monthly_fee: monthlyFee,
           contract_start_date: billing.firstPaymentDate,
+          ...(client.ghl_plan ? { ghl_monthly_fee: ghlFee } : {}),
         })
         .eq('id', clientId)
       if (cliErr) throw cliErr
@@ -245,12 +283,14 @@ export default function PaymentTracker({ client, onClientUpdate }) {
 
   const setupPayments = payments.filter((p) => p.payment_type === 'setup')
   const monthlyPayments = payments.filter((p) => p.payment_type === 'monthly')
+  const ghlPayments = payments.filter((p) => p.payment_type === 'ghl')
   const totalPaid = payments
     .filter((p) => p.status === 'paid')
     .reduce((sum, p) => sum + p.amount, 0)
   // Falls back to the schedule itself for clients billed before monthly_fee
   // was recorded on the client row.
   const monthlyAmount = client.monthly_fee || monthlyPayments[0]?.amount || 0
+  const ghlMonthlyAmount = ghlPayments.length > 0 ? ghlPayments[0].amount || 0 : 0
   const nextDue = payments.find((p) => p.status !== 'paid')
 
   const PaymentRow = ({ payment, label }) => {
@@ -331,7 +371,11 @@ export default function PaymentTracker({ client, onClientUpdate }) {
       {/* Send these instead of the raw Stripe links: they carry the client's ID,
           which is the only thing that tells the webhook whose payment it is. */}
       <div className="mb-4">
-        <StripeLinkButtons clientId={clientId} stripeCustomerId={client.stripe_customer_id} />
+        <StripeLinkButtons
+          clientId={clientId}
+          stripeCustomerId={client.stripe_customer_id}
+          ghlPlan={client.ghl_plan}
+        />
       </div>
 
       {error && (
@@ -360,7 +404,16 @@ export default function PaymentTracker({ client, onClientUpdate }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-xs text-blue-600 font-medium">Monthly Payment</p>
-              <p className="text-xl font-bold text-blue-900">{money(monthlyAmount)}</p>
+              {/* What the client is actually billed each month. Showing only
+                  the retainer here would understate a GHL client by $399. */}
+              <p className="text-xl font-bold text-blue-900">
+                {money(monthlyAmount + ghlMonthlyAmount)}
+              </p>
+              {ghlMonthlyAmount > 0 && (
+                <p className="text-xs text-blue-600 mt-1">
+                  {money(monthlyAmount)} retainer + {money(ghlMonthlyAmount)} GHL
+                </p>
+              )}
             </div>
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
               <p className="text-xs text-green-600 font-medium">Total Paid</p>
@@ -412,12 +465,29 @@ export default function PaymentTracker({ client, onClientUpdate }) {
                 <PaymentRow
                   key={p.id}
                   payment={p}
-                  label={new Date(`${p.due_date}T00:00:00`).toLocaleDateString('en-US', {
-                    month: 'long',
-                    year: 'numeric',
-                  })}
+                  label={monthLabel(p.due_date)}
                 />
               ))}
+            </div>
+          )}
+
+          {ghlPayments.length > 0 && (
+            <div className="mt-6">
+              <h3 className="font-semibold text-slate-900 mb-2">
+                GHL Subscription
+                <span className="ml-1.5 text-sm font-normal text-slate-500">
+                  {money(ghlMonthlyAmount)}/mo
+                </span>
+              </h3>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {ghlPayments.map((p) => (
+                  <PaymentRow
+                    key={p.id}
+                    payment={p}
+                    label={monthLabel(p.due_date)}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </>
@@ -601,11 +671,29 @@ export default function PaymentTracker({ client, onClientUpdate }) {
                 className={inputClass}
               />
             </div>
+            {client.ghl_plan && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  GHL subscription ($/mo)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={billing.ghlFee}
+                  onChange={(e) => setBilling((b) => ({ ...b, ghlFee: e.target.value }))}
+                  className={inputClass}
+                  placeholder={String(GHL_DEFAULT_FEE)}
+                />
+              </div>
+            )}
           </div>
 
           <p className="text-xs text-slate-500">
             Bills the same day each month for {MONTHS} months, starting from the first payment
             date.
+            {client.ghl_plan &&
+              ' The GHL subscription is billed on its own schedule alongside the retainer, so each one is tracked and paid separately.'}
           </p>
 
           {payments.some((p) => p.status === 'paid') && (

@@ -64,13 +64,28 @@ export function money(n) {
 // status reaching 'active'. It counts anyone who has a monthly schedule and
 // hasn't churned — the schedule existing is what proves they're billing, since
 // monthly_fee carries a column default and is set on every client row.
+//
+// The GHL subscription is counted the same way and for the same reason: it is
+// recurring revenue on its own schedule, so a client paying $998 + $399 is
+// $1,397 of MRR. `count` stays a headcount of billing clients, not of
+// schedules — a client on both plans is one client.
 export function calcMRR(clients, payments) {
   const scheduled = new Set(
     payments.filter((p) => p.payment_type === 'monthly').map((p) => p.client_id)
   )
-  const billing = clients.filter((c) => scheduled.has(c.id) && !c.archived && !c.is_internal)
+  const ghlScheduled = new Set(
+    payments.filter((p) => p.payment_type === 'ghl').map((p) => p.client_id)
+  )
+  const live = (c) => !c.archived && !c.is_internal
+  const billing = clients.filter((c) => (scheduled.has(c.id) || ghlScheduled.has(c.id)) && live(c))
   return {
-    mrr: billing.reduce((sum, c) => sum + (c.monthly_fee || 0), 0),
+    mrr: billing.reduce(
+      (sum, c) =>
+        sum +
+        (scheduled.has(c.id) ? c.monthly_fee || 0 : 0) +
+        (ghlScheduled.has(c.id) ? c.ghl_monthly_fee || 0 : 0),
+      0
+    ),
     count: billing.length,
   }
 }

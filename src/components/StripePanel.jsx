@@ -15,8 +15,8 @@ import {
 // Stripe setup and the money that could not be matched to anyone. Both live on
 // the Payments page because that is where you go when the books look wrong.
 export default function StripePanel() {
-  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '' })
-  const [draft, setDraft] = useState({ setup: '', monthly: '', monthly1500: '' })
+  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '', ghl: '', ghlPriceId: '' })
+  const [draft, setDraft] = useState({ setup: '', monthly: '', monthly1500: '', ghl: '', ghlPriceId: '' })
   const [unmatched, setUnmatched] = useState([])
   const [clients, setClients] = useState([])
   const [open, setOpen] = useState(false)
@@ -96,7 +96,7 @@ export default function StripePanel() {
     }
   }
 
-  const configured = links.setup || links.monthly || links.monthly1500
+  const configured = links.setup || links.monthly || links.monthly1500 || links.ghl
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl mb-4 overflow-hidden">
@@ -133,20 +133,29 @@ export default function StripePanel() {
               link for the original monthly plan and the $1,500 link for the higher tier.
             </p>
             {[
-              ['Setup fee link', 'setup'],
-              ['Monthly subscription link ($998)', 'monthly'],
-              ['Monthly subscription link ($1,500)', 'monthly1500'],
-            ].map(([label, key]) => (
+              ['Setup fee link', 'setup', 'https://buy.stripe.com/...'],
+              ['Monthly subscription link ($998)', 'monthly', 'https://buy.stripe.com/...'],
+              ['Monthly subscription link ($1,500)', 'monthly1500', 'https://buy.stripe.com/...'],
+              ['GHL subscription link ($399/mo)', 'ghl', 'https://buy.stripe.com/...'],
+              ['GHL price ID (recommended)', 'ghlPriceId', 'price_...'],
+            ].map(([label, key, placeholder]) => (
               <div key={key}>
                 <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
                 <input
                   value={draft[key]}
                   onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-                  placeholder="https://buy.stripe.com/..."
+                  placeholder={placeholder}
                   className="w-full px-3 py-2 border border-slate-300 rounded text-sm font-mono"
                 />
               </div>
             ))}
+            <p className="text-xs text-slate-500">
+              The GHL price ID is what tells an incoming invoice apart from the marketing
+              retainer for a client who pays for both. Without it the CRM falls back to
+              matching on the amount, which works as long as the two fees differ. Find it in
+              Stripe under Product catalogue &rarr; the GHL product &rarr; the price
+              (it starts <span className="font-mono">price_</span>).
+            </p>
             <button
               onClick={save}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
@@ -219,8 +228,8 @@ export default function StripePanel() {
 }
 
 // The per-client copy buttons, used on the client's own Payments card.
-export function StripeLinkButtons({ clientId, stripeCustomerId }) {
-  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '' })
+export function StripeLinkButtons({ clientId, stripeCustomerId, ghlPlan }) {
+  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '', ghl: '', ghlPriceId: '' })
   const [copied, setCopied] = useState('')
 
   useEffect(() => {
@@ -237,6 +246,9 @@ export function StripeLinkButtons({ clientId, stripeCustomerId }) {
     ['setup', 'Setup fee link', links.setup],
     ['monthly', '$998/mo link', links.monthly],
     ['monthly1500', '$1,500/mo link', links.monthly1500],
+    // Only for clients actually on the GHL plan. Sending this to anyone else
+    // signs them up for a subscription nobody sold them.
+    ...(ghlPlan ? [['ghl', 'GHL $399/mo link', links.ghl]] : []),
   ].filter(([, , base]) => base)
 
   if (buttons.length === 0) return null
