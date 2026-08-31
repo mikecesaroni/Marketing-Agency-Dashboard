@@ -15,6 +15,10 @@ export default function ChannelSetupPanel({
   otherField,
   otherLabel,
   action,
+  // Rendered full width under the header. `action` sits in a flex row beside
+  // the title, so anything wider than a button gets squeezed into a column
+  // there -- which is what a numbered list of steps did.
+  footer,
 }) {
   const [clients, setClients] = useState(null)
   const [open, setOpen] = useState(true)
@@ -85,6 +89,8 @@ export default function ChannelSetupPanel({
           </button>
         </div>
       </div>
+
+      {footer && <div className="border-t border-slate-100 px-4 pb-3 pt-3">{footer}</div>}
 
       {open && (
         <div className="border-t border-slate-200 divide-y divide-slate-100">
