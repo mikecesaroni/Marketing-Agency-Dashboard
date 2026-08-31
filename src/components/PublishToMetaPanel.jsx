@@ -262,6 +262,19 @@ function setupFix(message, client) {
     }
   }
 
+  // Meta throttles per ad account per rolling hour, and a batch publish is the
+  // most call-hungry thing this CRM does: three image uploads plus a creative
+  // plus an ad, per creative picked. On an app still on development access the
+  // ceiling is low enough that one batch of five can reach it.
+  if (/too many api calls|too many calls from this ad-?account|request limit reached/i.test(text)) {
+    return {
+      title: 'Meta throttled the ad account, not the ad.',
+      body: `Nothing is wrong with what was being published. The quota is per ad account and refills over the following hour, so waiting and publishing again is the whole fix — and a failed read like the ad set list creates nothing, so there is no mess to clear up. If this keeps happening, the app is on Meta's development access tier: ads_management gets a small hourly allowance until Advanced Access is granted, and that allowance is shared by every client.`,
+      href: 'https://developers.facebook.com/docs/marketing-api/overview/authorization',
+      cta: 'How the access tiers differ',
+    }
+  }
+
   return null
 }
 
