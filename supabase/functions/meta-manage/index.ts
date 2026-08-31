@@ -189,7 +189,8 @@ Deno.serve(async (req) => {
     // The ad account comes from the CRM, never from the request. A caller
     // cannot name someone else's account and have this token act on it.
     const res = await fetch(
-      `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id&id=eq.${encodeURIComponent(clientId)}`,
+      `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id,meta_page_id,meta_pixel_id` +
+        `&id=eq.${encodeURIComponent(clientId)}`,
       { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
     )
     const client = (await res.json())?.[0]
@@ -476,6 +477,54 @@ Deno.serve(async (req) => {
         )
       }
 
+      const goal = String(body.optimization_goal || 'LEAD_GENERATION').toUpperCase()
+
+      // An ad set has to say what it is promoting, and which thing depends on
+      // how it optimises: a form lead is promoted against the Page hosting the
+      // form, a website lead against the pixel that reports it. Plain traffic
+      // promotes nothing.
+      //
+      // This used to be set only when the caller happened to pass
+      // promoted_page_id, while the default goal here is LEAD_GENERATION --
+      // which requires one. So the default path built ad sets Meta would not
+      // accept a single ad into. Belk's chat-made ad set was one: five ads went
+      // in and all five came back "Ad Set with Promoted Object Is Required".
+      const needsForm = goal === 'LEAD_GENERATION'
+      const needsPixel = goal === 'OFFSITE_CONVERSIONS'
+
+      const promotedPage = String(body.promoted_page_id || client.meta_page_id || '')
+      const promotedPixel = String(body.promoted_pixel_id || client.meta_pixel_id || '')
+
+      // Refused rather than created broken. An ad set that cannot take an ad is
+      // worse than no ad set: it looks finished, and the failure only surfaces
+      // later against a batch of creatives that were fine.
+      if (needsForm && !promotedPage) {
+        return json(
+          {
+            error: `An ad set optimising for LEAD_GENERATION has to name the Page hosting the form, and ${client.name} has no Facebook Page set in the CRM. Set the Page on the client first, or pass promoted_page_id.`,
+          },
+          400
+        )
+      }
+      if (needsPixel && !promotedPixel) {
+        return json(
+          {
+            error: `An ad set optimising for OFFSITE_CONVERSIONS has to name the pixel that reports the lead, and ${client.name} has no pixel set in the CRM. Set the pixel on the client first, or pass promoted_pixel_id.`,
+          },
+          400
+        )
+      }
+
+      const promotedObject = needsForm
+        ? { page_id: promotedPage }
+        : needsPixel
+          ? { pixel_id: promotedPixel, custom_event_type: 'LEAD' }
+          : undefined
+
+      // Left unset, Meta records this as UNDEFINED, which is half of what the
+      // publisher reads to decide whether a creative needs a form or a link.
+      const destinationType = needsForm ? 'ON_AD' : needsPixel ? 'WEBSITE' : undefined
+
       const adset = await graphPost(
         `${account}/adsets`,
         {
@@ -483,7 +532,7 @@ Deno.serve(async (req) => {
           campaign_id: campaignId,
           daily_budget: budgetCents(body.daily_budget_cents, 'daily_budget_cents'),
           billing_event: String(body.billing_event || 'IMPRESSIONS'),
-          optimization_goal: String(body.optimization_goal || 'LEAD_GENERATION'),
+          optimization_goal: goal,
           bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
           targeting: {
             geo_locations: geo,
@@ -491,7 +540,8 @@ Deno.serve(async (req) => {
             age_max: Number(body.age_max) || 65,
             targeting_automation: { advantage_audience: 0 },
           },
-          ...(body.promoted_page_id ? { promoted_object: { page_id: String(body.promoted_page_id) } } : {}),
+          ...(promotedObject ? { promoted_object: promotedObject } : {}),
+          ...(destinationType ? { destination_type: destinationType } : {}),
           ...(body.start_time ? { start_time: String(body.start_time) } : {}),
           status,
         },
@@ -499,7 +549,14 @@ Deno.serve(async (req) => {
         'create ad set'
       )
 
-      return json({ ok: true, adset_id: adset.id, status })
+      return json({
+        ok: true,
+        adset_id: adset.id,
+        status,
+        optimization_goal: goal,
+        promoted_object: promotedObject ?? null,
+        destination_type: destinationType ?? null,
+      })
     }
 
     // -----------------------------------------------------------------------

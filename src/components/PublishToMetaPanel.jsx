@@ -13,6 +13,7 @@ import {
   dollarsToCents,
   imagesFromSet,
   locationsFromIntake,
+  checkAdset,
   listAdsets,
   listCampaigns,
   publishAd,
@@ -449,6 +450,8 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
   const [reuseAdset, setReuseAdset] = useState(false)
   const [adsets, setAdsets] = useState(null)
   const [adsetId, setAdsetId] = useState('')
+  // null while it has not been asked, then {ok} from meta-adset-check.
+  const [adsetCheck, setAdsetCheck] = useState(null)
 
   const [adsetName, setAdsetName] = useState('')
   const [dailyBudget, setDailyBudget] = useState(() => budgetFromIntake(intake, client) || '20')
@@ -582,6 +585,29 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
       })
   }, [reuseCampaign, reuseAdset, campaignId, adsets, client.id])
 
+  // Ask Meta whether the picked ad set can take an ad at all, before a single
+  // image is uploaded into it. Belk's five ads were all built and all rejected
+  // for the same reason, and the ad set could not be fixed afterwards.
+  useEffect(() => {
+    setAdsetCheck(null)
+    if (!reuseAdset || !adsetId) return
+
+    let cancelled = false
+    checkAdset(client.id, adsetId)
+      .then((verdict) => {
+        if (!cancelled) setAdsetCheck(verdict)
+      })
+      .catch(() => {
+        // Deliberately optimistic. A check that fell over is not evidence
+        // against the ad set, and blocking on it would break publishing.
+        if (!cancelled) setAdsetCheck({ ok: true, unchecked: 'The ad set check did not run.' })
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [reuseAdset, adsetId, client.id])
+
   // Reusing an ad set only makes sense inside a campaign that already exists.
   useEffect(() => {
     if (!reuseCampaign) setReuseAdset(false)
@@ -609,6 +635,10 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
   if (chosenObjective?.needsForm && !leadForm) blockers.push('no instant form picked')
   if (reuseCampaign && !campaignId) blockers.push('no campaign picked')
   if (reuseAdset && !adsetId) blockers.push('no ad set picked')
+  // Waiting on the verdict counts as a blocker too, so a fast click cannot
+  // start the upload while the answer is still in flight.
+  if (reuseAdset && adsetId && !adsetCheck) blockers.push('still checking the ad set')
+  if (adsetCheck?.ok === false) blockers.push('that ad set cannot take ads')
   if (chosenCampaign?.campaign_budget && !reuseAdset)
     blockers.push('that campaign sets its own budget')
   // Budget and targeting belong to the ad set. When one is being reused they
@@ -962,7 +992,12 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
                 Its budget, targeting and schedule stay exactly as they are — this only adds ads
                 inside it.
               </p>
-              {chosenAdset?.live && (
+              {adsetCheck?.ok === false && (
+                <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1 whitespace-pre-line">
+                  {adsetCheck.error}
+                </p>
+              )}
+              {chosenAdset?.live && adsetCheck?.ok !== false && (
                 <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                   This ad set is delivering right now. The new ads arrive paused, but switching one
                   on puts it into a live auction immediately.

@@ -338,6 +338,34 @@ export async function listAdsets(clientId, campaignId) {
 }
 
 /**
+ * Can this ad set actually take an ad?
+ *
+ * Belk's publish built five ads into an ad set that optimised for
+ * LEAD_GENERATION and named nothing to promote. Meta rejected all five with
+ * the same message, after every image had been uploaded. The ad set was
+ * unfixable -- a promoted object is immutable once the ad set exists -- so the
+ * only thing worth doing is asking before the upload rather than after.
+ *
+ * A check that cannot run is never a reason not to publish: anything other
+ * than the function's own 400 verdict comes back ok with `unchecked` set, and
+ * the publish goes ahead exactly as it did before this existed.
+ */
+export async function checkAdset(clientId, adsetId) {
+  const { data, error } = await supabase.functions.invoke('meta-adset-check', {
+    body: { client_id: clientId, adset_id: adsetId },
+  })
+
+  if (error) {
+    const { status, detail } = await readFunctionError(error)
+    if (status === 400 && detail) return { ok: false, error: detail }
+    return { ok: true, unchecked: detail || 'The ad set check did not run.' }
+  }
+
+  if (data?.error) return { ok: false, error: data.error }
+  return { ok: true, ...(data || {}) }
+}
+
+/**
  * Works out which Facebook Page and pixel this client advertises with.
  *
  * The token can already see both, so nobody should be copying IDs out of

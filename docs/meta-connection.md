@@ -90,7 +90,7 @@ secrets box.
 
 | Name | Value | Used by |
 | --- | --- | --- |
-| `META_ACCESS_TOKEN` | the `EAAG...` token from part 1 | `sync-meta-kpis`, `meta-publish` |
+| `META_ACCESS_TOKEN` | the `EAAG...` token from part 1 | `sync-meta-kpis`, `meta-publish`, `meta-manage`, `meta-account-health`, `meta-adset-check` |
 
 No redeploy needed; the functions read it on the next invocation.
 
