@@ -6,6 +6,7 @@ import DeliverableForm from '../components/DeliverableForm'
 import LsaSetupPanel from '../components/LsaSetupPanel'
 import MetaSetupPanel from '../components/MetaSetupPanel'
 import GbpSetupPanel from '../components/GbpSetupPanel'
+import MetaAccessReport from '../components/MetaAccessReport'
 import { supabase } from '../lib/supabaseClient'
 import { fetchDeliverables, hasInternalColumn, today } from '../lib/queries'
 import {
@@ -445,6 +446,10 @@ export default function DeliverablesPage() {
           Who still needs each channel connected, and the message to send them. Connecting a Meta
           ad account completes that client&rsquo;s access deliverable on its own.
         </p>
+        {/* First, because "did it actually arrive" is the question you have
+            after sending the message, and the answer used to be to try
+            building something and watch it fail. */}
+        <MetaAccessReport />
         <MetaSetupPanel />
         <LsaSetupPanel />
         <GbpSetupPanel />

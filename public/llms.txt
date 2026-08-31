@@ -179,6 +179,10 @@ Whether a client's ads are actually running
   Go to: Dashboard → the alerts at the top, then the client page → Meta ad account
   An alert appears when an ad account is disabled, unsettled over an unpaid balance, or has gone quiet for a couple of days. Silence on the Dashboard means the accounts were healthy as of the last check.
 
+Whether a client actually granted the Meta access they said they did
+  Go to: Deliverables → "What did they actually grant?" → Check access
+  Reads the permission level back from Meta per client. Catches the two things invisible from inside the CRM: an asset shared at reporting level only, and access that was never granted or has been revoked. It also lists assets granted to us that no client is connected to yet.
+
 Yesterday's spend, leads or cost per lead
   Go to: Reports for all clients, or the client page → Ad performance for one
   Today is normally missing — the sync copies yesterday each morning. "Sync Meta" on Reports fetches fresh numbers if you need them now.

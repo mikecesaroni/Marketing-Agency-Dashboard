@@ -217,6 +217,11 @@ export const LOOKUPS = [
     how: 'An alert appears when an ad account is disabled, unsettled over an unpaid balance, or has gone quiet for a couple of days. Silence on the Dashboard means the accounts were healthy as of the last check.',
   },
   {
+    need: 'Whether a client actually granted the Meta access they said they did',
+    where: 'Deliverables → "What did they actually grant?" → Check access',
+    how: 'Reads the permission level back from Meta per client. Catches the two things invisible from inside the CRM: an asset shared at reporting level only, and access that was never granted or has been revoked. It also lists assets granted to us that no client is connected to yet.',
+  },
+  {
     need: 'Yesterday\'s spend, leads or cost per lead',
     where: 'Reports for all clients, or the client page → Ad performance for one',
     how: 'Today is normally missing — the sync copies yesterday each morning. "Sync Meta" on Reports fetches fresh numbers if you need them now.',
