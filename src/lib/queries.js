@@ -244,11 +244,32 @@ export async function fetchKPIHistory(weeks = 12) {
 
 // ---------- dashboard ----------
 // One round trip for everything the home screen needs to tell you what to do today.
+/**
+ * Per-client ad delivery, keyed by client id.
+ *
+ * Reads the client_ad_delivery view rather than ad_daily: the aggregation
+ * belongs in the database, and pulling every ad-day row to sum it in the
+ * browser would be hundreds of rows for one number per client.
+ */
+export async function fetchAdDelivery() {
+  const { data, error } = await supabase
+    .from('client_ad_delivery')
+    .select('client_id, last_spend_date, spend_7d, spend_30d')
+  // A project without the view applied should not take the dashboard down; the
+  // account status alone still catches a disabled account.
+  if (error) return {}
+  return Object.fromEntries((data || []).map((r) => [r.client_id, r]))
+}
+
 // No payments: the dashboard is an operations view and does not show money,
 // so pulling every payment row on each load was fetching a few hundred rows to
 // throw them away.
 export async function fetchDashboardData() {
-  const [clients, kpis] = await Promise.all([fetchClientsWithKPIs(), fetchKPIHistory(2)])
+  const [clients, kpis, delivery] = await Promise.all([
+    fetchClientsWithKPIs(),
+    fetchKPIHistory(2),
+    fetchAdDelivery(),
+  ])
 
   let deliverables = []
   try {
@@ -258,7 +279,7 @@ export async function fetchDashboardData() {
     deliverables = []
   }
 
-  return { clients, deliverables, kpis }
+  return { clients, deliverables, kpis, delivery }
 }
 
 // ---------- per-ad performance ----------

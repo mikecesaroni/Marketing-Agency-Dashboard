@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import FormSubmissionAlerts from '../components/FormSubmissionAlerts'
+import AdDeliveryAlerts from '../components/AdDeliveryAlerts'
 import {
   Badge,
   Card,
@@ -160,7 +161,7 @@ export default function HomePage() {
     )
   }
 
-  const { clients, deliverables, kpis } = data
+  const { clients, deliverables, kpis, delivery } = data
   const now = today()
 
   const live = clients.filter((c) => !c.archived)
@@ -294,9 +295,14 @@ export default function HomePage() {
         day: 'numeric',
       })}
     >
-      {/* Above the stats: a client waiting on us is more urgent than a number
-          that has not moved since yesterday. Renders nothing when nothing is
-          unread, so it costs no space on a quiet day. */}
+      {/* First, above everything: a client whose ads have stopped is losing
+          money right now, and it is the one thing here nobody would otherwise
+          notice. Renders nothing when all is well. */}
+      <AdDeliveryAlerts clients={clients} delivery={delivery} todayDate={now} />
+
+      {/* Then a client waiting on us, which is more urgent than a number that
+          has not moved since yesterday. Also renders nothing when there is
+          nothing unread, so it costs no space on a quiet day. */}
       <div className="mb-6 empty:mb-0 md:mb-8">
         <FormSubmissionAlerts />
       </div>
