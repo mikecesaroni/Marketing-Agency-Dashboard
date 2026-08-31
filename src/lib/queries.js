@@ -190,9 +190,13 @@ export async function fetchClientsWithKPIs() {
 
 // ---------- deliverables ----------
 export async function fetchDeliverables() {
+  // Launch order, then date. The page sorts properly itself -- see
+  // src/lib/deliverables.js -- but a sane order here keeps the raw list
+  // readable for anything that reads it without that.
   const { data, error } = await supabase
     .from('deliverables')
     .select('*, clients(name)')
+    .order('sort_order', { ascending: true })
     .order('due_date', { ascending: true, nullsFirst: false })
 
   if (error) throw error

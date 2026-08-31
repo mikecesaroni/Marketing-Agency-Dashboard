@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { DELIVERABLE_STATUSES, DELIVERABLE_TYPES } from '../lib/deliverables'
 
-// 'ghl setup' is a real unit of work with a due date and an owner, so it
-// belongs in the same list as the rest rather than living only as a flag on
-// the client. The dashboard surfaces the queue automatically either way --
-// this is for when a build needs scheduling against a date.
-const TYPES = ['creative', 'campaign', 'report', 'landing page', 'ghl setup', 'other']
-const STATUSES = ['todo', 'in progress', 'review', 'done']
+// Read from the shared list rather than typed out again here. This dropdown
+// used to offer 'ghl setup' while the database check constraint rejected it,
+// so choosing it failed the save -- two lists of the same thing with nothing
+// holding them together. scripts/check-deliverables.mjs now compares the
+// shared list against the constraint.
+const TYPES = DELIVERABLE_TYPES
+const STATUSES = DELIVERABLE_STATUSES
 const PRIORITIES = ['low', 'normal', 'high']
 
 const inputClass =
