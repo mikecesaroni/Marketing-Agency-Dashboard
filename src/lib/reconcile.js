@@ -1,21 +1,16 @@
-// The .js extension is deliberate and the only place in src/ that carries one.
-// Vite resolves either form, but node does not, and being importable by a plain
-// node script is the entire reason this module is separate from the data layer.
-import { ghlBilling, ghlMonthlyPortion, totalMonthly } from './ghlSetupFields.js'
-
 /**
  * Checks the CRM's billing config against what Stripe has actually collected.
  *
- * Stripe is the record of what people really pay. The fees on a client row are
- * only what somebody typed, and they drift: a client moves from $998 + $399
- * onto the combined $1,500 plan and nobody updates the CRM, so MRR quietly
- * reports a number nobody is billed. This is what makes that drift visible
- * instead of leaving it to be noticed a year later.
+ * Stripe is the record of what people really pay. The fee on a client row is
+ * only what somebody typed, and it drifts: a client moves onto a different
+ * package and nobody updates the CRM, so MRR quietly reports a number nobody
+ * is billed. This is what makes that drift visible instead of leaving it to be
+ * noticed a year later.
  */
 
 // Recurring money only. A setup fee is a one-off and would swamp the month it
 // landed in, making every client with one look like a mismatch.
-const RECURRING = new Set(['monthly', 'ghl'])
+const RECURRING = new Set(['monthly'])
 
 const monthOf = (date) => String(date || '').slice(0, 7)
 
@@ -67,25 +62,13 @@ export function feeMismatches(clients, payments) {
     const seen = actual[client.id]
     if (!seen || seen.rows.length === 0) continue
 
-    const expected = totalMonthly(client)
+    // The monthly fee is the whole monthly total, however many Stripe
+    // subscriptions add up to it. Only the amount can be wrong, so the number
+    // of charges is not checked: a client paying one $1,397 subscription and a
+    // client paying $998 + $399 are the same client as far as revenue goes.
+    const expected = Number(client.monthly_fee) || 0
     const collected = seen.collected
-
-    // Two different ways to be out of step, and both matter.
-    //
-    // The amount being wrong misreports revenue. The number of charges being
-    // wrong misreports the shape: a client the CRM thinks pays once but who
-    // actually pays twice gets one scheduled row and two payments, so the
-    // second lands unscheduled every single month even though the totals add
-    // up. Only GHL clients can legitimately have two recurring charges.
-    const amountOff = Math.abs(expected - collected) >= TOLERANCE
-    // Two charges are expected only from a client billed separately for GHL
-    // *and* actually being charged for it. A client on the plan whose GHL fee
-    // is still zero has not started paying for it, so one charge is correct
-    // and flagging them would be a standing false alarm.
-    const expectedCharges =
-      ghlBilling(client)?.key === 'separate' && ghlMonthlyPortion(client) > 0 ? 2 : 1
-    const shapeOff = seen.rows.length !== expectedCharges
-    if (!amountOff && !shapeOff) continue
+    if (Math.abs(expected - collected) < TOLERANCE) continue
 
     out.push({
       client,
@@ -94,44 +77,13 @@ export function feeMismatches(clients, payments) {
       month: seen.month,
       amounts: seen.amounts,
       difference: collected - expected,
-      amountOff,
-      shapeOff,
-      expectedCharges,
       // What the client row would have to say for the CRM to agree with
-      // Stripe. One charge is a combined plan; two is a separate GHL
-      // subscription, and the smaller of them is the GHL part.
-      suggestion: suggestFromAmounts(seen.amounts, client),
+      // Stripe: the total collected, whatever it arrived as.
+      suggestion: { monthly_fee: collected },
     })
   }
 
-  // Biggest money difference first; a shape-only mismatch sorts to the end,
-  // where it still gets seen but does not push a real shortfall down the list.
   return out.sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference))
-}
-
-function suggestFromAmounts(amounts, client) {
-  if (amounts.length === 1) {
-    return {
-      monthly_fee: amounts[0],
-      ghl_billing: 'bundled',
-      // A client not on the plan has no GHL share to attribute, whatever the
-      // stored fee happens to say.
-      ghl_monthly_fee: client.ghl_plan ? Number(client.ghl_monthly_fee) || 0 : 0,
-      label: `one charge of ${amounts[0]}`,
-    }
-  }
-  if (amounts.length === 2 && client.ghl_plan) {
-    const [retainer, ghl] = amounts
-    return {
-      monthly_fee: retainer,
-      ghl_billing: 'separate',
-      ghl_monthly_fee: ghl,
-      label: `${retainer} + ${ghl}`,
-    }
-  }
-  // Three or more charges in a month is not a plan shape the CRM models, so
-  // there is nothing honest to suggest -- it needs a person to look.
-  return null
 }
 
 /**

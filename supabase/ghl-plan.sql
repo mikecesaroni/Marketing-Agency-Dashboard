@@ -38,3 +38,18 @@ alter table public.clients
 -- Finding the queue is the common read: everyone on the plan who is not live.
 create index if not exists clients_ghl_queue_idx
   on public.clients (ghl_plan, ghl_active) where ghl_plan;
+
+-- ---------------------------------------------------------------------------
+-- ON REVENUE, DELIBERATELY NOT RECORDED HERE
+--
+-- There was briefly a ghl_monthly_fee column and a 'ghl' payment type, so a
+-- notional $399 of each package could be reported as GHL revenue. Both were
+-- removed, and supabase/ghl-billing.sql deleted along with them, because the
+-- premise was false: GHL is included in certain packages, and a package price
+-- is just the package price. Carving a fixed slice out of it invented a number
+-- nobody was billed and nobody had agreed to.
+--
+-- What is tracked instead is clients.monthly_fee -- the whole monthly total,
+-- which is what Stripe collects -- and these two flags, which say whether we
+-- are building GHL for a client and whether it is running. That is a delivery
+-- fact, and it is the only GHL question the CRM answers.

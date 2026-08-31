@@ -1,18 +1,15 @@
 // Self-check for the Stripe reconciliation. Run: node scripts/check-reconcile.mjs
 //
 // The fixtures are the real shapes this found in production on 2026-08-30:
-// two clients who had moved onto the combined $1,500 plan while the CRM still
-// said $998 + $399, one genuinely on two subscriptions, and one $399 payment
-// recorded twice because the CSV importer and the webhook store different
-// Stripe identifiers and neither can see the other's rows.
+// clients who had moved onto a $1,500 package while the CRM still said $998,
+// one paying that total as two Stripe subscriptions, and one payment recorded
+// twice because the CSV importer and the webhook store different Stripe
+// identifiers and neither can see the other's rows.
 
 import assert from 'node:assert/strict'
 import { feeMismatches, duplicateSuspects, latestBillingMonth } from '../src/lib/reconcile.js'
 
-const client = (over) => ({
-  id: over.name, monthly_fee: 998, ghl_monthly_fee: 399,
-  ghl_plan: false, ghl_billing: 'bundled', ...over,
-})
+const client = (over) => ({ id: over.name, monthly_fee: 998, archived: false, ...over })
 const paid = (id, type, amount, date, stripe) => ({
   id: `${id}-${type}-${amount}-${date}`, client_id: id, payment_type: type,
   amount, paid_date: date, status: 'paid',
@@ -22,51 +19,54 @@ const paid = (id, type, amount, date, stripe) => ({
 // --- fee drift -------------------------------------------------------------
 {
   const clients = [
-    // Moved to the combined plan; CRM still says separate. The real Belk case.
-    client({ name: 'belk', ghl_plan: true, ghl_billing: 'separate' }),
-    // Genuinely two subscriptions. The real Reliable case.
-    client({ name: 'reliable', ghl_plan: true, ghl_billing: 'separate' }),
-    // Plain retainer, agrees.
-    client({ name: 'plain' }),
+    // Moved onto the $1,500 package; the CRM still says $998. The real case.
+    client({ name: 'moved-up', stripe_customer_id: 'cus_1' }),
+    // Pays the same total as two Stripe subscriptions, and the fee says so.
+    client({ name: 'two-subs', monthly_fee: 1397 }),
+    // Agrees.
+    client({ name: 'fine', stripe_customer_id: 'cus_2' }),
   ]
   const payments = [
-    paid('belk', 'monthly', 1500, '2026-08-24', true),
-    paid('reliable', 'monthly', 998, '2026-08-28', true),
-    paid('reliable', 'ghl', 399, '2026-08-28', true),
-    paid('plain', 'monthly', 998, '2026-08-16', true),
+    paid('moved-up', 'monthly', 1500, '2026-08-24', true),
+    paid('two-subs', 'monthly', 998, '2026-08-28', true),
+    paid('two-subs', 'monthly', 399, '2026-08-28', true),
+    paid('fine', 'monthly', 998, '2026-08-16', true),
   ]
 
   const found = feeMismatches(clients, payments)
   assert.equal(found.length, 1, 'only the drifted client is flagged')
-  assert.equal(found[0].client.name, 'belk')
-  assert.equal(found[0].expected, 1397)
+  assert.equal(found[0].client.name, 'moved-up')
+  assert.equal(found[0].expected, 998)
   assert.equal(found[0].collected, 1500)
-  assert.deepEqual(found[0].suggestion, {
-    monthly_fee: 1500, ghl_billing: 'bundled', ghl_monthly_fee: 399,
-    label: 'one charge of 1500',
-  })
-  console.log('PASS  a client moved onto the combined plan is flagged')
-  console.log('PASS  a client genuinely on two subscriptions is not')
+  assert.deepEqual(found[0].suggestion, { monthly_fee: 1500 })
+  console.log('PASS  a client moved onto a bigger package is flagged')
+  console.log('PASS  the suggestion is the total Stripe collected')
 }
 
-// Same money, wrong shape: the CRM thinks one combined $1,397 charge, Stripe
-// sends two. MRR happens to agree, but the client gets one scheduled row and
-// two payments, so one lands unscheduled every month.
+// Two charges adding up to the fee is not a mismatch. The monthly fee is the
+// monthly total, however many subscriptions make it up, so the number of
+// charges is deliberately not checked.
 {
-  const clients = [client({ name: 'r', ghl_plan: true, ghl_billing: 'bundled', monthly_fee: 1397 })]
+  const clients = [client({ name: 'split', monthly_fee: 1397 })]
   const payments = [
-    paid('r', 'monthly', 998, '2026-08-28', true),
-    paid('r', 'ghl', 399, '2026-08-28', true),
+    paid('split', 'monthly', 998, '2026-08-28', true),
+    paid('split', 'monthly', 399, '2026-08-28', true),
   ]
-  const [m] = feeMismatches(clients, payments)
-  assert.ok(m, 'a shape mismatch is flagged even when the totals agree')
-  assert.equal(m.amountOff, false)
-  assert.equal(m.shapeOff, true)
-  assert.deepEqual(m.suggestion, {
-    monthly_fee: 998, ghl_billing: 'separate', ghl_monthly_fee: 399, label: '998 + 399',
-  })
-  console.log('PASS  right total but wrong number of charges is still flagged')
-  console.log('PASS  two charges are read back as a separate GHL subscription')
+  assert.equal(feeMismatches(clients, payments).length, 0)
+  console.log('PASS  two charges summing to the fee is not a mismatch')
+}
+
+// But two charges that do NOT add up still are.
+{
+  const clients = [client({ name: 'short', monthly_fee: 1500 })]
+  const payments = [
+    paid('short', 'monthly', 998, '2026-08-28', true),
+    paid('short', 'monthly', 399, '2026-08-28', true),
+  ]
+  const [row] = feeMismatches(clients, payments)
+  assert.equal(row.collected, 1397)
+  assert.equal(row.difference, -103)
+  console.log('PASS  charges that do not add up to the fee are flagged')
 }
 
 // Only the most recent month counts, so an old price is not held against a
@@ -94,16 +94,6 @@ const paid = (id, type, amount, date, stripe) => ({
   console.log('PASS  a setup fee does not count as monthly revenue')
 }
 
-// A client on the GHL plan who is not yet being charged for it pays once, and
-// must not be flagged every month for a second charge that is not due. The
-// real Summit Water Pros case.
-{
-  const clients = [client({ name: 'summit', ghl_plan: true, ghl_billing: 'separate', ghl_monthly_fee: 0 })]
-  const payments = [paid('summit', 'monthly', 998, '2026-08-01', true)]
-  assert.equal(feeMismatches(clients, payments).length, 0)
-  console.log('PASS  on the GHL plan but not yet billed for it is not a mismatch')
-}
-
 // Nobody who has never paid is flagged, and neither are archived clients.
 {
   const never = [client({ name: 'new' })]
@@ -114,30 +104,27 @@ const paid = (id, type, amount, date, stripe) => ({
 }
 
 // --- partial client rows ---------------------------------------------------
-// The bug that produced a false "Reliable is under-reported by $399" on the
-// Payments page. The page selected five columns and none of them was ghl_plan,
-// so ghlBilling() returned null, totalMonthly() fell back to the bare retainer,
-// and a correctly configured client was reported as disagreeing with Stripe.
-//
-// The real fix is CLIENT_BILLING_COLUMNS in queries.js -- this records the
-// failure so a future projection that drops those columns is caught here
-// rather than by someone reading a wrong number off the page.
+// A projection missing the columns these functions read fails silently and
+// produces a plausible wrong number, which is the worst kind. The real fix is
+// CLIENT_BILLING_COLUMNS in billing.js; this records the failure so a future
+// projection that drops one is caught here rather than by someone reading a
+// wrong figure off the page.
 {
-  const full = client({
-    name: 'reliable', ghl_plan: true, ghl_billing: 'separate', ghl_monthly_fee: 399,
-  })
-  const payments = [
-    paid('reliable', 'monthly', 998, '2026-08-28', true),
-    paid('reliable', 'ghl', 399, '2026-08-28', true),
-  ]
-
+  const full = client({ name: 'ok', monthly_fee: 1500 })
+  const payments = [paid('ok', 'monthly', 1500, '2026-08-24', true)]
   assert.equal(feeMismatches([full], payments).length, 0, 'a complete row reconciles')
 
-  // The old projection: id, name, monthly_fee, status, stripe_customer_id.
-  const partial = { id: full.id, name: full.name, monthly_fee: full.monthly_fee, status: 'active' }
-  const wrong = feeMismatches([partial], payments)
-  assert.equal(wrong.length, 1, 'a row missing ghl_plan is what caused the false alarm')
-  assert.equal(wrong[0].expected, 998, 'and it under-states the client by the GHL fee')
+  const noFee = { id: full.id, name: full.name, status: 'active' }
+  const wrong = feeMismatches([noFee], payments)
+  assert.equal(wrong.length, 1, 'a row without monthly_fee reads as billing nothing')
+  assert.equal(wrong[0].expected, 0)
+
+  const noArchived = { id: 'gone', name: 'gone', monthly_fee: 1 }
+  assert.equal(
+    feeMismatches([noArchived], [paid('gone', 'monthly', 998, '2026-08-01', true)]).length,
+    1,
+    'and without the archived flag a churned client cannot be excluded'
+  )
   console.log('PASS  a complete client row reconciles cleanly')
   console.log('PASS  the partial-row failure mode is pinned down')
 }
@@ -145,7 +132,7 @@ const paid = (id, type, amount, date, stripe) => ({
 // --- duplicates ------------------------------------------------------------
 {
   const clients = [{ id: 'rel', name: 'Reliable Heating and Cooling' }]
-  const webhook = paid('rel', 'ghl', 399, '2026-08-28', true)
+  const webhook = paid('rel', 'monthly', 399, '2026-08-28', true)
   const imported = { ...paid('rel', 'monthly', 399, '2026-08-28', false), id: 'imported-row' }
   const other = paid('rel', 'monthly', 998, '2026-08-28', true)
 

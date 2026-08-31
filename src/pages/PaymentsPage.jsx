@@ -178,7 +178,7 @@ export default function PaymentsPage() {
     loadData()
   }
 
-  const { mrr, count: billingCount, ghl: ghlMrr, ghlCount } = calcMRR(clients, payments)
+  const { mrr, count: billingCount } = calcMRR(clients, payments)
 
   // Deliberately all-time. Scoping this to the current calendar month meant it
   // reset to $0 every 1st, hiding money collected days earlier.
@@ -325,14 +325,7 @@ export default function PaymentsPage() {
         <StatCard
           label="MRR"
           value={money(mrr)}
-          sub={
-            // The GHL slice is worth calling out because it is invoiced two
-            // different ways — on its own for some clients, inside a combined
-            // fee for others — so it is not readable off any single number.
-            ghlMrr > 0
-              ? `${billingCount} ${billingCount === 1 ? 'client' : 'clients'} billing · ${money(ghlMrr)} GHL across ${ghlCount}`
-              : `${billingCount} ${billingCount === 1 ? 'client' : 'clients'} billing`
-          }
+          sub={`${billingCount} ${billingCount === 1 ? 'client' : 'clients'} billing`}
           tone="blue"
         />
         <StatCard

@@ -225,7 +225,6 @@ export default function StripeImportPanel({ clients, onDone }) {
                         >
                           <option value="monthly">Monthly</option>
                           <option value="setup">Setup</option>
-                          <option value="ghl">GHL</option>
                         </select>
                       </div>
                     )}

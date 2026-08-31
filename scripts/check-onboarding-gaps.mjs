@@ -60,12 +60,15 @@ const check = (name, got, want) => {
 }
 
 // --- a paying client is never "not subscribed" ----------------------------
-// The GHL subscription counts: a client whose only recurring payment is the
-// $399 GHL charge has still started paying.
+// Any recurring charge counts, including one that is only part of a client's
+// monthly total.
 {
-  const clients = [client({ name: 'ghl-only' })]
-  const payments = [pay('ghl-only', 'setup', 'paid'), pay('ghl-only', 'ghl', 'paid', { amount: 399 })]
-  check('a GHL payment counts as subscribed',
+  const clients = [client({ name: 'part-paid' })]
+  const payments = [
+    pay('part-paid', 'setup', 'paid'),
+    pay('part-paid', 'monthly', 'paid', { amount: 399 }),
+  ]
+  check('a partial monthly charge still counts as subscribed',
     onboardingGaps(clients, payments, TODAY).notSubscribed.length, 0)
 }
 

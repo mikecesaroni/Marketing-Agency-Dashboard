@@ -8,6 +8,11 @@
 // endpoint). No Stripe API key is needed. Everything used here is in the event
 // payload, and the signature is verified against the raw body directly, so
 // there is no reason to hold a key that can move money.
+//
+// Every recurring charge is a 'monthly' payment, whatever package it is for.
+// A client can be on more than one Stripe subscription -- their monthly total
+// is simply the sum -- and there is deliberately no attempt to attribute part
+// of a package price to a particular service.
 
 const TOLERANCE_SECONDS = 300
 
@@ -77,10 +82,8 @@ function timingSafeEqual(a: string, b: string) {
   return diff === 0
 }
 
-// Everything the handlers need off a client row: the identity, plus the two
-// fees and the plan flag that decide which schedule a payment settles.
-const CLIENT_FIELDS =
-  'id,name,stripe_customer_id,ghl_plan,ghl_billing,ghl_monthly_fee,monthly_fee'
+// Everything the handlers need off a client row.
+const CLIENT_FIELDS = 'id,name,stripe_customer_id,monthly_fee'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -165,83 +168,12 @@ async function isIgnoredCustomer(
   return false
 }
 
-type PaymentType = 'setup' | 'monthly' | 'ghl'
+type PaymentType = 'setup' | 'monthly'
 
-const PAYMENT_TYPES = new Set<string>(['setup', 'monthly', 'ghl'])
+const PAYMENT_TYPES = new Set<string>(['setup', 'monthly'])
 
 function asPaymentType(v: unknown): PaymentType {
   return PAYMENT_TYPES.has(String(v)) ? (String(v) as PaymentType) : 'monthly'
-}
-
-/**
- * Decides whether a paid invoice is the $399 GoHighLevel subscription rather
- * than the marketing retainer.
- *
- * This matters because recordPayment settles the oldest outstanding row of the
- * type it is given. A client on both plans gets two invoices a month, and if
- * both came through as 'monthly' the $399 would mark the $998 retainer paid --
- * the books would run a month ahead and short by $599 forever.
- *
- * The price id is authoritative and is checked first. The amount is a fallback
- * for the case where nobody has pasted the price id in yet: it only fires when
- * the client is on the GHL plan, is billed for it separately, and the two fees
- * differ -- so it can never misread a retainer as a GHL charge.
- *
- * A client on the bundled plan is invoiced once for everything, so nothing
- * they pay is ever a standalone GHL charge and the fallback must not fire for
- * them at all. Their ghl_monthly_fee is a share of a larger invoice, not an
- * amount anyone is billed.
- */
-export async function isGhlInvoice(
-  db: Db,
-  invoice: any,
-  client: {
-    id: string
-    ghl_plan?: boolean
-    ghl_billing?: string | null
-    ghl_monthly_fee?: number | null
-    monthly_fee?: number | null
-  },
-  amount: number
-) {
-  const configured = await ghlPriceId(db)
-  if (configured) {
-    const lines = invoice?.lines?.data
-    if (Array.isArray(lines)) {
-      for (const line of lines) {
-        const ids = [line?.price?.id, line?.plan?.id, line?.pricing?.price_details?.price]
-        if (ids.some((id) => id && String(id) === configured)) return true
-      }
-    }
-    // A configured price id that matched nothing is a real answer: this is the
-    // other subscription. Falling through to the amount check here would only
-    // add a way to be wrong.
-    return false
-  }
-
-  if (!client.ghl_plan || client.ghl_billing !== 'separate') return false
-  const ghlFee = Number(client.ghl_monthly_fee ?? 0)
-  const retainer = Number(client.monthly_fee ?? 0)
-  if (!(ghlFee > 0) || ghlFee === retainer) return false
-  return Math.abs(amount - ghlFee) < 0.01
-}
-
-// Cached per event, not per instance. An Edge Function stays warm between
-// deliveries, so a value held longer than one event would keep serving the old
-// price id after it was changed in the CRM -- cleared at the top of
-// handleEvent. Within one event a batch of parked rows can resolve without
-// refetching this per row.
-let ghlPriceCache: string | null | undefined
-async function ghlPriceId(db: Db) {
-  if (ghlPriceCache !== undefined) return ghlPriceCache
-  try {
-    const rows = await db.get('app_settings?key=eq.stripe_ghl_price_id&select=value&limit=1')
-    ghlPriceCache = String(rows?.[0]?.value || '').trim() || null
-  } catch {
-    // A missing settings row must not stop a payment being recorded.
-    ghlPriceCache = null
-  }
-  return ghlPriceCache
 }
 
 /**
@@ -304,7 +236,6 @@ export async function recordPayment(
  * covers that month, and counting both would bill every client twice on signup.
  */
 export async function handleEvent(db: Db, event: any) {
-  ghlPriceCache = undefined
   const type = event?.type
   const obj = event?.data?.object || {}
 
@@ -396,17 +327,12 @@ export async function handleEvent(db: Db, event: any) {
         return { status: 'ignored', note: 'customer marked not this business' }
       }
 
-      // No client means no fees to compare against, so only the price id can
-      // classify this one. It still matters: the parked row keeps its type
-      // when it is later assigned, so a GHL charge lands on a GHL schedule
-      // rather than settling a retainer month.
-      const parkedType = (await isGhlInvoice(db, obj, { id: '' }, amount)) ? 'ghl' : 'monthly'
       await parkUnmatched(db, event, {
         customerId,
         email,
         name: obj.customer_name,
         amount,
-        type: parkedType,
+        type: 'monthly',
         method: methodFrom(obj.payment_settings?.payment_method_types),
         invoiceId: obj.id,
         description: 'Invoice with no matching client',
@@ -414,23 +340,20 @@ export async function handleEvent(db: Db, event: any) {
       return { status: 'unmatched', note: 'no client for invoice' }
     }
 
-    const isGhl = await isGhlInvoice(db, obj, client, amount)
-    const kind: PaymentType = isGhl ? 'ghl' : 'monthly'
-
     const result = await recordPayment(db, {
       clientId: client.id,
-      type: kind,
+      type: 'monthly',
       amount,
       paidDate: isoDate(obj.status_transitions?.paid_at || obj.created),
       method: methodFrom(obj.payment_settings?.payment_method_types),
       eventId: event.id,
       invoiceId: obj.id,
       customerId,
-      description: isGhl ? 'Stripe GHL subscription payment' : 'Stripe subscription payment',
+      description: 'Stripe subscription payment',
     })
     return {
       status: 'processed',
-      note: `${kind} ${amount} for ${client.name} via ${via}${result.inserted ? ' (unscheduled)' : ''}`,
+      note: `monthly ${amount} for ${client.name} via ${via}${result.inserted ? ' (unscheduled)' : ''}`,
     }
   }
 
@@ -438,13 +361,8 @@ export async function handleEvent(db: Db, event: any) {
     const { client } = await findClient(db, { customerId: obj.customer, email: obj.customer_email })
     if (!client) return { status: 'unmatched', note: 'no client for failed invoice' }
 
-    // A failed GHL invoice must not push the retainer overdue, and vice versa.
-    const kind: PaymentType = (await isGhlInvoice(db, obj, client, centsToAmount(obj.amount_due)))
-      ? 'ghl'
-      : 'monthly'
-
     const due = await db.get(
-      `payments?client_id=eq.${client.id}&payment_type=eq.${kind}&status=eq.pending` +
+      `payments?client_id=eq.${client.id}&payment_type=eq.monthly&status=eq.pending` +
         `&order=due_date.asc&limit=1&select=id,notes`
     )
     if (due?.[0]) {
@@ -453,7 +371,7 @@ export async function handleEvent(db: Db, event: any) {
         notes: [due[0].notes, `Stripe payment failed ${isoDate(obj.created)}`].filter(Boolean).join(' | '),
       })
     }
-    return { status: 'processed', note: `${kind} payment failed for ${client.name}` }
+    return { status: 'processed', note: `monthly payment failed for ${client.name}` }
   }
 
   if (type === 'customer.subscription.deleted') {
@@ -600,7 +518,7 @@ export async function serve(req: Request) {
 }
 
 // Registered only when running under Deno. Guarding it is what lets
-// scripts/check-stripe-ghl.mjs import the booking logic above and run it
+// scripts/check-payments.mjs import the booking logic above and run it
 // against fake invoices without a Deno runtime.
 // deno-lint-ignore no-explicit-any
 if (typeof (globalThis as any).Deno?.serve === 'function') {

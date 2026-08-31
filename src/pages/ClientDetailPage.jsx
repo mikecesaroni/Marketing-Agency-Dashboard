@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { fetchAdDaily, summariseAds } from '../lib/queries'
-import { ghlBilling } from '../lib/ghlSetupFields'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
@@ -18,7 +17,7 @@ import AddCreativeForm from '../components/AddCreativeForm'
 import ClientFilesSection from '../components/ClientFilesSection'
 import PaymentTracker from '../components/PaymentTracker'
 import ClientFormsPanel from '../components/ClientFormsPanel'
-import { Badge, Button, Card } from '../components/ui'
+import { Button, Card } from '../components/ui'
 import {
   addTask,
   deleteTask,
@@ -361,22 +360,14 @@ export default function ClientDetailPage() {
                 clearsWhenOff={['ghl_active']}
               />
               {client.ghl_plan && (
-                <>
-                  <LiveToggle
-                    clientId={client.id}
-                    field="ghl_active"
-                    label="GHL account"
-                    value={client.ghl_active}
-                    onChange={loadClientData}
-                    doneWord="live"
-                  />
-                  {/* How they pay for it, which is not something a toggle can
-                      say. Set in Billing Setup, shown here because this is
-                      where you look to see what a client is on. */}
-                  <Badge tone={ghlBilling(client)?.key === 'separate' ? 'info' : 'neutral'}>
-                    GHL {ghlBilling(client)?.short}
-                  </Badge>
-                </>
+                <LiveToggle
+                  clientId={client.id}
+                  field="ghl_active"
+                  label="GHL account"
+                  value={client.ghl_active}
+                  onChange={loadClientData}
+                  doneWord="live"
+                />
               )}
             </div>
             <Button

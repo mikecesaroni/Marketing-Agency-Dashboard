@@ -7,13 +7,6 @@ export const MONTHLY_KEY = 'stripe_monthly_link'
 // The newer, higher-tier plan. A separate Payment Link in Stripe (its own
 // price), so it needs its own slot rather than overloading the first one.
 export const MONTHLY_1500_KEY = 'stripe_monthly_1500_link'
-// The $399/mo GoHighLevel subscription. Billed on its own subscription in
-// Stripe, so it gets its own link rather than sharing a monthly slot.
-export const GHL_KEY = 'stripe_ghl_link'
-// The Stripe price id behind that link (price_...). Optional, but it is the
-// only signal that tells the webhook a paid invoice is the GHL subscription
-// rather than the marketing retainer when a client is on both.
-export const GHL_PRICE_KEY = 'stripe_ghl_price_id'
 
 export async function fetchStripeLinks() {
   const { data } = await supabase.from('app_settings').select('key, value')
@@ -22,19 +15,15 @@ export async function fetchStripeLinks() {
     setup: map[SETUP_KEY] || '',
     monthly: map[MONTHLY_KEY] || '',
     monthly1500: map[MONTHLY_1500_KEY] || '',
-    ghl: map[GHL_KEY] || '',
-    ghlPriceId: map[GHL_PRICE_KEY] || '',
   }
 }
 
-export async function saveStripeLinks({ setup, monthly, monthly1500, ghl, ghlPriceId }) {
+export async function saveStripeLinks({ setup, monthly, monthly1500 }) {
   const stamp = new Date().toISOString()
   const rows = [
     { key: SETUP_KEY, value: setup || '', updated_at: stamp },
     { key: MONTHLY_KEY, value: monthly || '', updated_at: stamp },
     { key: MONTHLY_1500_KEY, value: monthly1500 || '', updated_at: stamp },
-    { key: GHL_KEY, value: ghl || '', updated_at: stamp },
-    { key: GHL_PRICE_KEY, value: (ghlPriceId || '').trim(), updated_at: stamp },
   ]
   const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
   if (error) throw error
@@ -60,10 +49,9 @@ export function clientLink(base, clientId) {
   }
 }
 
-// The three kinds of money the CRM tracks. Anything unrecognised is treated as
-// a monthly retainer, which is what an unmatched row defaulted to before the
-// GHL plan existed.
-const PAYMENT_TYPES = new Set(['setup', 'monthly', 'ghl'])
+// The two kinds of money the CRM tracks. Anything unrecognised is treated as a
+// monthly payment, which is what an unmatched row has always defaulted to.
+const PAYMENT_TYPES = new Set(['setup', 'monthly'])
 
 export async function fetchUnmatched() {
   const { data, error } = await supabase

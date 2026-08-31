@@ -15,8 +15,8 @@ import {
 // Stripe setup and the money that could not be matched to anyone. Both live on
 // the Payments page because that is where you go when the books look wrong.
 export default function StripePanel() {
-  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '', ghl: '', ghlPriceId: '' })
-  const [draft, setDraft] = useState({ setup: '', monthly: '', monthly1500: '', ghl: '', ghlPriceId: '' })
+  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '' })
+  const [draft, setDraft] = useState({ setup: '', monthly: '', monthly1500: '' })
   const [unmatched, setUnmatched] = useState([])
   const [clients, setClients] = useState([])
   const [open, setOpen] = useState(false)
@@ -96,7 +96,7 @@ export default function StripePanel() {
     }
   }
 
-  const configured = links.setup || links.monthly || links.monthly1500 || links.ghl
+  const configured = links.setup || links.monthly || links.monthly1500
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl mb-4 overflow-hidden">
@@ -129,16 +129,13 @@ export default function StripePanel() {
           <div className="space-y-2">
             <p className="text-xs text-slate-500">
               Paste the Payment Link URLs from Stripe. The CRM stamps each client&rsquo;s ID onto
-              them, which is how a payment finds its way back to the right client. The $1,500
-              link is the combined plan that already includes GHL; the $399 link is only for
-              clients billed for GHL as a second, separate subscription.
+              them, which is how a payment finds its way back to the right client. Whichever
+              package a client is on, the link is just their monthly total.
             </p>
             {[
               ['Setup fee link', 'setup', 'https://buy.stripe.com/...'],
               ['Monthly subscription link ($998)', 'monthly', 'https://buy.stripe.com/...'],
               ['Monthly subscription link ($1,500)', 'monthly1500', 'https://buy.stripe.com/...'],
-              ['GHL subscription link ($399/mo)', 'ghl', 'https://buy.stripe.com/...'],
-              ['GHL price ID (recommended)', 'ghlPriceId', 'price_...'],
             ].map(([label, key, placeholder]) => (
               <div key={key}>
                 <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
@@ -150,14 +147,6 @@ export default function StripePanel() {
                 />
               </div>
             ))}
-            <p className="text-xs text-slate-500">
-              The GHL price ID is what tells an incoming invoice apart from the marketing
-              retainer for a client who pays for both separately. Without it the CRM falls
-              back to matching on the amount, which works as long as the two fees differ.
-              Find it in Stripe under Product catalogue &rarr; the GHL product &rarr; the
-              price (it starts <span className="font-mono">price_</span>). Clients on the
-              combined $1,500 plan need neither &mdash; they are invoiced once.
-            </p>
             <button
               onClick={save}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
@@ -238,8 +227,8 @@ const MONTHLY_TIERS = [
 ]
 
 // The per-client copy buttons, used on the client's own Payments card.
-export function StripeLinkButtons({ clientId, stripeCustomerId, ghlSeparate, monthlyFee }) {
-  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '', ghl: '', ghlPriceId: '' })
+export function StripeLinkButtons({ clientId, stripeCustomerId, monthlyFee }) {
+  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '' })
   const [copied, setCopied] = useState('')
 
   useEffect(() => {
@@ -262,10 +251,6 @@ export function StripeLinkButtons({ clientId, stripeCustomerId, ghlSeparate, mon
   const buttons = [
     ['setup', 'Setup fee link', links.setup],
     ...tiers.map((t) => [t.key, t.label, links[t.key]]),
-    // Only for clients billed for GHL separately. Sending it to anyone else
-    // signs them up for a subscription nobody sold them — and for a bundled
-    // client it would charge $399 on top of a fee that already includes GHL.
-    ...(ghlSeparate ? [['ghl', 'GHL $399/mo link', links.ghl]] : []),
   ].filter(([, , base]) => base)
 
   if (buttons.length === 0) return null

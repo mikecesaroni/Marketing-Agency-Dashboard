@@ -1,7 +1,3 @@
-// The .js extension is deliberate and the only place in src/ that carries one.
-// Vite resolves either form, but node does not, and being importable by a plain
-// node script is the entire reason this module is separate from the data layer.
-import { ghlBilling, ghlMonthlyPortion } from './ghlSetupFields.js'
 
 // The money calculations, kept clear of the data layer.
 //
@@ -15,16 +11,14 @@ import { ghlBilling, ghlMonthlyPortion } from './ghlSetupFields.js'
 /**
  * The client columns every money calculation here needs.
  *
- * calcMRR and the Stripe reconciliation both read the GHL plan fields and the
- * archived flag, and both degrade silently when handed a row that lacks them:
- * a missing ghl_plan makes totalMonthly return the bare retainer, so a client
- * on $998 + $399 reads as $998 and gets reported as a Stripe mismatch that
- * isn't real. Selecting this list rather than hand-writing a projection is
- * what stops that happening again.
+ * calcMRR and the Stripe reconciliation both read the monthly fee and the
+ * archived flag, and both degrade silently when handed a row that lacks them —
+ * a missing archived flag counts churned clients in MRR, and the numbers stay
+ * plausible while being wrong. Selecting this list rather than hand-writing a
+ * projection is what stops that happening again.
  */
 export const CLIENT_BILLING_COLUMNS =
-  'id, name, status, setup_fee, monthly_fee, stripe_customer_id, ' +
-  'ghl_plan, ghl_billing, ghl_monthly_fee, archived'
+  'id, name, status, setup_fee, monthly_fee, stripe_customer_id, ghl_plan, archived'
 
 // Dev-only backstop for any caller that builds its own projection anyway.
 // Silent wrong money is worse than a noisy console.
@@ -32,13 +26,11 @@ function warnIfPartial(clients) {
   if (!import.meta.env?.DEV) return
   const row = (clients || [])[0]
   if (!row) return
-  const missing = ['ghl_plan', 'ghl_billing', 'ghl_monthly_fee', 'archived'].filter(
-    (k) => !(k in row)
-  )
+  const missing = ['monthly_fee', 'archived'].filter((k) => !(k in row))
   if (missing.length > 0) {
     console.warn(
       `calcMRR was given client rows without ${missing.join(', ')} — ` +
-        'GHL revenue and archived clients will be wrong. Select CLIENT_BILLING_COLUMNS.'
+        'the figures will be wrong. Select CLIENT_BILLING_COLUMNS.'
     )
   }
 }
@@ -48,55 +40,28 @@ function warnIfPartial(clients) {
 // hasn't churned — the schedule existing is what proves they're billing, since
 // monthly_fee carries a column default and is set on every client row.
 //
-// GHL is counted through totalMonthly, which is where the two arrangements
-// differ and the one place that difference is allowed to live:
-//
-//   separate  $998 retainer + $399 GHL, two invoices, so $1,397 of MRR.
-//   bundled   one $1,500 invoice that already contains GHL. Adding the GHL
-//             share on top would invent $399 a month that nobody is billed.
-//
-// `ghl` is the slice of that MRR attributable to GHL either way, so the
-// revenue can be tracked whichever way it happens to be invoiced. `count`
-// stays a headcount of billing clients — a client on both plans is one client.
+// monthly_fee is the whole monthly total, whatever the package includes. There
+// was briefly a GHL slice reported alongside this, carved out of the fee at a
+// notional $399. It was removed because the premise was false: GHL comes inside
+// certain packages, and a package price is just the package price. Splitting it
+// invented a number nobody was billed. Whether a client is on GHL is a delivery
+// fact and lives on ghl_plan.
 export function calcMRR(clients, payments) {
   warnIfPartial(clients)
   const scheduled = new Set(
     payments.filter((p) => p.payment_type === 'monthly').map((p) => p.client_id)
   )
-  const ghlScheduled = new Set(
-    payments.filter((p) => p.payment_type === 'ghl').map((p) => p.client_id)
+  const billing = clients.filter(
+    (c) => scheduled.has(c.id) && !c.archived && !c.is_internal
   )
-  const live = (c) => !c.archived && !c.is_internal
-  const billing = clients.filter((c) => (scheduled.has(c.id) || ghlScheduled.has(c.id)) && live(c))
-
-  let mrr = 0
-  let ghl = 0
-  let ghlCount = 0
-  for (const c of billing) {
-    const separate = ghlBilling(c)?.key === 'separate'
-    // A separate client's GHL money rides on its own schedule, so it counts
-    // only once that schedule exists. A bundled client's is already inside
-    // the retainer they are scheduled for.
-    const retainer = scheduled.has(c.id) ? Number(c.monthly_fee) || 0 : 0
-    const ghlPart = separate
-      ? ghlScheduled.has(c.id)
-        ? ghlMonthlyPortion(c)
-        : 0
-      : scheduled.has(c.id)
-        ? ghlMonthlyPortion(c)
-        : 0
-    // Only a separate client's GHL money is additional revenue. A bundled
-    // client's retainer already contains it, so it is counted in the ghl
-    // slice but never added to the total again.
-    mrr += retainer + (separate ? ghlPart : 0)
-    ghl += ghlPart
-    if (ghlPart > 0) ghlCount++
+  return {
+    mrr: billing.reduce((sum, c) => sum + (Number(c.monthly_fee) || 0), 0),
+    count: billing.length,
   }
-
-  return { mrr, count: billing.length, ghl, ghlCount }
 }
 
-const RECURRING = new Set(['monthly', 'ghl'])
+
+const RECURRING = new Set(['monthly'])
 
 const isPaid = (p) => p.status === 'paid'
 

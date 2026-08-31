@@ -2,18 +2,16 @@ import { useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { money } from '../lib/queries'
 import { duplicateSuspects, feeMismatches } from '../lib/reconcile'
-import { GHL_BILLING } from '../lib/ghlSetupFields'
 import { Badge, Button, Card } from './ui'
 
 /**
  * Where the CRM disagrees with Stripe.
  *
- * Stripe is the record of what people actually pay; the fees on a client row
- * are only what somebody typed, and they drift. Two clients moved onto the
- * combined $1,500 plan and nobody updated the CRM, so MRR under-reported them
- * by $103 each for a month before anyone noticed. This is what makes that kind
- * of drift visible on the page where the money lives, rather than leaving it
- * to be spotted by eye.
+ * Stripe is the record of what people actually pay; the fee on a client row is
+ * only what somebody typed, and it drifts. Two clients moved onto a $1,500
+ * package and nobody updated the CRM, so MRR under-reported them for a month
+ * before anyone noticed. This is what makes that kind of drift visible on the
+ * page where the money lives, rather than leaving it to be spotted by eye.
  *
  * Nothing here changes anything on its own. Every fix is a button, because
  * "Stripe charged a different amount" has more than one possible cause -- a
@@ -41,11 +39,12 @@ export default function StripeReconcilePanel({ clients, payments, onFixed }) {
   const applySuggestion = async (row) => {
     const s = row.suggestion
     if (!s) return
-    const shape =
-      s.ghl_billing === GHL_BILLING.separate.key
-        ? `${money(s.monthly_fee)} retainer plus ${money(s.ghl_monthly_fee)} GHL, billed separately`
-        : `${money(s.monthly_fee)} a month${s.ghl_monthly_fee ? `, ${money(s.ghl_monthly_fee)} of it GHL` : ''}`
-    if (!confirm(`Set ${row.client.name} to ${shape}?\n\nThis matches what Stripe collected in ${row.month}. It changes the fees on the client, not any payment already recorded.`))
+    if (
+      !confirm(
+        `Set ${row.client.name}'s monthly fee to ${money(s.monthly_fee)}?\n\n` +
+          `That is what Stripe collected from them in ${row.month}. It changes the fee on the client, not any payment already recorded.`
+      )
+    )
       return
 
     setBusy(row.client.id)
@@ -53,11 +52,7 @@ export default function StripeReconcilePanel({ clients, payments, onFixed }) {
     try {
       const { error: err } = await supabase
         .from('clients')
-        .update({
-          monthly_fee: s.monthly_fee,
-          ghl_billing: s.ghl_billing,
-          ghl_monthly_fee: s.ghl_monthly_fee,
-        })
+        .update({ monthly_fee: s.monthly_fee })
         .eq('id', row.client.id)
       if (err) throw err
       setDone((d) => new Set(d).add(row.client.id))
@@ -153,9 +148,7 @@ export default function StripeReconcilePanel({ clients, payments, onFixed }) {
                 <p className="mt-0.5 text-[11px] text-slate-500">
                   {withDuplicate.has(row.client.id)
                     ? 'This client also has a payment recorded twice, below, which inflates the Stripe figure. Clear that first — the fee may be correct already.'
-                    : row.amountOff
-                      ? `${row.difference > 0 ? 'Under' : 'Over'}-reporting this client by ${money(Math.abs(row.difference))} a month.`
-                      : `The amount is right but Stripe sends ${row.amounts.length} charge${row.amounts.length === 1 ? '' : 's'}, not ${row.expectedCharges}.`}
+                    : `${row.difference > 0 ? 'Under' : 'Over'}-reporting this client by ${money(Math.abs(row.difference))} a month.`}
                 </p>
               </div>
               <div className="flex flex-shrink-0 items-center gap-2">
