@@ -15,6 +15,7 @@ export {
   IconReports,
   IconSops,
   IconAiSearch,
+  IconCompass,
   IconAlert,
   IconClock,
   IconClipboard,

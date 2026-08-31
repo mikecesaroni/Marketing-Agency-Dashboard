@@ -8,6 +8,7 @@ import ReportsPage from './pages/ReportsPage'
 import SopsPage from './pages/SopsPage'
 import AiSearchPage from './pages/AiSearchPage'
 import ClientOnboardingPage from './pages/ClientOnboardingPage'
+import AgentGuidePage from './pages/AgentGuidePage'
 
 export default function App() {
   return (
@@ -25,6 +26,9 @@ export default function App() {
       <Route path="/reports" element={<ReportsPage />} />
       <Route path="/sops" element={<SopsPage />} />
       <Route path="/ai-search" element={<AiSearchPage />} />
+      {/* How to drive the place. Also served as plain text at /llms.txt for
+          anything that does not run JavaScript -- see src/lib/agentGuide.js. */}
+      <Route path="/guide" element={<AgentGuidePage />} />
     </Routes>
   )
 }

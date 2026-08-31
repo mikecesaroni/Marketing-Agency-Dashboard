@@ -7,6 +7,7 @@ import {
   IconReports,
   IconSops,
   IconAiSearch,
+  IconCompass,
 } from './ui'
 
 // Grouped, because seven flat items give no clue which are the daily ones and
@@ -33,6 +34,11 @@ const NAV_GROUPS = [
     items: [
       { to: '/sops', label: 'SOPs', short: 'SOPs', Icon: IconSops },
       { to: '/ai-search', label: 'AI Search', short: 'AI', Icon: IconAiSearch },
+      // Last, and in the nav rather than tucked away, because something
+      // arriving here for the first time -- a new hire, or a browsing agent --
+      // reads the sidebar before it reads anything else. A guide nobody can
+      // find is a file, not a guide.
+      { to: '/guide', label: 'Guide', short: 'Guide', Icon: IconCompass },
     ],
   },
 ]

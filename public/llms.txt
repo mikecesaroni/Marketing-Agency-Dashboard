@@ -1,0 +1,273 @@
+# This file is generated from src/lib/agentGuide.js. Do not edit it by hand;
+# edit that module and run `npm run guide`. The same content is rendered at
+# /guide inside the app.
+
+NAVIGATING THIS CRM
+===================
+
+This is the internal CRM for a marketing agency that runs paid advertising for home-services businesses — HVAC, plumbing, electrical and similar trades. Each of those businesses is a "client". The agency runs their Meta (Facebook and Instagram) ads, their Google Local Services Ads, their Google Business Profile, and for some of them a GoHighLevel account that handles automated texts and calls.
+
+Everything is one screen deep. There is no login and no per-user permission: whoever opens the CRM sees all of it, and anything on screen can be changed by whoever is looking at it. Treat that as a reason for care rather than permission — a wrong edit here is a wrong number in a real client report.
+
+Numbers about ad performance are not live. A scheduled job copies yesterday from Meta each morning, so today is usually absent and the freshest figure is yesterday. Money is different: payments come from Stripe, and Stripe is treated as the truth whenever the CRM disagrees with it.
+
+PAGES
+=====
+
+Dashboard   /  or  /dashboard
+-----------------------------
+Sidebar: Dashboard
+The operations hub, and the right place to start. Answers "where does every client stand and what needs doing today". Carries no billing figures at all by design — money is on Payments.
+
+What is on it:
+  - Ad delivery alerts, at the very top, and only when something is wrong: a client whose ad account is disabled or unsettled, or whose ads have gone quiet. This is the most important thing on the page and it is invisible on a good day.
+  - Unread client form submissions, same rule — shown only when there are some.
+  - Three counts: Clients, Open work, KPIs logged (as "n of m" for this week).
+  - "Channels live" — how many clients have Meta ads, Google LSA, Google Business and GHL running. GHL is counted out of the clients who bought it, not out of everyone.
+  - "This week across all clients" — ad spend, leads and cost per lead, each with last week beside it.
+  - "What to do today" — grouped lists of late deliverables, missing KPIs and clients missing a channel, each naming the client. Replaced by "All caught up" when there is nothing.
+
+What you can do:
+  - Nothing is edited here. Every item links to the client or page where it can be.
+
+Clients   /clients
+------------------
+Sidebar: Clients
+The roster, and the way in to any single client.
+
+What is on it:
+  - One row per client: name, business, industry, market, which channels are live, then this week's spend, leads and cost per lead, and their setup fee and monthly subscription.
+  - A row highlighted amber has KPIs that have not been logged this week.
+
+What you can do:
+  - Search box, matching business, client, industry or market.
+  - Filter buttons: All, Meta live, Meta not yet, LSA optimized, LSA not yet, GBP optimized, GBP not yet, and two for GHL.
+  - A "New Client" button in the page header opens a form in a modal.
+  - Clicking any row opens that client's page.
+
+Client detail   /client/:clientId
+---------------------------------
+Everything about one client, on a single long page. This is where most work actually happens. Reach it by clicking a client on /clients rather than by constructing the URL — clientId is a UUID and is not guessable from the name.
+
+What is on it:
+  - Status switches: Meta ads, Google LSA, Google Business Profile, GHL build, and — only once GHL build is on — GHL account.
+  - Industry, Market, Meta budget per day, LSA budget per day.
+  - "Client forms" — whether the onboarding form and the GHL setup form have come back, and the links to send them.
+  - Tasks, with a progress bar.
+  - Weekly KPI History, Weekly Work Log, Creative Log.
+  - The Meta ad account connection: which ad account, Page and pixel this client advertises with.
+  - Ad performance, anchored at #ad-performance so it can be linked to directly.
+  - Ad Doctor — kill and scale verdicts from the playbook, run against the last 30 days of synced data, with the arithmetic shown. It never pauses anything on its own.
+  - Deliverables for this client, Client Files, and Payments & Billing.
+
+What you can do:
+  - "Ad Studio" in the header opens the ad builder in a modal (see below).
+  - "Ask about <client>" opens a chat about this client that can read their data.
+  - Each status switch saves immediately on click. There is no separate save.
+  - "Archive client" is at the end of the switch row. Archiving excludes the client from MRR, the Meta sync and every list; it is reversible with "Restore client".
+  - Buttons open modals for logging weekly KPIs, adding a work log entry, and adding a creative entry.
+
+Deliverables   /deliverables
+----------------------------
+Sidebar: Deliverables
+The book of work across every client — what is promised and what is late.
+
+What is on it:
+  - One row per deliverable, with its client, status and due date.
+
+What you can do:
+  - Status filters: open, todo, in progress, review, done, all.
+  - A client dropdown to narrow to one client.
+  - "New Deliverable" and, on any row, "Edit Deliverable".
+
+Payments & Revenue   /payments
+------------------------------
+Sidebar: Payments
+All money. MRR, what has been collected, what is overdue, and every disagreement with Stripe.
+
+What is on it:
+  - MRR, Collected all time, and Overdue.
+  - "Setup fee not paid" and "Not subscribed yet" — the two onboarding money gaps, naming the clients.
+  - Stripe reconciliation, which flags where Stripe charged a different amount to what the CRM expects. Stripe wins these: the fix is to correct the CRM.
+  - Stripe payment links and unmatched Stripe payments waiting to be assigned to a client.
+  - "Paid out to Ethan" — whether each collected payment has had its split paid on, which is a separate question from whether the client paid.
+  - The payment ledger itself.
+
+What you can do:
+  - Filters: paid, overdue, upcoming, all. Views: By client or By date. A client dropdown.
+  - On a payment row: "Mark Payment Paid" and "Edit Payment".
+  - MRR counts a client only when they have a scheduled monthly payment, and never counts archived clients. A client with a monthly fee typed in but no schedule contributes nothing — that is the usual explanation for MRR looking low.
+
+Performance Reports   /reports
+------------------------------
+Sidebar: Reports
+Ad performance across every client, over time. The place to answer "how are we doing".
+
+What is on it:
+  - Ad spend, leads and cost per lead for the range, each against the previous equivalent range.
+  - A daily chart, switchable between ad spend, leads and cost per lead.
+  - A channel breakdown, per-client performance, and the agency's own businesses kept separate from client work.
+  - Ad accounts the sync found that no client claims, sorted by spend.
+  - The monthly client report log: who was sent one, who was skipped and why.
+
+What you can do:
+  - In the page header: "Sync Meta" pulls fresh data from Meta on demand rather than waiting for the morning job. It can take a while and is safe to run.
+  - Scope: Live ads or All ads. Range: 14, 30 or 90 days.
+
+SOPs   /sops
+------------
+Sidebar: SOPs
+The agency's written procedures. Reference material, not client data.
+
+What is on it:
+  - Saved procedures, pinned ones first, each with its steps and any attachments.
+
+What you can do:
+  - Search, "New SOP", "Edit SOP", copy an SOP's text, and pin or unpin it.
+
+AI Search Visibility   /ai-search
+---------------------------------
+Sidebar: AI Search
+Asks whether an AI assistant names a business when someone asks who to call, and who it names instead. Works on any business, client or not, so it doubles as a sales tool.
+
+What is on it:
+  - A scan form: website, business name, city or service area, trade, and optionally a client to attach it to.
+  - Past scans, and a comparison of any scan against an earlier one for the same business — which questions now name them that did not before.
+
+What you can do:
+  - "Run the scan" asks 15 real buyer questions with live web search. It takes a couple of minutes and shows its progress; do not assume it has hung.
+  - A scan attached to a client becomes their baseline, so a later scan can be measured against it.
+
+This guide   /guide
+-------------------
+Sidebar: Guide
+This page. Also available as plain text at /llms.txt, which needs no JavaScript.
+
+What is on it:
+  - Everything in this document.
+
+What you can do:
+  - A button copies the whole guide as plain text.
+
+Client onboarding form   /onboarding/:token
+-------------------------------------------
+NOT part of the CRM. This is the form a client fills in, opened with a private token in the link, and it deliberately shows none of the agency navigation. Do not treat it as an admin page and do not fill it in on a client's behalf unless asked to.
+
+What is on it:
+  - The onboarding questions about their business, and the GoHighLevel account setup questions.
+  - A ?form=intake or ?form=ghl query narrows it to one half.
+
+What you can do:
+  - It saves as the client types. There is no submit-and-lose-everything step.
+
+WHERE TO FIND A PARTICULAR THING
+================================
+
+How much a client pays, or whether they have paid
+  Go to: Payments, or the "Payments & Billing" section on the client's own page
+  The client page shows one client's setup fee, monthly payment and what is collected. /payments shows all of them at once and is the better place to compare.
+
+Total monthly revenue
+  Go to: Payments → the MRR card
+  Not on the Dashboard. The Dashboard carries no money at all.
+
+Why MRR looks wrong
+  Go to: Payments → the Stripe reconciliation panel
+  It names each client where Stripe collected a different amount to the CRM's figure. Stripe is right; correct the CRM. Also check the client is not archived and does have a scheduled monthly payment.
+
+Whether a client's ads are actually running
+  Go to: Dashboard → the alerts at the top, then the client page → Meta ad account
+  An alert appears when an ad account is disabled, unsettled over an unpaid balance, or has gone quiet for a couple of days. Silence on the Dashboard means the accounts were healthy as of the last check.
+
+Yesterday's spend, leads or cost per lead
+  Go to: Reports for all clients, or the client page → Ad performance for one
+  Today is normally missing — the sync copies yesterday each morning. "Sync Meta" on Reports fetches fresh numbers if you need them now.
+
+Which ad to turn off
+  Go to: The client page → Ad Doctor
+  It prints the kill and scale verdicts with the arithmetic behind each. It will not act on its own, and pausing is done from the CRM while deleting is not possible here at all.
+
+What is late, or what is owed to a client
+  Go to: Deliverables, filtered to open; or the Dashboard's "What to do today"
+  The Dashboard lists the late ones by name. Deliverables is where they get edited.
+
+Whether a client has sent their details back
+  Go to: The client page → "Client forms"
+  Shows not started, in progress or done for both the onboarding form and the GHL setup form, and gives you the link to send.
+
+A client's photos, logo or documents
+  Go to: The client page → "Client Files"
+  Uploaded files are listed there. Some clients also share a Google Drive folder, which appears in the same area.
+
+Ads that have already been designed
+  Go to: The client page → Ad Studio → "Saved ads"
+  Every saved design, in each size it was made in.
+
+Which Facebook Page or pixel a client advertises with
+  Go to: The client page → the Meta ad account section
+  Filled in automatically once an ad account is connected. Blank usually means no ad account is connected yet.
+
+How the agency does something
+  Go to: SOPs
+  Search it. This is written procedure, not client data.
+
+Whether an AI assistant recommends a business
+  Go to: AI Search
+  Past scans are listed; run a new one to compare against an old one.
+
+GETTING THINGS OUT
+==================
+
+One client file
+  Client page → Client Files → "Download" on the row. The button says "Saving..." while it works.
+
+Every client file at once
+  Client page → Client Files → "Download All (n)". It builds a single zip in the browser, so it takes a moment and shows progress. One archive rather than a burst of downloads, because phones and Safari block those.
+
+A finished ad image
+  Client page → Ad Studio → Design tab → the download button under an artboard. One PNG per size.
+
+A previously saved ad
+  Client page → Ad Studio → "Saved ads" → "Download" for the size you want, or "Copy URL" for a link to it.
+
+The GHL setup details as text
+  Client page → Client forms → the GHL setup form → "Copy Setup Brief". Written to be pasted to whoever or whatever is doing the setup, and it names any missing field rather than dropping it silently.
+
+The message to send a client
+  Client page → Client forms → "Copy message". This is the whole email or text, form link included, not just the URL.
+
+Anything else
+  There is no CSV or spreadsheet export anywhere in the CRM, and no PDF export. Do not go looking for one. Read the numbers off the page, or ask for an export to be built.
+
+THINGS THAT WILL CATCH YOU OUT
+==============================
+
+Publishing an ad never spends money
+  Everything the CRM creates in Meta — campaigns, ad sets, ads — is created paused. Nothing delivers until somebody switches it on in Meta Ads Manager, which is a separate deliberate act outside this CRM. So publishing is safe; switching on is not.
+
+The CRM cannot delete anything in Meta
+  It can create, and it can pause one live ad. It cannot delete a campaign, an ad set or an ad. Deleting is done in Ads Manager by hand, on purpose.
+
+A broken ad set cannot be repaired
+  Meta fixes what an ad set promotes when the ad set is created and refuses to change it afterwards. If the CRM says an ad set cannot take ads, the answer is a new ad set — not a retry. It will hand you the budget and targeting to rebuild with.
+
+Meta rate-limits per ad account, per hour
+  "Too many API calls" is the ad account's quota, not a rejected ad. Nothing was created, there is nothing to clean up, and the quota refills on its own. Publishing five ads at once is the most demanding thing the CRM does; two smaller batches get through where one large one will not.
+
+Ad numbers are yesterday's
+  A scheduled job copies Meta data each morning. Today is normally blank, and that is not a fault. "Sync Meta" on Reports fetches fresh figures on demand.
+
+Stripe overrules the CRM
+  Where a fee in the CRM and a charge in Stripe disagree, Stripe is the real one because it is what the client was actually charged. Fix the CRM, not Stripe.
+
+Archived clients vanish from everything
+  Archiving removes a client from MRR, the Meta sync and every list. A client who has "disappeared" is usually archived rather than deleted, and restoring is one click on their page.
+
+There is no login
+  No sign-in, no accounts, no roles. Nothing on screen is protected by permission, so nothing prevents a wrong edit. The one exception is the client onboarding form, which is reached with a private token in its link.
+
+GHL is not sold to everyone
+  Only some clients buy the GoHighLevel build, so a blank GHL section is normal rather than incomplete. Its coverage on the Dashboard is counted out of the clients on the plan, not out of every client.
+
+The AI Search scan is slow on purpose
+  It asks 15 questions with live web search and takes a couple of minutes. It shows its progress. Do not reload the page or start it again.

@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "guide": "node scripts/build-agent-guide.mjs",
+    "check": "for f in scripts/check-*.mjs; do node \"$f\" || exit 1; done",
+    "prebuild": "npm run guide",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

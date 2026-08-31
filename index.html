@@ -33,9 +33,27 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Roundtable" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Where to learn your way around. rel="help" is the standard hint, and
+         /llms.txt is the same guide as a real file for anything that cannot run
+         the app. Both come from src/lib/agentGuide.js. -->
+    <link rel="help" href="/guide" title="Navigating this CRM" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="Navigating this CRM" />
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- Without JavaScript this page is an empty div, which is a dead end
+         rather than an answer. A reader that got this far and saw nothing is
+         told where the plain-text guide is instead. -->
+    <noscript>
+      <p style="font: 16px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 34rem">
+        This CRM needs JavaScript to run. A plain-text guide to what it holds and
+        how it is laid out is at <a href="/llms.txt">/llms.txt</a>, and the
+        privacy policy is at <a href="/privacy">/privacy</a>.
+      </p>
+    </noscript>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
