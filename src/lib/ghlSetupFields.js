@@ -12,6 +12,8 @@
 //     review link, service area, support email
 //   - the GHL sub-account creation form: address, country, timezone
 //   - A2P 10DLC registration requirements
+//   - Ethan, 2026-08-31: an area code for the number the automated messages
+//     send from, so it is not provisioned wherever Twilio happens to have stock
 
 export const GHL_SETUP_SECTIONS = [
   {
@@ -28,6 +30,16 @@ export const GHL_SETUP_SECTIONS = [
       ['business_country', 'Country', 'text', 'US'],
       ['timezone', 'Time zone', 'select', ''],
       ['main_phone', 'Main business phone', 'text', '(555) 123-4567'],
+      // Asked here rather than in the A2P section because that section is
+      // carrier paperwork -- a preference sitting among requirements reads like
+      // a requirement. Next to the line they already have, "and the new one
+      // should look like this" is the obvious question.
+      [
+        'preferred_area_code',
+        'Area code you want your texting number to have',
+        'text',
+        'e.g. 512 \u2014 we match it if numbers are free there',
+      ],
       ['support_email', 'Best email for us to use', 'email', 'you@yourcompany.com'],
     ],
   },

@@ -45,6 +45,11 @@ create table if not exists ghl_setup (
   main_phone text,
   support_email text,
 
+  -- The area code the client wants on the number their automated texts and
+  -- calls send from. A preference, not a guarantee: it is honoured when the
+  -- provider has numbers free in that area code.
+  preferred_area_code text,
+
   -- A2P 10DLC registration
   ein text,
   business_entity_type text,
@@ -75,6 +80,11 @@ create table if not exists ghl_setup (
 );
 
 create unique index if not exists ghl_setup_client_id_key on ghl_setup(client_id);
+
+-- Added after the table was already live. onboarding_apply reads its columns
+-- out of information_schema at call time, so a new column needs nothing else
+-- to become writable by the client-facing form.
+alter table ghl_setup add column if not exists preferred_area_code text;
 
 -- 2. THE CLIENT LINK -------------------------------------------------------
 create table if not exists onboarding_links (

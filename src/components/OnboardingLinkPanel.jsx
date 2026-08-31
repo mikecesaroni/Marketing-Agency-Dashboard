@@ -122,8 +122,8 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
       return [
         `Hi ${client.name} team,`,
         '',
-        'To get your account and text messaging set up, we need a few details off',
-        'your business registration -- your EIN, business address and who the',
+        'To get your GHL account and text messaging set up, we need a few details',
+        'off your business registration -- your EIN, business address and who the',
         'authorised contact is.',
         '',
         activeUrl,
@@ -149,7 +149,7 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
     // end of the onboarding, and promising a second part that never arrives is
     // its own small broken promise.
     if (mode === 'both') {
-      lines.push('There is a short account setup section after it.')
+      lines.push('There is a short GHL account setup section after it.')
     }
 
     if (serviceEmail) {
