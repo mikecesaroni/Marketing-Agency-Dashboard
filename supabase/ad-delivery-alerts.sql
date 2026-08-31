@@ -14,6 +14,19 @@
 -- 1. Meta's own verdict on the account, written nightly by the
 --    meta-account-health Edge Function.
 --
+-- That function does two other jobs for the same reason -- Meta facts that go
+-- stale silently and that nobody should have to refresh by hand:
+--
+--   * It refreshes meta_ad_accounts, the cache behind the ad-account dropdown.
+--     NOTHING had ever written that table. Seven rows went in by hand in
+--     August 2026 and it froze there, so Belk, Pillar and Reliable were each
+--     connected to an account the dropdown could not offer -- which looked
+--     like the picker being broken.
+--   * It fills in meta_page_id and meta_pixel_id for any connected client
+--     missing them, from the Page the account's own creatives post as. That
+--     used to be a "Detect from Meta" button, which is a button whose only job
+--     is to ask Meta something Meta already knows.
+--
 -- account_status 1 is ACTIVE; anything else means ads are not delivering.
 --
 -- The balance is stored with it because it is the actual instruction. "Ad

@@ -122,6 +122,34 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
       return
     }
 
+    // Connecting the account is enough. The Page an account advertises as is
+    // something Meta already knows, so making somebody press a button to go
+    // and find it was busywork.
+    //
+    // It runs after the save rather than before because discover_assets reads
+    // the ad account off the client row — before the save, that row still
+    // holds the old account or none at all. Only blanks are filled: a value
+    // already typed is a decision.
+    if (cleaned && (!pageId.trim() || !pixelId.trim())) {
+      try {
+        const found = await discoverAssets(client.id)
+        const fill = {}
+        if (!pageId.trim() && found.suggested_page_id) fill.meta_page_id = found.suggested_page_id
+        if (!pixelId.trim() && found.suggested_pixel_id) fill.meta_pixel_id = found.suggested_pixel_id
+
+        if (Object.keys(fill).length > 0) {
+          await supabase.from('clients').update(fill).eq('id', client.id)
+          if (fill.meta_page_id) setPageId(fill.meta_page_id)
+          if (fill.meta_pixel_id) setPixelId(fill.meta_pixel_id)
+        }
+        setDetected(found)
+      } catch {
+        // Never fail the save over this. The account is connected either way,
+        // the nightly meta-account-health run fills these in too, and the
+        // Detect button is still there to try again by hand.
+      }
+    }
+
     setEditing(false)
     setSaving(false)
     onUpdate?.()
