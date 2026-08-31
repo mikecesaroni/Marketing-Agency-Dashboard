@@ -1,78 +1,93 @@
 // The message sent to a client to get us access to their Meta assets.
 //
-// IT ASKS THEM TO APPROVE, NOT TO SHARE. That is the whole point of this
-// rewrite, and it is a change of direction rather than a change of wording.
+// It asks THEM to grant access from their end. That is a deliberate return to
+// where this started, after checking whether the CRM could send the requests
+// itself instead. It mostly cannot, and the half that works is not worth the
+// manual step it would add:
 //
-// Meta allows the same access to be set up from either end:
+//   POST /{business_id}/client_pages          WORKS. Meta accepted the call and
+//     only rejected the deliberately-invalid page id it was probed with
+//     ("Param page_id must be a valid page ID"), so Page requests really can be
+//     sent from here.
 //
-//   THEY SHARE (what this used to ask). The client opens Business Settings,
-//     finds Partners, enters our business ID, then picks which assets to share
-//     and what permission level to give on each. Six screens, and three
-//     separate places to under-grant. In practice they would share the Page and
-//     not the ad account, or give partial access on the ad account, or share
-//     everything at "Analyze" and nothing could be built. Every one of those
-//     looks finished from their side.
+//   POST /{business_id}/client_ad_accounts    BLOCKED. "(#3) Application does
+//     not have the capability to make this API call." That is an app-level
+//     refusal, not a bad parameter -- most likely the same development-access
+//     tier that limits the ads API, which Advanced Access would lift.
 //
-//   WE REQUEST (what it asks now). We name the assets and the access level, and
-//     Meta sends them a notification per asset with one Approve button. They
-//     cannot pick a subset, because there is no picker -- the scope is already
-//     in the request. Half-access stops being possible.
+//   client_instagram_accounts                 DOES NOT EXIST, read or write.
+//     Instagram access is not its own request; it travels with the Page.
 //
-// Verified on the live API before rewriting: our business ID 1191797372977574
-// can already read both /client_pages and /client_ad_accounts, which is the
-// agency-to-client asset relationship these requests create. The token has
-// business_management, so the requesting side genuinely is available to us.
+// So the ad account -- the one asset nothing can be built without -- has to be
+// granted by the client whatever we do. Automating only the Page would mean a
+// button to press per client AND a client still doing the sharing flow for the
+// ad account: more moving parts, same waiting.
 //
-// One thing still has to come from them: the ad account ID. A Page can be found
-// from its public URL, and an Instagram account is usually reachable through the
-// Page, but an ad account ID is not discoverable from outside -- so the message
-// asks for that single number and nothing else. Pretending zero input is needed
-// would send someone into a dead end.
+// WHAT ACTUALLY FIXES THE HALF-ACCESS PROBLEM is not the direction of the
+// request, it is that the old message let someone believe they were finished
+// when they were not. Two things go wrong, in this order:
 //
-// The old share-with-partner flow is kept at the bottom, because it does work
-// and some clients will already have started down it.
+//   1. The permission level. Meta defaults these toggles to partial access, so
+//      a client can share all four assets and still leave us unable to build
+//      anything. It looks completely done from their side.
+//   2. A missed asset, usually the ad account, because it is on a different
+//      row of the same screen from the Page.
+//
+// This version therefore leads with the count, names the permission trap before
+// the steps rather than after, and ends by asking them to say when they are
+// done -- because we can read back exactly what landed and chase the specific
+// gap instead of asking them to check again.
 
 export const BUSINESS_ID_PLACEHOLDER = '[YOUR BUSINESS PORTFOLIO ID]'
 
-/**
- * What we do, before sending the message.
- *
- * The requesting is our work now, so it needs writing down somewhere the person
- * doing it will look. Shown in the Meta setup panel next to the copy button.
- */
-export const META_REQUEST_STEPS = [
-  'Find their Facebook Page from its public URL — you do not need anything from them for this.',
-  'In Business Settings → Accounts → Pages, choose Add → Request access to a Page, paste the Page, and ask for full control.',
-  'Do the same under Accounts → Ad accounts once they send the ad account ID, asking for Manage campaigns.',
-  'Instagram usually arrives attached to the Page. If it does not, request it under Accounts → Instagram accounts.',
-  'Then send the message below, so they know what they are approving and that it is expected.',
+// Shown to whoever sends the message, not to the client. The failure is
+// specific and repeated, so it is worth naming where it will be read.
+export const META_ACCESS_WATCHOUTS = [
+  'Meta defaults these toggles to partial access. A client can share all four assets and still leave us unable to build anything — and it looks finished from their side.',
+  'The ad account is the one most often missed, and it is the one nothing works without.',
+  'When they say they are done, check your end before replying — what actually landed is visible in Business Settings → Partners, and it is much easier to chase one named gap than to ask them to look again.',
 ]
 
 export function buildMetaSetupMessage(businessId) {
   const id = String(businessId || '').trim() || BUSINESS_ID_PLACEHOLDER
 
-  return `Getting your Meta ads set up — one small thing from you
+  return `Getting your Meta ads set up — about two minutes on your end
 
-We need access to your Facebook and Instagram assets before we can build anything. I've set this up so it's mostly on our end rather than yours.
+Before we can build anything we need access to your Facebook and Instagram assets. Meta only lets the business owner grant this, so it has to come from you.
 
-WHAT I NEED FROM YOU (one number)
-Your Meta ad account ID. It's the number at the top of Ads Manager, next to the account name — usually 15 or 16 digits. If you're not sure, open adsmanager.facebook.com and it's in the top-left, or send me a screenshot and I'll find it.
+THERE ARE FOUR THINGS TO SHARE, AND ONE SETTING THAT CATCHES EVERYONE
 
-If you've never run ads before and don't have an ad account yet, just tell me — we'll handle that differently and you can skip the rest of this.
+The four:
+  1. Ad account
+  2. Facebook Page
+  3. Instagram account
+  4. Pixel / dataset — only if you already have one
 
-THEN JUST APPROVE
-Once I have that number I'll send access requests directly to your business. You'll get a notification for each one — your Facebook Page, your Instagram account, and the ad account — and each has an Approve button. That's it. No settings to dig through, no permissions to choose. I've already specified exactly what we need, so you can't accidentally send the wrong thing.
+The setting: each one has a permission level, and Meta preselects a partial one. If you leave the default we will be able to look at the account but not build in it, which looks completely fine on your side and blocks everything on ours. Please turn on FULL CONTROL for each of the four. If you see a "Full control" toggle, switch it on; if you see a list of tasks, tick them all.
 
-The requests will come from ejretreats (business ID ${id}). If you see anything from a different name, don't approve it and tell me.
+Add us as a PARTNER, not as a person. Partner access belongs to our agency, so our whole team and our tools can work with it. Adding an individual by email only works while that one person is logged in and dies with their account.
 
-WHERE THE APPROVALS SHOW UP
-Usually as a Facebook notification and an email to whoever owns the business account. If nothing arrives within a day, they're also sitting at business.facebook.com under Settings → Requests. Worth checking there before assuming it didn't send — the notifications go to the account owner, which isn't always the person reading this.
+THE STEPS
+  1. Go to business.facebook.com and make sure your business is selected top-left.
+  2. Click Settings (bottom-left), then open Partners.
+  3. Click Add, then "Give a partner access to your assets".
+  4. Enter our business portfolio ID: ${id}
+  5. Select each of the four assets above and give Full control on each.
+  6. Click Save changes.
+
+Nothing to email — the invitation reaches us automatically.
+
+WHEN YOU'RE DONE, JUST REPLY "DONE"
+I'll check straight away and confirm everything came through. If one is missing or the permission level is short, I'll tell you exactly which one rather than making you go back through it all.
+
+IF YOU CANNOT FIND THE PARTNERS SCREEN
+Some accounts hide it. In that case: Settings → People → Invite people, enter ejretreats1@gmail.com, give Full control, and assign the same four assets. Tell me if you had to do it this way, because we will need to move it to partner access later.
+
+IF YOU'VE NEVER RUN ADS AND HAVE NO AD ACCOUNT
+Say so and skip the ad account — we'll sort that out separately.
 
 WHAT HAPPENS NEXT
-Once the approvals come through we take it from there: campaign structure, audiences, creative, budgets and ongoing management. Nothing goes live and nothing spends without you knowing.
+Once access is through we handle the rest: campaign structure, audiences, creative, budgets and ongoing management. Nothing goes live and nothing spends without you knowing.
 
-IF YOU'D RATHER DO IT THE OTHER WAY
-Some people prefer to grant it themselves. That works too: business.facebook.com → Settings → Partners → Add → "Give a partner access to your assets" → enter ${id}, then share your ad account, Facebook Page and Instagram account, giving full control on each. The catch is that it's easy to miss one or pick the wrong permission level, which is why I'd rather send the requests.
-
-Reply here or text me if anything looks off. Happy to jump on a five-minute call and do it together.`
+Reply here or text me if Meta throws anything odd at you. Happy to jump on a five-minute call and do it together.`
 }

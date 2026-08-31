@@ -4,15 +4,15 @@ import CopySetupMessageButton from './CopySetupMessageButton'
 import { supabase } from '../lib/supabaseClient'
 import {
   BUSINESS_ID_PLACEHOLDER,
-  META_REQUEST_STEPS,
+  META_ACCESS_WATCHOUTS,
   buildMetaSetupMessage,
 } from '../lib/metaSetupMessage'
 
-// Our half of the job, written where the person doing it will look. The
-// message now asks the client to approve requests we send, so somebody has to
-// actually send them -- and a message promising approvals that never arrive is
-// worse than the old one that at least asked them to do it themselves.
-function RequestSteps() {
+// The client grants this access themselves, so our half is knowing how it goes
+// wrong. It goes wrong the same way every time -- partial permissions that look
+// complete from their side -- and that is worth saying next to the button that
+// sends the message rather than in a commit nobody will read.
+function Watchouts() {
   const [open, setOpen] = useState(false)
 
   return (
@@ -21,17 +21,17 @@ function RequestSteps() {
         onClick={() => setOpen(!open)}
         className="text-[11px] font-medium text-slate-500 underline hover:text-slate-800"
       >
-        {open ? 'Hide' : 'What to do before sending this'}
+        {open ? 'Hide' : 'Why access keeps coming back half-granted'}
       </button>
       {open && (
-        <ol className="mt-1.5 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-          {META_REQUEST_STEPS.map((step, i) => (
-            <li key={step} className="flex gap-2 text-[11px] text-slate-600">
-              <span className="flex-shrink-0 font-semibold text-slate-400">{i + 1}.</span>
-              <span>{step}</span>
+        <ul className="mt-1.5 space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+          {META_ACCESS_WATCHOUTS.map((note) => (
+            <li key={note} className="flex gap-2 text-[11px] text-amber-900">
+              <span className="flex-shrink-0 text-amber-500">&middot;</span>
+              <span>{note}</span>
             </li>
           ))}
-        </ol>
+        </ul>
       )}
     </div>
   )
@@ -64,7 +64,7 @@ export default function MetaSetupPanel() {
       title="Meta ads not live yet"
       markLabel="Mark Meta live"
       allLiveMessage="Meta ads are live for every client."
-      footer={<RequestSteps />}
+      footer={<Watchouts />}
       action={
         <div className="flex items-center gap-2">
           {missing && (
