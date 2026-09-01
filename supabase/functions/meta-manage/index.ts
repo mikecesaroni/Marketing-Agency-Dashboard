@@ -477,6 +477,13 @@ Deno.serve(async (req) => {
         )
       }
 
+      // People who LIVE here. Meta defaults to ["home","recent"], and "recent"
+      // means anyone recently in the area -- which is how Summit Water Pros got
+      // a lead from Sacramento, three hours away. See buildTargeting in
+      // meta-publish for the full story; the two builders have to agree or the
+      // chat and the Studio would target differently.
+      geo.location_types = ['home']
+
       const goal = String(body.optimization_goal || 'LEAD_GENERATION').toUpperCase()
 
       // An ad set has to say what it is promoting, and which thing depends on
