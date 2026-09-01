@@ -56,7 +56,19 @@ export const FORM_QUESTIONS = [
 
 // What a home-services form asks by default. Name and phone are what actually
 // gets someone called back; email is the fallback when nobody picks up.
-export const DEFAULT_FORM_QUESTIONS = ['FULL_NAME', 'PHONE', 'EMAIL']
+//
+// ZIP is here because of a lead Summit Water Pros took from Sacramento, three
+// hours outside their service area. Meta forces location targeting to include
+// people "recently in" the area, so a visitor to the service area is inside the
+// audience by design and cannot be excluded -- see buildTargeting in
+// meta-publish. ZIP does not stop that lead arriving. What it does is put the
+// location in front of whoever reads it, before somebody books a drive.
+//
+// It costs almost nothing to ask: Meta prefills ZIP from the viewer's profile,
+// and prefilled fields barely dent completion the way a typed answer does. That
+// prefill is also exactly why it works as a filter -- the visitor's profile
+// still says Sacramento.
+export const DEFAULT_FORM_QUESTIONS = ['FULL_NAME', 'PHONE', 'EMAIL', 'ZIP']
 
 // Meta's enum, narrowed to the ones that make sense for a home-services ad.
 // BOOK_TRAVEL is not a typo: it is the long-standing enum Meta renders as
