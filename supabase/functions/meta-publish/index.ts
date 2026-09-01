@@ -453,6 +453,20 @@ function buildTargeting(locations: any[], ageMin?: number, ageMax?: number) {
   // For a plumber or an HVAC company the buyer has to live at the property, so
   // "recent" can only ever buy visitors. It is a sensible default for a
   // restaurant and a waste of money for every client in this CRM.
+  //
+  // WORKS ON CREATE ONLY, and that asymmetry is verified rather than assumed.
+  // Creating an ad set with ["home"] is accepted and stored -- checked by
+  // making one in the agency's own account, reading it back, and deleting it.
+  // Updating an EXISTING ad set the same way is refused:
+  //
+  //   Update the value of the location_types field -- All location targeting
+  //   will now reach people living in or recently in the locations you
+  //   selected. Please remove all values from the location_types field.
+  //
+  // So an ad set already running cannot be narrowed; it has to be replaced.
+  // That message also reads like a migration in progress, so "home" being
+  // honoured on create may not last. Worth re-checking if out-of-area leads
+  // start arriving from ad sets built after this change.
   if (Object.keys(geo).length > 0) geo.location_types = ['home']
 
   return {
