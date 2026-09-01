@@ -441,32 +441,12 @@ function buildTargeting(locations: any[], ageMin?: number, ageMax?: number) {
     }
   }
 
-  // PEOPLE WHO LIVE HERE, not people who happen to be passing through.
-  //
-  // Meta's default is ["home","recent"], where "recent" means anyone recently
-  // in the area. Left alone it produced exactly the failure you would expect:
-  // Summit Water Pros took a lead from Sacramento, three hours from their
-  // service area, because Sacramento to Walnut Creek is an ordinary day trip.
-  // The person saw the ad while they were in Contra Costa and the instant form
-  // prefilled the address off their Facebook profile.
-  //
-  // For a plumber or an HVAC company the buyer has to live at the property, so
-  // "recent" can only ever buy visitors. It is a sensible default for a
-  // restaurant and a waste of money for every client in this CRM.
-  //
-  // WORKS ON CREATE ONLY, and that asymmetry is verified rather than assumed.
-  // Creating an ad set with ["home"] is accepted and stored -- checked by
-  // making one in the agency's own account, reading it back, and deleting it.
-  // Updating an EXISTING ad set the same way is refused:
-  //
-  //   Update the value of the location_types field -- All location targeting
-  //   will now reach people living in or recently in the locations you
-  //   selected. Please remove all values from the location_types field.
-  //
-  // So an ad set already running cannot be narrowed; it has to be replaced.
-  // That message also reads like a migration in progress, so "home" being
-  // honoured on create may not last. Worth re-checking if out-of-area leads
-  // start arriving from ad sets built after this change.
+  // People who LIVE here, not people passing through. Meta defaults to
+  // ["home","recent"] when omitted, and "recent" is how Summit Water Pros got a
+  // lead from Sacramento, three hours away. Accepted on CREATE only -- updating
+  // an existing ad set is refused ("Please remove all values from the
+  // location_types field"), so a running ad set has to be replaced rather than
+  // narrowed. Full story and the regression guard: scripts/check-targeting.mjs.
   if (Object.keys(geo).length > 0) geo.location_types = ['home']
 
   return {

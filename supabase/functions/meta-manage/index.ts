@@ -496,6 +496,8 @@ Deno.serve(async (req) => {
       // which requires one. So the default path built ad sets Meta would not
       // accept a single ad into. Belk's chat-made ad set was one: five ads went
       // in and all five came back "Ad Set with Promoted Object Is Required".
+      // Meta treats a promoted object as immutable once the ad set exists, so
+      // there is no repairing one later -- it has to be right here.
       const needsForm = goal === 'LEAD_GENERATION'
       const needsPixel = goal === 'OFFSITE_CONVERSIONS'
 
