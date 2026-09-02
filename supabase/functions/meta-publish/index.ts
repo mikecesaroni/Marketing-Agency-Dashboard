@@ -1410,16 +1410,16 @@ Deno.serve(async (req) => {
     }
     const budget = Math.round(Number(dailyBudgetCents) || 0)
 
-    // A dry run checks the creative payload against Meta and returns its
-    // verdict without creating a campaign, an ad set, a creative or an ad.
-    // Placement asset customization is the reason this exists: the rules have
-    // to be right, and the only authority on that is Meta.
     // Resolved once for the whole call rather than per ad. Only asked for when
     // some ad actually carries more than one size, since that is the only
     // shape that needs it.
     const wantsPlacements = ads.some((a) => Object.keys(a.images).length > 1)
     const igUserId = wantsPlacements ? await instagramId(account, token) : ''
 
+    // A dry run checks the creative payload against Meta and returns its
+    // verdict without creating a campaign, an ad set, a creative or an ad.
+    // Placement asset customization is the reason this exists: the rules have
+    // to be right, and the only authority on that is Meta.
     if (body.dry_run) {
       const checks = []
       for (const [i, a] of ads.entries()) {

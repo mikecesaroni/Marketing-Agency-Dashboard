@@ -207,6 +207,11 @@ export const LOOKUPS = [
     how: 'One lifetime running balance, cash basis — everything ever collected, minus everything ever spent, split by the agreed percent, minus everything ever sent. There is no month to pick and nothing closes off, so a late expense just moves the balance. Every line of the arithmetic is shown, and "What the balance is made of" lists the individual client payments behind the total. A partner who paid a cost out of their own pocket is owed it back on top of their share.',
   },
   {
+    need: 'Whether a client\'s card failed',
+    where: 'Payments → the red banner at the top',
+    how: 'Only appears when money has not arrived. Each line names the client, the amount, and the date Stripe will retry — Stripe retries a failed card up to four times over about two weeks and most go through on their own, so a retry date means wait. "Stripe has stopped retrying", or a retry date that has passed, is the one that needs a new card from the client. A failure that was later paid is not in the banner at all; the payment row itself says the card failed and the retry went through.',
+  },
+  {
     need: 'What the business paid out, and to whom',
     where: 'Payments → Expenses',
     how: 'One row per cost. Anything marked shared comes off the top before the split; anything not stays recorded but out of it. This is a management view, not payroll — no withholding or 1099s are modelled.',
@@ -331,6 +336,10 @@ export const GOTCHAS = [
   {
     title: 'Ad numbers are yesterday\'s',
     body: 'A scheduled job copies Meta data each morning. Today is normally blank, and that is not a fault. "Sync Meta" on Reports fetches fresh figures on demand.',
+  },
+  {
+    title: 'A failed payment that says paid is usually a successful retry',
+    body: 'Stripe retries a failed card automatically, and when the retry goes through the row is genuinely paid — the money arrived. The row still shows what happened ("Card failed 2026-08-30 · Stripe retried and it went through 2026-08-31") because the history is worth keeping, not because anything is wrong. Only the red banner at the top of Payments lists money that has actually not arrived.',
   },
   {
     title: 'Stripe overrules the CRM',

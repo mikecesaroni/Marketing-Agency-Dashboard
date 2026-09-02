@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import StripePanel from '../components/StripePanel'
 import StripeReconcilePanel from '../components/StripeReconcilePanel'
 import OnboardingMoneyPanel from '../components/OnboardingMoneyPanel'
+import PaymentFailureAlerts from '../components/PaymentFailureAlerts'
 import PartnerSplitPanel from '../components/PartnerSplitPanel'
 import ExpensesPanel from '../components/ExpensesPanel'
 import Modal from '../components/Modal'
@@ -18,6 +19,7 @@ import {
   today,
 } from '../lib/queries'
 import { fetchExpenses, fetchPayouts } from '../lib/partnerData'
+import { failureState } from '../lib/paymentFailures'
 import { Badge, Button, Card, Input, Select, StatCard, Textarea } from '../components/ui'
 
 const FILTERS = ['paid', 'overdue', 'upcoming', 'all']
@@ -234,6 +236,7 @@ export default function PaymentsPage() {
   // whichever way the page is sorted.
   const renderPayment = (p) => {
     const late = isOverdue(p)
+    const failure = failureState(p)
     return (
       <div
         key={p.id}
@@ -263,6 +266,37 @@ export default function PaymentsPage() {
             </span>
             {p.status === 'paid' && ` · Paid ${p.paid_date} (${p.payment_method || '—'})`}
           </p>
+          {/* The failure history, from its own columns rather than from a
+              sentence in the notes. A payment that failed and was then retried
+              successfully has to read as recovered -- it used to keep saying
+              "Stripe payment failed" under a green Paid button, which looks
+              exactly like a failed payment somebody wrongly ticked off. */}
+          {failure && (
+            <p
+              className={`mt-1 text-xs ${
+                failure.severity === 'critical'
+                  ? 'font-medium text-red-700'
+                  : failure.severity === 'warning'
+                    ? 'text-amber-800'
+                    : 'text-slate-500'
+              }`}
+            >
+              {failure.label}
+              {failure.url && (
+                <>
+                  {' · '}
+                  <a
+                    href={failure.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline hover:text-slate-900"
+                  >
+                    invoice
+                  </a>
+                </>
+              )}
+            </p>
+          )}
           {p.notes && <p className="text-xs text-slate-600 mt-1">{p.notes}</p>}
         </div>
 
@@ -356,6 +390,10 @@ export default function PaymentsPage() {
           tone={overdue.length > 0 ? 'red' : 'slate'}
         />
       </div>
+
+      {/* First thing on the page when it is there, because it is money that
+          did not arrive. Renders nothing when nothing is outstanding. */}
+      <PaymentFailureAlerts payments={payments} />
 
       {/* Who owes money that no ledger row makes obvious, before the panels
           about reconciling and configuring Stripe. */}

@@ -43,10 +43,15 @@ function makeFake({ client, payments }) {
         return m === client.id || m === client.stripe_customer_id ? [client] : []
       }
       if (path.startsWith('payments')) {
-        const type = /payment_type=eq\.(\w+)/.exec(path)[1]
+        // Three shapes now: by invoice id, by payment type, or both. The
+        // invoice lookup is what keeps a retry on the row it failed on.
         const statuses = path.includes('status=eq.pending') ? ['pending'] : ['pending', 'overdue']
+        const invoice = /stripe_invoice_id=eq\.([^&]+)/.exec(path)?.[1]
+        const type = /payment_type=eq\.(\w+)/.exec(path)?.[1]
         return rows
-          .filter((r) => r.payment_type === type && statuses.includes(r.status))
+          .filter((r) => statuses.includes(r.status))
+          .filter((r) => (invoice ? r.stripe_invoice_id === decodeURIComponent(invoice) : true))
+          .filter((r) => (type ? r.payment_type === type : true))
           .sort((a, b) => a.due_date.localeCompare(b.due_date))
           .slice(0, 1)
       }
@@ -145,6 +150,186 @@ const settled = (rows) =>
     data: { object: { id: 'in_z', customer: 'cus_1', amount_paid: 0, created: 1788000000 } },
   })
   check('a zero-amount invoice records nothing', [settled(rows), log.length], [[], 0])
+}
+
+// --- FAILED CARDS, AND THE RETRY THAT FIXES THEM --------------------------
+// MBD Pressure Washing's card failed on 2026-08-30 and Stripe retried it
+// successfully on the 31st. The money is real and the row is correctly paid,
+// but the failure had been recorded by appending a sentence to the notes
+// column -- and a sentence cannot be resolved, so the row went on announcing
+// "Stripe payment failed" under a green Paid button. These pin down the shape
+// that fixed it: failures live in columns, and the retry lands on the row it
+// failed on.
+
+const FAILED_AT = 1788118944 // 2026-08-30T19:42:24Z
+const RETRY_AT = 1788298978 // 2026-09-01T21:42:58Z
+
+const failedInvoice = (over = {}) => ({
+  id: 'evt_fail',
+  type: 'invoice.payment_failed',
+  data: {
+    object: {
+      id: 'in_mbd',
+      customer: 'cus_1',
+      amount_due: 99800,
+      amount_paid: 0,
+      created: FAILED_AT,
+      attempt_count: 1,
+      next_payment_attempt: RETRY_AT,
+      hosted_invoice_url: 'https://invoice.stripe.com/i/acct_x/live_y',
+      ...over,
+    },
+  },
+})
+
+{
+  const { db, rows } = makeFake({ client: CLIENT, payments: structuredClone(SCHEDULE) })
+  await handleEvent(db, failedInvoice())
+  const hit = rows.find((r) => r.status === 'overdue')
+  check('a failure is recorded in columns, not in the notes', [
+    hit.last_failed_at,
+    hit.failure_count,
+    hit.next_attempt_at,
+    hit.stripe_hosted_invoice_url,
+    hit.notes,
+  ], [
+    '2026-08-30T19:42:24.000Z',
+    1,
+    '2026-09-01T21:42:58.000Z',
+    'https://invoice.stripe.com/i/acct_x/live_y',
+    null,
+  ])
+  check('and the invoice is stamped on the row so the retry can find it',
+    hit.stripe_invoice_id, 'in_mbd')
+}
+
+{
+  // The whole point. Fail, then succeed, on the same invoice.
+  const { db, rows } = makeFake({ client: CLIENT, payments: structuredClone(SCHEDULE) })
+  await handleEvent(db, failedInvoice())
+  await handleEvent(db, {
+    id: 'evt_paid',
+    type: 'invoice.paid',
+    data: {
+      object: {
+        id: 'in_mbd',
+        customer: 'cus_1',
+        amount_paid: 99800,
+        created: 1788173835,
+        status_transitions: { paid_at: 1788173835 },
+      },
+    },
+  })
+  const hit = rows.find((r) => r.stripe_invoice_id === 'in_mbd')
+  check('the retry settles the row it failed on, not the next month',
+    [settled(rows), hit.due_date], [['monthly:2026-09-01'], '2026-09-01'])
+  check('the money arriving cancels the pending retry',
+    hit.next_attempt_at, null)
+  check('but what happened is still on the record',
+    hit.last_failed_at, '2026-08-30T19:42:24.000Z')
+  check('and no other month was disturbed',
+    rows.filter((r) => r.status === 'overdue').length, 0)
+}
+
+{
+  // A card that fails twice must not drag an innocent future month down with
+  // it -- the second failure belongs to the same invoice.
+  const { db, rows } = makeFake({ client: CLIENT, payments: structuredClone(SCHEDULE) })
+  await handleEvent(db, failedInvoice())
+  await handleEvent(db, failedInvoice({ attempt_count: 2, created: FAILED_AT + 86400 }))
+  check('a second failure lands on the same row', rows.filter((r) => r.status === 'overdue').length, 1)
+  check('and counts the attempt', rows.find((r) => r.status === 'overdue').failure_count, 2)
+}
+
+{
+  // No next attempt is Stripe saying it has given up, which is the difference
+  // between something to wait out and something that needs a new card.
+  const { db, rows } = makeFake({ client: CLIENT, payments: structuredClone(SCHEDULE) })
+  await handleEvent(db, failedInvoice({ attempt_count: 4, next_payment_attempt: null }))
+  const hit = rows.find((r) => r.status === 'overdue')
+  check('Stripe giving up leaves no retry date', [hit.next_attempt_at, hit.failure_count], [null, 4])
+}
+
+{
+  const { db, log } = makeFake({ client: CLIENT, payments: [] })
+  const r = await handleEvent(db, failedInvoice())
+  check('a failure with no month to mark is handled rather than thrown',
+    [r.status, log.length], ['processed', 0])
+}
+
+// The case the invoice match exists for: an OLDER month is still unpaid when a
+// later invoice fails, so "oldest open month" and "the month this invoice is
+// for" are two different rows.
+//
+// A FIRST failure still takes the oldest open month, because nothing yet ties
+// a Stripe invoice to a CRM schedule row -- the schedule is generated twelve
+// months ahead and its due dates are the CRM's guess at Stripe's billing
+// periods, not Stripe's own. Deliberately the SAME heuristic recordPayment
+// uses for a successful invoice, so the two agree about which row an invoice
+// owns: whichever row the failure lands on is the row the retry settles, and
+// the count of open months comes out right either way.
+//
+// What the invoice id buys is everything after that first stamp -- pinned down
+// in the two blocks below.
+const WITH_ARREARS = [
+  { payment_type: 'monthly', amount: 1500, due_date: '2026-07-01', status: 'pending' },
+  { payment_type: 'monthly', amount: 1500, due_date: '2026-09-01', status: 'pending' },
+]
+
+{
+  const { db, rows } = makeFake({ client: CLIENT, payments: structuredClone(WITH_ARREARS) })
+  // The September invoice is the one failing; July was never collected.
+  await handleEvent(db, failedInvoice({ id: 'in_sept' }))
+  const hit = rows.find((r) => r.status === 'overdue')
+  check('a first failure takes the oldest open month, and claims it',
+    [hit.due_date, hit.stripe_invoice_id], ['2026-07-01', 'in_sept'])
+}
+
+{
+  const { db, rows } = makeFake({
+    client: CLIENT,
+    payments: [
+      { payment_type: 'monthly', amount: 1500, due_date: '2026-07-01', status: 'pending' },
+      { payment_type: 'monthly', amount: 998, due_date: '2026-09-01', status: 'overdue',
+        stripe_invoice_id: 'in_sept', last_failed_at: '2026-08-30T19:42:24.000Z', failure_count: 1,
+        next_attempt_at: '2026-09-01T21:42:58.000Z' },
+    ],
+  })
+  await handleEvent(db, {
+    id: 'evt_retry',
+    type: 'invoice.paid',
+    data: {
+      object: {
+        id: 'in_sept',
+        customer: 'cus_1',
+        amount_paid: 99800,
+        created: 1788173835,
+        status_transitions: { paid_at: 1788173835 },
+      },
+    },
+  })
+  check('a successful retry settles its own invoice, leaving arrears alone',
+    settled(rows), ['monthly:2026-09-01'])
+  const july = rows.find((r) => r.due_date === '2026-07-01')
+  check('the older unpaid month is untouched', july.status, 'pending')
+}
+
+{
+  // And a second failure on that same later invoice must not reach back either.
+  const { db, rows } = makeFake({
+    client: CLIENT,
+    payments: [
+      { payment_type: 'monthly', amount: 1500, due_date: '2026-07-01', status: 'pending' },
+      { payment_type: 'monthly', amount: 998, due_date: '2026-09-01', status: 'overdue',
+        stripe_invoice_id: 'in_sept', last_failed_at: '2026-08-30T19:42:24.000Z', failure_count: 1 },
+    ],
+  })
+  await handleEvent(db, failedInvoice({ id: 'in_sept', attempt_count: 2 }))
+  check('a repeat failure stays on its own invoice',
+    rows.filter((r) => r.status === 'overdue').map((r) => [r.due_date, r.failure_count]),
+    [['2026-09-01', 2]])
+  check('and does not mark the older month overdue',
+    rows.find((r) => r.due_date === '2026-07-01').status, 'pending')
 }
 
 // --- MRR -------------------------------------------------------------------

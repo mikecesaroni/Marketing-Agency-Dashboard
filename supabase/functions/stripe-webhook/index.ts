@@ -97,6 +97,14 @@ function isoDate(seconds: unknown) {
   return d.toISOString().slice(0, 10)
 }
 
+// A full timestamp, for the failure columns. A failed attempt and its retry can
+// land on the same calendar day, and "failed today, retrying today" is not a
+// sentence anyone can act on.
+function isoTimestamp(seconds: unknown) {
+  const n = Number(seconds)
+  return Number.isFinite(n) && n > 0 ? new Date(n * 1000).toISOString() : null
+}
+
 // The CRM's payment_method list is card / ach / check / paypal / other.
 function methodFrom(types: unknown): string {
   const list = Array.isArray(types) ? types.map(String) : []
@@ -198,10 +206,22 @@ export async function recordPayment(
     description?: string
   }
 ) {
-  const due = await db.get(
-    `payments?client_id=eq.${p.clientId}&payment_type=eq.${p.type}` +
-      `&status=in.(pending,overdue)&order=due_date.asc&limit=1&select=id,due_date,amount`
-  )
+  // The row this invoice already failed on, first. Without this an invoice that
+  // fails and then succeeds can settle a DIFFERENT month than the one it was
+  // recorded against, leaving one row paid twice over and another still open.
+  let due = p.invoiceId
+    ? await db.get(
+        `payments?stripe_invoice_id=eq.${encodeURIComponent(p.invoiceId)}` +
+          `&status=in.(pending,overdue)&order=due_date.asc&limit=1&select=id,due_date,amount`
+      )
+    : null
+
+  if (!due?.[0]) {
+    due = await db.get(
+      `payments?client_id=eq.${p.clientId}&payment_type=eq.${p.type}` +
+        `&status=in.(pending,overdue)&order=due_date.asc&limit=1&select=id,due_date,amount`
+    )
+  }
 
   const patch = {
     status: 'paid',
@@ -210,6 +230,10 @@ export async function recordPayment(
     stripe_event_id: p.eventId,
     stripe_invoice_id: p.invoiceId || null,
     stripe_customer_id: p.customerId || null,
+    // The money arrived, so there is no retry pending. last_failed_at is left
+    // alone: what happened still happened, and the row shows it as recovered
+    // rather than pretending the card never bounced.
+    next_attempt_at: null,
   }
 
   if (due?.[0]) {
@@ -361,17 +385,53 @@ export async function handleEvent(db: Db, event: any) {
     const { client } = await findClient(db, { customerId: obj.customer, email: obj.customer_email })
     if (!client) return { status: 'unmatched', note: 'no client for failed invoice' }
 
-    const due = await db.get(
-      `payments?client_id=eq.${client.id}&payment_type=eq.monthly&status=eq.pending` +
-        `&order=due_date.asc&limit=1&select=id,notes`
-    )
-    if (due?.[0]) {
-      await db.patch(`payments?id=eq.${due[0].id}`, {
-        status: 'overdue',
-        notes: [due[0].notes, `Stripe payment failed ${isoDate(obj.created)}`].filter(Boolean).join(' | '),
-      })
+    // Already stamped with this invoice, before falling back to the oldest
+    // open month. A card that fails twice has to land on the same row both
+    // times, or the second failure marks an innocent future month overdue.
+    let due = obj.id
+      ? await db.get(
+          `payments?stripe_invoice_id=eq.${encodeURIComponent(obj.id)}` +
+            `&status=in.(pending,overdue)&order=due_date.asc&limit=1&select=id,failure_count`
+        )
+      : null
+
+    if (!due?.[0]) {
+      due = await db.get(
+        `payments?client_id=eq.${client.id}&payment_type=eq.monthly&status=in.(pending,overdue)` +
+          `&order=due_date.asc&limit=1&select=id,failure_count`
+      )
     }
-    return { status: 'processed', note: `monthly payment failed for ${client.name}` }
+
+    if (!due?.[0]) {
+      return { status: 'processed', note: `payment failed for ${client.name}, no open month to mark` }
+    }
+
+    // Columns, not a sentence in the notes. A note cannot be resolved, so a
+    // failure written into one still reads as current after the retry goes
+    // through -- which is how a correctly paid row came to sit under the words
+    // "Stripe payment failed". See src/lib/paymentFailures.js.
+    const attempts = Number(obj.attempt_count) || Number(due[0].failure_count) + 1 || 1
+    const retry = isoTimestamp(obj.next_payment_attempt)
+
+    await db.patch(`payments?id=eq.${due[0].id}`, {
+      status: 'overdue',
+      last_failed_at: isoTimestamp(obj.created) || new Date().toISOString(),
+      failure_count: attempts,
+      // Absent when Stripe has given up, which is the difference between
+      // something to wait out and something that needs a new card.
+      next_attempt_at: retry,
+      stripe_invoice_id: obj.id || null,
+      stripe_customer_id: obj.customer || null,
+      // The only real action on a failure is to go and look at it in Stripe.
+      stripe_hosted_invoice_url: obj.hosted_invoice_url || null,
+    })
+
+    return {
+      status: 'processed',
+      note:
+        `monthly payment failed for ${client.name}` +
+        ` (attempt ${attempts}, ${retry ? `retrying ${retry.slice(0, 10)}` : 'no retry scheduled'})`,
+    }
   }
 
   if (type === 'customer.subscription.deleted') {
