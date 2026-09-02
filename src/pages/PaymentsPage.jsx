@@ -4,7 +4,8 @@ import Layout from '../components/Layout'
 import StripePanel from '../components/StripePanel'
 import StripeReconcilePanel from '../components/StripeReconcilePanel'
 import OnboardingMoneyPanel from '../components/OnboardingMoneyPanel'
-import EthanPayoutPanel from '../components/EthanPayoutPanel'
+import PartnerSplitPanel from '../components/PartnerSplitPanel'
+import ExpensesPanel from '../components/ExpensesPanel'
 import Modal from '../components/Modal'
 import { supabase } from '../lib/supabaseClient'
 import {
@@ -16,6 +17,7 @@ import {
   money,
   today,
 } from '../lib/queries'
+import { fetchExpenses, fetchPayouts } from '../lib/partnerData'
 import { Badge, Button, Card, Input, Select, StatCard, Textarea } from '../components/ui'
 
 const FILTERS = ['paid', 'overdue', 'upcoming', 'all']
@@ -75,6 +77,8 @@ function ByClient({ groups, expanded, toggle, renderRow }) {
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState([])
+  const [expenses, setExpenses] = useState([])
+  const [payouts, setPayouts] = useState([])
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -103,10 +107,21 @@ export default function PaymentsPage() {
         .order('name')
       if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
 
-      const [items, clientsRes] = await Promise.all([fetchPayments(), clientsQuery])
+      // Expenses and payouts are fetched alongside rather than by the panels
+      // themselves: the split is computed from all three together, and three
+      // components each loading their own slice is how a statement ends up
+      // showing numbers from two different moments.
+      const [items, clientsRes, expenseRows, payoutRows] = await Promise.all([
+        fetchPayments(),
+        clientsQuery,
+        fetchExpenses().catch(() => []),
+        fetchPayouts().catch(() => []),
+      ])
       if (clientsRes.error) throw clientsRes.error
       setPayments(items)
       setClients(clientsRes.data || [])
+      setExpenses(expenseRows)
+      setPayouts(payoutRows)
       setError('')
     } catch (err) {
       setError(err.message)
@@ -350,7 +365,25 @@ export default function PaymentsPage() {
           is something to act on, and pasting in payment links is not. */}
       <StripeReconcilePanel clients={clients} payments={payments} onFixed={loadData} />
       <StripePanel />
-      <EthanPayoutPanel payments={payments} onChange={loadData} />
+
+      {/* The split, and the costs it comes off. Above the payment ledger
+          because "what do I owe Ethan" is the question asked of this page far
+          more often than "what did Belk pay in July" — the ledger below is the
+          evidence, this is the answer. */}
+      <h2 className="mb-3 mt-8 text-lg font-semibold tracking-tight text-slate-900">
+        Profit split
+      </h2>
+      <PartnerSplitPanel
+        payments={payments}
+        expenses={expenses}
+        payouts={payouts}
+        onChanged={loadData}
+      />
+      <ExpensesPanel expenses={expenses} clients={clients} onChanged={loadData} />
+
+      <h2 className="mb-3 mt-8 text-lg font-semibold tracking-tight text-slate-900">
+        Every payment from Stripe
+      </h2>
 
       <div className="flex flex-col md:flex-row gap-2 mb-4">
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">

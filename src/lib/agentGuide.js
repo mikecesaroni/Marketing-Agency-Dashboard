@@ -202,6 +202,16 @@ export const LOOKUPS = [
     how: 'The client page shows one client\'s setup fee, monthly payment and what is collected. /payments shows all of them at once and is the better place to compare.',
   },
   {
+    need: 'What is owed to Ethan, or what the business actually made',
+    where: 'Payments → Profit split',
+    how: 'Cash basis, one month at a time: collected, minus shared expenses, split by the agreed percent. Every line of the arithmetic is shown so a payout can be checked rather than trusted. A partner who paid a cost out of their own pocket is owed it back on top of their share.',
+  },
+  {
+    need: 'What the business paid out, and to whom',
+    where: 'Payments → Expenses',
+    how: 'One row per cost. Anything marked shared comes off the top before the split; anything not stays recorded but out of it. This is a management view, not payroll — no withholding or 1099s are modelled.',
+  },
+  {
     need: 'Total monthly revenue',
     where: 'Payments → the MRR card',
     how: 'Not on the Dashboard. The Dashboard carries no money at all.',
