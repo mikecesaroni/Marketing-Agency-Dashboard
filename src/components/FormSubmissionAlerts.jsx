@@ -8,8 +8,22 @@ import { supabase } from '../lib/supabaseClient'
 // anywhere that surfaced it. Without this a client can complete their
 // onboarding and nobody finds out until someone happens to open their page.
 //
-// Unread is tracked per form rather than per client: the two forms are sent and
-// come back at different times, so dismissing one must not hide the other.
+// THE TWO FORMS CLEAR DIFFERENTLY, ON PURPOSE.
+//
+// The onboarding form is information: read it once and it is dealt with, so it
+// clears when it is dismissed.
+//
+// The GHL form is a job. It is the client handing over what is needed to build
+// their GoHighLevel account, and dismissing the notice does not build it --
+// Reliable Heating and Plumbquick were both dismissed days ago and neither
+// account has been set up. So that row does not offer a Dismiss at all: it
+// stays until the GoHighLevel template setup deliverable for that client is
+// marked done, and the button on the row is what marks it. The one action that
+// makes the notice go away is the one that means the work happened.
+
+// The deliverable that stands for "their GHL account exists". Seeded for every
+// client on GoHighLevel by supabase/deliverable-templates.sql.
+const GHL_SETUP_KEY = 'ghl-template'
 
 function ago(iso) {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
@@ -27,41 +41,68 @@ export default function FormSubmissionAlerts() {
 
   const load = async () => {
     // Embeds the client name so this is one request rather than one per row.
-    const { data, error } = await supabase
-      .from('onboarding_links')
-      .select(
-        'id, client_id, intake_submitted_at, ghl_submitted_at, intake_seen_at, ghl_seen_at, clients(name)'
-      )
-      .or('and(intake_submitted_at.not.is.null,intake_seen_at.is.null),and(ghl_submitted_at.not.is.null,ghl_seen_at.is.null)')
+    //
+    // Unfiltered, and filtered in JS below. There is one row per client -- a
+    // couple of dozen -- and whether a row still needs showing now depends on
+    // a deliverable in another table, so the filter cannot be expressed as one
+    // condition anyway. A half-expressible PostgREST filter is worse than
+    // none: get it slightly wrong and the query errors, and this panel treats
+    // an error as "nothing to show" and vanishes.
+    const [linksRes, setupRes] = await Promise.all([
+      supabase
+        .from('onboarding_links')
+        .select(
+          'id, client_id, intake_submitted_at, ghl_submitted_at, intake_seen_at, ghl_seen_at, clients(name)'
+        ),
+      supabase
+        .from('deliverables')
+        .select('id, client_id, status')
+        .eq('template_key', GHL_SETUP_KEY),
+    ])
 
     // A missing table or column means the migration has not been run yet, which
     // is not worth breaking the dashboard over.
-    if (error) return
+    if (linksRes.error) return
+
+    // Keyed by client rather than looked up per row: one client has one GHL
+    // account, however many times they submitted the form.
+    const ghlSetup = new Map()
+    for (const d of setupRes.data || []) ghlSetup.set(d.client_id, d)
 
     const rows = []
-    for (const link of data || []) {
+    for (const link of linksRes.data || []) {
       const name = link.clients?.name || 'A client'
       if (link.intake_submitted_at && !link.intake_seen_at) {
         rows.push({
           key: `${link.id}:intake`,
+          kind: 'intake',
           id: link.id,
           column: 'intake_seen_at',
           clientId: link.client_id,
           name,
-          form: 'onboarding form',
+          message: 'submitted their onboarding form',
           at: link.intake_submitted_at,
         })
       }
-      if (link.ghl_submitted_at && !link.ghl_seen_at) {
-        rows.push({
-          key: `${link.id}:ghl`,
-          id: link.id,
-          column: 'ghl_seen_at',
-          clientId: link.client_id,
-          name,
-          form: 'account setup form',
-          at: link.ghl_submitted_at,
-        })
+
+      if (link.ghl_submitted_at) {
+        const setup = ghlSetup.get(link.client_id)
+        // Done, or -- if the deliverable was deleted by hand -- fall back to
+        // the old dismissal so the row cannot become impossible to clear.
+        const settled = setup ? setup.status === 'done' : !!link.ghl_seen_at
+        if (!settled) {
+          rows.push({
+            key: `${link.id}:ghl`,
+            kind: 'ghl',
+            id: link.id,
+            column: 'ghl_seen_at',
+            deliverableId: setup?.id || null,
+            clientId: link.client_id,
+            name,
+            message: 'needs their GHL account set up',
+            at: link.ghl_submitted_at,
+          })
+        }
       }
     }
     rows.sort((a, b) => new Date(b.at) - new Date(a.at))
@@ -84,6 +125,26 @@ export default function FormSubmissionAlerts() {
     setBusy('')
   }
 
+  // Marks the work done rather than merely marking it seen. Writes the
+  // deliverable so the Deliverables page and this notice cannot disagree, and
+  // stamps ghl_seen_at too so the row stays gone even if the deliverable is
+  // later deleted.
+  const markGhlSetUp = async (row) => {
+    setBusy(row.key)
+    setItems((prev) => prev.filter((r) => r.key !== row.key))
+    if (row.deliverableId) {
+      await supabase
+        .from('deliverables')
+        .update({ status: 'done', completed_date: new Date().toISOString().slice(0, 10) })
+        .eq('id', row.deliverableId)
+    }
+    await supabase
+      .from('onboarding_links')
+      .update({ ghl_seen_at: new Date().toISOString() })
+      .eq('id', row.id)
+    setBusy('')
+  }
+
   if (items.length === 0) return null
 
   return (
@@ -99,28 +160,50 @@ export default function FormSubmissionAlerts() {
         {items.map((row) => (
           <li
             key={row.key}
-            className="flex flex-wrap items-center justify-between gap-2 p-3 bg-blue-50 border border-blue-100 rounded-lg"
+            className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border ${
+              row.kind === 'ghl'
+                ? 'bg-amber-50 border-amber-200'
+                : 'bg-blue-50 border-blue-100'
+            }`}
           >
             <span className="text-sm text-slate-800">
-              <strong>{row.name}</strong> submitted their {row.form}{' '}
-              <span className="text-slate-500">· {ago(row.at)}</span>
+              <strong>{row.name}</strong> {row.message}{' '}
+              <span className="text-slate-500">
+                · {row.kind === 'ghl' ? 'form came in ' : ''}
+                {ago(row.at)}
+              </span>
             </span>
             <span className="flex gap-2 flex-shrink-0">
               <Link
                 to={`/client/${row.clientId}`}
-                onClick={() => dismiss(row)}
+                // Opening the onboarding form IS dealing with it. Opening a GHL
+                // row deliberately does not clear it -- going to look at the
+                // answers is how the account gets built, not proof that it was.
+                onClick={row.kind === 'intake' ? () => dismiss(row) : undefined}
                 className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition"
               >
                 Open
               </Link>
-              <button
-                type="button"
-                onClick={() => dismiss(row)}
-                disabled={busy === row.key}
-                className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 text-xs font-medium hover:bg-slate-50 disabled:opacity-50 transition"
-              >
-                Dismiss
-              </button>
+              {row.kind === 'ghl' ? (
+                <button
+                  type="button"
+                  onClick={() => markGhlSetUp(row)}
+                  disabled={busy === row.key}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 transition"
+                  title="Marks the GoHighLevel template setup deliverable done for this client"
+                >
+                  ✓ GHL is set up
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => dismiss(row)}
+                  disabled={busy === row.key}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 text-xs font-medium hover:bg-slate-50 disabled:opacity-50 transition"
+                >
+                  Dismiss
+                </button>
+              )}
             </span>
           </li>
         ))}

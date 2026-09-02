@@ -50,7 +50,7 @@ export const ROUTES = [
       'The operations hub, and the right place to start. Answers "where does every client stand and what needs doing today". Carries no billing figures at all by design — money is on Payments.',
     contains: [
       'Ad delivery alerts, at the very top, and only when something is wrong: a client whose ad account is disabled or unsettled, or whose ads have gone quiet. This is the most important thing on the page and it is invisible on a good day.',
-      'Unread client form submissions, same rule — shown only when there are some.',
+      'Client form submissions, same rule — shown only when there are some. The onboarding form clears when it is opened or dismissed. A GHL setup form does not: it stays until somebody presses "GHL is set up" on it, which marks that client\'s GoHighLevel template setup deliverable done. It is a job to do, not a message to read.',
       'Three counts: Clients, Open work, KPIs logged (as "n of m" for this week).',
       '"Channels live" — how many clients have Meta ads, Google LSA, Google Business and GHL running. GHL is counted out of the clients who bought it, not out of everyone.',
       '"This week across all clients" — ad spend, leads and cost per lead, each with last week beside it.',
@@ -255,6 +255,11 @@ export const LOOKUPS = [
     need: 'Whether a client has sent their details back',
     where: 'The client page → "Client forms"',
     how: 'Shows not started, in progress or done for both the onboarding form and the GHL setup form, and gives you the link to send.',
+  },
+  {
+    need: 'Which clients still need their GHL account built',
+    where: 'The Dashboard → "New from clients", the amber rows',
+    how: 'One row per client who has sent their GHL setup form and whose GoHighLevel template setup deliverable is not done yet. There is no Dismiss on those rows on purpose — pressing "GHL is set up" is what clears them, and it marks the deliverable done. Opening the client does not clear it.',
   },
   {
     need: 'A client\'s photos, logo or documents',
