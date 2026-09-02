@@ -279,7 +279,14 @@ function SentRow({ entry, onDelete }) {
 }
 
 /**
- * The payments the balance is made of, and which of them are settled.
+ * The payments still to split, and on request the ones already split.
+ *
+ * SHOWS ONLY WHAT IS STILL TO SETTLE by default -- including in the group
+ * totals, which is the part that matters. Showing a client at $11,498 when
+ * $2,500 of that was settled weeks ago makes the section describe history
+ * rather than work, and the number you want to see next to a tick box is the
+ * number that tick box is worth. "Show already split" switches the whole card
+ * over: same groups, full totals, settled rows badged.
  *
  * Grouped by client and collapsed, because the useful question is "which
  * clients is this money from" and the row-by-row detail is the follow-up. The
@@ -287,7 +294,7 @@ function SentRow({ entry, onDelete }) {
  * pooled, so pretending an employee's wage belongs to one client's invoice
  * would be a tidier screen and a worse number.
  */
-function CountedPayments({ book, selected, onToggle, onToggleGroup, onSelectAll, onClear }) {
+function CountedPayments({ book, preview, selected, onToggle, onToggleGroup, onSelectAll, onClear }) {
   const [open, setOpen] = useState(() => new Set())
   const [showSettled, setShowSettled] = useState(false)
   const groups = useMemo(() => countedByClient(book.counted), [book.counted])
@@ -303,9 +310,9 @@ function CountedPayments({ book, selected, onToggle, onToggleGroup, onSelectAll,
   if (book.counted.length === 0) {
     return (
       <Card padding="lg">
-        <h3 className="font-semibold text-slate-900">What the balance is made of</h3>
+        <h3 className="font-semibold text-slate-900">Payments to split with Ethan</h3>
         <p className="py-4 text-center text-sm text-slate-500">
-          No payments marked paid yet, so there is nothing in the total.
+          No payments marked paid yet, so there is nothing to split.
         </p>
       </Card>
     )
@@ -313,35 +320,83 @@ function CountedPayments({ book, selected, onToggle, onToggleGroup, onSelectAll,
 
   const shown = groups.filter((g) => showSettled || g.openCount > 0)
 
+  // Every tick box on screen. The master box acts on exactly these, so
+  // "all" always means what is visible rather than something hidden below.
+  const tickable = book.counted.filter((r) => !r.settled).map((r) => r.id)
+  const ticked = tickable.filter((id) => selected.has(id)).length
+  const allTicked = tickable.length > 0 && ticked === tickable.length
+
   return (
     <Card padding="lg">
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start">
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-slate-900">What the balance is made of</h3>
+          <h3 className="font-semibold text-slate-900">
+            {showSettled ? 'Every payment in the balance' : 'Payments to split with Ethan'}
+          </h3>
           <p className="mt-0.5 text-sm text-slate-600">
-            Every client payment counted toward the {money(book.collected)} collected, and the{' '}
-            {book.splitPercent}% of each that goes to Ethan{' '}
-            <span className="text-slate-400">before costs</span>. Tick the ones a transfer covers;
-            the amount to send is worked out above.
+            {showSettled ? (
+              <>
+                All {book.collectedCount} payments behind the {money(book.collected)} collected,
+                the {book.settledCount} already split included. The {book.splitPercent}% shown against each is{' '}
+                <span className="text-slate-400">before costs</span>.
+              </>
+            ) : (
+              <>
+                The {book.unsettledCount} {book.unsettledCount === 1 ? 'payment' : 'payments'} not
+                yet split with Ethan, worth {money(book.unsettledTotal)}. Tick what a transfer
+                covers — the amount to send is worked out above.
+              </>
+            )}
           </p>
         </div>
-        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onSelectAll}>
-            All {book.unsettledCount} unsettled
-          </Button>
-          <Button variant="outline" size="sm" onClick={onClear} disabled={selected.size === 0}>
-            Clear
-          </Button>
-          {book.settledCount > 0 && (
-            <button
-              onClick={() => setShowSettled((v) => !v)}
-              className="text-xs text-slate-500 underline hover:text-slate-800"
-            >
-              {showSettled ? 'Hide' : 'Show'} {book.settledCount} settled
-            </button>
-          )}
-        </div>
+        {book.settledCount > 0 && (
+          <button
+            onClick={() => setShowSettled((v) => !v)}
+            className="flex-shrink-0 text-xs text-slate-500 underline hover:text-slate-800"
+          >
+            {showSettled
+              ? 'Only what is left to split'
+              : `Show ${book.settledCount} already split`}
+          </button>
+        )}
       </div>
+
+      {/* One box for the whole list, because "send him his half of everything
+          since last time" is the normal case and it should cost one click. */}
+      {tickable.length > 0 && (
+        <label className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <input
+            type="checkbox"
+            checked={allTicked}
+            ref={(el) => {
+              if (el) el.indeterminate = ticked > 0 && !allTicked
+            }}
+            onChange={() => (allTicked ? onClear() : onSelectAll())}
+            className="h-4 w-4 flex-shrink-0 rounded"
+          />
+          <span className="text-sm font-medium text-slate-900">
+            All {tickable.length} unsettled
+          </span>
+          <span className="ml-auto text-xs text-slate-500">
+            {ticked} ticked ·{' '}
+            {preview.negative ? (
+              <>
+                short by{' '}
+                <span className="font-semibold tabular-nums text-amber-800">
+                  {money(Math.abs(preview.amount))}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="font-semibold tabular-nums text-slate-900">
+                  {money(preview.amount)}
+                </span>{' '}
+                to send
+              </>
+            )}
+          </span>
+        </label>
+      )}
 
       <div className="space-y-1.5">
         {shown.map((g) => {
@@ -351,6 +406,11 @@ function CountedPayments({ book, selected, onToggle, onToggleGroup, onSelectAll,
           )
           const ticked = g.openIds.filter((id) => selected.has(id)).length
           const allTicked = g.openCount > 0 && ticked === g.openCount
+          // The figures next to a tick box have to be what that box is worth,
+          // so they are the unsettled ones unless the settled rows are on show.
+          const count = showSettled ? g.count : g.openCount
+          const total = showSettled ? g.total : g.openTotal
+          const cut = showSettled ? g.ethanCut : g.openEthanCut
 
           return (
             <div key={g.client} className="overflow-hidden rounded-lg border border-slate-200">
@@ -375,14 +435,14 @@ function CountedPayments({ book, selected, onToggle, onToggleGroup, onSelectAll,
                     {g.client}
                   </span>
                   <span className="flex-shrink-0 text-[11px] text-slate-400">
-                    {g.count} {g.count === 1 ? 'payment' : 'payments'}
-                    {g.settledCount > 0 && ` · ${g.settledCount} settled`}
+                    {count} {count === 1 ? 'payment' : 'payments'}
+                    {showSettled && g.settledCount > 0 && ` · ${g.settledCount} split`}
                   </span>
                   <span className="w-24 flex-shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">
-                    {money(g.total)}
+                    {money(total)}
                   </span>
                   <span className="w-28 flex-shrink-0 text-right text-xs tabular-nums text-slate-500">
-                    {money(g.ethanCut)} → Ethan
+                    {money(cut)} → Ethan
                   </span>
                   <span className="w-6 flex-shrink-0 text-right text-xs text-slate-400">
                     {isOpen ? '−' : '+'}
@@ -452,14 +512,27 @@ function CountedPayments({ book, selected, onToggle, onToggleGroup, onSelectAll,
 
       <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 border-t border-slate-300 pt-2 text-sm">
         <span className="font-semibold text-slate-900">
-          {book.collectedCount} {book.collectedCount === 1 ? 'payment' : 'payments'} counted
-          {book.settledCount > 0 && (
-            <span className="ml-2 font-normal text-slate-500">
-              {book.settledCount} split with Ethan, {book.unsettledCount} not yet
-            </span>
+          {showSettled ? (
+            <>
+              {book.collectedCount} {book.collectedCount === 1 ? 'payment' : 'payments'} counted
+              <span className="ml-2 font-normal text-slate-500">
+                {book.settledCount} split with Ethan, {book.unsettledCount} not yet
+              </span>
+            </>
+          ) : (
+            <>
+              {book.unsettledCount} {book.unsettledCount === 1 ? 'payment' : 'payments'} to split
+              {book.settledCount > 0 && (
+                <span className="ml-2 font-normal text-slate-500">
+                  {book.settledCount} already split, {money(book.settledTotal)}
+                </span>
+              )}
+            </>
           )}
         </span>
-        <span className="font-bold tabular-nums text-slate-900">{money(book.collected)}</span>
+        <span className="font-bold tabular-nums text-slate-900">
+          {money(showSettled ? book.collected : book.unsettledTotal)}
+        </span>
       </div>
 
       {/* Why the total is smaller than the payments page shows. Left
@@ -766,6 +839,7 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
 
       <CountedPayments
         book={book}
+        preview={preview}
         selected={selected}
         onToggle={toggle}
         onToggleGroup={toggleGroup}

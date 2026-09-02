@@ -235,6 +235,7 @@ export function ledger({
   const settledPayments = collectedRows.filter(live)
   const settledExpenses = shared.filter(live)
   const attributed = entitlement(settledPayments, settledExpenses, splitPercent).earned.ethan
+  const settledTotal = settledPayments.reduce((t, r) => t + toCents(r.amount), 0)
 
   // Sent, minus what the settled rows actually entitled him to. Zero when the
   // suggested amount was accepted, which is the normal case. Non-zero means
@@ -335,6 +336,8 @@ export function ledger({
 
     settledCount: settledPayments.length,
     unsettledCount: collectedRows.length - settledPayments.length,
+    settledTotal: toDollars(settledTotal),
+    unsettledTotal: toDollars(collected - settledTotal),
     // Ethan's entitlement from the rows already settled, and the gap between
     // that and what he has actually been sent.
     attributed: toDollars(attributed),

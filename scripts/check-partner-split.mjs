@@ -326,6 +326,15 @@ const withSettled = ledger({
 check('settled payments are counted', withSettled.settledCount === 2, String(withSettled.settledCount))
 check('and so are the ones still to settle', withSettled.unsettledCount === 1)
 check(
+  'each side has its own total, because the list shows one of them at a time',
+  withSettled.settledTotal === 1500 && withSettled.unsettledTotal === 2000,
+  `${withSettled.settledTotal} / ${withSettled.unsettledTotal}`
+)
+check(
+  'and the two add back up to everything collected',
+  withSettled.settledTotal + withSettled.unsettledTotal === withSettled.collected
+)
+check(
   'a settled row says when it was sent',
   withSettled.counted.every((r) =>
     r.id === 'u1' ? !r.settled && !r.settledOn : r.settled && r.settledOn === '2026-08-26'

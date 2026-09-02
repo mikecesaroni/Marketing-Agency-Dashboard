@@ -213,8 +213,8 @@ export const LOOKUPS = [
   },
   {
     need: 'Which client payments have already been split with Ethan',
-    where: 'Payments → Profit split → "What the balance is made of"',
-    how: 'Grouped by client, expandable to the individual payments. A settled one is greyed out with a green "split & sent" badge and its date; an unsettled one has a tick box. The footer counts both. To undo a settlement, delete its payout from "Everything sent" — the payments it covered go back to unsettled.',
+    where: 'Payments → Profit split → "Payments to split with Ethan"',
+    how: 'That card shows only what is still to split, totals included. Press "Show n already split" to switch it to every payment in the balance — the split ones then appear greyed out with a green "split & sent" badge and their date, and the totals become the full ones. To undo a settlement, open its transfer under "Everything sent" and remove the record; the payments it covered go back to unsettled.',
   },
   {
     need: 'Which payments a particular transfer to Ethan covered',
@@ -224,7 +224,7 @@ export const LOOKUPS = [
   {
     need: 'How to record sending Ethan his share',
     where: 'Payments → Profit split → "Settle up"',
-    how: 'Tick the payments the transfer covers — everything unsettled starts ticked, so the usual case is one press. The amount is worked out from the ticked payments: their half, minus his share of any costs not yet settled, plus anything he paid out of pocket. It is editable, and if you send a different figure the panel says so rather than quietly disagreeing with itself. Recording it marks those payments as split.',
+    how: 'Tick the payments the transfer covers. Everything unsettled starts ticked and there is one box at the top of the list for all of them, so the usual case is one press; that box also shows the running "to send" total as you tick. The amount is worked out from the ticked payments: their half, minus his share of any costs not yet settled, plus anything he paid out of pocket. It is editable, and if you send a different figure the panel says so rather than quietly disagreeing with itself. Recording it marks those payments as split.',
   },
   {
     need: 'What the business paid out, and to whom',

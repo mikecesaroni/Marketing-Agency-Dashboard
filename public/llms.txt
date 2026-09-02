@@ -176,8 +176,8 @@ Whether a client's card failed
   Only appears when money has not arrived. Each line names the client, the amount, and the date Stripe will retry — Stripe retries a failed card up to four times over about two weeks and most go through on their own, so a retry date means wait. "Stripe has stopped retrying", or a retry date that has passed, is the one that needs a new card from the client. A failure that was later paid is not in the banner at all; the payment row itself says the card failed and the retry went through.
 
 Which client payments have already been split with Ethan
-  Go to: Payments → Profit split → "What the balance is made of"
-  Grouped by client, expandable to the individual payments. A settled one is greyed out with a green "split & sent" badge and its date; an unsettled one has a tick box. The footer counts both. To undo a settlement, delete its payout from "Everything sent" — the payments it covered go back to unsettled.
+  Go to: Payments → Profit split → "Payments to split with Ethan"
+  That card shows only what is still to split, totals included. Press "Show n already split" to switch it to every payment in the balance — the split ones then appear greyed out with a green "split & sent" badge and their date, and the totals become the full ones. To undo a settlement, open its transfer under "Everything sent" and remove the record; the payments it covered go back to unsettled.
 
 Which payments a particular transfer to Ethan covered
   Go to: Payments → Profit split → "Everything sent"
@@ -185,7 +185,7 @@ Which payments a particular transfer to Ethan covered
 
 How to record sending Ethan his share
   Go to: Payments → Profit split → "Settle up"
-  Tick the payments the transfer covers — everything unsettled starts ticked, so the usual case is one press. The amount is worked out from the ticked payments: their half, minus his share of any costs not yet settled, plus anything he paid out of pocket. It is editable, and if you send a different figure the panel says so rather than quietly disagreeing with itself. Recording it marks those payments as split.
+  Tick the payments the transfer covers. Everything unsettled starts ticked and there is one box at the top of the list for all of them, so the usual case is one press; that box also shows the running "to send" total as you tick. The amount is worked out from the ticked payments: their half, minus his share of any costs not yet settled, plus anything he paid out of pocket. It is editable, and if you send a different figure the panel says so rather than quietly disagreeing with itself. Recording it marks those payments as split.
 
 What the business paid out, and to whom
   Go to: Payments → Expenses
