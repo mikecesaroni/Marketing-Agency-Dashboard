@@ -92,18 +92,16 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
     // When the list was last brought up to date. This is the fact that
     // explains an account being missing, so it is on screen rather than
     // inferable.
-    setListChecked(
-      rows.reduce((latest, a) => (a.synced_at && a.synced_at > latest ? a.synced_at : latest), '')
+    const latest = rows.reduce(
+      (newest, a) => (a.synced_at && a.synced_at > newest ? a.synced_at : newest),
+      ''
     )
+    setListChecked(latest)
+    return latest
   }, [client.id])
 
-  useEffect(() => {
-    if (!editing) return
-    loadAccounts()
-  }, [editing, loadAccounts])
-
   // Asks Meta again, rather than waiting for tomorrow's scheduled run.
-  const refreshList = async () => {
+  const refreshList = useCallback(async () => {
     setRefreshing(true)
     setError('')
     try {
@@ -114,7 +112,37 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
     } finally {
       setRefreshing(false)
     }
-  }
+  }, [loadAccounts])
+
+  /**
+   * Opening the picker asks Meta, without being told to.
+   *
+   * Granting the CRM a new ad account and then coming here to connect it is
+   * one continuous action, so the moment the picker opens is exactly when the
+   * list needs to be current. Both Plumbquick and Tito's Appliances were
+   * granted, live, and unofferable, and in both cases the obvious next move --
+   * pressing "Sync Meta" -- pulls spend and leads and touches this list not at
+   * all. A button nobody knows to press is not a fix.
+   *
+   * Cached rows render immediately and the refresh corrects them a second
+   * later, so this costs no waiting. Skipped when the list was refreshed in
+   * the last couple of minutes, which keeps opening and closing the editor
+   * from hammering Meta.
+   */
+  useEffect(() => {
+    if (!editing) return
+    let live = true
+
+    loadAccounts().then((latest) => {
+      if (!live) return
+      const age = latest ? Date.now() - new Date(latest).getTime() : Infinity
+      if (age > 120000) refreshList()
+    })
+
+    return () => {
+      live = false
+    }
+  }, [editing, loadAccounts, refreshList])
 
   const handleSave = async (e) => {
     e.preventDefault()
@@ -292,15 +320,17 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
                 type="button"
                 onClick={refreshList}
                 disabled={refreshing}
-                title="Ask Meta for the current list. Use this right after being granted access to a new ad account."
+                title="This list is refreshed automatically when the picker opens. Use this if access was granted seconds ago."
                 className="text-xs text-blue-600 underline hover:text-blue-800 disabled:opacity-50"
               >
-                {refreshing ? 'Checking Meta…' : 'Check Meta for new accounts'}
+                {refreshing ? 'Checking Meta…' : 'Check again'}
               </button>
               <span className="text-[11px] text-slate-400">
-                {listChecked
-                  ? `list last checked ${new Date(listChecked).toLocaleString()}`
-                  : 'the list refreshes itself once a day'}
+                {refreshing
+                  ? 'asking Meta for the current list…'
+                  : listChecked
+                    ? `list checked ${new Date(listChecked).toLocaleString()}`
+                    : 'no accounts cached yet'}
               </span>
             </div>
           </div>

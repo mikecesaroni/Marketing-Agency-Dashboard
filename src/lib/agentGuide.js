@@ -273,8 +273,8 @@ export const LOOKUPS = [
   },
   {
     need: 'A newly granted Meta ad account is not in the dropdown',
-    where: 'The client page → Meta Ads Sync → "Check Meta for new accounts"',
-    how: 'The browser holds no Meta credentials, so the dropdown reads a cached list that a scheduled job refreshes once a day at 08:20 UTC. Grant access at two in the afternoon and the account is real, the token can see it, and the dropdown still cannot offer it until tomorrow. That link asks Meta again straight away; the timestamp next to it says when the list was last brought up to date.',
+    where: 'The client page → Meta Ads Sync → the ad account dropdown',
+    how: 'It should already be there: opening the picker asks Meta for the current list by itself, and the timestamp under the dropdown says when the list was last checked. If access was granted seconds ago, "Check again" forces it. Note that "Sync Meta" is a different thing entirely — it pulls spend and leads and does not touch this list.',
   },
   {
     need: 'Which clients still need their GHL account built',
