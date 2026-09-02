@@ -83,3 +83,34 @@ export function summariseSync(data) {
 
   return parts.join(' ')
 }
+
+/**
+ * Re-reads the list of ad accounts Meta will let us see.
+ *
+ * The picker cannot ask Meta directly -- the browser holds no Meta credentials
+ * -- so it reads a table that a scheduled job refreshes at 08:20. That is fine
+ * until somebody grants access to a new account at two in the afternoon, when
+ * the account exists, the token can see it, and the dropdown cannot offer it
+ * until tomorrow. Plumbquick was exactly that: access granted, ad account
+ * live, and nothing in the CRM to point at it.
+ *
+ * Same function the scheduled job runs, so there is one code path that decides
+ * what we can see.
+ */
+export async function refreshAdAccounts() {
+  const { data, error } = await supabase.functions.invoke('meta-account-health', { body: {} })
+
+  if (error) {
+    const { status, detail } = await readFunctionError(error)
+    if (status === 404) {
+      throw new Error(
+        'The account-health function is not deployed yet. Deploy meta-account-health in Supabase, then try again.'
+      )
+    }
+    throw new Error(detail || 'Could not reach Meta.')
+  }
+
+  if (data?.error) throw new Error(data.error)
+
+  return { found: Number(data?.ad_accounts_cached) || 0 }
+}

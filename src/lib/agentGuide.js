@@ -272,6 +272,11 @@ export const LOOKUPS = [
     how: 'Shows not started, in progress or done for both the onboarding form and the GHL setup form, and gives you the link to send.',
   },
   {
+    need: 'A newly granted Meta ad account is not in the dropdown',
+    where: 'The client page → Meta Ads Sync → "Check Meta for new accounts"',
+    how: 'The browser holds no Meta credentials, so the dropdown reads a cached list that a scheduled job refreshes once a day at 08:20 UTC. Grant access at two in the afternoon and the account is real, the token can see it, and the dropdown still cannot offer it until tomorrow. That link asks Meta again straight away; the timestamp next to it says when the list was last brought up to date.',
+  },
+  {
     need: 'Which clients still need their GHL account built',
     where: 'The Dashboard → "New from clients", the amber rows',
     how: 'One row per client who has sent their GHL setup form and whose GoHighLevel template setup deliverable is not done yet. There is no Dismiss on those rows on purpose — pressing "GHL is set up" is what clears them, and it marks the deliverable done. Opening the client does not clear it.',
@@ -352,6 +357,10 @@ export const GOTCHAS = [
   {
     title: 'Meta rate-limits per ad account, per hour',
     body: '"Too many API calls" is the ad account\'s quota, not a rejected ad. Nothing was created, there is nothing to clean up, and the quota refills on its own. Publishing five ads at once is the most demanding thing the CRM does; two smaller batches get through where one large one will not.',
+  },
+  {
+    title: 'A client with no ad account is skipped silently',
+    body: 'The Meta sync walks clients that have an ad account ID. One without it is not an error and produces no warning — it simply is not in the results, which looks identical to a sync that failed for that client. If a client is missing from a sync, check their ad account is connected on their page first.',
   },
   {
     title: 'Ad numbers are yesterday\'s',

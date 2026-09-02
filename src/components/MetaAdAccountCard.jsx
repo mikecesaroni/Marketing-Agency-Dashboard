@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { runMetaSync, summariseSync } from '../lib/metaSync'
+import { refreshAdAccounts, runMetaSync, summariseSync } from '../lib/metaSync'
 import { discoverAssets } from '../lib/metaPublish'
 
 export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate }) {
@@ -13,6 +13,8 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
   const [accountName, setAccountName] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const [listChecked, setListChecked] = useState(null)
 
   // Only the ad account matters for syncing KPIs. These three are what
   // publishing needs: the Page an ad posts as, the pixel it optimises against,
@@ -73,20 +75,46 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
   // meta_ad_accounts table rather than from Meta directly. Which client each is
   // already on is joined here — there's no foreign key between the two tables
   // for PostgREST to embed across.
+  const loadAccounts = useCallback(async () => {
+    const [accountsRes, clientsRes] = await Promise.all([
+      supabase
+        .from('meta_ad_accounts')
+        .select('ad_account_id, name, business_name, synced_at')
+        .order('name'),
+      supabase.from('clients').select('id, name, meta_ad_account_id').not('meta_ad_account_id', 'is', null),
+    ])
+    const takenBy = {}
+    for (const c of clientsRes.data || []) {
+      if (c.id !== client.id) takenBy[c.meta_ad_account_id] = c.name
+    }
+    const rows = accountsRes.data || []
+    setAccounts(rows.map((a) => ({ ...a, takenBy: takenBy[a.ad_account_id] })))
+    // When the list was last brought up to date. This is the fact that
+    // explains an account being missing, so it is on screen rather than
+    // inferable.
+    setListChecked(
+      rows.reduce((latest, a) => (a.synced_at && a.synced_at > latest ? a.synced_at : latest), '')
+    )
+  }, [client.id])
+
   useEffect(() => {
     if (!editing) return
+    loadAccounts()
+  }, [editing, loadAccounts])
 
-    Promise.all([
-      supabase.from('meta_ad_accounts').select('ad_account_id, name, business_name').order('name'),
-      supabase.from('clients').select('id, name, meta_ad_account_id').not('meta_ad_account_id', 'is', null),
-    ]).then(([accountsRes, clientsRes]) => {
-      const takenBy = {}
-      for (const c of clientsRes.data || []) {
-        if (c.id !== client.id) takenBy[c.meta_ad_account_id] = c.name
-      }
-      setAccounts((accountsRes.data || []).map((a) => ({ ...a, takenBy: takenBy[a.ad_account_id] })))
-    })
-  }, [editing, client.id])
+  // Asks Meta again, rather than waiting for tomorrow's scheduled run.
+  const refreshList = async () => {
+    setRefreshing(true)
+    setError('')
+    try {
+      await refreshAdAccounts()
+      await loadAccounts()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const handleSave = async (e) => {
     e.preventDefault()
@@ -255,6 +283,26 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
                 </p>
               </>
             )}
+
+            {/* Always on screen, both branches. An empty list is the case that
+                needs this most: nothing to pick from is indistinguishable from
+                "Meta shows us nothing" until you ask. */}
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <button
+                type="button"
+                onClick={refreshList}
+                disabled={refreshing}
+                title="Ask Meta for the current list. Use this right after being granted access to a new ad account."
+                className="text-xs text-blue-600 underline hover:text-blue-800 disabled:opacity-50"
+              >
+                {refreshing ? 'Checking Meta…' : 'Check Meta for new accounts'}
+              </button>
+              <span className="text-[11px] text-slate-400">
+                {listChecked
+                  ? `list last checked ${new Date(listChecked).toLocaleString()}`
+                  : 'the list refreshes itself once a day'}
+              </span>
+            </div>
           </div>
 
           <div className="pt-3 border-t border-slate-200 space-y-3">
