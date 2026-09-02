@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import FormSubmissionAlerts from '../components/FormSubmissionAlerts'
 import AdDeliveryAlerts from '../components/AdDeliveryAlerts'
+import { adsReady } from '../lib/adsReady'
 import {
   Badge,
   Card,
   Delta,
+  IconAlert,
   IconCheckCircle,
   IconClipboard,
   IconClock,
@@ -68,6 +70,10 @@ function Coverage({ label, done, total, empty }) {
  * glance, quiet enough that six of them still look like a list.
  */
 const GROUP_TONES = {
+  // Green is for the one group that is an opportunity rather than a problem:
+  // work that is unblocked and waiting. Among four shades of warning it reads
+  // as "start here", which is exactly its job.
+  success: { rail: 'bg-emerald-500', icon: 'text-emerald-600', badge: 'success' },
   danger: { rail: 'bg-red-500', icon: 'text-red-600', badge: 'danger' },
   warning: { rail: 'bg-amber-500', icon: 'text-amber-600', badge: 'warning' },
   info: { rail: 'bg-blue-500', icon: 'text-blue-600', badge: 'info' },
@@ -192,6 +198,10 @@ export default function HomePage() {
   const ghlWaiting = live.filter((c) => c.ghlStage?.key === 'waiting')
   const ghlReady = live.filter((c) => c.ghlStage?.key === 'ready')
 
+  // Backend standing, ads still off. The most valuable thing on the page,
+  // because it is revenue sitting still with nothing in the way.
+  const forAds = adsReady({ clients: live, deliverables })
+
   const lsaLive = live.filter((c) => c.lsa_active)
   const gbpDone = live.filter((c) => c.gbp_optimized)
   const ghlOnPlan = live.filter((c) => c.ghl_plan)
@@ -222,6 +232,31 @@ export default function HomePage() {
   const missingKPIs = clients.filter((c) => c.hasMissingKPIs)
 
   const actionGroups = [
+    // First on purpose. Everything below it is something going wrong; this is
+    // money waiting to be made, and it is the thing most easily missed because
+    // nothing is broken.
+    {
+      Icon: IconLaunch,
+      title: 'Ready to build ads',
+      tone: 'success',
+      items: forAds.ready.map((c) => ({
+        key: `ads-ready-${c.id}`,
+        to: `/client/${c.id}`,
+        label: c.name,
+        meta: c.note,
+      })),
+    },
+    {
+      Icon: IconAlert,
+      title: 'GHL built, waiting on Meta access',
+      tone: 'warning',
+      items: forAds.blocked.map((c) => ({
+        key: `ads-blocked-${c.id}`,
+        to: `/client/${c.id}`,
+        label: c.name,
+        meta: c.note,
+      })),
+    },
     {
       Icon: IconClock,
       title: 'Deliverables past due',

@@ -54,7 +54,7 @@ export const ROUTES = [
       'Three counts: Clients, Open work, KPIs logged (as "n of m" for this week).',
       '"Channels live" — how many clients have Meta ads, Google LSA, Google Business and GHL running. GHL is counted out of the clients who bought it, not out of everyone.',
       '"This week across all clients" — ad spend, leads and cost per lead, each with last week beside it.',
-      '"What to do today" — grouped lists of late deliverables, missing KPIs and clients missing a channel, each naming the client. A group shows six and then folds; "+ n more" expands it, "Show fewer" puts it back, and the count in the badge is always the full number. Replaced by "All caught up" when there is nothing.',
+      '"What to do today" — grouped lists, each naming the client. "Ready to build ads" is first and is the only green one: those clients have their GoHighLevel backend standing and their Meta ads still off, so the ads can be built today with nothing in the way. A group shows six and then folds; "+ n more" expands it, "Show fewer" puts it back, and the count in the badge is always the full number. Replaced by "All caught up" when there is nothing.',
     ],
     actions: ['Nothing is edited here. Every item links to the client or page where it can be.'],
   },
@@ -275,6 +275,16 @@ export const LOOKUPS = [
     need: 'A newly granted Meta ad account is not in the dropdown',
     where: 'The client page → Meta Ads Sync → the ad account dropdown',
     how: 'It should already be there: opening the picker asks Meta for the current list by itself, and the timestamp under the dropdown says when the list was last checked. If access was granted seconds ago, "Check again" forces it. Note that "Sync Meta" is a different thing entirely — it pulls spend and leads and does not touch this list.',
+  },
+  {
+    need: 'Which clients I can build Meta ads for right now',
+    where: 'The Dashboard → "Ready to build ads", the green group at the top',
+    how: 'A client appears when their GoHighLevel backend is standing (all four of A2P, template, Meta form automation and SMS automation marked done — or the client flagged GHL live), their Meta ad account and Facebook Page are connected, and their ads are not live yet. The row says which: "GHL built · nothing in the way", or "GHL marked live · 2 of 4 items still open" when the flag is carrying it rather than the deliverables. A missing landing page or privacy policy URL is named but does not hold them out, because which of those is needed depends on the campaign type. Empty means nothing is actually ready — the order of work is GHL backend first, then ads.',
+  },
+  {
+    need: 'Which clients are ready for ads but missing Meta access',
+    where: 'The Dashboard → "GHL built, waiting on Meta access"',
+    how: 'The same test, failed only on the Meta side: backend done, ads off, but no ad account or no Facebook Page connected. That is the one thing standing between us and spending their budget, and the action is a request to the client rather than a job for us — which is why it is a separate group.',
   },
   {
     need: 'Which clients still need their GHL account built',
