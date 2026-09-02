@@ -65,25 +65,19 @@ export async function fetchPayouts() {
 }
 
 /**
- * Records a payment to a partner, together with the arithmetic it came from.
+ * Records a payment to a partner.
  *
- * The basis is the point. Without it, back-dating an expense into a settled
- * month silently restates what two people already agreed; with it, the
- * statement can show both numbers and let a human decide. See payoutDrift.
+ * Just the fact of the transfer -- who, how much, when, how. The balance is
+ * derived from the totals every time it is read, so there is no snapshot of
+ * the arithmetic to store and nothing to keep in step with it.
  */
-export async function addPayout({ period, partner, amount, paidOn, method, notes, basis }) {
+export async function addPayout({ partner, amount, paidOn, method, notes }) {
   const { error } = await supabase.from('partner_payouts').insert({
-    period,
     partner,
     amount,
     paid_on: paidOn,
     method: method?.trim() || null,
     notes: notes?.trim() || null,
-    basis_collected: basis?.collected ?? null,
-    basis_expenses: basis?.sharedExpenses ?? null,
-    basis_net: basis?.net ?? null,
-    basis_split_percent: basis?.splitPercent ?? null,
-    basis_reimbursement: basis?.reimbursement ?? null,
   })
   if (error) throw error
 }

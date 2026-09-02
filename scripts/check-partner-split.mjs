@@ -1,15 +1,22 @@
 // The money math.
 //
-// This decides what one partner actually pays the other, so the two things
-// worth being certain of are asserted against awkward numbers rather than
-// convenient ones:
+// This decides what one partner actually pays the other, so the things worth
+// being certain of are asserted against awkward numbers rather than convenient
+// ones:
 //
 //   THE SHARES SUM TO THE NET. Exactly, on an odd number of cents, where naive
 //   rounding of both halves leaves a stray penny belonging to nobody.
 //
-//   THE TOTAL OWED EQUALS WHAT THE BUSINESS ACCOUNT DID. Including when a
+//   THE TOTAL EARNED EQUALS WHAT THE BUSINESS ACCOUNT DID. Including when a
 //   partner fronted a cost personally, which is the case that makes the
 //   identity non-obvious and the reason `paid_by` exists at all.
+//
+//   THE PER-PAYMENT CUTS SUM TO THE POOLED CUT. The screen that shows which
+//   client payments the balance is made of has to add up to the balance, or it
+//   undermines the number it is meant to justify.
+//
+//   NOTHING IS PERIODIC. A back-dated expense moves the balance instead of
+//   restating a settled month, and the order of the rows never changes a total.
 //
 // Run with: node scripts/check-partner-split.mjs
 
@@ -17,13 +24,12 @@ import {
   DEFAULT_SPLIT_PERCENT,
   EXPENSE_CATEGORIES,
   PAID_BY,
+  PARTNERS,
+  countedByClient,
   expensesByPayee,
-  overall,
-  payoutDrift,
+  ledger,
   periodLabel,
   periodOf,
-  periodsPresent,
-  statement,
   toCents,
 } from '../src/lib/partnerSplit.js'
 
@@ -36,15 +42,17 @@ function check(name, cond, detail = '') {
   }
 }
 
+let seq = 0
 const pay = (amount, paid_date, over = {}) => ({
-  id: Math.random().toString(36).slice(2),
+  id: `p${++seq}`,
   amount,
   paid_date,
   status: 'paid',
+  clients: { name: 'Acme' },
   ...over,
 })
 const exp = (amount, spent_on, over = {}) => ({
-  id: Math.random().toString(36).slice(2),
+  id: `e${++seq}`,
   amount,
   spent_on,
   payee: 'Sam',
@@ -54,54 +62,72 @@ const exp = (amount, spent_on, over = {}) => ({
   ...over,
 })
 
-// --- cents and periods ----------------------------------------------------
+// --- cents and month labels ----------------------------------------------
 check('numeric strings from Postgres convert cleanly', toCents('1749.00') === 174900)
 check('a float that cannot be represented still rounds right', toCents(0.07 * 3) === 21)
 check('rubbish becomes zero rather than NaN', toCents(null) === 0 && toCents('abc') === 0)
-check('a period is the year and month', periodOf('2026-08-26') === '2026-08')
-check('a period reads as a month name', periodLabel('2026-08') === 'August 2026')
+check('a month key is the year and month', periodOf('2026-08-26') === '2026-08')
+check('a month key reads as a month name', periodLabel('2026-08') === 'August 2026')
 
-check(
-  'only months with something in them get a statement, newest first',
-  periodsPresent({
-    payments: [pay(100, '2026-07-04'), pay(100, '2026-09-01', { status: 'pending' })],
-    expenses: [exp(50, '2026-08-10')],
-    payouts: [{ period: '2026-06-01' }],
-  }).join(',') === '2026-08,2026-07,2026-06'
-)
-
-// --- the basic month ------------------------------------------------------
-const basic = statement({
-  period: '2026-08',
+// --- the basic balance ----------------------------------------------------
+const basic = ledger({
   payments: [pay(1000, '2026-08-01'), pay(500, '2026-08-20'), pay(999, '2026-07-31')],
   expenses: [exp(400, '2026-08-05'), exp(100, '2026-07-01')],
   payouts: [],
 })
-check('only this month is collected', basic.collected === 1500, String(basic.collected))
-check('only this month is spent', basic.sharedExpenses === 400, String(basic.sharedExpenses))
-check('net is collected minus shared costs', basic.net === 1100, String(basic.net))
-check('the split is even by default', basic.shares.ethan === 550 && basic.shares.me === 550)
-check('nothing paid yet means all of it outstanding', basic.outstanding.ethan === 550)
-check('the month balances', basic.balances === true)
+check('everything ever collected is collected', basic.collected === 2499, String(basic.collected))
+check('everything ever spent is deducted', basic.sharedExpenses === 500, String(basic.sharedExpenses))
+check('net is collected minus shared costs', basic.net === 1999, String(basic.net))
+check('the split is even by default', basic.shares.ethan === 999.5 && basic.shares.me === 999.5)
+check('nothing sent yet means all of it owed', basic.owed.ethan === 999.5)
+check('and it balances', basic.balances === true)
 check('the default split is 50', DEFAULT_SPLIT_PERCENT === 50)
+check('there are two partners', PARTNERS.join(',') === 'me,ethan')
+
+// --- no periods anywhere --------------------------------------------------
+// The whole point of the rewrite: a cost from any date is just a cost.
+const july = ledger({ payments: [pay(1000, '2026-07-01')], expenses: [], payouts: [] })
+const backDated = ledger({
+  payments: [pay(1000, '2026-07-01')],
+  expenses: [exp(200, '2020-01-01')],
+  payouts: [],
+})
+check(
+  'an expense from years earlier still comes off the balance',
+  july.net === 1000 && backDated.net === 800,
+  `${july.net} then ${backDated.net}`
+)
+check(
+  'a payment from the future counts the moment it is marked paid',
+  ledger({ payments: [pay(500, '2030-01-01')], expenses: [], payouts: [] }).collected === 500
+)
+
+// --- what gets counted ----------------------------------------------------
+const partial = ledger({
+  payments: [
+    pay(1000, '2026-08-01'),
+    pay(700, null, { status: 'pending' }),
+    pay(300, null, { status: 'paid' }), // marked paid with no date: not collected
+    pay(50, '2026-08-02', { status: 'refunded' }),
+  ],
+  expenses: [],
+  payouts: [],
+})
+check('only paid payments with a date count', partial.collected === 1000, String(partial.collected))
+check('the rest are counted and totalled separately', partial.uncountedCount === 3 && partial.uncounted === 1050,
+  `${partial.uncountedCount} / ${partial.uncounted}`)
 
 // --- the stray cent -------------------------------------------------------
 // $0.01 of net: half is half a cent. Rounding both halves gives 1c + 1c = 2c
 // out of 1c, which is exactly the bug this guards.
-const oddPenny = statement({
-  period: '2026-08',
-  payments: [pay(0.01, '2026-08-01')],
-  expenses: [],
-  payouts: [],
-})
+const oddPenny = ledger({ payments: [pay(0.01, '2026-08-01')], expenses: [], payouts: [] })
 check(
   'a single cent of net is not duplicated',
   toCents(oddPenny.shares.ethan) + toCents(oddPenny.shares.me) === 1,
   `${oddPenny.shares.ethan} + ${oddPenny.shares.me}`
 )
 
-const oddNet = statement({
-  period: '2026-08',
+const oddNet = ledger({
   payments: [pay(1000.01, '2026-08-01')],
   expenses: [exp(0.02, '2026-08-01')],
   payouts: [],
@@ -115,19 +141,13 @@ check(
 // A sweep, because one example proves nothing about rounding.
 let sumFailures = 0
 for (let cents = -500; cents <= 500; cents++) {
-  const s = statement({
-    period: '2026-08',
-    payments: [pay(cents / 100, '2026-08-01')],
-    expenses: [],
-    payouts: [],
-  })
+  const s = ledger({ payments: [pay(cents / 100, '2026-08-01')], expenses: [], payouts: [] })
   if (toCents(s.shares.ethan) + toCents(s.shares.me) !== cents) sumFailures++
 }
 check('shares sum to net across 1001 values, negatives included', sumFailures === 0, `${sumFailures} failed`)
 
 // --- an uneven split -----------------------------------------------------
-const sixtyForty = statement({
-  period: '2026-08',
+const sixtyForty = ledger({
   payments: [pay(1000, '2026-08-01')],
   expenses: [],
   payouts: [],
@@ -138,8 +158,7 @@ check('60 means 60/40 without a second setting', sixtyForty.shares.ethan === 600
 // --- someone fronted the money ------------------------------------------
 // The case that makes the identity non-obvious: Ethan paid the employee out of
 // his own pocket, so he is owed his profit share PLUS the money he laid out.
-const fronted = statement({
-  period: '2026-08',
+const fronted = ledger({
   payments: [pay(2000, '2026-08-01')],
   expenses: [
     exp(600, '2026-08-02', { paid_by: 'ethan' }),
@@ -150,30 +169,29 @@ const fronted = statement({
 check('net still deducts everything shared', fronted.net === 1000, String(fronted.net))
 check('shares are of the net', fronted.shares.ethan === 500 && fronted.shares.me === 500)
 check(
-  'the partner who fronted it is owed it back on top',
-  fronted.owed.ethan === 1100 && fronted.owed.me === 500,
-  `ethan ${fronted.owed.ethan}, me ${fronted.owed.me}`
+  'the partner who fronted it has earned it back on top',
+  fronted.earned.ethan === 1100 && fronted.earned.me === 500,
+  `ethan ${fronted.earned.ethan}, me ${fronted.earned.me}`
 )
 check(
   'and the books balance against the business account',
   fronted.balances === true && fronted.businessCashChange === 1600,
-  `owed ${fronted.owed.ethan + fronted.owed.me} vs cash ${fronted.businessCashChange}`
+  `earned ${fronted.earned.ethan + fronted.earned.me} vs cash ${fronted.businessCashChange}`
 )
 
 // The identity has to hold for arbitrary mixtures, not just the neat one.
 let balanceFailures = 0
 for (let i = 0; i < 300; i++) {
   const r = (n) => Math.round(Math.random() * n * 100) / 100
-  const s = statement({
-    period: '2026-08',
-    payments: [pay(r(5000), '2026-08-01'), pay(r(5000), '2026-08-15')],
+  const s = ledger({
+    payments: [pay(r(5000), '2026-08-01'), pay(r(5000), '2026-07-15')],
     expenses: [
       exp(r(900), '2026-08-02', { paid_by: 'business' }),
-      exp(r(900), '2026-08-03', { paid_by: 'ethan' }),
+      exp(r(900), '2026-06-03', { paid_by: 'ethan' }),
       exp(r(900), '2026-08-04', { paid_by: 'me' }),
       exp(r(900), '2026-08-05', { shared: false, paid_by: 'me' }),
     ],
-    payouts: [],
+    payouts: [{ partner: 'ethan', amount: r(2000) }],
     splitPercent: [40, 50, 55, 60][i % 4],
   })
   if (!s.balances) balanceFailures++
@@ -181,8 +199,7 @@ for (let i = 0; i < 300; i++) {
 check('the identity holds across 300 random mixtures', balanceFailures === 0, `${balanceFailures} failed`)
 
 // --- personal costs stay out of the split -------------------------------
-const personal = statement({
-  period: '2026-08',
+const personal = ledger({
   payments: [pay(1000, '2026-08-01')],
   expenses: [exp(300, '2026-08-02', { shared: false, paid_by: 'me' })],
   payouts: [],
@@ -191,76 +208,118 @@ check('a personal cost does not reduce the net', personal.net === 1000, String(p
 check('but it is still recorded and shown', personal.personalExpenses === 300)
 check(
   'and it is not reimbursed either — it was never the business’s cost',
-  personal.owed.me === 500 && personal.owed.ethan === 500
+  personal.earned.me === 500 && personal.earned.ethan === 500
 )
-check('a personal cost cannot unbalance the month', personal.balances === true)
+check('a personal cost cannot unbalance the books', personal.balances === true)
 
 // --- payouts already made ------------------------------------------------
-const settled = statement({
-  period: '2026-08',
+const settled = ledger({
   payments: [pay(2000, '2026-08-01')],
   expenses: [],
   payouts: [
-    { period: '2026-08-01', partner: 'ethan', amount: 600 },
-    { period: '2026-08-01', partner: 'me', amount: 1000 },
-    { period: '2026-07-01', partner: 'ethan', amount: 999 },
+    { id: 'x1', partner: 'ethan', amount: 600, paid_on: '2026-08-10' },
+    { id: 'x2', partner: 'me', amount: 1000, paid_on: '2026-08-11' },
+    { id: 'x3', partner: 'ethan', amount: 100, paid_on: '2026-07-01' },
   ],
 })
-check('payouts are counted per partner', settled.paid.ethan === 600 && settled.paid.me === 1000)
-check('a payout from another month is not counted', settled.paid.ethan !== 1599)
-check('outstanding is owed minus paid', settled.outstanding.ethan === 400)
-check(
-  'overpaying reads as negative rather than clamping to zero',
-  settled.outstanding.me === 0,
-  String(settled.outstanding.me)
-)
+check('payouts are counted per partner', settled.paid.ethan === 700 && settled.paid.me === 1000)
+check('a payout from any date counts — there are no periods', settled.paid.ethan === 700)
+check('owed is earned minus sent', settled.owed.ethan === 300, String(settled.owed.ethan))
+check('and for the other partner too', settled.owed.me === 0, String(settled.owed.me))
 
-const overpaid = statement({
-  period: '2026-08',
+const overpaid = ledger({
   payments: [pay(100, '2026-08-01')],
   expenses: [],
-  payouts: [{ period: '2026-08-01', partner: 'ethan', amount: 80 }],
+  payouts: [{ id: 'x', partner: 'ethan', amount: 80, paid_on: '2026-08-01' }],
 })
-check('an overpayment is visible as a negative', overpaid.outstanding.ethan === -30, String(overpaid.outstanding.ethan))
+check('an overpayment reads as negative rather than clamping', overpaid.owed.ethan === -30, String(overpaid.owed.ethan))
+check('a payout to an unknown partner is ignored, not misfiled',
+  ledger({ payments: [], expenses: [], payouts: [{ partner: 'someone', amount: 999 }] }).paid.ethan === 0)
+check('a payout with no partner is assumed to be Ethan, as the table default is',
+  ledger({ payments: [], expenses: [], payouts: [{ amount: 500 }] }).paid.ethan === 500)
 
-// --- drift after settling ------------------------------------------------
-const current = statement({
-  period: '2026-08',
-  payments: [pay(2000, '2026-08-01')],
-  expenses: [exp(500, '2026-08-20')],
+// --- which payments the balance is made of -------------------------------
+const traced = ledger({
+  payments: [
+    pay(1000, '2026-08-01', { clients: { name: 'Acme' }, client_id: 'c1', payment_type: 'setup' }),
+    pay(500, '2026-08-20', { clients: { name: 'Belk' }, client_id: 'c2', payment_type: 'monthly' }),
+    pay(250, '2026-07-05', { clients: { name: 'Acme' }, client_id: 'c1' }),
+    pay(9999, null, { status: 'pending', clients: { name: 'Belk' } }),
+  ],
+  expenses: [exp(300, '2026-08-02')],
   payouts: [],
 })
-const drift = payoutDrift(
-  { basis_net: 2000, basis_collected: 2000, basis_expenses: 0 },
-  current
-)
-check('a back-dated cost shows as drift, not a silent restatement', drift !== null)
+check('every counted payment is listed', traced.counted.length === 3)
+check('newest first', traced.counted.map((r) => r.paidDate).join(',') === '2026-08-20,2026-08-01,2026-07-05')
+check('the client name comes through', traced.counted[0].client === 'Belk')
+check('so does the payment type, for the ones that have it', traced.counted[0].type === 'monthly')
 check(
-  'and names both numbers',
-  drift.wasNet === 2000 && drift.nowNet === 1500 && drift.difference === -500,
-  JSON.stringify(drift)
+  'the listed amounts add up to what was collected',
+  traced.counted.reduce((t, r) => t + toCents(r.amount), 0) === toCents(traced.collected),
+  String(traced.collected)
 )
-check('an unchanged month reports no drift', payoutDrift({ basis_net: 1500 }, current) === null)
 check(
-  'the migrated payout has no basis and is not accused of drifting',
-  payoutDrift({ basis_net: null }, current) === null
+  'the per-payment cuts add up to the gross cut',
+  traced.counted.reduce((t, r) => t + toCents(r.ethanCut), 0) === toCents(traced.gross.ethan),
+  `${traced.gross.ethan}`
 )
+check(
+  'each payment is split into two halves that sum back to it',
+  traced.counted.every((r) => toCents(r.ethanCut) + toCents(r.meCut) === toCents(r.amount))
+)
+check(
+  'the gross cut is bigger than the real cut, because costs come off the pool',
+  traced.gross.ethan === 875 && traced.shares.ethan === 725,
+  `${traced.gross.ethan} vs ${traced.shares.ethan}`
+)
+check('a payment with no client is labelled rather than blank',
+  ledger({ payments: [pay(10, '2026-08-01', { clients: null })] }).counted[0].client === 'Unassigned')
 
-// --- the all-time view ---------------------------------------------------
-const all = overall({
-  payments: [pay(1000, '2026-07-10'), pay(2000, '2026-08-10')],
-  expenses: [exp(200, '2026-07-11'), exp(400, '2026-08-11')],
-  payouts: [{ period: '2026-07-01', partner: 'ethan', amount: 400 }],
+// The per-payment column adding up is the property that makes the screen
+// trustworthy, so it gets a sweep too -- odd amounts at odd percentages.
+let allocFailures = 0
+for (let i = 0; i < 300; i++) {
+  const r = () => Math.round(Math.random() * 100000) / 100
+  const rows = Array.from({ length: 1 + (i % 7) }, (_, k) =>
+    pay(r(), `2026-0${1 + (k % 9)}-01`)
+  )
+  const s = ledger({ payments: rows, expenses: [], payouts: [], splitPercent: [33, 50, 55, 60][i % 4] })
+  const summed = s.counted.reduce((t, x) => t + toCents(x.ethanCut), 0)
+  if (summed !== toCents(s.gross.ethan)) allocFailures++
+  if (toCents(s.gross.ethan) + toCents(s.gross.me) !== toCents(s.collected)) allocFailures++
+}
+check('per-payment cuts tie to the total across 300 random sets', allocFailures === 0, `${allocFailures} failed`)
+
+// Order must not change any total, since the allocation is cumulative.
+const forwards = ledger({
+  payments: [pay(333.33, '2026-01-01'), pay(666.67, '2026-02-01'), pay(0.01, '2026-03-01')],
+  splitPercent: 55,
 })
-check('every month gets a statement', all.months.length === 2)
-check('totals are the sum of the months', all.collected === 3000 && all.sharedExpenses === 600)
-check('net all time', all.net === 2400, String(all.net))
-check('owed all time is half the net', all.owedEthan === 1200, String(all.owedEthan))
-check('paid is counted', all.paidEthan === 400)
-check('outstanding is the difference', all.outstandingEthan === 800)
-check('nothing unbalanced', all.unbalanced.length === 0)
+const backwards = ledger({
+  payments: [pay(0.01, '2026-03-01'), pay(666.67, '2026-02-01'), pay(333.33, '2026-01-01')],
+  splitPercent: 55,
+})
+check(
+  'the order rows arrive in cannot change a total',
+  forwards.collected === backwards.collected &&
+    forwards.gross.ethan === backwards.gross.ethan &&
+    forwards.shares.ethan === backwards.shares.ethan
+)
 
-// --- the expense roll-up -------------------------------------------------
+// --- the roll-ups --------------------------------------------------------
+const byClient = countedByClient(traced.counted)
+check('payments group by client, biggest first', byClient[0].client === 'Acme' && byClient[0].total === 1250)
+check('with a count and the cut', byClient[0].count === 2 && byClient[1].client === 'Belk')
+check(
+  'the groups add back up to the collected total',
+  byClient.reduce((t, g) => t + toCents(g.total), 0) === toCents(traced.collected)
+)
+check(
+  'and their cuts add back up to the gross cut',
+  byClient.reduce((t, g) => t + toCents(g.ethanCut), 0) === toCents(traced.gross.ethan)
+)
+check('the client id is kept so the group can link to the client', byClient[0].clientId === 'c1')
+
 const byPayee = expensesByPayee([
   exp(100, '2026-08-01', { payee: 'Sam' }),
   exp(250, '2026-08-02', { payee: 'Sam' }),
@@ -279,22 +338,16 @@ check(
 check('paid_by matches the check constraint', PAID_BY.join(',') === 'business,me,ethan')
 
 // --- empties -------------------------------------------------------------
-const empty = statement({ period: '2026-08', payments: [], expenses: [], payouts: [] })
+const empty = ledger()
 check(
-  'an empty month is zero everywhere and still balances',
-  empty.net === 0 && empty.owed.ethan === 0 && empty.balances === true
+  'an empty account is zero everywhere and still balances',
+  empty.net === 0 && empty.owed.ethan === 0 && empty.balances === true && empty.counted.length === 0
 )
-check('an empty account has no months', overall({ payments: [], expenses: [], payouts: [] }).months.length === 0)
 
-// A month that only has costs is a real loss, and a negative share is the
-// honest answer -- each partner owes half of it.
-const loss = statement({
-  period: '2026-08',
-  payments: [],
-  expenses: [exp(1000, '2026-08-01')],
-  payouts: [],
-})
-check('a losing month splits the loss', loss.net === -1000 && loss.shares.ethan === -500)
+// Costs and no revenue is a real loss, and a negative share is the honest
+// answer -- each partner is down half of it.
+const loss = ledger({ payments: [], expenses: [exp(1000, '2026-08-01')], payouts: [] })
+check('a loss is split too', loss.net === -1000 && loss.shares.ethan === -500)
 check('and still balances', loss.balances === true)
 
 if (failures > 0) {

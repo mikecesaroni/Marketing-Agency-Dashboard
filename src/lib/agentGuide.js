@@ -204,7 +204,7 @@ export const LOOKUPS = [
   {
     need: 'What is owed to Ethan, or what the business actually made',
     where: 'Payments → Profit split',
-    how: 'Cash basis, one month at a time: collected, minus shared expenses, split by the agreed percent. Every line of the arithmetic is shown so a payout can be checked rather than trusted. A partner who paid a cost out of their own pocket is owed it back on top of their share.',
+    how: 'One lifetime running balance, cash basis — everything ever collected, minus everything ever spent, split by the agreed percent, minus everything ever sent. There is no month to pick and nothing closes off, so a late expense just moves the balance. Every line of the arithmetic is shown, and "What the balance is made of" lists the individual client payments behind the total. A partner who paid a cost out of their own pocket is owed it back on top of their share.',
   },
   {
     need: 'What the business paid out, and to whom',
