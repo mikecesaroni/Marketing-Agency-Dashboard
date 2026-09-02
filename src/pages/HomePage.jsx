@@ -73,9 +73,20 @@ const GROUP_TONES = {
   info: { rail: 'bg-blue-500', icon: 'text-blue-600', badge: 'info' },
 }
 
+// How many of a group show before it folds. Six keeps a card the height of a
+// card; the rest are one click away.
+const VISIBLE = 6
+
 function ActionGroup({ Icon, title, tone, items }) {
+  // Before the early return, not after. A group that is empty today and has
+  // something in it tomorrow is the same component instance in the same slot,
+  // and a hook that only runs on some of those renders is a crash.
+  const [expanded, setExpanded] = useState(false)
+
   if (items.length === 0) return null
   const t = GROUP_TONES[tone] || GROUP_TONES.info
+  const hidden = items.length - VISIBLE
+  const shown = expanded ? items : items.slice(0, VISIBLE)
 
   return (
     <Card padding="none" className="overflow-hidden">
@@ -89,7 +100,7 @@ function ActionGroup({ Icon, title, tone, items }) {
           </div>
 
           <ul className="space-y-1">
-            {items.slice(0, 6).map((item) => (
+            {shown.map((item) => (
               <li key={item.key}>
                 <Link
                   to={item.to}
@@ -106,8 +117,14 @@ function ActionGroup({ Icon, title, tone, items }) {
             ))}
           </ul>
 
-          {items.length > 6 && (
-            <p className="pt-2 text-[11px] text-slate-400">+ {items.length - 6} more</p>
+          {hidden > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-1 -mx-2 w-[calc(100%+1rem)] rounded-lg px-2 py-1.5 text-left text-[11px] font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+            >
+              {expanded ? 'Show fewer' : `+ ${hidden} more`}
+            </button>
           )}
         </div>
       </div>
