@@ -364,6 +364,114 @@ check(
   ledger({ payments: [pay(1000, '2026-08-01')], payouts: [OUT] }).unattributed === 750
 )
 
+// --- what each transfer covered ------------------------------------------
+// "$3,498 to Ethan" is not checkable on its own. "$3,498, being half of these
+// four payments" is.
+
+const covered = ledger({
+  payments: [
+    pay(2500, '2026-07-30', { id: 'j1', clients: { name: 'MBD' }, partner_payout_id: 'jul' }),
+    pay(998, '2026-07-30', { id: 'j2', clients: { name: 'MBD' }, partner_payout_id: 'jul' }),
+    pay(2500, '2026-08-01', { id: 'g1', clients: { name: 'Summit' }, partner_payout_id: 'aug' }),
+    pay(998, '2026-08-01', { id: 'g2', clients: { name: 'Summit' }, partner_payout_id: 'aug' }),
+    pay(1500, '2026-08-20', { id: 'open' }),
+  ],
+  expenses: [exp(400, '2026-08-02', { id: 'c1', paid_by: 'ethan', partner_payout_id: 'aug' })],
+  payouts: [
+    { id: 'jul', partner: 'ethan', amount: 1749, paid_on: '2026-08-26', method: 'migrated' },
+    { id: 'aug', partner: 'ethan', amount: 1949, paid_on: '2026-08-27', method: 'Zelle' },
+  ],
+})
+
+check('there is one entry per transfer', covered.coverage.length === 2)
+check('newest first, like the list it renders', covered.coverage[0].id === 'aug')
+check(
+  'a transfer names the payments it covered',
+  covered.coverage[1].payments.map((r) => r.id).join(',') === 'j1,j2',
+  JSON.stringify(covered.coverage[1].payments.map((r) => r.id))
+)
+check(
+  'and totals them',
+  covered.coverage[1].paymentsTotal === 3498 && covered.coverage[1].covers === 2
+)
+check(
+  'the amount sent ties to half of what it covered',
+  covered.coverage[1].entitled === 1749 && covered.coverage[1].difference === 0,
+  JSON.stringify({ e: covered.coverage[1].entitled, d: covered.coverage[1].difference })
+)
+check(
+  'a covered cost is named too, and says who fronted it',
+  covered.coverage[0].costs.length === 1 &&
+    covered.coverage[0].costs[0].payee === 'Sam' &&
+    covered.coverage[0].costs[0].frontedByEthan === true
+)
+check(
+  'and the cost is in the tie-out: (3498 - 400) / 2 + 400 fronted back',
+  covered.coverage[0].entitled === 1949 && covered.coverage[0].difference === 0,
+  String(covered.coverage[0].entitled)
+)
+check(
+  'the client comes through so a row can name it',
+  covered.coverage[0].payments.every((r) => r.client === 'Summit')
+)
+check(
+  'an unsettled payment belongs to no transfer',
+  covered.coverage.every((c) => !c.payments.some((r) => r.id === 'open'))
+)
+
+// A payout recorded before any of this existed covers nothing, and that has to
+// read as "nothing recorded" rather than as a discrepancy in the books.
+const bare = ledger({
+  payments: [pay(1000, '2026-08-01', { id: 'x' })],
+  payouts: [{ id: 'old', partner: 'ethan', amount: 500, paid_on: '2026-08-02' }],
+})
+check(
+  'a transfer with nothing attributed says so',
+  bare.coverage[0].covers === 0 && bare.coverage[0].paymentsTotal === 0
+)
+check(
+  'and its whole amount is the difference',
+  bare.coverage[0].entitled === 0 && bare.coverage[0].difference === 500
+)
+
+// Typing a different figure shows up per transfer as well as overall.
+const typedDiff = ledger({
+  payments: [pay(1000, '2026-08-01', { id: 'x', partner_payout_id: 'o' })],
+  payouts: [{ id: 'o', partner: 'ethan', amount: 600, paid_on: '2026-08-02' }],
+})
+check(
+  'sending more than half of what it covers is reported on the row',
+  typedDiff.coverage[0].entitled === 500 && typedDiff.coverage[0].difference === 100
+)
+
+// The tie-out must be computed from the covered rows, not by adding up cuts
+// that were allocated across the whole page -- summing a subset of those can
+// land a cent out.
+// Five single cents, alternately attributed: the cumulative allocation gives
+// the covered rows cuts of 1c + 1c + 1c, while half of the 3c they add up to
+// is 2c. Adding up the cuts would invent a cent and report it as a
+// discrepancy on a payout that is exactly right.
+const pennies = ledger({
+  payments: [
+    pay(0.01, '2026-08-05', { id: 'p1', partner_payout_id: 'o' }),
+    pay(0.01, '2026-08-04', { id: 'p2' }),
+    pay(0.01, '2026-08-03', { id: 'p3', partner_payout_id: 'o' }),
+    pay(0.01, '2026-08-02', { id: 'p4' }),
+    pay(0.01, '2026-08-01', { id: 'p5', partner_payout_id: 'o' }),
+  ],
+  payouts: [{ id: 'o', partner: 'ethan', amount: 0.02, paid_on: '2026-08-06' }],
+})
+check(
+  'the tie-out is computed from the covered rows, not from adding up their cuts',
+  pennies.coverage[0].paymentsTotal === 0.03 && pennies.coverage[0].entitled === 0.02,
+  JSON.stringify({ t: pennies.coverage[0].paymentsTotal, e: pennies.coverage[0].entitled })
+)
+check('so an exactly-right payout reports no difference', pennies.coverage[0].difference === 0)
+check(
+  'and the cuts really would have added up to a different number',
+  pennies.coverage[0].payments.reduce((t, r) => t + toCents(r.ethanCut), 0) === 3
+)
+
 // --- what to send for a selection ----------------------------------------
 const sel = (ids, over = {}) =>
   payoutPreview({

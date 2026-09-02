@@ -217,6 +217,11 @@ export const LOOKUPS = [
     how: 'Grouped by client, expandable to the individual payments. A settled one is greyed out with a green "split & sent" badge and its date; an unsettled one has a tick box. The footer counts both. To undo a settlement, delete its payout from "Everything sent" — the payments it covered go back to unsettled.',
   },
   {
+    need: 'Which payments a particular transfer to Ethan covered',
+    where: 'Payments → Profit split → "Everything sent"',
+    how: 'Click any sent row to open it. It lists the client payments that transfer covered, and any costs deducted, then ties out: what it covers, his share of that, and what actually went. "Ties out exactly" means the amount sent was the amount the split worked out to. A transfer saying "nothing recorded" predates ticking payments — the money still counts in the balance, only the attribution is missing. Removing the record is inside the opened row, and it un-settles the payments it covered.',
+  },
+  {
     need: 'How to record sending Ethan his share',
     where: 'Payments → Profit split → "Settle up"',
     how: 'Tick the payments the transfer covers — everything unsettled starts ticked, so the usual case is one press. The amount is worked out from the ticked payments: their half, minus his share of any costs not yet settled, plus anything he paid out of pocket. It is editable, and if you send a different figure the panel says so rather than quietly disagreeing with itself. Recording it marks those payments as split.',

@@ -242,6 +242,56 @@ export function ledger({
   // a balance you can trust and one that quietly stopped matching its story.
   const unattributed = paid.ethan - attributed
 
+  // Each transfer, and the client payments it covered.
+  //
+  // "$3,498 to Ethan" is not a checkable statement on its own. "$3,498, being
+  // half of these four payments" is, and it is the same question the whole
+  // panel exists to answer, asked about one row instead of the lot.
+  //
+  // The per-payout entitlement is worked out from the covered rows rather than
+  // by adding up their individual cuts: those cuts are allocated cumulatively
+  // across every payment on the page, so summing a subset of them can land a
+  // cent away from the subset's own half. One number, computed once, that ties
+  // to the amount actually sent.
+  const coverage = [...payouts]
+    .sort((a, b) => String(b.paid_on).localeCompare(String(a.paid_on)))
+    .map((p) => {
+      const key = String(p.id)
+      const rows = countedRows.filter((r) => r.payoutId === key)
+      const rawPayments = collectedRows.filter((r) => String(r.partner_payout_id) === key)
+      const costs = shared.filter((e) => String(e.partner_payout_id) === key)
+      const amount = toCents(p.amount)
+      const entitled = entitlement(rawPayments, costs, splitPercent).earned.ethan
+
+      return {
+        id: p.id,
+        partner: p.partner || 'ethan',
+        amount: toDollars(amount),
+        paidOn: p.paid_on || null,
+        method: p.method || null,
+        notes: p.notes || null,
+
+        payments: rows,
+        paymentsTotal: toDollars(rawPayments.reduce((t, r) => t + toCents(r.amount), 0)),
+        costs: costs.map((e) => ({
+          id: e.id,
+          payee: e.payee || 'Unknown',
+          spentOn: e.spent_on || null,
+          amount: toDollars(toCents(e.amount)),
+          frontedByEthan: (e.paid_by || 'business') === 'ethan',
+        })),
+        costsTotal: toDollars(costs.reduce((t, e) => t + toCents(e.amount), 0)),
+
+        entitled: toDollars(entitled),
+        // Sent minus earned on what it covers. Zero on a payout recorded from
+        // a selection; the whole amount on one recorded before any of this
+        // existed, which is why it reads as "nothing recorded" rather than as
+        // a discrepancy.
+        difference: toDollars(amount - entitled),
+        covers: rows.length + costs.length,
+      }
+    })
+
   return {
     splitPercent,
 
@@ -280,6 +330,8 @@ export function ledger({
       me: toDollars(earned.me - paid.me),
     },
     payoutCount: payouts.length,
+
+    coverage,
 
     settledCount: settledPayments.length,
     unsettledCount: collectedRows.length - settledPayments.length,

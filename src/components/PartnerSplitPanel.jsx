@@ -140,6 +140,145 @@ function RecordPayout({ preview, onDone }) {
 }
 
 /**
+ * One transfer that was sent, and the client payments it covered.
+ *
+ * "$3,498 to Ethan" is not a checkable statement on its own; "$3,498, being
+ * half of these four payments" is. So the row opens.
+ *
+ * The tie-out line at the bottom is the point of opening it: what it covers,
+ * what that entitled him to, and what actually went. On a payout recorded from
+ * a selection those agree and the line simply confirms it. The two migrated
+ * rows have nothing attributed, and that reads as "no payments recorded
+ * against this one" rather than as money gone missing.
+ */
+function SentRow({ entry, onDelete }) {
+  const [open, setOpen] = useState(false)
+  const off = Math.abs(entry.difference) >= 0.01
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full flex-wrap items-center gap-2 px-2.5 py-2 text-left transition hover:bg-slate-50"
+      >
+        <span className="text-sm font-semibold tabular-nums text-slate-900">
+          {money(entry.amount)}
+        </span>
+        <span className="text-xs text-slate-500">
+          to {entry.partner === 'ethan' ? 'Ethan' : 'you'} · {entry.paidOn}
+        </span>
+        {entry.method && (
+          <Badge tone="neutral" className="capitalize">
+            {entry.method}
+          </Badge>
+        )}
+        <span className="text-[11px] text-slate-400">
+          {entry.covers === 0
+            ? 'nothing recorded'
+            : `${entry.payments.length} payment${entry.payments.length === 1 ? '' : 's'}${
+                entry.costs.length > 0 ? ` · ${entry.costs.length} cost${entry.costs.length === 1 ? '' : 's'}` : ''
+              }`}
+        </span>
+        <span className="ml-auto text-xs text-slate-400">{open ? '−' : '+'}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-200 bg-slate-50/60 px-2.5 py-1.5">
+          {entry.payments.length === 0 ? (
+            <p className="py-1 text-[11px] text-slate-500">
+              No payments were recorded against this transfer — it predates being able to tick
+              them. The money is counted in the balance either way; only the attribution is
+              missing.
+            </p>
+          ) : (
+            <>
+              {entry.payments.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-slate-200/70 py-1 last:border-0"
+                >
+                  <span className="w-20 flex-shrink-0 text-[11px] tabular-nums text-slate-500">
+                    {r.paidDate}
+                  </span>
+                  {r.clientId ? (
+                    <Link
+                      to={`/client/${r.clientId}`}
+                      className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800 hover:text-blue-600"
+                    >
+                      {r.client}
+                    </Link>
+                  ) : (
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800">
+                      {r.client}
+                    </span>
+                  )}
+                  {r.type && (
+                    <span className="flex-shrink-0 text-[10px] uppercase text-slate-400">
+                      {r.type}
+                    </span>
+                  )}
+                  <span className="w-20 flex-shrink-0 text-right text-xs tabular-nums text-slate-900">
+                    {money(r.amount)}
+                  </span>
+                </div>
+              ))}
+
+              {entry.costs.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-slate-200/70 py-1 last:border-0"
+                >
+                  <span className="w-20 flex-shrink-0 text-[11px] tabular-nums text-slate-500">
+                    {c.spentOn}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-slate-600">
+                    {c.payee}
+                    {c.frontedByEthan && (
+                      <span className="ml-1 text-[10px] text-slate-400">he fronted it</span>
+                    )}
+                  </span>
+                  <span className="w-20 flex-shrink-0 text-right text-xs tabular-nums text-red-700">
+                    − {money(c.amount)}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+
+          {entry.covers > 0 && (
+            <p className="mt-1.5 border-t border-slate-300 pt-1.5 text-[11px] text-slate-600">
+              {money(entry.paymentsTotal)} of payments
+              {entry.costsTotal > 0 && `, less ${money(entry.costsTotal)} of costs`} — his share of
+              that is <span className="font-semibold">{money(entry.entitled)}</span>, and{' '}
+              {money(entry.amount)} was sent
+              {off ? '.' : ', which ties out exactly.'}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between gap-2 pt-1.5">
+            {off ? (
+              <span className="text-[11px] text-amber-800">
+                {entry.difference > 0
+                  ? `${money(entry.difference)} more was sent than these rows come to.`
+                  : `${money(Math.abs(entry.difference))} less was sent than these rows come to.`}
+              </span>
+            ) : (
+              <span />
+            )}
+            <button
+              onClick={() => onDelete(entry)}
+              className="flex-shrink-0 text-[11px] text-slate-400 underline hover:text-red-600"
+            >
+              Remove this record
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * The payments the balance is made of, and which of them are settled.
  *
  * Grouped by client and collapsed, because the useful question is "which
@@ -371,11 +510,6 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
     [payments, expenses, selected, splitPercent]
   )
 
-  const history = useMemo(
-    () => [...payouts].sort((a, b) => String(b.paid_on).localeCompare(String(a.paid_on))),
-    [payouts]
-  )
-
   const toggle = (id) =>
     setSelected((prev) => {
       const next = new Set(prev)
@@ -599,36 +733,17 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
               )}
             </div>
 
-            {history.length > 0 && (
+            {book.coverage.length > 0 && (
               <div className="mt-4">
                 <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Everything sent
+                  <span className="ml-1.5 font-normal normal-case tracking-normal text-slate-400">
+                    open one to see which payments it covered
+                  </span>
                 </p>
-                <div className="max-h-64 space-y-1 overflow-y-auto">
-                  {history.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-2"
-                    >
-                      <span className="text-sm font-semibold tabular-nums text-slate-900">
-                        {money(p.amount)}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        to {p.partner === 'ethan' ? 'Ethan' : 'you'} · {p.paid_on}
-                      </span>
-                      {p.method && (
-                        <Badge tone="neutral" className="capitalize">
-                          {p.method}
-                        </Badge>
-                      )}
-                      <button
-                        onClick={() => removePayout(p)}
-                        className="ml-auto text-xs text-slate-400 hover:text-red-600"
-                        title="Remove the record and un-settle its payments"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                <div className="max-h-80 space-y-1 overflow-y-auto">
+                  {book.coverage.map((entry) => (
+                    <SentRow key={entry.id} entry={entry} onDelete={removePayout} />
                   ))}
                 </div>
               </div>
