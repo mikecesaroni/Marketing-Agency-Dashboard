@@ -36,6 +36,13 @@
 //   is still made of individual client payments, and being able to point at
 //   which ones is the difference between a number you check and a number you
 //   are told. See `counted` below.
+//
+// SETTLING IS ATTRIBUTION, NOT A SECOND SET OF BOOKS. A payment carries the
+// payout that covered it, so "which of these 24 have been split with Ethan"
+// has an answer. The money still comes from one place -- earned minus sent --
+// and `payoutPreview` works out what to send for a chosen set of payments by
+// running this same `ledger` over just those payments. There is deliberately
+// no second implementation of the arithmetic to keep in step with the first.
 
 export const EXPENSE_CATEGORIES = [
   'employee',
@@ -95,14 +102,18 @@ export function periodLabel(key) {
  * `splitPercent` is ETHAN's share. The other partner gets the remainder, so
  * changing it to 60 means 60/40 without a second setting to keep in step.
  */
-export function ledger({
-  payments = [],
-  expenses = [],
-  payouts = [],
-  splitPercent = DEFAULT_SPLIT_PERCENT,
-} = {}) {
-  const isCounted = (p) => p.status === 'paid' && !!p.paid_date
-  const collectedRows = payments.filter(isCounted)
+/** Paid, and with a date. A payment marked paid with no date is not money in. */
+const isCollected = (p) => p.status === 'paid' && !!p.paid_date
+
+/**
+ * The whole arithmetic, in cents, for ANY set of payments and expenses.
+ *
+ * Pulled out because two questions need it: what is owed over all time, and
+ * what to send for a chosen handful of payments. Those must never be able to
+ * disagree, so there is one implementation and both call it.
+ */
+function entitlement(payments, expenses, splitPercent) {
+  const collectedRows = payments.filter(isCollected)
   const shared = expenses.filter((e) => e.shared !== false)
   const personal = expenses.filter((e) => e.shared === false)
 
@@ -123,7 +134,38 @@ export function ledger({
   const fronted = { business: 0, me: 0, ethan: 0 }
   for (const e of shared) fronted[e.paid_by || 'business'] += toCents(e.amount)
 
-  const earned = { ethan: ethanShare + fronted.ethan, me: meShare + fronted.me }
+  return {
+    collectedRows,
+    shared,
+    collected,
+    sharedTotal,
+    personalTotal,
+    net,
+    shares: { ethan: ethanShare, me: meShare },
+    fronted,
+    earned: { ethan: ethanShare + fronted.ethan, me: meShare + fronted.me },
+  }
+}
+
+export function ledger({
+  payments = [],
+  expenses = [],
+  payouts = [],
+  splitPercent = DEFAULT_SPLIT_PERCENT,
+} = {}) {
+  const core = entitlement(payments, expenses, splitPercent)
+  const {
+    collectedRows,
+    shared,
+    collected,
+    sharedTotal,
+    personalTotal,
+    net,
+    fronted,
+    earned,
+  } = core
+  const ethanShare = core.shares.ethan
+  const meShare = core.shares.me
 
   const paid = { me: 0, ethan: 0 }
   for (const p of payouts) {
@@ -138,6 +180,10 @@ export function ledger({
   // the UI says so. It is allocated cumulatively rather than by rounding each
   // row on its own: round every row independently and the column does not add
   // up to the total above it, which reads as a bug even when it is a cent.
+  // Settled payments name the transfer that covered them, so the row can say
+  // when it was sent rather than just that it was.
+  const payoutById = new Map(payouts.filter((p) => p.id).map((p) => [String(p.id), p]))
+
   const counted = [...collectedRows]
     .sort((a, b) => String(b.paid_date).localeCompare(String(a.paid_date)))
   // The gross cut is worked out from the pooled total, not by adding up the
@@ -152,6 +198,7 @@ export function ledger({
     const nextEthan = Math.round((cum * splitPercent) / 100)
     const rowEthan = nextEthan - cumEthan
     cumEthan = nextEthan
+    const payout = p.partner_payout_id ? payoutById.get(String(p.partner_payout_id)) : null
     return {
       id: p.id,
       client: p.clients?.name || p.client_name || 'Unassigned',
@@ -161,13 +208,19 @@ export function ledger({
       amount: toDollars(cents),
       ethanCut: toDollars(rowEthan),
       meCut: toDollars(cents - rowEthan),
+      // A payout id pointing at a row that is gone reads as unsettled, which
+      // is right: the FK is ON DELETE SET NULL, so deleting a payout is how
+      // you undo one.
+      payoutId: payout ? String(p.partner_payout_id) : null,
+      settled: !!payout,
+      settledOn: payout?.paid_on || null,
     }
   })
 
   // Payments deliberately not in the total, so their absence is explainable
   // rather than mysterious. A payment with no paid_date has not been collected
   // however its status reads.
-  const uncounted = payments.filter((p) => !isCounted(p))
+  const uncounted = payments.filter((p) => !isCollected(p))
   const uncountedTotal = uncounted.reduce((sum, p) => sum + toCents(p.amount), 0)
 
   // What the business account actually did. If this disagrees with what the two
@@ -175,6 +228,19 @@ export function ledger({
   // balance is not safe to pay from.
   const businessCashChange = collected - fronted.business
   const totalEarned = earned.ethan + earned.me
+
+  // Settled means "a transfer to Ethan covered this". The money still comes
+  // from earned minus sent; this only says which rows have been dealt with.
+  const live = (row) => row.partner_payout_id && payoutById.has(String(row.partner_payout_id))
+  const settledPayments = collectedRows.filter(live)
+  const settledExpenses = shared.filter(live)
+  const attributed = entitlement(settledPayments, settledExpenses, splitPercent).earned.ethan
+
+  // Sent, minus what the settled rows actually entitled him to. Zero when the
+  // suggested amount was accepted, which is the normal case. Non-zero means
+  // somebody typed a different figure, and saying so is the difference between
+  // a balance you can trust and one that quietly stopped matching its story.
+  const unattributed = paid.ethan - attributed
 
   return {
     splitPercent,
@@ -215,6 +281,13 @@ export function ledger({
     },
     payoutCount: payouts.length,
 
+    settledCount: settledPayments.length,
+    unsettledCount: collectedRows.length - settledPayments.length,
+    // Ethan's entitlement from the rows already settled, and the gap between
+    // that and what he has actually been sent.
+    attributed: toDollars(attributed),
+    unattributed: toDollars(unattributed),
+
     balances: totalEarned === businessCashChange,
     businessCashChange: toDollars(businessCashChange),
   }
@@ -241,11 +314,29 @@ export function countedByClient(counted = []) {
   for (const row of counted) {
     const key = row.client || 'Unassigned'
     if (!byClient.has(key))
-      byClient.set(key, { client: key, clientId: row.clientId, cents: 0, ethanCents: 0, count: 0 })
+      byClient.set(key, {
+        client: key,
+        clientId: row.clientId,
+        cents: 0,
+        ethanCents: 0,
+        count: 0,
+        settled: 0,
+        openCents: 0,
+        openEthanCents: 0,
+        ids: [],
+        openIds: [],
+      })
     const agg = byClient.get(key)
     agg.cents += toCents(row.amount)
     agg.ethanCents += toCents(row.ethanCut)
     agg.count += 1
+    agg.ids.push(row.id)
+    if (row.settled) agg.settled += 1
+    else {
+      agg.openCents += toCents(row.amount)
+      agg.openEthanCents += toCents(row.ethanCut)
+      agg.openIds.push(row.id)
+    }
   }
   return [...byClient.values()]
     .map((r) => ({
@@ -254,6 +345,61 @@ export function countedByClient(counted = []) {
       total: toDollars(r.cents),
       ethanCut: toDollars(r.ethanCents),
       count: r.count,
+      ids: r.ids,
+      // What is still to settle, which is what the tick boxes act on.
+      settledCount: r.settled,
+      openCount: r.count - r.settled,
+      openTotal: toDollars(r.openCents),
+      openEthanCut: toDollars(r.openEthanCents),
+      openIds: r.openIds,
     }))
     .sort((a, b) => b.total - a.total)
+}
+
+// ---------- settling up ----------------------------------------------------
+/**
+ * What to send Ethan for a chosen set of payments.
+ *
+ * This is `ledger` run over just those payments -- not a second formula. Tick
+ * a different set and the number moves, and it moves the same way the balance
+ * does, because it is the same arithmetic.
+ *
+ * EVERY UNSETTLED SHARED COST COMES OFF, whatever is selected. A pooled cost
+ * is not attributable to one client's invoice, so it reduces the next
+ * distribution rather than waiting for the payment it "belongs" to. Select too
+ * few payments to cover the outstanding costs and the amount goes negative,
+ * which the caller should refuse rather than round away.
+ */
+export function payoutPreview({
+  payments = [],
+  expenses = [],
+  selectedIds = [],
+  splitPercent = DEFAULT_SPLIT_PERCENT,
+} = {}) {
+  const wanted = selectedIds instanceof Set ? selectedIds : new Set(selectedIds)
+  const selected = payments.filter((p) => isCollected(p) && wanted.has(p.id))
+  const pendingExpenses = expenses.filter((e) => !e.partner_payout_id)
+
+  const book = ledger({
+    payments: selected,
+    expenses: pendingExpenses,
+    payouts: [],
+    splitPercent,
+  })
+
+  return {
+    count: selected.length,
+    paymentIds: selected.map((p) => p.id),
+    expenseIds: pendingExpenses.filter((e) => e.shared !== false).map((e) => e.id),
+    selectedTotal: book.collected,
+    grossCut: book.gross.ethan,
+    expensesDeducted: book.sharedExpenses,
+    expenseShare: toDollars(toCents(book.gross.ethan) - toCents(book.shares.ethan)),
+    frontedBack: book.fronted.ethan,
+    amount: book.earned.ethan,
+    // Costs exceed the selection's cut. Not an error to hide: it means either
+    // more payments belong in this payout or the business genuinely lost money
+    // over these ones.
+    negative: book.earned.ethan < 0,
+  }
 }

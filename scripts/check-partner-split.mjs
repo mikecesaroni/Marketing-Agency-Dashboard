@@ -28,6 +28,7 @@ import {
   countedByClient,
   expensesByPayee,
   ledger,
+  payoutPreview,
   periodLabel,
   periodOf,
   toCents,
@@ -306,6 +307,164 @@ check(
     forwards.shares.ethan === backwards.shares.ethan
 )
 
+// --- which payments have been settled ------------------------------------
+// "Which of these 24 have been split with Ethan" is a different question from
+// "what is owed", and it is the one you ask looking at a list. A payment
+// carries the payout that covered it.
+
+const OUT = { id: 'o1', partner: 'ethan', amount: 750, paid_on: '2026-08-26' }
+
+const withSettled = ledger({
+  payments: [
+    pay(1000, '2026-08-01', { id: 's1', partner_payout_id: 'o1' }),
+    pay(500, '2026-08-02', { id: 's2', partner_payout_id: 'o1' }),
+    pay(2000, '2026-08-03', { id: 'u1' }),
+  ],
+  expenses: [],
+  payouts: [OUT],
+})
+check('settled payments are counted', withSettled.settledCount === 2, String(withSettled.settledCount))
+check('and so are the ones still to settle', withSettled.unsettledCount === 1)
+check(
+  'a settled row says when it was sent',
+  withSettled.counted.every((r) =>
+    r.id === 'u1' ? !r.settled && !r.settledOn : r.settled && r.settledOn === '2026-08-26'
+  )
+)
+const stale = ledger({
+  payments: [pay(1000, '2026-08-01', { id: 'x', partner_payout_id: 'gone' })],
+  expenses: [exp(100, '2026-08-01', { id: 'e', partner_payout_id: 'gone' })],
+  payouts: [],
+})
+check('a payout id pointing at a deleted payout reads as unsettled', stale.counted[0].settled === false)
+check(
+  'and it is not counted as settled either — deleting a payout is how you undo one',
+  stale.settledCount === 0 && stale.unsettledCount === 1 && stale.attributed === 0,
+  `${stale.settledCount} / ${stale.attributed}`
+)
+
+// The invariant that keeps the two stories together: what he was sent, versus
+// what the rows marked settled actually entitled him to.
+check(
+  'accepting the suggested amount leaves nothing unattributed',
+  withSettled.attributed === 750 && withSettled.unattributed === 0,
+  `${withSettled.attributed} / ${withSettled.unattributed}`
+)
+const typedOver = ledger({
+  payments: [pay(1000, '2026-08-01', { id: 's1', partner_payout_id: 'o1' })],
+  payouts: [{ ...OUT, amount: 600 }],
+})
+check(
+  'sending a different figure shows up as a gap rather than silently',
+  typedOver.attributed === 500 && typedOver.unattributed === 100,
+  `${typedOver.attributed} / ${typedOver.unattributed}`
+)
+check(
+  'settling nothing but sending money is the same kind of gap',
+  ledger({ payments: [pay(1000, '2026-08-01')], payouts: [OUT] }).unattributed === 750
+)
+
+// --- what to send for a selection ----------------------------------------
+const sel = (ids, over = {}) =>
+  payoutPreview({
+    payments: [
+      pay(1000, '2026-08-01', { id: 'a' }),
+      pay(500, '2026-08-02', { id: 'b' }),
+      pay(2000, '2026-08-03', { id: 'c', partner_payout_id: 'o1' }),
+    ],
+    selectedIds: ids,
+    ...over,
+  })
+
+check('an empty selection is worth nothing', sel([]).amount === 0 && sel([]).count === 0)
+check('one payment is worth half of it', sel(['a']).amount === 500)
+check('two are worth half of both', sel(['a', 'b']).amount === 750 && sel(['a', 'b']).count === 2)
+check('an id that is not there is ignored', sel(['a', 'nope']).amount === 500)
+check('a Set works as well as an array', sel(new Set(['a', 'b'])).amount === 750)
+check(
+  'an already-settled payment can still be re-selected — undoing is deleting the payout',
+  sel(['c']).amount === 1000
+)
+
+// THE property: the preview is the ledger, not a second formula.
+for (const ids of [[], ['a'], ['b'], ['a', 'b'], ['a', 'b', 'c']]) {
+  const preview = payoutPreview({
+    payments: [
+      pay(1000.01, '2026-08-01', { id: 'a' }),
+      pay(333.33, '2026-08-02', { id: 'b' }),
+      pay(0.01, '2026-08-03', { id: 'c' }),
+    ],
+    expenses: [exp(99.99, '2026-08-01', { id: 'e1' })],
+    selectedIds: ids,
+    splitPercent: 55,
+  })
+  const direct = ledger({
+    payments: [
+      pay(1000.01, '2026-08-01', { id: 'a' }),
+      pay(333.33, '2026-08-02', { id: 'b' }),
+      pay(0.01, '2026-08-03', { id: 'c' }),
+    ].filter((p) => ids.includes(p.id)),
+    expenses: [exp(99.99, '2026-08-01', { id: 'e1' })],
+    payouts: [],
+    splitPercent: 55,
+  })
+  check(
+    `the preview matches the ledger for ${ids.length} selected`,
+    preview.amount === direct.earned.ethan,
+    `${preview.amount} vs ${direct.earned.ethan}`
+  )
+}
+
+// Pooled costs come off the next distribution, whatever is ticked.
+const withCosts = payoutPreview({
+  payments: [pay(1000, '2026-08-01', { id: 'a' }), pay(1000, '2026-08-02', { id: 'b' })],
+  expenses: [
+    exp(400, '2026-08-01', { id: 'e1' }),
+    exp(100, '2026-08-02', { id: 'e2', paid_by: 'ethan' }),
+    exp(9999, '2026-01-01', { id: 'old', partner_payout_id: 'o1' }),
+    exp(50, '2026-08-03', { id: 'p1', shared: false, paid_by: 'me' }),
+  ],
+  selectedIds: ['a'],
+})
+check('every unsettled shared cost comes off', withCosts.expensesDeducted === 500, String(withCosts.expensesDeducted))
+check('a cost already settled is not deducted twice', withCosts.expensesDeducted !== 10499)
+check('a personal cost is not deducted at all', withCosts.expensesDeducted !== 550)
+check(
+  'the arithmetic is shown line by line',
+  withCosts.grossCut === 500 && withCosts.expenseShare === 250 && withCosts.frontedBack === 100,
+  JSON.stringify(withCosts)
+)
+check('and it adds up', withCosts.amount === 350, String(withCosts.amount))
+check(
+  'the settled cost is not offered up for re-settling',
+  !withCosts.expenseIds.includes('old') && withCosts.expenseIds.includes('e1')
+)
+check('a personal cost is never attached to a payout', !withCosts.expenseIds.includes('p1'))
+
+const swamped = payoutPreview({
+  payments: [pay(100, '2026-08-01', { id: 'a' })],
+  expenses: [exp(900, '2026-08-01', { id: 'e1' })],
+  selectedIds: ['a'],
+})
+check('costs bigger than the selection read as negative, not zero', swamped.negative === true && swamped.amount === -400)
+check('a positive amount is not flagged', withCosts.negative === false)
+
+// Settling everything and sending exactly that leaves nothing owed.
+const settleAll = (() => {
+  const payments = [pay(1000, '2026-08-01', { id: 'a' }), pay(600, '2026-08-02', { id: 'b' })]
+  const expenses = [exp(200, '2026-08-01', { id: 'e1', paid_by: 'ethan' })]
+  const preview = payoutPreview({ payments, expenses, selectedIds: ['a', 'b'] })
+  const after = ledger({
+    payments: payments.map((p) => ({ ...p, partner_payout_id: 'o1' })),
+    expenses: expenses.map((e) => ({ ...e, partner_payout_id: 'o1' })),
+    payouts: [{ id: 'o1', partner: 'ethan', amount: preview.amount, paid_on: '2026-09-02' }],
+  })
+  return { preview, after }
+})()
+check('settling up clears the balance exactly', settleAll.after.owed.ethan === 0, String(settleAll.after.owed.ethan))
+check('and leaves nothing unattributed', settleAll.after.unattributed === 0)
+check('and nothing left to settle', settleAll.after.unsettledCount === 0)
+
 // --- the roll-ups --------------------------------------------------------
 const byClient = countedByClient(traced.counted)
 check('payments group by client, biggest first', byClient[0].client === 'Acme' && byClient[0].total === 1250)
@@ -319,6 +478,38 @@ check(
   byClient.reduce((t, g) => t + toCents(g.ethanCut), 0) === toCents(traced.gross.ethan)
 )
 check('the client id is kept so the group can link to the client', byClient[0].clientId === 'c1')
+
+const mixedGroups = countedByClient(
+  ledger({
+    payments: [
+      pay(1000, '2026-08-01', { id: 'g1', clients: { name: 'Acme' }, partner_payout_id: 'o1' }),
+      pay(500, '2026-08-02', { id: 'g2', clients: { name: 'Acme' } }),
+      pay(300, '2026-08-03', { id: 'g3', clients: { name: 'Belk' } }),
+    ],
+    payouts: [OUT],
+  }).counted
+)
+check(
+  'a group separates what is settled from what is still open',
+  mixedGroups[0].client === 'Acme' &&
+    mixedGroups[0].count === 2 &&
+    mixedGroups[0].settledCount === 1 &&
+    mixedGroups[0].openCount === 1,
+  JSON.stringify(mixedGroups[0])
+)
+check(
+  'and the open figures exclude the settled payment',
+  mixedGroups[0].total === 1500 && mixedGroups[0].openTotal === 500 && mixedGroups[0].openEthanCut === 250,
+  `${mixedGroups[0].openTotal} / ${mixedGroups[0].openEthanCut}`
+)
+check(
+  'the open ids are what a tick box acts on',
+  mixedGroups[0].openIds.join(',') === 'g2' && !mixedGroups[0].openIds.includes('g1')
+)
+check(
+  'a group with nothing settled offers all of it',
+  mixedGroups[1].client === 'Belk' && mixedGroups[1].openIds.join(',') === 'g3' && mixedGroups[1].settledCount === 0
+)
 
 const byPayee = expensesByPayee([
   exp(100, '2026-08-01', { payee: 'Sam' }),

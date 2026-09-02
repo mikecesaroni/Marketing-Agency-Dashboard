@@ -212,6 +212,16 @@ export const LOOKUPS = [
     how: 'Only appears when money has not arrived. Each line names the client, the amount, and the date Stripe will retry — Stripe retries a failed card up to four times over about two weeks and most go through on their own, so a retry date means wait. "Stripe has stopped retrying", or a retry date that has passed, is the one that needs a new card from the client. A failure that was later paid is not in the banner at all; the payment row itself says the card failed and the retry went through.',
   },
   {
+    need: 'Which client payments have already been split with Ethan',
+    where: 'Payments → Profit split → "What the balance is made of"',
+    how: 'Grouped by client, expandable to the individual payments. A settled one is greyed out with a green "split & sent" badge and its date; an unsettled one has a tick box. The footer counts both. To undo a settlement, delete its payout from "Everything sent" — the payments it covered go back to unsettled.',
+  },
+  {
+    need: 'How to record sending Ethan his share',
+    where: 'Payments → Profit split → "Settle up"',
+    how: 'Tick the payments the transfer covers — everything unsettled starts ticked, so the usual case is one press. The amount is worked out from the ticked payments: their half, minus his share of any costs not yet settled, plus anything he paid out of pocket. It is editable, and if you send a different figure the panel says so rather than quietly disagreeing with itself. Recording it marks those payments as split.',
+  },
+  {
     need: 'What the business paid out, and to whom',
     where: 'Payments → Expenses',
     how: 'One row per cost. Anything marked shared comes off the top before the split; anything not stays recorded but out of it. This is a management view, not payroll — no withholding or 1099s are modelled.',

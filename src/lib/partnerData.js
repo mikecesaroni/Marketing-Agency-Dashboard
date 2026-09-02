@@ -65,21 +65,45 @@ export async function fetchPayouts() {
 }
 
 /**
- * Records a payment to a partner.
+ * Records a payment to a partner, and marks what it covered.
  *
- * Just the fact of the transfer -- who, how much, when, how. The balance is
+ * The transfer itself is just who, how much, when and how -- the balance is
  * derived from the totals every time it is read, so there is no snapshot of
- * the arithmetic to store and nothing to keep in step with it.
+ * the arithmetic to store. What DOES get stored is which payments and which
+ * costs this transfer settled, so a list of payments can say which of them
+ * have been dealt with.
+ *
+ * Through one Postgres function rather than three calls from here. The three
+ * writes -- the payout, the payments, the expenses -- have to be all or
+ * nothing: any two of them landing without the third is a wrong balance, and
+ * the browser cannot open a transaction.
  */
-export async function addPayout({ partner, amount, paidOn, method, notes }) {
-  const { error } = await supabase.from('partner_payouts').insert({
-    partner,
-    amount,
-    paid_on: paidOn,
-    method: method?.trim() || null,
-    notes: notes?.trim() || null,
-  })
+export async function addPayout({
+  partner,
+  amount,
+  paidOn,
+  method,
+  notes,
+  paymentIds = [],
+  expenseIds = [],
+}) {
+  // Empty lists are OMITTED rather than sent as []. The function defaults them
+  // to '{}', and leaving PostgREST to infer the element type of an empty JSON
+  // array for a uuid[] parameter is a needless thing to depend on -- and with
+  // no expenses logged yet, the empty case is the one production takes.
+  const args = {
+    p_partner: partner,
+    p_amount: amount,
+    p_paid_on: paidOn,
+    p_method: method || null,
+    p_notes: notes || null,
+  }
+  if (paymentIds.length > 0) args.p_payment_ids = paymentIds
+  if (expenseIds.length > 0) args.p_expense_ids = expenseIds
+
+  const { data, error } = await supabase.rpc('record_partner_payout', args)
   if (error) throw error
+  return data
 }
 
 export async function deletePayout(id) {

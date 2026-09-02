@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { money } from '../lib/queries'
-import { countedByClient, ledger } from '../lib/partnerSplit'
+import { countedByClient, ledger, payoutPreview } from '../lib/partnerSplit'
 import {
   addPayout,
   deletePayout,
@@ -10,14 +10,22 @@ import {
 } from '../lib/partnerData'
 import { Badge, Button, Card, Field, Input, StatCard } from './ui'
 
-// One running balance, and the payment it justifies.
+// One running balance, the payments it is made of, and the payment it justifies.
 //
 // The whole design goal is that a payout is never a number somebody has to
 // take on trust. Every line of the arithmetic is on screen, in the order it
-// happens, with the count of things behind each figure -- and underneath it,
-// the actual client payments the total is made of. So "you owe Ethan $X" can
-// be checked in ten seconds by the person receiving it. A split that cannot be
-// audited by both partners is a split that eventually gets argued about.
+// happens, and underneath it the actual client payments the total is made of --
+// each one saying whether it has been split with Ethan yet.
+//
+// SETTLING UP IS THE SAME ARITHMETIC, OVER FEWER ROWS. Tick the payments this
+// transfer covers and the amount is `payoutPreview` over exactly those: the
+// same `ledger` function that produces the balance above. There is no second
+// formula that could drift from the first, which is why ticking a box can be
+// trusted to move the number correctly.
+//
+// Everything unsettled starts ticked, so the common case -- "send him his half
+// of everything since last time" -- is one click and its amount already agrees
+// with what the balance says is owed. Unticking is for the times it does not.
 
 function Line({ label, value, sub, strong, negative, rule }) {
   return (
@@ -41,8 +49,15 @@ function Line({ label, value, sub, strong, negative, rule }) {
   )
 }
 
-function RecordPayout({ book, partner, onDone }) {
-  const owed = book.owed[partner]
+/**
+ * Records the transfer and marks what it covered.
+ *
+ * The amount is prefilled from the ticked payments but stays editable, because
+ * what actually left the bank is the fact worth recording. Typing a different
+ * figure is allowed and then reported: the balance shows the gap rather than
+ * quietly disagreeing with the payments it says are settled.
+ */
+function RecordPayout({ preview, onDone }) {
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState('')
   const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10))
@@ -51,10 +66,7 @@ function RecordPayout({ book, partner, onDone }) {
   const [error, setError] = useState('')
 
   const start = () => {
-    // Prefilled with what is owed, because that is the number nine times out
-    // of ten -- but editable, because what actually left the bank is the fact
-    // worth recording, not what should have.
-    setAmount(owed > 0 ? String(owed.toFixed(2)) : '')
+    setAmount(preview.amount > 0 ? String(preview.amount.toFixed(2)) : '')
     setOpen(true)
   }
 
@@ -64,7 +76,14 @@ function RecordPayout({ book, partner, onDone }) {
     if (!(Number(amount) > 0)) return setError('Amount has to be more than zero.')
     setSaving(true)
     try {
-      await addPayout({ partner, amount: Number(amount), paidOn, method })
+      await addPayout({
+        partner: 'ethan',
+        amount: Number(amount),
+        paidOn,
+        method,
+        paymentIds: preview.paymentIds,
+        expenseIds: preview.expenseIds,
+      })
       setOpen(false)
       onDone()
     } catch (err) {
@@ -76,8 +95,12 @@ function RecordPayout({ book, partner, onDone }) {
 
   if (!open) {
     return (
-      <Button variant="dark" onClick={start}>
-        Record a payment to {partner === 'ethan' ? 'Ethan' : 'yourself'}
+      <Button variant="dark" onClick={start} disabled={preview.count === 0 || preview.negative}>
+        {preview.count === 0
+          ? 'Tick the payments to settle'
+          : `Send ${money(preview.amount)} for ${preview.count} ${
+              preview.count === 1 ? 'payment' : 'payments'
+            }`}
       </Button>
     )
   }
@@ -97,8 +120,9 @@ function RecordPayout({ book, partner, onDone }) {
       </div>
 
       <p className="text-[11px] text-slate-500">
-        Recording a payment lowers the balance by this much and nothing else. It does not close
-        anything off — if an expense or a client payment turns up later, the balance just moves.
+        Marks {preview.count} {preview.count === 1 ? 'payment' : 'payments'} as split with Ethan
+        {preview.expensesDeducted > 0 && `, along with ${money(preview.expensesDeducted)} of costs`}.
+        To undo it, delete the payout from the list below — the payments go back to unsettled.
       </p>
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">{error}</p>}
@@ -116,7 +140,7 @@ function RecordPayout({ book, partner, onDone }) {
 }
 
 /**
- * The payments the balance is made of.
+ * The payments the balance is made of, and which of them are settled.
  *
  * Grouped by client and collapsed, because the useful question is "which
  * clients is this money from" and the row-by-row detail is the follow-up. The
@@ -124,11 +148,12 @@ function RecordPayout({ book, partner, onDone }) {
  * pooled, so pretending an employee's wage belongs to one client's invoice
  * would be a tidier screen and a worse number.
  */
-function CountedPayments({ book }) {
+function CountedPayments({ book, selected, onToggle, onToggleGroup, onSelectAll, onClear }) {
   const [open, setOpen] = useState(() => new Set())
+  const [showSettled, setShowSettled] = useState(false)
   const groups = useMemo(() => countedByClient(book.counted), [book.counted])
 
-  const toggle = (client) =>
+  const toggleOpen = (client) =>
     setOpen((prev) => {
       const next = new Set(prev)
       if (next.has(client)) next.delete(client)
@@ -147,45 +172,84 @@ function CountedPayments({ book }) {
     )
   }
 
+  const shown = groups.filter((g) => showSettled || g.openCount > 0)
+
   return (
     <Card padding="lg">
-      <div className="mb-3">
-        <h3 className="font-semibold text-slate-900">What the balance is made of</h3>
-        <p className="mt-0.5 text-sm text-slate-600">
-          Every client payment counted toward the {money(book.collected)} collected, and the{' '}
-          {book.splitPercent}% of each that goes to Ethan{' '}
-          <span className="text-slate-400">before costs</span>. These add up to{' '}
-          {money(book.gross.ethan)}; the {money(book.sharedExpenses)} of shared costs comes off the
-          pool, which is what brings it down to {money(book.shares.ethan)}.
-        </p>
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-slate-900">What the balance is made of</h3>
+          <p className="mt-0.5 text-sm text-slate-600">
+            Every client payment counted toward the {money(book.collected)} collected, and the{' '}
+            {book.splitPercent}% of each that goes to Ethan{' '}
+            <span className="text-slate-400">before costs</span>. Tick the ones a transfer covers;
+            the amount to send is worked out above.
+          </p>
+        </div>
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onSelectAll}>
+            All {book.unsettledCount} unsettled
+          </Button>
+          <Button variant="outline" size="sm" onClick={onClear} disabled={selected.size === 0}>
+            Clear
+          </Button>
+          {book.settledCount > 0 && (
+            <button
+              onClick={() => setShowSettled((v) => !v)}
+              className="text-xs text-slate-500 underline hover:text-slate-800"
+            >
+              {showSettled ? 'Hide' : 'Show'} {book.settledCount} settled
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="space-y-1.5">
-        {groups.map((g) => {
+        {shown.map((g) => {
           const isOpen = open.has(g.client)
-          const rows = book.counted.filter((r) => r.client === g.client)
+          const rows = book.counted.filter(
+            (r) => r.client === g.client && (showSettled || !r.settled)
+          )
+          const ticked = g.openIds.filter((id) => selected.has(id)).length
+          const allTicked = g.openCount > 0 && ticked === g.openCount
+
           return (
             <div key={g.client} className="overflow-hidden rounded-lg border border-slate-200">
-              <button
-                onClick={() => toggle(g.client)}
-                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left transition hover:bg-slate-50"
-              >
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
-                  {g.client}
-                </span>
-                <span className="flex-shrink-0 text-[11px] text-slate-400">
-                  {g.count} {g.count === 1 ? 'payment' : 'payments'}
-                </span>
-                <span className="w-24 flex-shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">
-                  {money(g.total)}
-                </span>
-                <span className="w-24 flex-shrink-0 text-right text-xs tabular-nums text-slate-500">
-                  {money(g.ethanCut)} → Ethan
-                </span>
-                <span className="w-8 flex-shrink-0 text-right text-xs text-slate-400">
-                  {isOpen ? '−' : '+'}
-                </span>
-              </button>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={allTicked}
+                  // Some but not all: the box shows the group is partly in.
+                  ref={(el) => {
+                    if (el) el.indeterminate = ticked > 0 && !allTicked
+                  }}
+                  disabled={g.openCount === 0}
+                  onChange={() => onToggleGroup(g.openIds, !allTicked)}
+                  className="h-4 w-4 flex-shrink-0 rounded disabled:opacity-30"
+                  title={g.openCount === 0 ? 'All settled' : `Tick all of ${g.client}`}
+                />
+                <button
+                  onClick={() => toggleOpen(g.client)}
+                  className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-left"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
+                    {g.client}
+                  </span>
+                  <span className="flex-shrink-0 text-[11px] text-slate-400">
+                    {g.count} {g.count === 1 ? 'payment' : 'payments'}
+                    {g.settledCount > 0 && ` · ${g.settledCount} settled`}
+                  </span>
+                  <span className="w-24 flex-shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">
+                    {money(g.total)}
+                  </span>
+                  <span className="w-28 flex-shrink-0 text-right text-xs tabular-nums text-slate-500">
+                    {money(g.ethanCut)} → Ethan
+                  </span>
+                  <span className="w-6 flex-shrink-0 text-right text-xs text-slate-400">
+                    {isOpen ? '−' : '+'}
+                  </span>
+                </button>
+              </div>
 
               {isOpen && (
                 <div className="border-t border-slate-200 bg-slate-50/60 px-3 py-1">
@@ -194,6 +258,18 @@ function CountedPayments({ book }) {
                       key={r.id}
                       className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-200/70 py-1.5 last:border-0"
                     >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(r.id)}
+                        disabled={r.settled}
+                        onChange={() => onToggle(r.id)}
+                        className="h-4 w-4 flex-shrink-0 rounded disabled:opacity-30"
+                        title={
+                          r.settled
+                            ? 'Already split with Ethan. Delete its payout to undo.'
+                            : 'Include in the next payout'
+                        }
+                      />
                       <span className="w-20 flex-shrink-0 text-xs tabular-nums text-slate-500">
                         {r.paidDate}
                       </span>
@@ -202,20 +278,26 @@ function CountedPayments({ book }) {
                           {r.type}
                         </Badge>
                       )}
-                      <span className="min-w-0 flex-1" />
+                      <span className="min-w-0 flex-1">
+                        {r.settled && (
+                          <Badge tone="success" className="flex-shrink-0">
+                            split &amp; sent {r.settledOn}
+                          </Badge>
+                        )}
+                      </span>
                       <span className="w-24 flex-shrink-0 text-right text-sm tabular-nums text-slate-900">
                         {money(r.amount)}
                       </span>
-                      <span className="w-24 flex-shrink-0 text-right text-xs tabular-nums text-slate-500">
+                      <span className="w-28 flex-shrink-0 text-right text-xs tabular-nums text-slate-500">
                         {money(r.ethanCut)} → Ethan
                       </span>
-                      <span className="w-8 flex-shrink-0" />
+                      <span className="w-6 flex-shrink-0" />
                     </div>
                   ))}
                   {g.clientId && (
                     <div className="py-1.5">
                       <Link
-                        to={`/clients/${g.clientId}`}
+                        to={`/client/${g.clientId}`}
                         className="text-xs text-slate-500 underline hover:text-slate-800"
                       >
                         Open {g.client}
@@ -232,6 +314,11 @@ function CountedPayments({ book }) {
       <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 border-t border-slate-300 pt-2 text-sm">
         <span className="font-semibold text-slate-900">
           {book.collectedCount} {book.collectedCount === 1 ? 'payment' : 'payments'} counted
+          {book.settledCount > 0 && (
+            <span className="ml-2 font-normal text-slate-500">
+              {book.settledCount} split with Ethan, {book.unsettledCount} not yet
+            </span>
+          )}
         </span>
         <span className="font-bold tabular-nums text-slate-900">{money(book.collected)}</span>
       </div>
@@ -254,6 +341,7 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
   const [splitPercent, setSplitPercent] = useState(50)
   const [editingSplit, setEditingSplit] = useState(false)
   const [splitDraft, setSplitDraft] = useState('50')
+  const [selected, setSelected] = useState(() => new Set())
 
   useEffect(() => {
     fetchSplitPercent().then((p) => {
@@ -267,10 +355,44 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
     [payments, expenses, payouts, splitPercent]
   )
 
+  const unsettledIds = useMemo(
+    () => book.counted.filter((r) => !r.settled).map((r) => r.id),
+    [book.counted]
+  )
+
+  // Everything not yet settled, ticked, whenever the data changes -- including
+  // after recording a payout, when what is unsettled has just changed.
+  useEffect(() => {
+    setSelected(new Set(unsettledIds))
+  }, [unsettledIds])
+
+  const preview = useMemo(
+    () => payoutPreview({ payments, expenses, selectedIds: selected, splitPercent }),
+    [payments, expenses, selected, splitPercent]
+  )
+
   const history = useMemo(
     () => [...payouts].sort((a, b) => String(b.paid_on).localeCompare(String(a.paid_on))),
     [payouts]
   )
+
+  const toggle = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const toggleGroup = (ids, on) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) {
+        if (on) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
 
   const saveSplit = async () => {
     const n = Number(splitDraft)
@@ -280,9 +402,14 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
     setEditingSplit(false)
   }
 
-  const removePayout = async (id) => {
-    if (!confirm('Remove this recorded payment? It does not move any money — it only removes the record, so the balance goes back up.')) return
-    await deletePayout(id)
+  const removePayout = async (p) => {
+    if (
+      !confirm(
+        `Remove the ${money(p.amount)} sent on ${p.paid_on}? No money moves — the record goes, the balance goes back up, and any payments it covered go back to unsettled.`
+      )
+    )
+      return
+    await deletePayout(p.id)
     onChanged()
   }
 
@@ -420,8 +547,56 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
               </p>
             )}
 
-            <div className="mt-4">
-              <RecordPayout book={book} partner="ethan" onDone={onChanged} />
+            {/* The next transfer, worked out from the ticked payments. Same
+                arithmetic as the column on the left, over fewer rows. */}
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Settle up
+              </p>
+
+              {book.unsettledCount === 0 && preview.count === 0 ? (
+                <p className="py-1 text-sm text-slate-600">
+                  Every payment has been split with Ethan. Nothing to settle.
+                </p>
+              ) : (
+                <>
+                  <Line
+                    label="Ticked payments"
+                    sub={`${preview.count} of ${book.unsettledCount} unsettled`}
+                    value={preview.selectedTotal}
+                  />
+                  <Line label={`His ${book.splitPercent}%`} value={preview.grossCut} />
+                  {preview.expensesDeducted > 0 && (
+                    <Line
+                      label="Less his share of costs"
+                      sub={`${money(preview.expensesDeducted)} not yet settled`}
+                      value={preview.expenseShare}
+                      negative
+                    />
+                  )}
+                  {preview.frontedBack > 0 && (
+                    <Line label="Plus what he fronted" value={preview.frontedBack} />
+                  )}
+                  <Line
+                    label={preview.negative ? 'Short by' : 'To send'}
+                    value={Math.abs(preview.amount)}
+                    negative={preview.negative}
+                    strong
+                    rule
+                  />
+
+                  {preview.negative && (
+                    <p className="mt-1 text-[11px] text-amber-800">
+                      The unsettled costs come to more than these payments earn. Tick more
+                      payments, or the business genuinely lost money over the ones ticked.
+                    </p>
+                  )}
+
+                  <div className="mt-3">
+                    <RecordPayout preview={preview} onDone={onChanged} />
+                  </div>
+                </>
+              )}
             </div>
 
             {history.length > 0 && (
@@ -447,9 +622,9 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
                         </Badge>
                       )}
                       <button
-                        onClick={() => removePayout(p.id)}
+                        onClick={() => removePayout(p)}
                         className="ml-auto text-xs text-slate-400 hover:text-red-600"
-                        title="Remove the record"
+                        title="Remove the record and un-settle its payments"
                       >
                         ✕
                       </button>
@@ -458,11 +633,30 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
                 </div>
               </div>
             )}
+
+            {/* Sent, versus what the payments marked settled actually entitled
+                him to. Zero unless somebody typed a different figure, and
+                worth saying out loud when it is not. */}
+            {Math.abs(book.unattributed) >= 0.01 && (
+              <p className="mt-3 text-[11px] text-amber-800">
+                {book.unattributed > 0
+                  ? `${money(book.unattributed)} of what has been sent is not accounted for by the payments marked settled.`
+                  : `${money(Math.abs(book.unattributed))} less has been sent than the payments marked settled came to.`}{' '}
+                Both figures are real — the balance above is the one to trust.
+              </p>
+            )}
           </div>
         </div>
       </Card>
 
-      <CountedPayments book={book} />
+      <CountedPayments
+        book={book}
+        selected={selected}
+        onToggle={toggle}
+        onToggleGroup={toggleGroup}
+        onSelectAll={() => setSelected(new Set(unsettledIds))}
+        onClear={() => setSelected(new Set())}
+      />
     </div>
   )
 }
