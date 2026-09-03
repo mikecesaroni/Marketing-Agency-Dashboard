@@ -237,6 +237,16 @@ export const LOOKUPS = [
     how: 'Not on the Dashboard. The Dashboard carries no money at all.',
   },
   {
+    need: 'Which clients make up the MRR figure',
+    where: 'Payments → click the MRR card',
+    how: 'It opens with every client in the figure and their monthly fee, biggest first, adding up to the total — plus a "Not counted" list naming everyone left out and why (archived, one of ours rather than a client, or no monthly schedule yet). That second list is the half that settles "but I thought we had more clients than that".',
+  },
+  {
+    need: 'A Stripe payment that does not appear anywhere',
+    where: 'Payments → Stripe → the unmatched queue',
+    how: 'Every payment on the connected Stripe account lands either against a client or in that queue — including subscription checkouts and failed charges, which used to be dropped or reported and then written nowhere. Nothing guesses whether a payment is for this business: assign it to a client, or dismiss it as another business and it stops reappearing. A parked payment is money that exists, so an empty queue is the only state that means nothing is outstanding.',
+  },
+  {
     need: 'Why MRR looks wrong',
     where: 'Payments → the Stripe reconciliation panel',
     how: 'It names each client where Stripe collected a different amount to the CRM\'s figure. Stripe is right; correct the CRM. Also check the client is not archived and does have a scheduled monthly payment.',
@@ -391,7 +401,7 @@ export const GOTCHAS = [
   },
   {
     title: 'Stripe overrules the CRM',
-    body: 'Where a fee in the CRM and a charge in Stripe disagree, Stripe is the real one because it is what the client was actually charged. Fix the CRM, not Stripe.',
+    body: 'Where a fee in the CRM and a charge in Stripe disagree, Stripe is the real one because it is what the client was actually charged. Fix the CRM, not Stripe. This is enforced rather than advisory: a Stripe payment records the amount Stripe took, overwriting whatever the twelve-month schedule guessed, and nothing gates recording on the calendar — a payment that arrives before its scheduled due date still settles it.',
   },
   {
     title: 'Archived clients vanish from everything',

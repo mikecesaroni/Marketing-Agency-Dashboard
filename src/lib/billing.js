@@ -57,7 +57,43 @@ export function calcMRR(clients, payments) {
   return {
     mrr: billing.reduce((sum, c) => sum + (Number(c.monthly_fee) || 0), 0),
     count: billing.length,
+    // The clients behind the figure, so it can be opened rather than trusted.
+    // Biggest first, which is the order you want when asking who this is.
+    clients: [...billing].sort(
+      (a, b) =>
+        (Number(b.monthly_fee) || 0) - (Number(a.monthly_fee) || 0) ||
+        String(a.name).localeCompare(String(b.name))
+    ),
   }
+}
+
+/**
+ * Everyone the MRR figure leaves out, and why.
+ *
+ * "15 clients pay us monthly" and "MRR says 12" is a question the card cannot
+ * answer on its own, and the answer is never interesting enough to go digging
+ * for: two of ours are internal, one churned, one never had a schedule. So the
+ * exclusions are listed alongside the total rather than left to be rediscovered
+ * every time somebody counts.
+ */
+export function mrrExclusions(clients, payments) {
+  const scheduled = new Set(
+    payments.filter((p) => p.payment_type === 'monthly').map((p) => p.client_id)
+  )
+
+  const reasonFor = (c) => {
+    // Ordered by which fact settles it: an archived client is out whatever
+    // else is true of them.
+    if (c.archived) return 'archived'
+    if (c.is_internal) return 'one of ours, not a client'
+    if (!scheduled.has(c.id)) return 'no monthly schedule yet'
+    return null
+  }
+
+  return clients
+    .map((c) => ({ ...c, reason: reasonFor(c) }))
+    .filter((c) => c.reason)
+    .sort((a, b) => a.reason.localeCompare(b.reason) || String(a.name).localeCompare(String(b.name)))
 }
 
 

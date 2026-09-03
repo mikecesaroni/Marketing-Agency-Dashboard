@@ -17,7 +17,7 @@
 // was billed.
 
 import { handleEvent } from '../supabase/functions/stripe-webhook/index.ts'
-import { calcMRR } from '../src/lib/billing.js'
+import { calcMRR, mrrExclusions } from '../src/lib/billing.js'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -31,13 +31,29 @@ function check(name, actual, expected) {
 
 // A stand-in for PostgREST that understands only the query shapes this
 // function issues. Enough to prove which schedule row a payment settles.
-function makeFake({ client, payments }) {
+function makeFake({ client, payments, parked = [], ignored = [], parkFails = false }) {
   const rows = payments.map((p, i) => ({ id: `p${i}`, notes: null, ...p }))
+  // The unmatched queue, so parking can be asserted on rather than inferred
+  // from a log line.
+  const queue = parked.map((r, i) => ({ id: `u${i}`, resolved_client_id: null, ...r }))
   const log = []
   const db = {
     async get(path) {
-      if (path.startsWith('stripe_ignored_customers')) return []
-      if (path.startsWith('stripe_unmatched')) return []
+      if (path.startsWith('stripe_ignored_customers')) {
+        const m = /eq\.([^&]+)|ilike\.([^&]+)/.exec(path)
+        const needle = decodeURIComponent(m?.[1] || m?.[2] || '')
+        return ignored.includes(needle) ? [{ id: 'ig' }] : []
+      }
+      if (path.startsWith('stripe_unmatched')) {
+        const cust = /stripe_customer_id=eq\.([^&]+)/.exec(path)?.[1]
+        const amount = /amount=eq\.([^&]+)/.exec(path)?.[1]
+        return queue.filter(
+          (r) =>
+            r.resolved_client_id === null &&
+            (!cust || r.stripe_customer_id === decodeURIComponent(cust)) &&
+            (!amount || Number(r.amount) === Number(amount))
+        )
+      }
       if (path.startsWith('clients')) {
         const m = /eq\.([^&]+)/.exec(path)[1]
         return m === client.id || m === client.stripe_customer_id ? [client] : []
@@ -59,17 +75,22 @@ function makeFake({ client, payments }) {
     },
     async post(table, body) {
       log.push({ op: 'insert', table, body })
+      if (table === 'stripe_unmatched') {
+        if (parkFails) return new Response('permission denied', { status: 403 })
+        queue.push({ id: `u${queue.length}`, resolved_client_id: null, ...body })
+      }
       return new Response('{}')
     },
     async patch(path, body) {
       const id = /id=eq\.([^&]+)/.exec(path)?.[1]
-      const row = rows.find((r) => r.id === id)
+      const target = path.startsWith('stripe_unmatched') ? queue : rows
+      const row = target.find((r) => r.id === id)
       if (row) Object.assign(row, body)
       log.push({ op: 'patch', path, body })
       return new Response('{}')
     },
   }
-  return { db, rows, log }
+  return { db, rows, log, queue }
 }
 
 const CLIENT = {
@@ -150,6 +171,192 @@ const settled = (rows) =>
     data: { object: { id: 'in_z', customer: 'cus_1', amount_paid: 0, created: 1788000000 } },
   })
   check('a zero-amount invoice records nothing', [settled(rows), log.length], [[], 0])
+}
+
+// --- STRIPE ALWAYS WINS ---------------------------------------------------
+// The schedule is generated twelve months ahead, and when it was seeded from a
+// CSV its dates are somebody's best guess. So nothing may gate recording a
+// payment on the calendar: money that arrived is paid, whatever the row it
+// lands on says its due date is.
+{
+  const { db, rows } = makeFake({
+    client: CLIENT,
+    payments: [
+      // Every open month is dated well into the future, as a wrong CSV import
+      // would leave them.
+      { payment_type: 'monthly', amount: 1500, due_date: '2027-06-01', status: 'pending' },
+      { payment_type: 'monthly', amount: 1500, due_date: '2027-07-01', status: 'pending' },
+    ],
+  })
+  await handleEvent(db, invoice(150000))
+  const settled = rows.filter((r) => r.status === 'paid')
+  check('a payment arriving long before its due date is still recorded as paid',
+    [settled.length, settled[0]?.due_date, settled[0]?.paid_date],
+    [1, '2027-06-01', '2026-08-29'])
+}
+
+{
+  // Two charges in the same month, which is what a mid-cycle upgrade or a
+  // re-subscribe looks like. Both are Stripe payments, so both get recorded.
+  const { db, rows } = makeFake({ client: CLIENT, payments: structuredClone(SCHEDULE) })
+  await handleEvent(db, { ...invoice(150000), id: 'evt_a' })
+  await handleEvent(db, {
+    ...invoice(99800),
+    id: 'evt_b',
+    data: { object: { ...invoice(99800).data.object, id: 'in_2' } },
+  })
+  check('two charges in one month are two recorded payments, not one',
+    rows.filter((r) => r.status === 'paid').map((r) => r.amount), [1500, 998])
+}
+
+// --- what Stripe took is what gets recorded -------------------------------
+// The schedule is a guess made twelve months ahead. Stripe is what actually
+// left the client's card, so settling a scheduled row has to overwrite the
+// amount and not just the status. Summit Water Pros moved from $998 to $1,500
+// and the CRM recorded $998 as collected for months.
+{
+  const { db, rows } = makeFake({ client: CLIENT, payments: structuredClone(SCHEDULE) })
+  // The schedule says 1500 for this month; Stripe took 2500.
+  await handleEvent(db, invoice(250000))
+  const settled = rows.find((r) => r.status === 'paid')
+  check('a bigger charge than the schedule records the bigger amount',
+    [settled.amount, settled.due_date], [2500, '2026-09-01'])
+}
+
+{
+  // And downward, which is the same principle: a partial or prorated charge is
+  // what was collected, whatever the schedule said.
+  const { db, rows } = makeFake({ client: CLIENT, payments: structuredClone(SCHEDULE) })
+  await handleEvent(db, invoice(49900))
+  check('a smaller charge is not rounded up to the scheduled figure',
+    rows.find((r) => r.status === 'paid').amount, 499)
+}
+
+{
+  // The unscheduled path already recorded Stripe's amount; this pins it so the
+  // two paths cannot drift apart again.
+  const { db, log } = makeFake({ client: CLIENT, payments: [] })
+  await handleEvent(db, invoice(150000))
+  check('an unscheduled payment still records what Stripe took',
+    log.find((l) => l.op === 'insert').body.amount, 1500)
+}
+
+// --- NOTHING IS SILENTLY DROPPED -----------------------------------------
+// Every payment on the connected Stripe account has to end up somewhere a
+// person can see it, even when the CRM cannot say whose it is. Guessing that
+// something will turn up later, or that it is not our business, is how four
+// subscription checkouts worth $5,498 came to be recorded nowhere.
+
+const checkout = (cents, over = {}) => ({
+  id: 'evt_co',
+  type: 'checkout.session.completed',
+  data: {
+    object: {
+      customer: 'cus_stranger',
+      customer_details: { email: 'someone@example.com', name: 'A Stranger' },
+      amount_total: cents,
+      created: 1788000000,
+      ...over,
+    },
+  },
+})
+
+{
+  const { db, queue } = makeFake({ client: CLIENT, payments: [] })
+  const r = await handleEvent(db, checkout(150000, { mode: 'subscription' }))
+  check('an unmatched SUBSCRIPTION checkout is parked, not dropped',
+    [r.status, queue.length, queue[0]?.amount, queue[0]?.payment_type],
+    ['unmatched', 1, 1500, 'monthly'])
+}
+
+{
+  const { db, queue } = makeFake({ client: CLIENT, payments: [] })
+  await handleEvent(db, checkout(250000, { mode: 'payment' }))
+  check('and so is a one-off checkout, as before',
+    [queue.length, queue[0]?.payment_type], [1, 'setup'])
+}
+
+{
+  // The double-count the old drop was avoiding: a subscription checkout and
+  // its first invoice are the same money. One row, not two.
+  const { db, queue } = makeFake({ client: CLIENT, payments: [] })
+  await handleEvent(db, checkout(150000, { mode: 'subscription' }))
+  await handleEvent(db, {
+    id: 'evt_inv',
+    type: 'invoice.paid',
+    data: {
+      object: {
+        id: 'in_first',
+        customer: 'cus_stranger',
+        amount_paid: 150000,
+        created: 1788000000,
+        status_transitions: { paid_at: 1788000000 },
+      },
+    },
+  })
+  check('the checkout and its first invoice stay ONE parked row', queue.length, 1)
+  check('and the row picks up the invoice id, which is the useful one',
+    queue[0].stripe_invoice_id, 'in_first')
+}
+
+{
+  // A different amount from the same customer is a different payment.
+  const { db, queue } = makeFake({ client: CLIENT, payments: [] })
+  await handleEvent(db, checkout(150000, { mode: 'subscription' }))
+  await handleEvent(db, {
+    id: 'evt_inv2',
+    type: 'invoice.paid',
+    data: {
+      object: {
+        id: 'in_other',
+        customer: 'cus_stranger',
+        amount_paid: 16500,
+        created: 1788000000,
+        status_transitions: { paid_at: 1788000000 },
+      },
+    },
+  })
+  check('a different amount is a separate row', queue.length, 2)
+}
+
+{
+  const { db, queue } = makeFake({ client: CLIENT, payments: [] })
+  const r = await handleEvent(db, {
+    id: 'evt_f_unknown',
+    type: 'invoice.payment_failed',
+    data: {
+      object: {
+        id: 'in_unknown',
+        customer: 'cus_stranger',
+        customer_email: 'someone@example.com',
+        amount_due: 16500,
+        created: 1788000000,
+      },
+    },
+  })
+  check('an unmatched FAILED invoice is parked too, where it wrote nothing before',
+    [r.status, queue.length, queue[0]?.amount], ['unmatched', 1, 165])
+}
+
+{
+  // Dismissing a customer is the user's own decision and still holds: that is
+  // what the queue is for.
+  const { db, queue } = makeFake({ client: CLIENT, payments: [], ignored: ['cus_stranger'] })
+  const r = await handleEvent(db, checkout(150000, { mode: 'subscription' }))
+  check('a customer already dismissed stays dismissed', [r.status, queue.length], ['ignored', 0])
+}
+
+{
+  // The silent-failure mode: the park is rejected and the event was still
+  // reported as merely unmatched, so the payment existed nowhere.
+  const { db } = makeFake({ client: CLIENT, payments: [], parkFails: true })
+  let threw = false
+  try {
+    await handleEvent(db, checkout(150000, { mode: 'subscription' }))
+  } catch {
+    threw = true
+  }
+  check('a park that fails throws rather than losing the payment quietly', threw, true)
 }
 
 // --- FAILED CARDS, AND THE RETRY THAT FIXES THEM --------------------------
@@ -338,25 +545,65 @@ const WITH_ARREARS = [
 const c = (over) => ({ monthly_fee: 998, ...over })
 const m = (id) => ({ client_id: id, payment_type: 'monthly' })
 
+// Just the two figures, so adding a field to the return value cannot fail a
+// check about the arithmetic.
+const totals = (...args) => {
+  const r = calcMRR(...args)
+  return { mrr: r.mrr, count: r.count }
+}
+
 check('MRR sums the monthly fee of everyone with a schedule',
-  calcMRR(
+  totals(
     [c({ id: 'a' }), c({ id: 'b', monthly_fee: 1500 }), c({ id: 'c', monthly_fee: 1397 })],
     [m('a'), m('b'), m('c')]
   ),
   { mrr: 998 + 1500 + 1397, count: 3 })
 
 check('a client with no schedule is not billing yet',
-  calcMRR([c({ id: 'new' })], []), { mrr: 0, count: 0 })
+  totals([c({ id: 'new' })], []), { mrr: 0, count: 0 })
 
 check('archived clients are excluded',
-  calcMRR([c({ id: 'gone', archived: true })], [m('gone')]), { mrr: 0, count: 0 })
+  totals([c({ id: 'gone', archived: true })], [m('gone')]), { mrr: 0, count: 0 })
 
 check('so are the businesses we run ourselves',
-  calcMRR([c({ id: 'ours', is_internal: true })], [m('ours')]), { mrr: 0, count: 0 })
+  totals([c({ id: 'ours', is_internal: true })], [m('ours')]), { mrr: 0, count: 0 })
 
 // A setup fee is not recurring revenue.
 check('a setup-fee-only client is not counted as billing',
-  calcMRR([c({ id: 's' })], [{ client_id: 's', payment_type: 'setup' }]), { mrr: 0, count: 0 })
+  totals([c({ id: 's' })], [{ client_id: 's', payment_type: 'setup' }]), { mrr: 0, count: 0 })
+
+// --- who is behind the figure, and who is not ----------------------------
+// The card said "12 clients billing" against a belief that 15 pay monthly, and
+// there was no way to see which 12. Both halves are asserted: the list that
+// adds up to the total, and the reason each excluded client is out.
+{
+  const clients = [
+    c({ id: 'a', name: 'Alpha Air', monthly_fee: 998 }),
+    c({ id: 'b', name: 'Big Plumbing', monthly_fee: 1500 }),
+    c({ id: 'i', name: 'Our Own Shop', monthly_fee: 998, is_internal: true }),
+    c({ id: 'x', name: 'Churned Ltd', monthly_fee: 998, archived: true }),
+    c({ id: 'n', name: 'Not Started', monthly_fee: 998 }),
+  ]
+  const payments = [m('a'), m('b'), m('i'), m('x')]
+
+  const result = calcMRR(clients, payments)
+  check('the total is the sum of the ones it counts', [result.mrr, result.count], [2498, 2])
+  check('and the list behind it is those same clients',
+    result.clients.map((x) => x.name), ['Big Plumbing', 'Alpha Air'])
+  check('biggest first, because that is the question being asked',
+    result.clients[0].monthly_fee, 1500)
+  check('the list always adds up to the total',
+    result.clients.reduce((t, x) => t + Number(x.monthly_fee), 0), result.mrr)
+
+  const out = mrrExclusions(clients, payments)
+  check('every excluded client is named with a reason',
+    out.map((x) => `${x.name}: ${x.reason}`),
+    ['Churned Ltd: archived', 'Not Started: no monthly schedule yet', 'Our Own Shop: one of ours, not a client'])
+  check('counted plus excluded is everybody', result.count + out.length, clients.length)
+  check('an archived internal client is reported once, as archived',
+    mrrExclusions([c({ id: 'z', name: 'Both', archived: true, is_internal: true })], []).map((x) => x.reason),
+    ['archived'])
+}
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

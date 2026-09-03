@@ -28,10 +28,14 @@ export default function Card({
   padding = 'md',
   className,
   children,
+  // A card that is really a control renders as one. `as="button"` rather than
+  // a click handler on a div, so it is reachable by keyboard and announced as
+  // a button without any of that being reimplemented here.
+  as: Element = 'div',
   ...rest
 }) {
   return (
-    <div
+    <Element
       className={cn(
         // The shadow is deliberately almost nothing: one pixel, four percent
         // black. Enough to lift a white card off a near-white page, not enough
@@ -45,7 +49,7 @@ export default function Card({
       {...rest}
     >
       {children}
-    </div>
+    </Element>
   )
 }
 

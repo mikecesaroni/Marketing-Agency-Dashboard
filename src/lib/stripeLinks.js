@@ -66,10 +66,15 @@ export async function fetchUnmatched() {
 /**
  * Attaches a parked payment to a client by hand.
  *
- * Also writes the Stripe customer id onto the client when it is missing, so
- * this is a one-time correction rather than something to repeat every month.
+ * Also relinks the client's Stripe customer, so this is a one-time correction
+ * rather than something to repeat every month. `replaceCustomerId` is the
+ * caller's decision about the awkward case: the client already points at a
+ * DIFFERENT customer. Summit Water Pros is why that case matters -- their old
+ * subscription was cancelled, a new one started under a new customer, and
+ * because the old id was merely stale rather than missing the relink was
+ * skipped and every future invoice would have arrived unmatched again.
  */
-export async function assignUnmatched(row, clientId) {
+export async function assignUnmatched(row, clientId, { replaceCustomerId = false } = {}) {
   const type = PAYMENT_TYPES.has(row.payment_type) ? row.payment_type : 'monthly'
 
   const { data: due } = await supabase
@@ -88,6 +93,13 @@ export async function assignUnmatched(row, clientId) {
     stripe_event_id: row.stripe_event_id,
     stripe_invoice_id: row.stripe_invoice_id,
     stripe_customer_id: row.stripe_customer_id,
+    // WHAT STRIPE TOOK, not what the schedule guessed. Settling a scheduled
+    // row without this records the CRM's own figure as though it were
+    // collected: Summit Water Pros moved from $998 to $1,500 and the ledger
+    // went on saying $998, so $502 of real money was missing from the books
+    // and from the profit split, and the reconcile panel could not see it
+    // because both sides of its comparison were the same wrong number.
+    amount: row.amount,
   }
 
   if (due?.[0]) {
@@ -106,17 +118,19 @@ export async function assignUnmatched(row, clientId) {
   }
 
   // The part that stops this recurring: future invoices match on the customer.
+  let relinked = 'none'
   if (row.stripe_customer_id) {
     const { data: client } = await supabase
       .from('clients')
       .select('stripe_customer_id')
       .eq('id', clientId)
       .maybeSingle()
-    if (client && !client.stripe_customer_id) {
-      await supabase
-        .from('clients')
-        .update({ stripe_customer_id: row.stripe_customer_id })
-        .eq('id', clientId)
+    const current = client?.stripe_customer_id || ''
+    const wanted = row.stripe_customer_id
+
+    if (client && current !== wanted && (!current || replaceCustomerId)) {
+      await supabase.from('clients').update({ stripe_customer_id: wanted }).eq('id', clientId)
+      relinked = current ? 'replaced' : 'set'
     }
   }
 
@@ -125,6 +139,8 @@ export async function assignUnmatched(row, clientId) {
     .update({ resolved_client_id: clientId, resolved_at: new Date().toISOString() })
     .eq('id', row.id)
   if (error) throw error
+
+  return { relinked }
 }
 
 /**

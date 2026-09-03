@@ -36,7 +36,7 @@ export default function StripePanel() {
         // stay at the top of the list.
         supabase
           .from('clients')
-          .select('id, name, archived')
+          .select('id, name, archived, stripe_customer_id')
           .order('archived')
           .order('name'),
       ])
@@ -68,10 +68,34 @@ export default function StripePanel() {
 
   const assign = async (row, clientId) => {
     if (!clientId) return
+
+    // Moving a client onto a different Stripe customer is how their billing
+    // identity changes, so it is asked rather than done quietly. The usual
+    // reason is the honest one -- they cancelled and resubscribed, which is
+    // what happened to Summit Water Pros -- but doing it to the wrong client
+    // would silently redirect somebody's invoices.
+    const client = clients.find((c) => c.id === clientId)
+    const replacing =
+      row.stripe_customer_id &&
+      client?.stripe_customer_id &&
+      client.stripe_customer_id !== row.stripe_customer_id
+
+    if (
+      replacing &&
+      !confirm(
+        `${client.name} is currently linked to Stripe customer ${client.stripe_customer_id}, ` +
+          `and this payment came from ${row.stripe_customer_id}.\n\n` +
+          `Point them at the new customer? Do this if they cancelled and resubscribed — ` +
+          `otherwise their future invoices will keep arriving unmatched.`
+      )
+    ) {
+      return
+    }
+
     setBusy(row.id)
     setError('')
     try {
-      await assignUnmatched(row, clientId)
+      await assignUnmatched(row, clientId, { replaceCustomerId: Boolean(replacing) })
       await load()
     } catch (err) {
       setError(err.message)

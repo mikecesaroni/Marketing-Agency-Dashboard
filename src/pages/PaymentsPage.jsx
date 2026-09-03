@@ -20,6 +20,7 @@ import {
 } from '../lib/queries'
 import { fetchExpenses, fetchPayouts } from '../lib/partnerData'
 import { failureState } from '../lib/paymentFailures'
+import { mrrExclusions } from '../lib/billing'
 import { Badge, Button, Card, Input, Select, StatCard, Textarea } from '../components/ui'
 
 const FILTERS = ['paid', 'overdue', 'upcoming', 'all']
@@ -96,6 +97,7 @@ export default function PaymentsPage() {
 
   const [editing, setEditing] = useState(null)
   const [editForm, setEditForm] = useState({ amount: '', due_date: '', notes: '' })
+  const [showMRR, setShowMRR] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -195,7 +197,8 @@ export default function PaymentsPage() {
     loadData()
   }
 
-  const { mrr, count: billingCount } = calcMRR(clients, payments)
+  const { mrr, count: billingCount, clients: billingClients } = calcMRR(clients, payments)
+  const notBilling = mrrExclusions(clients, payments)
 
   // Deliberately all-time. Scoping this to the current calendar month meant it
   // reset to $0 every 1st, hiding money collected days earlier.
@@ -374,7 +377,9 @@ export default function PaymentsPage() {
         <StatCard
           label="MRR"
           value={money(mrr)}
-          sub={`${billingCount} ${billingCount === 1 ? 'client' : 'clients'} billing`}
+          sub={`${billingCount} ${billingCount === 1 ? 'client' : 'clients'} billing — see who`}
+          onClick={() => setShowMRR(true)}
+          hint="Every client in this figure, and everyone left out of it"
           tone="blue"
         />
         <StatCard
@@ -493,6 +498,71 @@ export default function PaymentsPage() {
           <div className="space-y-2">{filtered.map(renderPayment)}</div>
         )
       )}
+
+      {/* What the MRR figure is made of.
+          "12 clients billing" against a belief that 15 pay monthly is a
+          question the card cannot answer, so the answer is one click away --
+          including who is deliberately left out and why, which is the half
+          that actually settles the disagreement. */}
+      <Modal
+        isOpen={showMRR}
+        onClose={() => setShowMRR(false)}
+        title={`Monthly billing — ${money(mrr)} from ${billingCount} ${
+          billingCount === 1 ? 'client' : 'clients'
+        }`}
+      >
+        <div className="space-y-4">
+          <div className="divide-y divide-slate-100">
+            {billingClients.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-3 py-2">
+                <Link
+                  to={`/client/${c.id}`}
+                  onClick={() => setShowMRR(false)}
+                  className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900 hover:text-blue-600"
+                >
+                  {c.name}
+                </Link>
+                <span className="flex-shrink-0 text-sm font-semibold tabular-nums text-slate-900">
+                  {money(c.monthly_fee)}
+                  <span className="ml-0.5 text-xs font-normal text-slate-400">/mo</span>
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-baseline justify-between gap-3 border-t border-slate-300 pt-2">
+            <span className="text-sm font-semibold text-slate-900">Total</span>
+            <span className="text-base font-bold tabular-nums text-slate-900">{money(mrr)}</span>
+          </div>
+
+          {notBilling.length > 0 && (
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Not counted ({notBilling.length})
+              </p>
+              <div className="space-y-1">
+                {notBilling.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-3">
+                    <Link
+                      to={`/client/${c.id}`}
+                      onClick={() => setShowMRR(false)}
+                      className="min-w-0 flex-1 truncate text-xs text-slate-600 hover:text-blue-600"
+                    >
+                      {c.name}
+                    </Link>
+                    <span className="flex-shrink-0 text-[11px] text-slate-400">{c.reason}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">
+                MRR counts a client once they have a monthly schedule and have not churned. The
+                fee itself is whatever the CRM has — the Stripe check below the cards names anyone
+                being charged something different.
+              </p>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <Modal isOpen={!!markingPaid} onClose={() => setMarkingPaid(null)} title="Mark Payment Paid">
         {markingPaid && (

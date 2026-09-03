@@ -230,6 +230,16 @@ export async function recordPayment(
     stripe_event_id: p.eventId,
     stripe_invoice_id: p.invoiceId || null,
     stripe_customer_id: p.customerId || null,
+    // WHAT STRIPE TOOK, not what the schedule guessed twelve months ago.
+    //
+    // Missing this was the quietest money bug in the app: a client who moved
+    // onto a different price had the OLD figure marked paid. Summit Water Pros
+    // went from $998 to $1,500 and the ledger kept saying $998 -- $502 per
+    // invoice missing from the books and from the profit split. It was also
+    // invisible to the panel built to catch exactly this, because that panel
+    // reads "what Stripe collected" off these rows, so both sides of its
+    // comparison were the same wrong number and agreed.
+    amount: p.amount,
     // The money arrived, so there is no retry pending. last_failed_at is left
     // alone: what happened still happened, and the row shows it as recovered
     // rather than pretending the card never bounced.
@@ -273,28 +283,33 @@ export async function handleEvent(db: Db, event: any) {
     })
 
     if (!client) {
-      // A brand-new subscription's checkout.session.completed carries the
-      // same dollar amount as the invoice.paid event that always follows for
-      // that same first period. Parking both double-counts one payment as
-      // two the moment they both land in the unmatched queue. This mirrors
-      // the matched-client branch just below, which never records money for
-      // a subscription checkout either — only invoice.paid ever does that.
-      if (obj.mode === 'subscription') {
-        return { status: 'ignored', note: 'unmatched subscription checkout, waiting for the invoice' }
-      }
-
       if (await isIgnoredCustomer(db, { customerId, email })) {
         return { status: 'ignored', note: 'customer marked not this business' }
       }
 
+      // PARKED, INCLUDING SUBSCRIPTIONS.
+      //
+      // This used to drop an unmatched subscription checkout entirely, on the
+      // reasoning that its invoice always follows and parking both would
+      // double-count one payment. The invoice does usually follow -- but
+      // "usually" meant four checkouts worth $5,498 were recorded nowhere a
+      // person could see them. A guess about a future event is not a good
+      // enough reason to make money invisible.
+      //
+      // The double-count it was avoiding is handled properly instead:
+      // parkUnmatched merges an invoice into an open row from the same
+      // customer for the same amount, so one payment stays one row.
+      const subscription = obj.mode === 'subscription'
       await parkUnmatched(db, event, {
         customerId,
         email,
         name: obj.customer_details?.name,
         amount: centsToAmount(obj.amount_total),
-        type: 'setup',
+        type: subscription ? 'monthly' : 'setup',
         method: methodFrom(obj.payment_method_types),
-        description: 'Checkout session with no matching client',
+        description: subscription
+          ? 'Subscription started by someone with no matching client'
+          : 'Checkout session with no matching client',
       })
       return { status: 'unmatched', note: 'no client for checkout session' }
     }
@@ -383,7 +398,29 @@ export async function handleEvent(db: Db, event: any) {
 
   if (type === 'invoice.payment_failed') {
     const { client } = await findClient(db, { customerId: obj.customer, email: obj.customer_email })
-    if (!client) return { status: 'unmatched', note: 'no client for failed invoice' }
+
+    if (!client) {
+      if (await isIgnoredCustomer(db, { customerId: obj.customer, email: obj.customer_email })) {
+        return { status: 'ignored', note: 'customer marked not this business' }
+      }
+
+      // Parked, where before it was reported as unmatched and then written
+      // nowhere -- three of these were sitting in the event log and in no
+      // queue. A failed charge from someone we cannot identify is worth
+      // seeing: either it is a client whose billing is broken, or it is not
+      // ours and belongs dismissed.
+      await parkUnmatched(db, event, {
+        customerId: obj.customer,
+        email: obj.customer_email,
+        name: obj.customer_name,
+        amount: centsToAmount(obj.amount_due),
+        type: 'monthly',
+        method: methodFrom(obj.payment_settings?.payment_method_types),
+        invoiceId: obj.id,
+        description: 'Failed payment from someone with no matching client',
+      })
+      return { status: 'unmatched', note: 'no client for failed invoice' }
+    }
 
     // Already stamped with this invoice, before falling back to the oldest
     // open month. A card that fails twice has to land on the same row both
@@ -445,6 +482,21 @@ export async function handleEvent(db: Db, event: any) {
   return { status: 'ignored', note: `unhandled event type ${type}` }
 }
 
+/**
+ * Puts a payment we cannot attribute somewhere a person will see it.
+ *
+ * MERGES rather than blindly inserting. A subscription's checkout and its
+ * first invoice are the same money seen twice -- same customer, same amount,
+ * same day -- so the second one updates the open row instead of creating a
+ * second row for one payment. That is what makes it safe to park the checkout
+ * at all, which is what stopped $5,498 of subscriptions from disappearing.
+ *
+ * THROWS if the write fails. It used to fire and forget, so a rejected insert
+ * left the event marked "unmatched" and the queue empty -- the payment existed
+ * in Stripe, was named in the event log, and appeared nowhere anyone looks.
+ * Throwing marks the event as an error and makes Stripe retry, which is loud
+ * and recoverable instead of silent and not.
+ */
 async function parkUnmatched(
   db: Db,
   event: any,
@@ -459,18 +511,42 @@ async function parkUnmatched(
     description: string
   }
 ) {
-  await db.post('stripe_unmatched', {
+  const paidDate = isoDate(event?.data?.object?.created)
+
+  if (d.customerId) {
+    const open = await db.get(
+      `stripe_unmatched?stripe_customer_id=eq.${encodeURIComponent(d.customerId)}` +
+        `&resolved_client_id=is.null&amount=eq.${d.amount}` +
+        `&select=id,stripe_invoice_id,description`
+    )
+    const twin = (open || []).find((r: any) => r.id)
+    if (twin) {
+      await db.patch(`stripe_unmatched?id=eq.${twin.id}`, {
+        // Keep whichever id we have; the invoice is the more useful one.
+        stripe_invoice_id: d.invoiceId || twin.stripe_invoice_id || null,
+        paid_date: paidDate,
+      })
+      return
+    }
+  }
+
+  const res = await db.post('stripe_unmatched', {
     stripe_event_id: event.id,
     stripe_customer_id: d.customerId || null,
     customer_email: d.email || null,
     customer_name: d.name || null,
     amount: d.amount,
-    paid_date: isoDate(event?.data?.object?.created),
+    paid_date: paidDate,
     payment_type: d.type,
     payment_method: d.method,
     stripe_invoice_id: d.invoiceId || null,
     description: d.description,
   })
+
+  // 409 is this exact event arriving twice, which is fine and idempotent.
+  if (!res.ok && res.status !== 409) {
+    throw new Error(`Could not park the unmatched payment: ${await res.text()}`)
+  }
 }
 
 // Picks up payments that were parked because they arrived before the customer

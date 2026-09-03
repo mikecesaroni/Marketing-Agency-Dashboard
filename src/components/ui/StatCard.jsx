@@ -10,9 +10,27 @@ import { cn } from './cn'
  * one `alert` flag instead, so when a card does go red it is because something
  * is wrong and it is the only red thing on the row.
  */
-export default function StatCard({ label, value, sub, delta, alert, className }) {
+export default function StatCard({ label, value, sub, delta, alert, className, onClick, hint }) {
   return (
-    <Card tone={alert ? 'danger' : 'default'} className={cn('min-w-0', className)}>
+    <Card
+      tone={alert ? 'danger' : 'default'}
+      className={cn(
+        'min-w-0',
+        // A card that opens something says so by behaving like a control. Only
+        // when it actually does: a hover state on a card that does nothing is
+        // worse than no affordance at all.
+        onClick && 'w-full cursor-pointer text-left transition hover:border-slate-300 hover:shadow-md',
+        className
+      )}
+      {...(onClick
+        ? {
+            as: 'button',
+            type: 'button',
+            onClick,
+            title: hint,
+          }
+        : {})}
+    >
       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p
         className={cn(
