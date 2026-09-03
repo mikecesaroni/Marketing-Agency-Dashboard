@@ -273,7 +273,10 @@ export async function locationsFromIntake(intake) {
   return { entries, source: intake?.target_cities ? 'target_cities' : 'service_area' }
 }
 
-async function callFunction(body) {
+// Exported so the video helpers can reuse this error mapping rather than
+// reinventing it. Every Meta rejection the app can usefully explain is
+// explained here, once.
+export async function callFunction(body) {
   const { data, error } = await supabase.functions.invoke('meta-publish', { body })
 
   if (error) {
@@ -318,6 +321,36 @@ async function callFunction(body) {
  * cannot be a free-text box: "Rochester" means nothing to the API, the key it
  * returns for Rochester does.
  */
+/**
+ * Sends an uploaded video to a client's Meta ad account.
+ *
+ * Idempotent: the function looks for an existing registration on
+ * (storage_path, ad account) before uploading, so calling this twice does not
+ * put two copies of the same clip in the account.
+ *
+ * Returns while Meta is usually still transcoding — `status` is 'processing'
+ * far more often than 'ready' on the first call, which is what adVideoStatus
+ * is for.
+ */
+export async function registerAdVideo({ clientId, storagePath, fileName }) {
+  return callFunction({
+    action: 'register_video',
+    client_id: clientId,
+    storage_path: storagePath,
+    file_name: fileName,
+  })
+}
+
+/** Where Meta has got to with a video it is transcoding. */
+export async function adVideoStatus({ clientId, storagePath, metaVideoId }) {
+  return callFunction({
+    action: 'video_status',
+    client_id: clientId,
+    storage_path: storagePath,
+    meta_video_id: metaVideoId,
+  })
+}
+
 export async function searchLocations(query) {
   const data = await callFunction({ action: 'search_locations', query })
   return data?.locations || []

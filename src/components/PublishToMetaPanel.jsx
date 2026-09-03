@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import LocationPicker from './LocationPicker'
 import LeadFormPicker from './LeadFormPicker'
+import VideoAdPicker from './VideoAdPicker'
 import { fetchSavedAds } from '../lib/savedAds'
 import {
   CTA_OPTIONS,
@@ -446,6 +447,13 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
   const [copies, setCopies] = useState({})
   const [openCopy, setOpenCopy] = useState(String(set.stamp))
 
+  // Videos are picked by storage path rather than stamp: they are not artboard
+  // sets and have no stamp. They publish as ads in the SAME ad set as the
+  // image creatives, which is the point — a video and a static competing in
+  // one ad set is a real test; in two ad sets it is two budgets.
+  const [pickedVideos, setPickedVideos] = useState([])
+  const [videoCopies, setVideoCopies] = useState({})
+
   const [cta, setCta] = useState('LEARN_MORE')
   const [linkUrl, setLinkUrl] = useState(() => websiteFromIntake(intake, client))
 
@@ -640,8 +648,11 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
 
   const blockers = []
   if (missing.length > 0) blockers.push('missing client details')
-  if (pickedSets.length === 0) blockers.push('no creative picked')
-  if (pickedSets.length > MAX_BATCH_ADS) blockers.push(`more than ${MAX_BATCH_ADS} creatives`)
+  const adTotal = pickedSets.length + pickedVideos.length
+  if (adTotal === 0) blockers.push('no creative picked')
+  if (adTotal > MAX_BATCH_ADS) blockers.push(`more than ${MAX_BATCH_ADS} creatives`)
+  if (pickedVideos.some((path) => !videoCopies[path]?.primary_text?.trim()))
+    blockers.push('a video has no primary text')
   if (pickedSets.some((s) => !copies[String(s.stamp)]?.primary_text?.trim()))
     blockers.push('a creative has no primary text')
   if (chosenObjective?.needsLink && !linkUrl.trim()) blockers.push('no landing page')
@@ -666,9 +677,9 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
     setError('')
     setPartial(null)
     setProgress(
-      pickedSets.length === 1
-        ? 'Uploading the image and creating the ad…'
-        : `Creating ${pickedSets.length} ads in one ad set…`
+      adTotal === 1
+        ? 'Creating the ad…'
+        : `Creating ${adTotal} ads in one ad set…`
     )
     try {
       const ads = pickedSets.map((s) => {
@@ -688,6 +699,25 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
           lead_form_name: leadForm?.name,
         }
       })
+
+      // Video ads carry a Meta video id instead of artboards. Everything else
+      // — copy, CTA, link, lead form — is identical, so they go into the same
+      // list and the same ad set.
+      const videoAds = pickedVideos.map((path) => {
+        const c = videoCopies[path] || {}
+        return {
+          video_id: c.meta_video_id,
+          video_thumb_url: c.thumb_url || undefined,
+          primary_text: c.primary_text?.trim(),
+          headline: c.headline?.trim() || undefined,
+          ad_name: c.ad_name?.trim() || undefined,
+          cta,
+          link_url: linkUrl.trim() || undefined,
+          lead_form_id: leadForm?.id,
+          lead_form_name: leadForm?.name,
+        }
+      })
+      ads.push(...videoAds)
 
       const shared = {
         client_id: client.id,
@@ -802,6 +832,22 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
             the 4:5 everywhere else.
           </p>
         )}
+      </Section>
+
+      <Section
+        step="1b"
+        title="Videos"
+        hint="Uploaded here and sent to Meta straight away, because Meta has to finish transcoding before an ad can use one. Ticked videos publish into the same ad set as the creatives above."
+      >
+        <VideoAdPicker
+          client={client}
+          picked={pickedVideos}
+          onPicked={setPickedVideos}
+          copies={videoCopies}
+          onCopy={(path, patch) =>
+            setVideoCopies((prev) => ({ ...prev, [path]: { ...prev[path], ...patch } }))
+          }
+        />
       </Section>
 
       <Section step="2" title="Button and destination" hint="Shared by every ad in this publish.">
@@ -1141,7 +1187,7 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
             campaignName,
             reuseCampaign,
             formName: leadForm?.name,
-            adCount: pickedSets.length,
+            adCount: adTotal,
             sizeCount: maxSizes,
             reuseAdset: chosenAdset,
           })}
@@ -1154,7 +1200,7 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
           >
             {publishing
               ? 'Creating in Meta…'
-              : `Publish ${pickedSets.length || ''} paused to Meta`.replace('  ', ' ')}
+              : `Publish ${adTotal || ''} paused to Meta`.replace('  ', ' ')}
           </button>
           {publishing && progress && <p className="text-[11px] text-slate-500">{progress}</p>}
           {!publishing && blockers.length > 0 && (

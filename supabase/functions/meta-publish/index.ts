@@ -298,6 +298,81 @@ async function uploadImage(accountId: string, imageUrl: string, token: string): 
   return first.hash
 }
 
+/**
+ * The public URL of a file in the client-files bucket.
+ *
+ * Built rather than passed in from the browser, so the only thing the caller
+ * names is a storage path. Each segment is encoded because uploaded filenames
+ * arrive with spaces and parentheses in them straight off a phone.
+ */
+function bucketUrl(supabaseUrl: string, storagePath: string): string {
+  const encoded = String(storagePath)
+    .split('/')
+    .map((seg) => encodeURIComponent(seg))
+    .join('/')
+  return `${supabaseUrl}/storage/v1/object/public/client-files/${encoded}`
+}
+
+/**
+ * Hands Meta a video by URL and lets it fetch the bytes itself.
+ *
+ * The opposite choice from uploadImage, and deliberately. An image is a few
+ * hundred kilobytes, so re-uploading the bytes to get a permanent image_hash
+ * is cheap. A video is tens of megabytes: streaming it through this function
+ * would mean holding it in memory and would blow the function's wall clock on
+ * anything phone-sized. file_url makes it Meta's download, and it only has to
+ * work once -- Meta keeps its own copy against the video id afterwards, so the
+ * ad does not stay a live dependency on the bucket.
+ */
+async function uploadVideo(
+  accountId: string,
+  fileUrl: string,
+  name: string,
+  token: string
+): Promise<string> {
+  const body = await graphPost(
+    `${accountId}/advideos`,
+    { file_url: fileUrl, name },
+    token,
+    'upload video'
+  )
+  if (!body?.id) {
+    throw new GraphError('Meta accepted the video but returned no id.', {
+      step: 'upload video',
+      body,
+    })
+  }
+  return String(body.id)
+}
+
+/**
+ * Where Meta has got to with transcoding, and a thumbnail once there is one.
+ *
+ * Both matter before an ad can be built: a creative referencing a video that
+ * is still processing is refused, and so is one with no thumbnail. Thumbnails
+ * do not exist until processing has produced frames, which is why this reads
+ * them in the same call as the status rather than at upload time.
+ */
+async function videoState(videoId: string, token: string) {
+  const info = await graphGet(videoId, { fields: 'status' }, token)
+  const state = String(info?.status?.video_status || 'processing')
+
+  let thumbUrl = ''
+  if (state === 'ready') {
+    const thumbs = await graphGet(videoId, { fields: 'thumbnails{uri,is_preferred}' }, token)
+    const list = (thumbs?.thumbnails?.data || []) as { uri?: string; is_preferred?: boolean }[]
+    // Meta marks one frame preferred; it is a better still than frame zero,
+    // which on a phone video is very often a blur.
+    thumbUrl = String(list.find((t) => t.is_preferred)?.uri || list[0]?.uri || '')
+  }
+
+  return {
+    status: state,
+    thumb_url: thumbUrl,
+    error: state === 'error' ? String(info?.status?.processing_progress ?? 'Meta could not process this video.') : '',
+  }
+}
+
 // Ad account IDs are stored bare in the CRM; every Graph path wants act_.
 function actId(raw: string): string {
   return raw.startsWith('act_') ? raw : `act_${raw}`
@@ -510,6 +585,9 @@ type CreativeInput = {
   instagramUserId?: string
   // size_key -> image hash, in the ad account.
   hashes: Record<string, string>
+  // A video creative instead of images. `thumbUrl` is not optional in
+  // practice: Meta refuses a video creative with no thumbnail.
+  video?: { id: string; thumbUrl?: string }
 }
 
 /**
@@ -551,6 +629,41 @@ const NO_ENHANCEMENTS = {
 function creativeParams(input: CreativeInput): Record<string, unknown> {
   const { hashes, spec, leadFormId, linkUrl, primaryText, headline, description, ctaType } = input
   const sizeKeys = Object.keys(hashes)
+
+  // A VIDEO CREATIVE.
+  //
+  // video_data rather than link_data, and the copy fields are named
+  // differently from every other shape here: the headline is `title` and the
+  // description is `link_description`. Sending `name`/`description` as the
+  // image path does is not an error -- Meta accepts the creative and silently
+  // drops the copy, which is worse.
+  //
+  // The thumbnail is REQUIRED. Meta generates several once the upload has
+  // processed and rejects the creative outright without one, so register_video
+  // fetches the preferred frame and stores it against the video.
+  if (input.video) {
+    return {
+      name: input.name,
+      object_story_spec: {
+        page_id: input.pageId,
+        // Same reason as the per-placement image shape: video runs on Reels
+        // and Instagram, and Meta will not infer who the business is there.
+        ...(input.instagramUserId ? { instagram_user_id: input.instagramUserId } : {}),
+        video_data: {
+          video_id: input.video.id,
+          message: primaryText,
+          title: headline || undefined,
+          link_description: description || undefined,
+          image_url: input.video.thumbUrl || undefined,
+          call_to_action: {
+            type: ctaType,
+            value: spec.needs_form ? { lead_gen_form_id: leadFormId } : { link: linkUrl },
+          },
+        },
+      },
+      degrees_of_freedom_spec: NO_ENHANCEMENTS,
+    }
+  }
 
   // Single image: the long-proven path, and the one lead-form ads have always
   // published through.
@@ -686,6 +799,10 @@ type BuildAdInput = {
   // size_key -> public bucket URL. One entry publishes a plain creative;
   // several publish one ad that serves the right crop per placement.
   images: Record<string, string>
+  // Set instead of `images` to publish a video ad. The id is a Meta AdVideo
+  // already registered in THIS ad account -- videos do not travel between
+  // accounts, so it is looked up per account by register_video.
+  video?: { id: string; thumbUrl?: string }
   primaryText: string
   headline?: string
   description?: string
@@ -709,18 +826,36 @@ type BuildAdInput = {
  * given, and it never decides which ad set that is.
  */
 async function buildAd(input: BuildAdInput) {
-  const entries = Object.entries(input.images).filter(([, url]) => Boolean(url))
-  if (entries.length === 0) {
-    throw new GraphError('No ad image was given to publish.', { step: 'upload image' })
-  }
+  // A video ad uploads nothing here: the video is already in the ad account,
+  // put there by register_video, because Meta transcodes asynchronously and
+  // that wait does not belong inside a publish.
+  let hashes: Record<string, string> = {}
+  if (!input.video) {
+    const entries = Object.entries(input.images || {}).filter(([, url]) => Boolean(url))
+    if (entries.length === 0) {
+      throw new GraphError('No ad image was given to publish.', { step: 'upload image' })
+    }
 
-  // In parallel: three artboards is three round trips to Meta, and they do not
-  // depend on each other. Sequentially this is the slowest part of a publish.
-  const uploaded = await Promise.all(
-    entries.map(async ([key, url]) => [key, await uploadImage(input.account, url, input.token)] as const)
-  )
-  const hashes = Object.fromEntries(uploaded)
-  if (input.into) input.into.image_hash = uploaded[0][1]
+    // In parallel: three artboards is three round trips to Meta, and they do not
+    // depend on each other. Sequentially this is the slowest part of a publish.
+    const uploaded = await Promise.all(
+      entries.map(async ([key, url]) => [key, await uploadImage(input.account, url, input.token)] as const)
+    )
+    hashes = Object.fromEntries(uploaded)
+    if (input.into) input.into.image_hash = uploaded[0][1]
+  } else {
+    // Meta requires a thumbnail on a video creative and says so with subcode
+    // 1443226 after the request has already gone out. Verified against the
+    // live API: the identical creative validates with image_url and is refused
+    // without it. Failing here instead means the message names the fix.
+    if (!input.video.thumbUrl) {
+      throw new GraphError(
+        'That video has no cover frame yet, and Meta will not take a video ad without one. Re-check the video in the publish panel — Meta usually has thumbnails within a minute of finishing the upload.',
+        { step: 'video thumbnail', video_id: input.video.id }
+      )
+    }
+    if (input.into) input.into.video_id = input.video.id
+  }
 
   const params = creativeParams({
     name: `${input.adName || input.client.name} — creative`,
@@ -734,6 +869,7 @@ async function buildAd(input: BuildAdInput) {
     leadFormId: input.leadFormId,
     instagramUserId: input.instagramUserId,
     hashes,
+    video: input.video,
   })
 
   // A dry run stops here: Meta validates the creative and saves nothing, so
@@ -750,6 +886,7 @@ async function buildAd(input: BuildAdInput) {
       ad_id: '',
       image_hashes: hashes,
       sizes: Object.keys(hashes),
+      video_id: input.video?.id || '',
       validated: params,
     }
   }
@@ -933,6 +1070,90 @@ Deno.serve(async (req) => {
     }
 
     const account = actId(client.meta_ad_account_id)
+
+    // -----------------------------------------------------------------------
+    // VIDEO. Registering an uploaded file with the client's ad account, and
+    // reporting where Meta has got to with transcoding it.
+    //
+    // Split from publishing on purpose. Meta transcodes asynchronously and a
+    // phone-shot clip can take a minute or more; making a publish wait on that
+    // would put the slowest, least predictable step inside the one action the
+    // user is watching. Registering at upload time means the wait happens
+    // while they are still writing the copy, and by the time they publish the
+    // video is a plain id.
+    //
+    // Videos belong to ONE ad account. The same file used for two clients is
+    // two Meta videos, which is why ad_videos is keyed on (storage_path,
+    // meta_account_id) rather than on the file alone.
+    // -----------------------------------------------------------------------
+    if (action === 'register_video' || action === 'video_status') {
+      const storagePath = String(body.storage_path || '').trim()
+
+      // Already registered? Then this is a status poll, whichever action was
+      // asked for -- re-uploading a file Meta already has would duplicate it
+      // in the account and orphan the first copy.
+      const lookup = await fetch(
+        `${supabaseUrl}/rest/v1/ad_videos?select=*&meta_account_id=eq.${encodeURIComponent(account)}` +
+          (body.meta_video_id
+            ? `&meta_video_id=eq.${encodeURIComponent(String(body.meta_video_id))}`
+            : `&storage_path=eq.${encodeURIComponent(storagePath)}`),
+        { headers: dbHeaders }
+      )
+      const existing = (await lookup.json())?.[0]
+
+      if (action === 'video_status' && !existing) {
+        return json({ error: 'That video has not been sent to Meta yet.' }, 404)
+      }
+
+      let videoId = existing?.meta_video_id || ''
+
+      if (!videoId) {
+        if (!storagePath) return json({ error: 'storage_path is required.' }, 400)
+        const fileUrl = bucketUrl(supabaseUrl, storagePath)
+        const fileName = String(body.file_name || storagePath.split('/').pop() || 'video')
+        videoId = await uploadVideo(account, fileUrl, `${client.name} — ${fileName}`, token)
+
+        await fetch(`${supabaseUrl}/rest/v1/ad_videos?on_conflict=storage_path,meta_account_id`, {
+          method: 'POST',
+          headers: { ...dbHeaders, Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({
+            client_id: client.id,
+            storage_path: storagePath,
+            file_name: fileName,
+            meta_account_id: account,
+            meta_video_id: videoId,
+            status: 'processing',
+            error: null,
+          }),
+        })
+      }
+
+      const state = await videoState(videoId, token)
+
+      // Written back so the library can show the state without asking Meta
+      // again on every render, and so a ready video survives a page reload.
+      await fetch(
+        `${supabaseUrl}/rest/v1/ad_videos?meta_video_id=eq.${encodeURIComponent(videoId)}` +
+          `&meta_account_id=eq.${encodeURIComponent(account)}`,
+        {
+          method: 'PATCH',
+          headers: { ...dbHeaders, Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            status: state.status,
+            thumb_url: state.thumb_url || null,
+            error: state.error || null,
+            updated_at: new Date().toISOString(),
+          }),
+        }
+      )
+
+      return json({
+        meta_video_id: videoId,
+        meta_account_id: account,
+        storage_path: storagePath || existing?.storage_path || '',
+        ...state,
+      })
+    }
 
     // -----------------------------------------------------------------------
     // Existing campaigns, so a second ad can join the first one's campaign
@@ -1242,6 +1463,10 @@ Deno.serve(async (req) => {
       link_url?: string
       lead_form_id?: string
       lead_form_name?: string
+      // A Meta AdVideo id in THIS ad account, from register_video. Set instead
+      // of images to publish a video ad.
+      video_id?: string
+      video_thumb_url?: string
     }
 
     const adInputs: AdInput[] = batch
@@ -1262,6 +1487,8 @@ Deno.serve(async (req) => {
             link_url: linkUrlIn,
             lead_form_id: leadFormId,
             lead_form_name: leadFormName,
+            video_id: body.video_id,
+            video_thumb_url: body.video_thumb_url,
           },
         ]
 
@@ -1352,14 +1579,18 @@ Deno.serve(async (req) => {
       // Verified by validating the same creative twice, once with the Page URL
       // and once with a real site: the Page URL fails, the site passes.
       link_url: a.link_url || linkUrlIn || client.website_url,
+      video_id: a.video_id ?? body.video_id,
+      video_thumb_url: a.video_thumb_url ?? body.video_thumb_url,
     }))
 
     for (const [i, a] of ads.entries()) {
       // Named so a rejected batch says which creative to go and fix.
       const which = batch ? `Ad ${i + 1}${a.ad_name ? ` ("${a.ad_name}")` : ''}` : 'This ad'
 
-      if (Object.keys(a.images).length === 0) {
-        return json({ error: `${which} has no image to publish.` }, 400)
+      // A video ad has no images by design, so this can no longer just count
+      // them: one or the other has to be present.
+      if (!a.video_id && Object.keys(a.images).length === 0) {
+        return json({ error: `${which} has no image or video to publish.` }, 400)
       }
       if (!a.primary_text) {
         return json(
@@ -1434,6 +1665,7 @@ Deno.serve(async (req) => {
             ctaType: a.cta,
             adsetId: '',
             images: a.images,
+            video: a.video_id ? { id: a.video_id, thumbUrl: a.video_thumb_url } : undefined,
             primaryText: a.primary_text,
             headline: a.headline,
             description: a.description,
@@ -1605,6 +1837,7 @@ Deno.serve(async (req) => {
           ctaType: a.cta,
           adsetId,
           images: a.images,
+          video: a.video_id ? { id: a.video_id, thumbUrl: a.video_thumb_url } : undefined,
           primaryText: a.primary_text,
           headline: a.headline,
           description: a.description,
