@@ -10,6 +10,7 @@ import { fetchPublishedAds } from '../lib/metaPublish'
 import { recipeToContent, saveAdRecipe } from '../lib/savedAds'
 import AdImagePicker from './AdImagePicker'
 import { resolveImageSrc } from '../lib/driveAssets'
+import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
 import {
   DEFAULT_ACCENT,
   DEFAULT_BADGE,
@@ -456,6 +457,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState('')
+  const [zipping, setZipping] = useState(false)
 
   const refs = useRef(SIZES.map(() => null))
   const intakeProof = useMemo(() => proofFromIntake(intake), [intake])
@@ -766,14 +768,34 @@ export default function AdStudioPanel({ client, intake, seed }) {
     if (!canvas) return
     try {
       const blob = await canvasToBlob(canvas)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${client.name.replace(/\W+/g, '-').toLowerCase()}-${SIZES[i].key}.png`
-      a.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, adFileName(client.name, SIZES[i].key))
     } catch (err) {
       setError(err.message)
+    }
+  })
+
+  // All three at once, as one archive.
+  //
+  // Zipped rather than three downloads fired in a row: browsers block or
+  // mangle rapid successive downloads from a single gesture, so the honest
+  // one-click version of this is one file.
+  const downloadAll = withoutGuides(async () => {
+    setZipping(true)
+    setError('')
+    try {
+      const entries = []
+      for (const [i, size] of SIZES.entries()) {
+        const canvas = refs.current[i]
+        if (canvas) entries.push({ sizeKey: size.key, blob: await canvasToBlob(canvas) })
+      }
+      const { blob, names } = await zipAdSizes({ clientName: client.name, entries })
+      if (!blob) throw new Error('None of the artboards could be exported.')
+      saveBlob(blob, zipFileName(client.name))
+      setSaved(`Downloaded ${names.length} ${names.length === 1 ? 'size' : 'sizes'} as one zip.`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setZipping(false)
     }
   })
 
@@ -1094,8 +1116,17 @@ export default function AdStudioPanel({ client, intake, seed }) {
         >
           {saving ? 'Saving...' : 'Save all 3 sizes'}
         </button>
+        <button
+          onClick={downloadAll}
+          disabled={zipping}
+          title="All three PNGs as one zip"
+          className="px-4 py-2 bg-white border border-slate-300 text-slate-800 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 transition"
+        >
+          {zipping ? 'Zipping…' : 'Download all 3'}
+        </button>
         <p className="text-[11px] text-slate-500">
-          Saved to the public bucket, which is where Meta pulls the image bytes from.
+          Saved to the public bucket, which is where Meta pulls the image bytes from. Download
+          keeps them off the bucket entirely.
         </p>
       </div>
     </div>

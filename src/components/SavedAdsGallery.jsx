@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { copyText } from '../lib/intakeSummary'
 import { deleteSavedAd, fetchSavedAds } from '../lib/savedAds'
+import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
 
 function when(date) {
   return date.toLocaleString(undefined, {
@@ -19,6 +20,7 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
   const [error, setError] = useState('')
   const [copied, setCopied] = useState('')
   const [busy, setBusy] = useState('')
+  const [zipping, setZipping] = useState('')
 
   const load = () =>
     fetchSavedAds(clientId)
@@ -41,10 +43,45 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
   const download = (file, sizeKey) => {
     const a = document.createElement('a')
     a.href = file.url
-    a.download = `${clientName.replace(/\W+/g, '-').toLowerCase()}-${sizeKey}.png`
+    a.download = adFileName(clientName, sizeKey)
     a.target = '_blank'
     a.rel = 'noopener'
     a.click()
+  }
+
+  /**
+   * The whole set as one archive.
+   *
+   * Fetched and zipped rather than three links clicked in a row, which
+   * browsers block or mangle from a single gesture. A size that fails to
+   * download is reported rather than quietly missing from the zip -- an
+   * archive with two files in it looks exactly like one with three.
+   */
+  const downloadSet = async (set) => {
+    setZipping(set.stamp)
+    setError('')
+    try {
+      const entries = []
+      const failed = []
+      for (const { size, file } of set.ordered) {
+        try {
+          const res = await fetch(file.url)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          entries.push({ sizeKey: size.key, blob: await res.blob() })
+        } catch {
+          failed.push(size.label)
+        }
+      }
+
+      const { blob } = await zipAdSizes({ clientName, entries })
+      if (!blob) throw new Error('None of the sizes could be downloaded.')
+      saveBlob(blob, zipFileName(clientName, set.stamp))
+      if (failed.length > 0) setError(`Downloaded without ${failed.join(' and ')} — that size failed to load.`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setZipping('')
+    }
   }
 
   const remove = async (set) => {
@@ -115,6 +152,14 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
                   image only
                 </span>
               )}
+              <button
+                onClick={() => downloadSet(set)}
+                disabled={zipping === set.stamp}
+                title={`All ${set.ordered.length} sizes as one zip`}
+                className="px-2 py-1 rounded border border-slate-300 bg-white text-[11px] font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50 transition"
+              >
+                {zipping === set.stamp ? 'Zipping…' : `Download all ${set.ordered.length}`}
+              </button>
               <button
                 onClick={() => remove(set)}
                 disabled={busy === set.stamp}

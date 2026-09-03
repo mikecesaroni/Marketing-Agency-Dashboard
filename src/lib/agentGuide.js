@@ -277,6 +277,11 @@ export const LOOKUPS = [
     how: 'It should already be there: opening the picker asks Meta for the current list by itself, and the timestamp under the dropdown says when the list was last checked. If access was granted seconds ago, "Check again" forces it. Note that "Sync Meta" is a different thing entirely — it pulls spend and leads and does not touch this list.',
   },
   {
+    need: 'All three sizes of an ad, in one file',
+    where: 'Client page → Ad Studio → "Download all 3"',
+    how: 'On the Design tab it exports the three live artboards; on the "Saved ads" tab it fetches a saved set. Either way you get one zip named client-ads-YYYY-MM-DD.zip holding client-square.png, client-feed.png and client-story.png at 1080x1080, 1080x1350 and 1080x1920. A size that fails is named in the message rather than quietly missing — an archive with two files in it looks exactly like one with three.',
+  },
+  {
     need: 'Which clients I can build Meta ads for right now',
     where: 'The Dashboard → "Ready to build ads", the green group at the top',
     how: 'A client appears when their GoHighLevel backend is standing (all four of A2P, template, Meta form automation and SMS automation marked done — or the client flagged GHL live), their Meta ad account and Facebook Page are connected, and their ads are not live yet. The row says which: "GHL built · nothing in the way", or "GHL marked live · 2 of 4 items still open" when the flag is carrying it rather than the deliverables. A missing landing page or privacy policy URL is named but does not hold them out, because which of those is needed depends on the campaign type. Empty means nothing is actually ready — the order of work is GHL backend first, then ads.',
@@ -329,11 +334,11 @@ export const DOWNLOADS = [
   },
   {
     what: 'A finished ad image',
-    how: 'Client page → Ad Studio → Design tab → the download button under an artboard. One PNG per size.',
+    how: 'Client page → Ad Studio → Design tab → "Save PNG" under an artboard for one size, or "Download all 3" next to "Save all 3 sizes" for every size as one zip. Neither puts anything in the bucket.',
   },
   {
     what: 'A previously saved ad',
-    how: 'Client page → Ad Studio → "Saved ads" → "Download" for the size you want, or "Copy URL" for a link to it.',
+    how: 'Client page → Ad Studio → "Saved ads" → "Download all 3" on the set, or "Download" on one size, or "Copy URL" for a link to it. Zipped rather than three downloads at once, because phones and Safari block those.',
   },
   {
     what: 'The GHL setup details as text',
