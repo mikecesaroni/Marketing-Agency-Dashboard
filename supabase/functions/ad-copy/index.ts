@@ -38,6 +38,11 @@ const FIELDS = [
   'description',
 ] as const
 
+// The only slots a VIDEO ad has. There is no artboard, so the painted fields
+// do not exist -- asking for them would spend output on copy nobody can use
+// and give the picker fields it has nowhere to put.
+const FEED_FIELDS = ['primaryText', 'headline', 'description'] as const
+
 const Suggestion = z.object({
   field: z.enum(FIELDS),
   value: z.string(),
@@ -91,6 +96,13 @@ fixed layout:
   identical to the hook.
 - description: NOT on the image. One short line under the headline.
 
+WHEN THE AD IS A VIDEO, you are told so explicitly. Then there is no image and
+no artboard: the painted slots do not exist, and the only three that do are
+primaryText, headline and description. Write them for someone who is being
+shown a video with the sound off, so the primaryText has to carry the offer on
+its own -- and never describe the video or refer to it ("watch this", "see the
+video"). The words are read beside it, not about it.
+
 Write like the business owner talks. Concrete over clever. No em dashes, no
 square brackets, no placeholders. Never invent a number, a rating, a review
 count, a licence or a guarantee that is not already somewhere in what you were
@@ -135,13 +147,35 @@ Deno.serve(async (req) => {
   const current = body.current && typeof body.current === 'object' ? body.current : {}
   const slots = FIELDS.map((f) => `${f}: ${String(current[f] ?? '').trim() || '(empty)'}`).join('\n')
 
-  const about = [
-    body.client_name ? `Business: ${body.client_name}` : '',
-    body.industry ? `Trade: ${body.industry}` : '',
-    body.market ? `Area served: ${body.market}` : '',
+  // WHAT THE BUSINESS ACTUALLY SELLS.
+  //
+  // Without these the model has a trade and a town and nothing else, so it
+  // writes copy that could belong to any plumber in the country -- and the
+  // system prompt forbids inventing an offer, which left it with almost
+  // nothing honest to say. Every one of these comes off the client's own
+  // onboarding form, so it is the client's own words being used.
+  const facts: [string, unknown][] = [
+    ['Business', body.client_name],
+    ['Trade', body.industry],
+    ['Area served', body.market || body.service_area],
+    ['Services', body.services],
+    ['The offer to run', body.offer],
+    ['Guarantee', body.guarantee],
+    ['Typical price range', body.price_range],
+    ['Why people choose them', body.why_choose],
+    ['Their best customer', body.ideal_customer],
+    ['What the button says', body.cta_label],
   ]
-    .filter(Boolean)
+  const about = facts
+    .map(([label, value]) => [label, String(value ?? '').trim()] as const)
+    // Capped: a rambling intake answer can be paragraphs long, and the useful
+    // signal is always at the front.
+    .filter(([, value]) => value)
+    .map(([label, value]) => `${label}: ${value.slice(0, 400)}`)
     .join('\n')
+
+  const avoid = String(body.words_to_avoid || '').trim()
+  const isVideo = body.medium === 'video'
 
   try {
     const client = new Anthropic({ apiKey })
@@ -157,7 +191,11 @@ Deno.serve(async (req) => {
       messages: [
         {
           role: 'user',
-          content: `${about ? `${about}\n\n` : ''}The ad as it stands:\n${slots}\n\nWhat I want: ${instruction}`,
+          content:
+            `${about ? `${about}\n\n` : ''}` +
+            `${isVideo ? 'THIS AD IS A VIDEO. There is no image and no artboard: write only primaryText, headline and description.\n\n' : ''}` +
+            `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
+            `The ad as it stands:\n${slots}\n\nWhat I want: ${instruction}`,
         },
       ],
     })
@@ -172,9 +210,12 @@ Deno.serve(async (req) => {
 
     return json({
       note: parsed.note,
-      // Belt and braces on the field name even though the schema constrains it:
-      // this is what the Studio writes straight into its own state.
-      options: parsed.options.filter((o) => (FIELDS as readonly string[]).includes(o.field)),
+      // Belt and braces on the field name even though the schema constrains it,
+      // and narrowed to the feed fields for a video so the picker cannot be
+      // handed a slot it has nowhere to paint.
+      options: parsed.options.filter((o) =>
+        ((isVideo ? FEED_FIELDS : FIELDS) as readonly string[]).includes(o.field)
+      ),
     })
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) {

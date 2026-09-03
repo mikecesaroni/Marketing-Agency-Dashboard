@@ -862,6 +862,7 @@ export default function PublishToMetaPanel({
       >
         <VideoAdPicker
           client={client}
+          intake={intake}
           picked={pickedVideos}
           onPicked={setPickedVideos}
           copies={videoCopies}

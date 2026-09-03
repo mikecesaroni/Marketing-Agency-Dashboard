@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Button from './ui/Button'
 import { registerAdVideo, adVideoStatus } from '../lib/metaPublish'
+import { suggestVideoCopy } from '../lib/adCopy'
+import { anglesAvailable, nthPerField } from '../lib/adCopyOptions'
 import {
   MAX_VIDEO_BYTES,
   isPublishable,
@@ -38,7 +40,13 @@ function Pill({ video }) {
   )
 }
 
-export default function VideoAdPicker({ client, picked, onPicked, copies, onCopy }) {
+export default function VideoAdPicker({ client, intake, picked, onPicked, copies, onCopy }) {
+  // Which video's copy is being written, what the model said it did, and the
+  // options it returned so "another angle" can walk them without paying for a
+  // second request.
+  const [writing, setWriting] = useState('')
+  const [note, setNote] = useState({})
+  const [angles, setAngles] = useState({})
   const [videos, setVideos] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
@@ -150,6 +158,70 @@ export default function VideoAdPicker({ client, picked, onPicked, copies, onCopy
       setError(err.message)
     } finally {
       setBusy('')
+    }
+  }
+
+  /**
+   * Fills primary text, headline and description from the client's own
+   * onboarding answers.
+   *
+   * Applied straight into the fields rather than offered as chips, which is
+   * the opposite of what the Design tab does — and right here, because the
+   * fields are empty and editable text boxes. Nothing is hidden: what it
+   * wrote is sitting in the inputs to be changed.
+   *
+   * "Another angle" steps through the options already in hand before asking
+   * for more. The model returns three per field and this used to keep one, so
+   * every re-roll was a fresh Opus request for something already paid for.
+   */
+  const apply = (path, options, index, said) => {
+    const best = nthPerField(options, index)
+    const patch = {}
+    if (best.primaryText) patch.primary_text = best.primaryText
+    if (best.headline) patch.headline = best.headline
+    if (best.description) patch.description = best.description
+    if (Object.keys(patch).length === 0) return false
+
+    onCopy(path, patch)
+    setAngles((prev) => ({ ...prev, [path]: { options, index, total: anglesAvailable(options) } }))
+    if (said !== undefined) setNote((prev) => ({ ...prev, [path]: said || '' }))
+    return true
+  }
+
+  const write = async (video) => {
+    const path = video.storage_path
+    const held = angles[path]
+
+    // Still have an unseen angle from the last reply: no request needed.
+    if (held && held.index + 1 < held.total) {
+      apply(path, held.options, held.index + 1)
+      return
+    }
+
+    setWriting(path)
+    setError('')
+    try {
+      const copy = copies[path] || {}
+      const { note: said, options } = await suggestVideoCopy({
+        client,
+        intake,
+        current: {
+          primaryText: copy.primary_text || '',
+          headline: copy.headline || '',
+          description: copy.description || '',
+        },
+        instruction: copy.primary_text?.trim()
+          ? 'Give me a different angle on the primary text, headline and description for this video ad.'
+          : 'Write the primary text, headline and description for this video ad.',
+      })
+
+      if (!apply(path, options, 0, said)) {
+        setError(said || 'The copy assistant did not return anything usable. Try again.')
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setWriting('')
     }
   }
 
@@ -293,6 +365,27 @@ export default function VideoAdPicker({ client, picked, onPicked, copies, onCopy
                       placeholder="Ad name — what you will see in Ads Manager (optional)"
                       className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
                     />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={writing === v.storage_path}
+                        onClick={() => write(v)}
+                      >
+                        {writing === v.storage_path
+                          ? 'Writing…'
+                          : !copy.primary_text?.trim()
+                            ? '✨ Write the copy'
+                            : angles[v.storage_path]?.total > 1
+                              ? `✨ Another angle (${angles[v.storage_path].index + 1}/${angles[v.storage_path].total})`
+                              : '✨ Another angle'}
+                      </Button>
+                      {note[v.storage_path] && (
+                        <p className="text-[11px] text-slate-600 flex-1 min-w-0">
+                          {note[v.storage_path]}
+                        </p>
+                      )}
+                    </div>
                     {open === v.storage_path && !copy.primary_text?.trim() && (
                       <p className="text-[11px] text-amber-700">
                         Primary text is required before this video can publish.

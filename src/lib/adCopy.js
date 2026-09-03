@@ -11,15 +11,17 @@ import { readFunctionError } from './functionError'
  * photo, the colours and everything else already chosen.
  */
 export async function suggestCopy({ client, current, instruction }) {
-  const { data, error } = await supabase.functions.invoke('ad-copy', {
-    body: {
-      client_name: client?.name,
-      industry: client?.industry,
-      market: client?.market,
-      current,
-      instruction,
-    },
+  return callAdCopy({
+    client_name: client?.name,
+    industry: client?.industry,
+    market: client?.market,
+    current,
+    instruction,
   })
+}
+
+async function callAdCopy(body) {
+  const { data, error } = await supabase.functions.invoke('ad-copy', { body })
 
   if (error) {
     const { status, detail } = await readFunctionError(error)
@@ -39,6 +41,37 @@ export async function suggestCopy({ client, current, instruction }) {
   if (data?.error) throw new Error(data.error)
 
   return { note: data?.note || '', options: data?.options || [] }
+}
+
+/**
+ * Copy for a VIDEO ad: primary text, headline, description, nothing painted.
+ *
+ * Sends the client's own onboarding answers with it. Without them the model
+ * has a trade and a town, and the system prompt rightly forbids inventing an
+ * offer or a guarantee — so it could only write copy that would fit any
+ * plumber anywhere. The offer, the guarantee, the price range and the reason
+ * people choose them are the facts that make the copy this client's.
+ */
+export async function suggestVideoCopy({ client, intake, current, instruction }) {
+  const i = intake || {}
+  return callAdCopy({
+    medium: 'video',
+    client_name: client?.name,
+    industry: client?.industry || i.industry_trade,
+    market: client?.market,
+    service_area: i.service_area,
+    services: i.service_want_more || i.most_profitable_service || i.services_offered,
+    // The headline offer first, then whatever promotion is running.
+    offer: i.offer_headline || i.current_offers_guarantees,
+    guarantee: i.guarantee,
+    price_range: i.typical_price_range,
+    why_choose: i.why_people_choose,
+    ideal_customer: i.ideal_customer,
+    cta_label: i.cta_offering,
+    words_to_avoid: i.words_to_avoid,
+    current,
+    instruction,
+  })
 }
 
 // What each slot is called on screen. The function answers with the state key,
