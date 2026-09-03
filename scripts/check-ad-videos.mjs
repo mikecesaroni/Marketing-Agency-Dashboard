@@ -17,6 +17,7 @@
 
 import {
   MAX_VIDEO_BYTES,
+  accountKey,
   isPublishable,
   isVideoFile,
   mergeVideos,
@@ -25,6 +26,20 @@ import {
   validateVideo,
   videoPath,
 } from '../src/lib/adVideos.js'
+
+// THE TWO SPELLINGS OF ONE AD ACCOUNT, and the reason this file now uses both.
+//
+// The CRM stores the id bare, because that is what a person copies out of Ads
+// Manager. Every Graph path needs act_ in front, so meta-publish prefixes it —
+// and stored the prefixed form against the video. Comparing them as strings
+// never matched, so a video that really was registered and really was
+// transcoded read as "Not sent to Meta yet" for ever.
+//
+// The first version of these checks used 'act_1' on BOTH sides of the join, so
+// it passed against a broken build. Every fixture below now spells it the way
+// the two systems really do.
+const BARE_ACCOUNT = '3053788018160847'
+const PREFIXED_ACCOUNT = 'act_3053788018160847'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -70,6 +85,16 @@ check('exactly at the limit is allowed', validateVideo({ name: 'a.mp4', size: MA
   check('and carries no characters that need escaping', /^[\w./-]+$/.test(path), true)
 }
 
+// --- one account, two spellings -------------------------------------------
+
+check('the prefix is stripped', accountKey(PREFIXED_ACCOUNT), BARE_ACCOUNT)
+check('a bare id is left alone', accountKey(BARE_ACCOUNT), BARE_ACCOUNT)
+check('both spellings key the same', accountKey(PREFIXED_ACCOUNT) === accountKey(BARE_ACCOUNT), true)
+check('a capitalised prefix is stripped too', accountKey('ACT_123'), '123')
+check('whitespace does not make a new account', accountKey('  act_123 '), '123')
+check('nothing is the empty key', [accountKey(''), accountKey(null)], ['', ''])
+check('a different account is still different', accountKey('act_999') === accountKey('act_123'), false)
+
 // --- the per-account join --------------------------------------------------
 
 const FILES = [
@@ -79,7 +104,7 @@ const FILES = [
 ]
 
 {
-  const rows = mergeVideos(FILES, [], 'act_1')
+  const rows = mergeVideos(FILES, [], BARE_ACCOUNT)
   check('non-videos are dropped from the list', rows.map((r) => r.file_name), [
     'before-after.mov',
     'walkthrough.mp4',
@@ -93,17 +118,45 @@ const FILES = [
   const registered = [
     {
       storage_path: 'c1/1-walkthrough.mp4',
-      meta_account_id: 'act_1',
+      meta_account_id: PREFIXED_ACCOUNT,
       meta_video_id: 'v100',
       status: 'ready',
       thumb_url: 'https://x/thumb.jpg',
     },
   ]
-  const rows = mergeVideos(FILES, registered, 'act_1')
+  const rows = mergeVideos(FILES, registered, BARE_ACCOUNT)
   const walk = rows.find((r) => r.file_name === 'walkthrough.mp4')
   check('a ready registration attaches its video id', [walk.status, walk.meta_video_id], ['ready', 'v100'])
   check('and is publishable', isPublishable(walk), true)
   check('the other file is untouched', rows.find((r) => r.file_name === 'before-after.mov').status, 'new')
+}
+
+{
+  // THE REGRESSION. The client's bare id against the row's prefixed one: the
+  // exact shape that shipped broken. If this fails, "Send to Meta" appears to
+  // do nothing again.
+  const registered = [
+    {
+      storage_path: 'c1/1-walkthrough.mp4',
+      meta_account_id: PREFIXED_ACCOUNT,
+      meta_video_id: 'v100',
+      status: 'ready',
+      thumb_url: 'https://x/thumb.jpg',
+    },
+  ]
+  const walk = mergeVideos(FILES, registered, BARE_ACCOUNT).find(
+    (r) => r.file_name === 'walkthrough.mp4'
+  )
+  check('a prefixed row matches a bare client id', walk.status, 'ready')
+  check('and is publishable', isPublishable(walk), true)
+
+  // The other direction, in case the two ever swap which form they store.
+  const swapped = mergeVideos(
+    FILES,
+    [{ ...registered[0], meta_account_id: BARE_ACCOUNT }],
+    PREFIXED_ACCOUNT
+  ).find((r) => r.file_name === 'walkthrough.mp4')
+  check('and a bare row matches a prefixed client id', swapped.status, 'ready')
 }
 
 {
@@ -112,13 +165,13 @@ const FILES = [
   const registered = [
     {
       storage_path: 'c1/1-walkthrough.mp4',
-      meta_account_id: 'act_SOMEONE_ELSE',
+      meta_account_id: 'act_999999999999999',
       meta_video_id: 'v100',
       status: 'ready',
       thumb_url: 'https://x/thumb.jpg',
     },
   ]
-  const rows = mergeVideos(FILES, registered, 'act_1')
+  const rows = mergeVideos(FILES, registered, BARE_ACCOUNT)
   const walk = rows.find((r) => r.file_name === 'walkthrough.mp4')
   check("another account's registration does not count", walk.status, 'new')
   check('and carries no video id', walk.meta_video_id, '')
@@ -128,8 +181,8 @@ const FILES = [
 {
   const rows = mergeVideos(
     FILES,
-    [{ storage_path: 'c1/1-walkthrough.mp4', meta_account_id: 'act_1', meta_video_id: 'v1', status: 'processing' }],
-    'act_1'
+    [{ storage_path: 'c1/1-walkthrough.mp4', meta_account_id: PREFIXED_ACCOUNT, meta_video_id: 'v1', status: 'processing' }],
+    BARE_ACCOUNT
   )
   const walk = rows.find((r) => r.file_name === 'walkthrough.mp4')
   check('a processing video is not publishable', isPublishable(walk), false)
@@ -172,7 +225,7 @@ const FILES = [
 
 // --- empties ---------------------------------------------------------------
 
-check('no files is an empty list', mergeVideos([], [], 'act_1'), [])
+check('no files is an empty list', mergeVideos([], [], BARE_ACCOUNT), [])
 check('null inputs do not throw', mergeVideos(null, null, null), [])
 
 console.log(failures === 0 ? '\nAll ad-video checks passed' : `\n${failures} FAILED`)

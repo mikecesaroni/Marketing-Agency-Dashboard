@@ -63,6 +63,23 @@ export function videoPath(clientId, fileName, stamp = Date.now()) {
 }
 
 /**
+ * One ad account id, however it is spelled.
+ *
+ * The CRM stores it bare (3053788018160847) because that is what a person
+ * copies out of Ads Manager; every Graph path needs act_ in front, so the
+ * publish function prefixes it and stored the prefixed form against the
+ * video. Comparing the two as plain strings never matched, so a video that
+ * really was registered and really was transcoded read as "Not sent to Meta
+ * yet" for ever — pressing the button did the work and then showed nothing.
+ *
+ * Normalising here rather than at the two call sites means the next thing to
+ * join on an account id cannot reintroduce it.
+ */
+export function accountKey(id) {
+  return String(id || '').trim().replace(/^act_/i, '')
+}
+
+/**
  * Joins the client's video files to whatever Meta knows about them.
  *
  * Deliberately does NOT build the public URL: that needs the storage client,
@@ -75,10 +92,10 @@ export function videoPath(clientId, fileName, stamp = Date.now()) {
  * somebody else's account and publishing it here would fail.
  */
 export function mergeVideos(files, registered, account) {
-  const wanted = String(account || '')
+  const wanted = accountKey(account)
   const byPath = new Map()
   for (const row of registered || []) {
-    if (String(row.meta_account_id || '') !== wanted) continue
+    if (accountKey(row.meta_account_id) !== wanted) continue
     byPath.set(row.storage_path, row)
   }
 
