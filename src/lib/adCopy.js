@@ -52,7 +52,7 @@ async function callAdCopy(body) {
  * plumber anywhere. The offer, the guarantee, the price range and the reason
  * people choose them are the facts that make the copy this client's.
  */
-export async function suggestVideoCopy({ client, intake, current, instruction }) {
+export async function suggestVideoCopy({ client, intake, current, instruction, transcript }) {
   const i = intake || {}
   return callAdCopy({
     medium: 'video',
@@ -69,6 +69,9 @@ export async function suggestVideoCopy({ client, intake, current, instruction })
     ideal_customer: i.ideal_customer,
     cta_label: i.cta_offering,
     words_to_avoid: i.words_to_avoid,
+    // What was actually said in the clip, when it has been transcribed. The
+    // strongest input there is: the client's own words about their own work.
+    transcript,
     current,
     instruction,
   })

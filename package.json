@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "guide": "node scripts/build-agent-guide.mjs",
-    "check": "for f in scripts/check-*.mjs; do node \"$f\" || exit 1; done",
-    "prebuild": "npm run guide && node scripts/check-agent-guide.mjs",
+    "check": "oxlint && for f in scripts/check-*.mjs; do node \"$f\" || exit 1; done",
+    "prebuild": "oxlint && npm run guide && node scripts/check-agent-guide.mjs",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

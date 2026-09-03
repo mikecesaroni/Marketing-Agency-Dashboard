@@ -10,7 +10,7 @@ import {
   statusLabel,
   validateVideo,
 } from '../lib/adVideos'
-import { deleteVideo, fetchClientVideos, uploadVideo } from '../lib/adVideoStore'
+import { deleteVideo, fetchClientVideos, transcribeVideo, uploadVideo } from '../lib/adVideoStore'
 
 /**
  * Upload a video, wait for Meta to transcode it, tick it, publish it.
@@ -51,6 +51,10 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
   const [open, setOpen] = useState('')
+  // Transcript text keyed by storage path, held here as well as on the row so
+  // a fresh transcription shows without waiting for a reload.
+  const [heard, setHeard] = useState({})
+  const [showHeard, setShowHeard] = useState('')
   const fileInput = useRef(null)
 
   const account = client.meta_ad_account_id || ''
@@ -188,6 +192,47 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     return true
   }
 
+  /**
+   * The words spoken in the clip, for the model to write copy from.
+   *
+   * This is the one input that is actually about THIS video rather than about
+   * the client in general. Without it every clip for one client gets copy off
+   * the same onboarding answers, so three videos read the same; with it the
+   * primary text can pick up the technician's own words.
+   *
+   * Never blocks the copy. A missing DEEPGRAM_API_KEY, a vendor that is down,
+   * or a clip that is music over B-roll all end the same way: return '' and
+   * let the model work from the form, which is exactly what it did before
+   * transcription existed. Refusing to write copy because a nice-to-have input
+   * failed would be a worse product than the one this replaces.
+   */
+  const hear = async (video) => {
+    const path = video.storage_path
+    if (heard[path]) return heard[path]
+    if (video.transcript) {
+      setHeard((prev) => ({ ...prev, [path]: video.transcript }))
+      return video.transcript
+    }
+    // 'empty' is a settled answer, not a gap: the vendor listened and there
+    // was nothing said. Asking again would cost money for the same silence.
+    if (video.transcript_status === 'empty') return ''
+
+    try {
+      const { transcript } = await transcribeVideo({ clientId: client.id, storagePath: path })
+      if (transcript) setHeard((prev) => ({ ...prev, [path]: transcript }))
+      // Refreshes the row so the status pill and the transcript survive a
+      // reload, but deliberately not awaited into the copy request: the copy
+      // only needs the text, which is already in hand.
+      load()
+      return transcript || ''
+    } catch (err) {
+      // needsKey is the setup case. Said once, next to the button, rather than
+      // in the red error banner — nothing is broken and the copy still comes.
+      setNote((prev) => ({ ...prev, [path]: err.needsKey ? err.message : '' }))
+      return ''
+    }
+  }
+
   const write = async (video) => {
     const path = video.storage_path
     const held = angles[path]
@@ -201,10 +246,12 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     setWriting(path)
     setError('')
     try {
+      const transcript = await hear(video)
       const copy = copies[path] || {}
       const { note: said, options } = await suggestVideoCopy({
         client,
         intake,
+        transcript,
         current: {
           primaryText: copy.primary_text || '',
           headline: copy.headline || '',
@@ -373,7 +420,9 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                         onClick={() => write(v)}
                       >
                         {writing === v.storage_path
-                          ? 'Writing…'
+                          ? heard[v.storage_path] || v.transcript
+                            ? 'Writing…'
+                            : 'Listening to the video…'
                           : !copy.primary_text?.trim()
                             ? '✨ Write the copy'
                             : angles[v.storage_path]?.total > 1
@@ -386,6 +435,39 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                         </p>
                       )}
                     </div>
+                    {/* What the copy was written FROM. Shown because the
+                        transcript is machine-heard: it mishears prices and
+                        phone numbers, and if the primary text quotes a wrong
+                        number this is where that came from. Collapsed by
+                        default — it is evidence, not something to read every
+                        time. */}
+                    {(heard[v.storage_path] || v.transcript || v.transcript_status === 'empty') && (
+                      <div className="text-[11px]">
+                        {v.transcript_status === 'empty' && !heard[v.storage_path] ? (
+                          <p className="text-slate-500">
+                            Nothing spoken in this clip — the copy comes from the onboarding
+                            form.
+                          </p>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setShowHeard(showHeard === v.storage_path ? '' : v.storage_path)
+                              }
+                              className="text-slate-500 hover:text-slate-800 underline"
+                            >
+                              {showHeard === v.storage_path ? 'Hide' : 'Show'} what the video says
+                            </button>
+                            {showHeard === v.storage_path && (
+                              <p className="mt-1 p-2 bg-white border border-slate-200 rounded text-slate-600 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                                {heard[v.storage_path] || v.transcript}
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
                     {open === v.storage_path && !copy.primary_text?.trim() && (
                       <p className="text-[11px] text-amber-700">
                         Primary text is required before this video can publish.

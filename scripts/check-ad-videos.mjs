@@ -223,6 +223,114 @@ const FILES = [
   check('the same video with a cover frame is publishable', isPublishable(withThumb), true)
 }
 
+// --- the transcript, which is the copy assistant's only per-video input -----
+//
+// Everything else the copy assistant knows comes off the onboarding form, so
+// without this every clip for one client gets copy written from identical
+// facts and three videos read the same. The transcript is the only thing that
+// is about THIS video.
+//
+// It rides on the ad_videos row, so it is subject to the same per-account join
+// as everything else here -- which is the case worth pinning down, because a
+// transcript leaking across the join would put one client's spoken words into
+// another client's ad.
+
+{
+  const registered = [
+    {
+      storage_path: 'c1/1-walkthrough.mp4',
+      meta_account_id: PREFIXED_ACCOUNT,
+      meta_video_id: 'v100',
+      status: 'ready',
+      thumb_url: 'https://x/thumb.jpg',
+      transcript: 'Dale here with Reliable, twenty two years on Ocoee Street.',
+      transcript_status: 'done',
+    },
+  ]
+  const walk = mergeVideos(FILES, registered, BARE_ACCOUNT).find(
+    (r) => r.file_name === 'walkthrough.mp4'
+  )
+  check('a done transcript comes through the join', walk.transcript_status, 'done')
+  check('with its words intact', walk.transcript.includes('Ocoee Street'), true)
+
+  // A file with no registration has no transcript to carry, and must not
+  // report one as merely missing-but-known.
+  const other = mergeVideos(FILES, registered, BARE_ACCOUNT).find(
+    (r) => r.file_name === 'before-after.mov'
+  )
+  check('an unregistered file has no transcript', [other.transcript, other.transcript_status], [
+    '',
+    'none',
+  ])
+}
+
+{
+  // THE LEAK. Same file, transcript recorded against a DIFFERENT ad account.
+  // If this came through, one client's spoken words would be handed to the
+  // copy assistant while it writes another client's ad.
+  const registered = [
+    {
+      storage_path: 'c1/1-walkthrough.mp4',
+      meta_account_id: 'act_999999999999999',
+      meta_video_id: 'v100',
+      status: 'ready',
+      thumb_url: 'https://x/thumb.jpg',
+      transcript: "Somebody else's pitch entirely.",
+      transcript_status: 'done',
+    },
+  ]
+  const walk = mergeVideos(FILES, registered, BARE_ACCOUNT).find(
+    (r) => r.file_name === 'walkthrough.mp4'
+  )
+  check("another account's transcript does not come through", walk.transcript, '')
+  check('and its status does not either', walk.transcript_status, 'none')
+}
+
+{
+  // 'empty' is a SETTLED answer, not a gap: the vendor listened and there was
+  // nothing said, which is the normal case for B-roll over music. It has to
+  // survive the join as itself, because the picker uses it to decide not to
+  // pay to transcribe the same silence again.
+  const registered = [
+    {
+      storage_path: 'c1/1-walkthrough.mp4',
+      meta_account_id: PREFIXED_ACCOUNT,
+      meta_video_id: 'v100',
+      status: 'ready',
+      thumb_url: 'https://x/thumb.jpg',
+      transcript: null,
+      transcript_status: 'empty',
+    },
+  ]
+  const walk = mergeVideos(FILES, registered, BARE_ACCOUNT).find(
+    (r) => r.file_name === 'walkthrough.mp4'
+  )
+  check('empty survives as empty, not as none', walk.transcript_status, 'empty')
+  check('and carries no words', walk.transcript, '')
+
+  // The transcript is not part of publishability. A clip with nothing said in
+  // it is a perfectly good ad -- the copy just comes off the onboarding form.
+  check('a silent video is still publishable', isPublishable(walk), true)
+}
+
+{
+  // A failed or still-running transcription must not block publishing either.
+  const base = {
+    storage_path: 'c1/1-walkthrough.mp4',
+    meta_account_id: PREFIXED_ACCOUNT,
+    meta_video_id: 'v100',
+    status: 'ready',
+    thumb_url: 'https://x/thumb.jpg',
+  }
+  for (const state of ['running', 'error', 'none']) {
+    const row = mergeVideos(FILES, [{ ...base, transcript_status: state }], BARE_ACCOUNT).find(
+      (r) => r.file_name === 'walkthrough.mp4'
+    )
+    check(`transcript_status ${state} does not block publishing`, isPublishable(row), true)
+    check(`and ${state} is carried, not flattened`, row.transcript_status, state)
+  }
+}
+
 // --- empties ---------------------------------------------------------------
 
 check('no files is an empty list', mergeVideos([], [], BARE_ACCOUNT), [])

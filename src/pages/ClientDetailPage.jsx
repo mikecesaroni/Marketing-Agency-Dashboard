@@ -232,12 +232,12 @@ export default function ClientDetailPage() {
     setShowStudioModal(true)
   }
 
+  // Only ever called with 'kpis', 'worklog' or 'creative'. It used to carry
+  // 'intake' and 'ghl' branches closing modals that no longer exist on this
+  // page, calling setters that were deleted with them — dead code that would
+  // have thrown the moment anything passed either name again.
   const handleDataAdded = async (type) => {
-    if (type === 'intake') {
-      setShowIntakeModal(false)
-    } else if (type === 'ghl') {
-      setShowGhlModal(false)
-    } else if (type === 'kpis') {
+    if (type === 'kpis') {
       setShowKPIsModal(false)
     } else if (type === 'worklog') {
       setShowWorkLogModal(false)

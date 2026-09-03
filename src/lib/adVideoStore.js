@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
-import { mergeVideos, validateVideo } from './adVideos'
+import { mergeVideos, validateVideo, videoPath } from './adVideos'
+import { readFunctionError } from './functionError'
 
 /**
  * Storage and database access for ad videos.
@@ -63,6 +64,32 @@ export async function uploadVideo({ clientId, file }) {
   }
 
   return { storage_path: path, file_name: file.name }
+}
+
+/**
+ * Asks for the words spoken in a video.
+ *
+ * Cached on the row by the function: the words in a file never change, and one
+ * clip gets its copy rewritten several times while somebody hunts for an angle
+ * they like, so re-buying the transcript each press would be paying twice for
+ * the same answer.
+ *
+ * A 501 means no DEEPGRAM_API_KEY is set on the project. That is a setup step,
+ * not a failure of the video, so the caller carries on without a transcript
+ * rather than refusing to write copy at all.
+ */
+export async function transcribeVideo({ clientId, storagePath, force = false }) {
+  const { data, error } = await supabase.functions.invoke('transcribe-video', {
+    body: { client_id: clientId, storage_path: storagePath, force },
+  })
+  if (error) {
+    const detail = await readFunctionError(error)
+    const err = new Error(detail.detail || 'Could not transcribe that video.')
+    err.needsKey = detail.status === 501
+    throw err
+  }
+  if (data?.error) throw new Error(data.error)
+  return { status: data?.status || 'none', transcript: data?.transcript || '' }
 }
 
 export async function deleteVideo(video) {

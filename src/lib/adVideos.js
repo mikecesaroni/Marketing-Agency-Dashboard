@@ -115,6 +115,11 @@ export function mergeVideos(files, registered, account) {
         // 'processing': one needs sending to Meta, the other needs waiting for.
         status: meta ? meta.status : 'new',
         error: meta?.error || '',
+        transcript: meta?.transcript || '',
+        // 'none' | 'running' | 'done' | 'empty' | 'error'. 'empty' means the
+        // vendor heard nothing, which is a real answer for B-roll over music
+        // and is why it is not just a blank transcript.
+        transcript_status: meta?.transcript_status || 'none',
       }
     })
     .sort((a, b) => String(b.uploaded_at || '').localeCompare(String(a.uploaded_at || '')))
