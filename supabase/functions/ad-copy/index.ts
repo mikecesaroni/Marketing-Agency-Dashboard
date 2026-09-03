@@ -96,23 +96,25 @@ fixed layout:
   identical to the hook.
 - description: NOT on the image. One short line under the headline.
 
-WHEN YOU ARE GIVEN A TRANSCRIPT, it is what was actually said out loud in the
-video, and it is the best material you have. It is the business owner's own
-words about their own work, which is exactly the voice to write in, and it
-often contains the offer, the timeframe or the guarantee in a form they are
-happy to stand behind. Prefer a phrase they really said over one you invent.
+WHEN YOU ARE TOLD WHAT THE VIDEO SHOWS, that line was typed by the person
+building the ad, about this specific clip. Everything else you are given is
+true of the business in general and identical for every video they run, so it
+is the only thing that makes the copy about the ad in front of them. Use it.
+If it names a moment, a person or a job, write copy that a viewer of THAT clip
+would recognise.
 
-Two cautions on it. A transcript is machine-heard, so a number, a name or a
-brand in it can be wrong -- treat a figure that appears ONLY in the transcript
-as something to repeat in their words rather than as a fact to build a claim
-on, and if a transcript number contradicts the onboarding form, the form wins
-and you say so in the note. And the transcript is speech: it rambles, repeats
-and trails off. Take the substance, not the sentence structure.
+It is a note, not copy. It is shorthand, it may be half a sentence, and it is
+written to you rather than to a customer -- so take the substance and write the
+ad yourself, and never quote the note back or describe the footage. Anything in
+it is a fact about the video, not a claim you may make about the business: if
+it says a price or a timeframe that appears nowhere else, treat that as the
+offer being shown on screen and keep it consistent with the offer you were
+given, saying so in the note if the two disagree.
 
-Do no arithmetic on what they said. A tenure is not a founding year: "22 years"
-stays "22 years" and must never become "since 2003", because that is a new
-number you worked out and it is usually off by one. The same goes for turning a
-count into a rate, a price into a discount, or a timeframe into a date.
+Do no arithmetic on it. A tenure is not a founding year: "22 years" stays "22
+years" and must never become "since 2003", because that is a new number you
+worked out and it is usually off by one. The same goes for turning a count into
+a rate, a price into a discount, or a timeframe into a date.
 
 WHEN THE AD IS A VIDEO, you are told so explicitly. Then there is no image and
 no artboard: the painted slots do not exist, and the only three that do are
@@ -185,11 +187,11 @@ Deno.serve(async (req) => {
     ['What the button says', body.cta_label],
   ]
 
-  // The spoken track, kept separate from the facts list and given far more
-  // room: it is the only input that is the client talking rather than the
-  // client filling in a form, and truncating it to 400 characters like the
-  // rest would cut most clips off mid-pitch.
-  const transcript = String(body.transcript || '').trim().slice(0, 6000)
+  // What this clip shows, typed on the video itself. Kept out of the facts
+  // list and given more room than the 400 characters those get: everything in
+  // that list is true of the business in general, and this is the only line
+  // that is about the ad being built.
+  const videoAbout = String(body.about || '').trim().slice(0, 2000)
   const about = facts
     .map(([label, value]) => [label, String(value ?? '').trim()] as const)
     // Capped: a rambling intake answer can be paragraphs long, and the useful
@@ -217,7 +219,7 @@ Deno.serve(async (req) => {
           role: 'user',
           content:
             `${about ? `${about}\n\n` : ''}` +
-            `${transcript ? `TRANSCRIPT of what is said in the video:\n"""\n${transcript}\n"""\n\n` : ''}` +
+            `${videoAbout ? `WHAT THIS VIDEO SHOWS, from the person building the ad:\n"""\n${videoAbout}\n"""\n\n` : ''}` +
             `${isVideo ? 'THIS AD IS A VIDEO. There is no image and no artboard: write only primaryText, headline and description.\n\n' : ''}` +
             `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
             `The ad as it stands:\n${slots}\n\nWhat I want: ${instruction}`,

@@ -115,11 +115,11 @@ export function mergeVideos(files, registered, account) {
         // 'processing': one needs sending to Meta, the other needs waiting for.
         status: meta ? meta.status : 'new',
         error: meta?.error || '',
-        transcript: meta?.transcript || '',
-        // 'none' | 'running' | 'done' | 'empty' | 'error'. 'empty' means the
-        // vendor heard nothing, which is a real answer for B-roll over music
-        // and is why it is not just a blank transcript.
-        transcript_status: meta?.transcript_status || 'none',
+        // What the clip actually shows, typed by whoever uploaded it. The one
+        // thing the copy assistant knows about THIS video rather than about
+        // the client in general, so without it three clips for one client all
+        // get written from the same onboarding answers and read the same.
+        about: meta?.about || '',
       }
     })
     .sort((a, b) => String(b.uploaded_at || '').localeCompare(String(a.uploaded_at || '')))

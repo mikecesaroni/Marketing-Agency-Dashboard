@@ -52,7 +52,7 @@ async function callAdCopy(body) {
  * plumber anywhere. The offer, the guarantee, the price range and the reason
  * people choose them are the facts that make the copy this client's.
  */
-export async function suggestVideoCopy({ client, intake, current, instruction, transcript }) {
+export async function suggestVideoCopy({ client, intake, current, instruction, about }) {
   const i = intake || {}
   return callAdCopy({
     medium: 'video',
@@ -69,9 +69,11 @@ export async function suggestVideoCopy({ client, intake, current, instruction, t
     ideal_customer: i.ideal_customer,
     cta_label: i.cta_offering,
     words_to_avoid: i.words_to_avoid,
-    // What was actually said in the clip, when it has been transcribed. The
-    // strongest input there is: the client's own words about their own work.
-    transcript,
+    // What this particular clip shows, typed on the video itself. Everything
+    // above is true of the client in general and identical for every one of
+    // their videos, so this is the only line that makes the copy about the ad
+    // in front of them.
+    about,
     current,
     instruction,
   })

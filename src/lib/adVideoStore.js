@@ -1,6 +1,5 @@
 import { supabase } from './supabaseClient'
 import { mergeVideos, validateVideo, videoPath } from './adVideos'
-import { readFunctionError } from './functionError'
 
 /**
  * Storage and database access for ad videos.
@@ -67,29 +66,24 @@ export async function uploadVideo({ clientId, file }) {
 }
 
 /**
- * Asks for the words spoken in a video.
+ * Saves what the video is about, so it is typed once and not on every re-roll.
  *
- * Cached on the row by the function: the words in a file never change, and one
- * clip gets its copy rewritten several times while somebody hunts for an angle
- * they like, so re-buying the transcript each press would be paying twice for
- * the same answer.
+ * Written straight onto the ad_videos row rather than held in the publish
+ * screen's state: it describes the clip, not one publish, and the whole reason
+ * for it is that the copy assistant otherwise knows nothing about this
+ * particular video. Somebody who has to retype it each time they ask for
+ * another angle will stop typing it.
  *
- * A 501 means no DEEPGRAM_API_KEY is set on the project. That is a setup step,
- * not a failure of the video, so the caller carries on without a transcript
- * rather than refusing to write copy at all.
+ * Matches on client id as well as path so it cannot write to another client's
+ * registration of a file with a colliding name.
  */
-export async function transcribeVideo({ clientId, storagePath, force = false }) {
-  const { data, error } = await supabase.functions.invoke('transcribe-video', {
-    body: { client_id: clientId, storage_path: storagePath, force },
-  })
-  if (error) {
-    const detail = await readFunctionError(error)
-    const err = new Error(detail.detail || 'Could not transcribe that video.')
-    err.needsKey = detail.status === 501
-    throw err
-  }
-  if (data?.error) throw new Error(data.error)
-  return { status: data?.status || 'none', transcript: data?.transcript || '' }
+export async function saveVideoAbout({ clientId, storagePath, about }) {
+  const { error } = await supabase
+    .from('ad_videos')
+    .update({ about: String(about || '').trim() || null })
+    .eq('client_id', clientId)
+    .eq('storage_path', storagePath)
+  if (error) throw error
 }
 
 export async function deleteVideo(video) {
