@@ -209,7 +209,6 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     offerDetail,
     subhead,
     proof,
-    cta,
     accent = DEFAULT_ACCENT,
     badgeColor = DEFAULT_BADGE,
     hookPlate = false,
@@ -249,7 +248,6 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     const scale = Math.min(box / logo.width, box / logo.height)
     logoBox = { w: logo.width * scale, h: logo.height * scale }
   }
-  const logoGutter = logoBox ? logoBox.w + 28 : 0
 
   // The subhead is a deck under the hook, not part of the footer stack.
   //
@@ -268,7 +266,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   const deckH = deck ? deck.lines.length * deck.px * 1.34 : 0
   const deckGap = deck ? 22 : 0
 
-  const footer = measureFooter(ctx, { offerAmount, offerDetail, proof, cta }, maxWidth, logoGutter)
+  const footer = measureFooter(ctx, { offerAmount, offerDetail, proof }, maxWidth)
   const footerTop = contentBottom - footer.height
 
   // ---- BACKGROUND ----
@@ -436,19 +434,29 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
 
 // Works out the footer's total height without drawing, so the hook above it
 // can be sized against real numbers rather than a guess.
-function measureFooter(ctx, { offerAmount, offerDetail, proof, cta }, maxWidth, logoGutter) {
+// NO CTA BUTTON IN THE IMAGE, deliberately, and it used to be here.
+//
+// It was a white pill 98px tall and at least 640px wide -- drawn "wider than
+// the words need so it reads as a button" -- which is precisely the problem:
+// it read as a control, and nothing happens when a thumb lands on it. Meta
+// already renders the real button directly under the creative, chosen on the
+// Publish tab, so the painted one was a decoy competing with the working one.
+//
+// The two could also disagree outright. The pill defaulted to "Book Today!"
+// while Meta's own button defaults to LEARN_MORE and is picked separately, so
+// an ad could show one instruction inside the image and a different one below
+// it.
+//
+// Removing it gave 130px of frame back -- 12% of a square -- and the hook is
+// measured against the footer height, so the headline is bigger for free.
+// That space is worth most on the 9:16 frame, where the safe area already
+// takes 14% off the top and 20-35% off the bottom.
+//
+// If a placement needs a nudge toward the real button, the words belong in the
+// copy ("tap below for a free quote"), which is text rather than a fake
+// affordance.
+function measureFooter(ctx, { offerAmount, offerDetail, proof }, maxWidth) {
   const parts = { height: 0 }
-
-  if (cta?.trim()) {
-    setFont(ctx, '700', 32, 0)
-    const textW = ctx.measureText(cta).width
-    parts.cta = {
-      text: cta,
-      h: 98,
-      w: Math.min(Math.max(textW + 140, 640), maxWidth - logoGutter),
-    }
-    parts.height += 98 + 32
-  }
 
   if (proof?.trim()) {
     parts.proof = { text: proof.trim(), px: 23 }
@@ -499,27 +507,6 @@ function drawFooter(ctx, parts, { padX, contentBottom, accent }) {
   let cursor = contentBottom
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
-
-  // CTA pill: white, dark text, wider than the words need so it reads as a
-  // button. Width-capped above so it never runs under the logo.
-  if (parts.cta) {
-    const { text, w: btnW, h: btnH } = parts.cta
-    const btnY = cursor - btnH
-
-    ctx.fillStyle = '#FFFFFF'
-    roundRect(ctx, padX, btnY, btnW, btnH, btnH / 2)
-    ctx.fill()
-
-    setFont(ctx, '700', 32, 0)
-    ctx.fillStyle = '#0F172A'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(text, padX + btnW / 2, btnY + btnH / 2 + 1)
-
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'alphabetic'
-    cursor = btnY - 32
-  }
 
   if (parts.proof) {
     setFont(ctx, '700', parts.proof.px, 0)

@@ -50,7 +50,6 @@ export const FIELD_LABELS = {
   offerDetail: 'Offer detail',
   subhead: 'Subhead',
   proof: 'Proof strip',
-  cta: 'CTA pill',
   primaryText: 'Primary text',
   headline: 'Headline',
   description: 'Description',

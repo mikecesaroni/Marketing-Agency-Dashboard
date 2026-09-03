@@ -302,6 +302,9 @@ A broken ad set cannot be repaired
 Meta rate-limits per ad account, per hour
   "Too many API calls" is the ad account's quota, not a rejected ad. Nothing was created, there is nothing to clean up, and the quota refills on its own. Publishing five ads at once is the most demanding thing the CRM does; two smaller batches get through where one large one will not.
 
+There is no button on the ad image
+  The creative carries no call-to-action button, deliberately. Meta renders the real one directly under the image and it is chosen on the Publish tab, so a painted one inside the frame was a decoy nobody could click — and it could contradict the real button, which said "Learn More" while the image said "Book Today!". If copy needs to push toward the button it points down and out of the image, and it belongs in the primary text.
+
 A client with no ad account is skipped silently
   The Meta sync walks clients that have an ad account ID. One without it is not an error and produces no warning — it simply is not in the results, which looks identical to a sync that failed for that client. If a client is missing from a sync, check their ad account is connected on their page first.
 

@@ -22,6 +22,10 @@ const MAX_TOKENS = 16000
 // The slots the Studio can actually paint or publish. Anything outside this
 // list is dropped rather than trusted: the Studio applies what comes back
 // straight into its own state, so the field name is the security boundary.
+//
+// No 'cta'. The image used to carry a painted button and no longer does --
+// Meta renders the real one under the creative, so a second one inside it was
+// a decoy nobody could click.
 const FIELDS = [
   'badge',
   'hook',
@@ -29,7 +33,6 @@ const FIELDS = [
   'offerDetail',
   'subhead',
   'proof',
-  'cta',
   'primaryText',
   'headline',
   'description',
@@ -59,6 +62,12 @@ about, so there is a real choice. Only touch other fields when the instruction
 clearly covers them, or when leaving one alone would make the clicked option
 read wrong.
 
+There is NO BUTTON painted on the image. Meta renders the real call-to-action
+button directly under the creative and it is chosen separately, so never write
+copy that acts like a button or points at one inside the frame: no "click
+here", no "tap this", no arrows aimed at nothing. If a line has to push toward
+the button, it points DOWN and out of the image, and it belongs in primaryText.
+
 What each slot is, and the limits that matter because they are painted into a
 fixed layout:
 
@@ -74,7 +83,6 @@ fixed layout:
 - offerDetail: the rest of the offer, rendered in caps. Short.
 - proof: one short line. A rating and a review count, or a real credential.
   Give the numbers as digits, the studio draws the star itself.
-- cta: the words on the button. Two or three.
 - primaryText: NOT on the image. It sits above the ad in the feed. Two or three
   short lines, and the first line is all that shows before "see more", so it
   carries the hook on its own.

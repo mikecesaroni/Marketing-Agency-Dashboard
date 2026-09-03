@@ -419,7 +419,6 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [offerDetail, setOfferDetail] = useState('')
   const [subhead, setSubhead] = useState('')
   const [proof, setProof] = useState('')
-  const [cta, setCta] = useState('Book Today!')
 
   // Copy that is never painted on the artboard: the primary text sits above
   // the image in the feed, the headline and description below it. These used to
@@ -471,7 +470,6 @@ export default function AdStudioPanel({ client, intake, seed }) {
     offerDetail: setOfferDetail,
     subhead: setSubhead,
     proof: setProof,
-    cta: setCta,
     primaryText: setPrimaryText,
     headline: setMetaHeadline,
     description: setMetaDescription,
@@ -483,7 +481,6 @@ export default function AdStudioPanel({ client, intake, seed }) {
     offerDetail,
     subhead,
     proof,
-    cta,
     primaryText,
     headline: metaHeadline,
     description: metaDescription,
@@ -526,7 +523,6 @@ export default function AdStudioPanel({ client, intake, seed }) {
     setOfferDetail(seed.offerDetail || '')
     setSubhead(seed.subhead || '')
     setProof(seed.proof || '')
-    setCta(seed.cta || 'Book Today!')
     setPrimaryText(seed.primaryText || '')
     setMetaHeadline(seed.headline || '')
     setMetaDescription(seed.description || '')
@@ -608,7 +604,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // first paint measures with a fallback face and wraps differently.
   useEffect(() => {
     let cancelled = false
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor, hookPlate }
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate }
     ensureFonts().then(() => {
       if (cancelled) return
       SIZES.forEach((size, i) => {
@@ -619,12 +615,12 @@ export default function AdStudioPanel({ client, intake, seed }) {
     return () => {
       cancelled = true
     }
-  }, [badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor, hookPlate, assets, safeMode, guides])
+  }, [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, assets, safeMode, guides])
 
   // Guides are a preview aid. Repaint clean, export, then put them back, so a
   // saved PNG can never carry the red bands into the ad account.
   const withoutGuides = (fn) => async (...args) => {
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, cta, accent, badgeColor, hookPlate }
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate }
     const repaint = (g) =>
       SIZES.forEach((size, i) => {
         const c = refs.current[i]
@@ -654,7 +650,6 @@ export default function AdStudioPanel({ client, intake, seed }) {
     setOfferDetail(r.offerDetail)
     setSubhead(r.subhead)
     setProof(r.proof)
-    setCta(r.cta)
     setPrimaryText(r.primaryText)
     setMetaHeadline(r.headline)
     setMetaDescription(r.description)
@@ -737,7 +732,6 @@ export default function AdStudioPanel({ client, intake, seed }) {
             offerDetail,
             subhead,
             proof,
-            cta,
             accent,
             badgeColor,
             hookPlate,
@@ -928,7 +922,6 @@ export default function AdStudioPanel({ client, intake, seed }) {
             <Field label="Offer detail" value={offerDetail} onChange={setOfferDetail} hint="set in caps" />
           </div>
         </div>
-        <Field label="3 · CTA pill" value={cta} onChange={setCta} hint="text on the white button" />
         <Field label="Subhead" value={subhead} onChange={setSubhead} />
         <div className="grid md:grid-cols-2 gap-2">
           <div>
