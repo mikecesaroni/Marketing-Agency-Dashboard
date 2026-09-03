@@ -724,6 +724,7 @@ export default function PublishToMetaPanel({
           video_thumb_url: c.thumb_url || undefined,
           primary_text: c.primary_text?.trim(),
           headline: c.headline?.trim() || undefined,
+          description: c.description?.trim() || undefined,
           ad_name: c.ad_name?.trim() || undefined,
           cta,
           link_url: linkUrl.trim() || undefined,

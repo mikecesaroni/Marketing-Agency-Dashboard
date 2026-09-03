@@ -275,13 +275,24 @@ export default function VideoAdPicker({ client, picked, onPicked, copies, onCopy
                         placeholder="Headline (optional)"
                         className="px-2 py-1.5 border border-slate-300 rounded text-xs"
                       />
+                      {/* Meta calls this link_description on a video creative
+                          rather than description. It was supported by the
+                          publish function from the start and simply never
+                          asked for here, so video ads silently shipped
+                          without it while image ads had it. */}
                       <input
-                        value={copy.ad_name || ''}
-                        onChange={(e) => onCopy(v.storage_path, { ad_name: e.target.value })}
-                        placeholder="Ad name (optional)"
+                        value={copy.description || ''}
+                        onChange={(e) => onCopy(v.storage_path, { description: e.target.value })}
+                        placeholder="Description (optional)"
                         className="px-2 py-1.5 border border-slate-300 rounded text-xs"
                       />
                     </div>
+                    <input
+                      value={copy.ad_name || ''}
+                      onChange={(e) => onCopy(v.storage_path, { ad_name: e.target.value })}
+                      placeholder="Ad name — what you will see in Ads Manager (optional)"
+                      className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
+                    />
                     {open === v.storage_path && !copy.primary_text?.trim() && (
                       <p className="text-[11px] text-amber-700">
                         Primary text is required before this video can publish.
