@@ -317,6 +317,11 @@ export const LOOKUPS = [
     how: 'Every saved design, in each size it was made in.',
   },
   {
+    need: 'Video ads',
+    where: 'The client page → Ad Studio → publish → "Videos"',
+    how: 'Upload .mp4 or .mov there and it goes into the client\'s files AND straight to their Meta ad account, because Meta transcodes asynchronously and an ad cannot use a video until that finishes — usually well under a minute. The pill on each video says where it has got to. A video is only tickable once it reads "Ready to publish", and ticked videos publish as ads in the SAME ad set as the image creatives, so a video and a static are testable against each other on one budget. A Meta video belongs to one ad account, so the same clip used for two clients is uploaded to each of them separately.',
+  },
+  {
     need: 'Which Facebook Page or pixel a client advertises with',
     where: 'The client page → the Meta ad account section',
     how: 'Filled in automatically once an ad account is connected. Blank usually means no ad account is connected yet.',
@@ -406,6 +411,10 @@ export const GOTCHAS = [
   {
     title: 'Archived clients vanish from everything',
     body: 'Archiving removes a client from MRR, the Meta sync and every list. A client who has "disappeared" is usually archived rather than deleted, and restoring is one click on their page. An archived client can also be deleted for good, from the archived banner on their page — but only when NO COLLECTED MONEY is attached, because every paid payment feeds the lifetime profit split and cascading one away would move money out of Ethan\'s column with nothing left to explain it. The database refuses that delete in a trigger, not just in the UI. So archiving is the answer for a client with history; permanent delete is for one created by accident.',
+  },
+  {
+    title: 'A video ad needs a cover frame, and Meta will not invent one',
+    body: 'Meta refuses a video creative that carries no thumbnail — subcode 1443226, "Your ad needs a video thumbnail" — so a video is not publishable until Meta has produced its frames, even if transcoding says ready. It normally has eleven of them within a minute; where a video sits on "No cover frame yet", the Re-check button re-reads them. Verified by validating the identical creative twice against a live ad account, with and without the thumbnail.',
   },
   {
     title: 'There is no login',
