@@ -144,25 +144,25 @@ export async function assignUnmatched(row, clientId, { replaceCustomerId = false
 }
 
 /**
- * Marks a parked payment as belonging to a different business entirely.
+ * Dismisses ONE parked payment. Nothing is remembered.
  *
- * Some Stripe accounts on this connection bill for more than one business.
- * A payment like that will never match a client here — remembering the
- * customer or email is what stops it from reappearing in the queue on every
- * future invoice, rather than having to dismiss the same subscription again
- * each month.
+ * This used to also add the customer and email to stripe_ignored_customers,
+ * and the webhook checked that list before parking anything, so a recurring
+ * subscription that wasn't ours only had to be dismissed once.
+ *
+ * That shortcut cost a real payment. Pillar HVAC's $998 invoice arrived on
+ * 2026-08-31 from mlopez@lopezprojectgroup.com -- an email dismissed the day
+ * before over a different, unrelated $165 charge -- and the webhook dropped
+ * it silently. A judgement call about one payment had quietly become a
+ * standing rule about a person, and the only trace left was a line in the
+ * event log.
+ *
+ * So a dismissal now applies to the payment in front of you and nothing else.
+ * The same customer paying again next month shows up again, and dismissing it
+ * costs one click. That is the trade the owner asked for, in their words:
+ * every payment shows up, and they match it to a client or dismiss it.
  */
 export async function dismissUnmatched(row) {
-  if (row.stripe_customer_id || row.customer_email) {
-    const { error: ignoreErr } = await supabase.from('stripe_ignored_customers').insert({
-      stripe_customer_id: row.stripe_customer_id || null,
-      customer_email: row.customer_email || null,
-      reason: 'Marked not this business from the unmatched payments queue',
-    })
-    // Already on the ignore list is fine — anything else is worth surfacing.
-    if (ignoreErr && ignoreErr.code !== '23505') throw ignoreErr
-  }
-
   const { error } = await supabase.from('stripe_unmatched').delete().eq('id', row.id)
   if (error) throw error
 }

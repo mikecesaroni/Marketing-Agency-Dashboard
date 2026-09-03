@@ -13,6 +13,22 @@
 // A client can be on more than one Stripe subscription -- their monthly total
 // is simply the sum -- and there is deliberately no attempt to attribute part
 // of a package price to a particular service.
+//
+// EVERY PAYMENT, EVERY TIME. NOTHING IS DROPPED AND NOTHING IS REMEMBERED.
+//
+// Every payment on this Stripe account ends up either against a client or in
+// the unmatched queue for a person to assign or dismiss. The queue is the
+// answer to "is this ours"; this function never guesses it.
+//
+// There used to be one exception. Dismissing a payment put its customer and
+// email on an ignore list, and this function checked that list before parking
+// anything, so a subscription that wasn't ours only had to be dismissed once.
+// It cost a real $998 client invoice: Pillar HVAC paid on 2026-08-31 from an
+// email dismissed the day before, and the payment was recorded nowhere a
+// person could see. A rule inferred from one judgement call and then applied
+// silently to every later payment is worth far less than showing the payment
+// again and spending two seconds dismissing it. Dismissing is now a decision
+// about ONE payment and carries no memory. Do not add the list back.
 
 const TOLERANCE_SECONDS = 300
 
@@ -150,32 +166,6 @@ export async function findClient(
   return { client: null, via: null }
 }
 
-/**
- * True when this customer or email was marked "not this business" from the
- * Unmatched payments queue — some Stripe accounts on this connection bill
- * for more than one business. Checked before parking anything, so a
- * recurring subscription that isn't ours stops cluttering the queue after
- * being dismissed once, rather than reappearing on every invoice.
- */
-async function isIgnoredCustomer(
-  db: Db,
-  { customerId, email }: { customerId?: string | null; email?: string | null }
-) {
-  if (customerId) {
-    const rows = await db.get(
-      `stripe_ignored_customers?stripe_customer_id=eq.${encodeURIComponent(customerId)}&select=id&limit=1`
-    )
-    if (rows?.[0]) return true
-  }
-  if (email) {
-    const rows = await db.get(
-      `stripe_ignored_customers?customer_email=ilike.${encodeURIComponent(email)}&select=id&limit=1`
-    )
-    if (rows?.[0]) return true
-  }
-  return false
-}
-
 type PaymentType = 'setup' | 'monthly'
 
 const PAYMENT_TYPES = new Set<string>(['setup', 'monthly'])
@@ -283,10 +273,6 @@ export async function handleEvent(db: Db, event: any) {
     })
 
     if (!client) {
-      if (await isIgnoredCustomer(db, { customerId, email })) {
-        return { status: 'ignored', note: 'customer marked not this business' }
-      }
-
       // PARKED, INCLUDING SUBSCRIPTIONS.
       //
       // This used to drop an unmatched subscription checkout entirely, on the
@@ -362,10 +348,6 @@ export async function handleEvent(db: Db, event: any) {
     const { client, via } = await findClient(db, { customerId, email })
 
     if (!client) {
-      if (await isIgnoredCustomer(db, { customerId, email })) {
-        return { status: 'ignored', note: 'customer marked not this business' }
-      }
-
       await parkUnmatched(db, event, {
         customerId,
         email,
@@ -400,10 +382,6 @@ export async function handleEvent(db: Db, event: any) {
     const { client } = await findClient(db, { customerId: obj.customer, email: obj.customer_email })
 
     if (!client) {
-      if (await isIgnoredCustomer(db, { customerId: obj.customer, email: obj.customer_email })) {
-        return { status: 'ignored', note: 'customer marked not this business' }
-      }
-
       // Parked, where before it was reported as unmatched and then written
       // nowhere -- three of these were sitting in the event log and in no
       // queue. A failed charge from someone we cannot identify is worth

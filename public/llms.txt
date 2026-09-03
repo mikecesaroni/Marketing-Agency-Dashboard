@@ -201,7 +201,7 @@ Which clients make up the MRR figure
 
 A Stripe payment that does not appear anywhere
   Go to: Payments → Stripe → the unmatched queue
-  Every payment on the connected Stripe account lands either against a client or in that queue — including subscription checkouts and failed charges, which used to be dropped or reported and then written nowhere. Nothing guesses whether a payment is for this business: assign it to a client, or dismiss it as another business and it stops reappearing. A parked payment is money that exists, so an empty queue is the only state that means nothing is outstanding.
+  Every payment on the connected Stripe account lands either against a client or in that queue — including subscription checkouts and failed charges, which used to be dropped or reported and then written nowhere. Nothing guesses whether a payment is for this business: assign it to a client, or dismiss it. A dismissal covers THAT ONE PAYMENT and nothing more -- it builds no rule and remembers no customer, so if the same person pays again next month it shows up again and gets dismissed again. That is deliberate. Dismissing used to add the customer and email to an ignore list the webhook checked before parking anything, and it silently swallowed a real $998 client invoice from an email dismissed the day before over an unrelated charge. Every payment, every time, is worth more than saving a click. A parked payment is money that exists, so an empty queue is the only state that means nothing is outstanding.
 
 Why MRR looks wrong
   Go to: Payments → the Stripe reconciliation panel

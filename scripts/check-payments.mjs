@@ -18,6 +18,7 @@
 
 import { handleEvent } from '../supabase/functions/stripe-webhook/index.ts'
 import { calcMRR, mrrExclusions } from '../src/lib/billing.js'
+import { readFileSync } from 'node:fs'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -338,12 +339,87 @@ const checkout = (cents, over = {}) => ({
     [r.status, queue.length, queue[0]?.amount], ['unmatched', 1, 165])
 }
 
+// --- A DISMISSAL IS ABOUT ONE PAYMENT, NOT ABOUT A PERSON -----------------
+//
+// Dismissing used to add the customer and email to stripe_ignored_customers,
+// and the webhook checked that list before parking, so the same subscription
+// only had to be dismissed once. That inference cost a real payment: Pillar
+// HVAC's $998 invoice arrived from an email dismissed the day before over an
+// unrelated $165 charge, and it was recorded nowhere a person could see.
+//
+// These checks are the guard against that shortcut coming back. `ignored` is
+// still wired into the fake DB on purpose -- so that if anyone re-adds a
+// lookup, these assertions fail instead of passing vacuously.
+
 {
-  // Dismissing a customer is the user's own decision and still holds: that is
-  // what the queue is for.
   const { db, queue } = makeFake({ client: CLIENT, payments: [], ignored: ['cus_stranger'] })
   const r = await handleEvent(db, checkout(150000, { mode: 'subscription' }))
-  check('a customer already dismissed stays dismissed', [r.status, queue.length], ['ignored', 0])
+  check('a dismissed customer\'s next CHECKOUT still parks', [r.status, queue.length], ['unmatched', 1])
+}
+
+{
+  const { db, queue } = makeFake({
+    client: CLIENT,
+    payments: [],
+    ignored: ['cus_dismissed', 'someone@example.com'],
+  })
+  // The exact shape that lost the $998: a NEW customer id under an email that
+  // had been dismissed, so only the email lookup would have caught it.
+  const r = await handleEvent(db, {
+    id: 'evt_998',
+    type: 'invoice.paid',
+    data: {
+      object: {
+        id: 'in_998',
+        customer: 'cus_new_for_same_person',
+        customer_email: 'someone@example.com',
+        amount_paid: 99800,
+        created: 1788000000,
+        status_transitions: { paid_at: 1788000000 },
+      },
+    },
+  })
+  check(
+    'a dismissed EMAIL does not drop a later invoice -- the $998 case',
+    [r.status, queue.length, queue[0]?.amount],
+    ['unmatched', 1, 998]
+  )
+}
+
+{
+  const { db, queue } = makeFake({
+    client: CLIENT,
+    payments: [],
+    ignored: ['cus_stranger', 'someone@example.com'],
+  })
+  const r = await handleEvent(db, {
+    id: 'evt_f_dismissed',
+    type: 'invoice.payment_failed',
+    data: {
+      object: {
+        id: 'in_f_dismissed',
+        customer: 'cus_stranger',
+        customer_email: 'someone@example.com',
+        amount_due: 16500,
+        created: 1788000000,
+      },
+    },
+  })
+  check('a dismissed customer\'s FAILED invoice still parks', [r.status, queue.length], ['unmatched', 1])
+}
+
+{
+  // Source-level, because the whole bug was a lookup nobody could see the
+  // effect of. If the table is queried again anywhere in the webhook, say so.
+  const src = readFileSync(
+    new URL('../supabase/functions/stripe-webhook/index.ts', import.meta.url),
+    'utf8'
+  )
+  check('the webhook never reads the ignore list', src.includes('stripe_ignored_customers'), false)
+
+  const lib = readFileSync(new URL('../src/lib/stripeLinks.js', import.meta.url), 'utf8')
+  const body = lib.slice(lib.indexOf('export async function dismissUnmatched'))
+  check('dismissing writes no ignore rule', body.includes('stripe_ignored_customers'), false)
 }
 
 {

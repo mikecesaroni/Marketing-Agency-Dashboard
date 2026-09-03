@@ -105,9 +105,10 @@ export default function StripePanel() {
   }
 
   const dismiss = async (row) => {
-    const label = row.customer_email || row.stripe_customer_id || 'this customer'
-    if (!confirm(`Mark ${label} as a different business? Future payments from them will stop showing up here.`))
-      return
+    // Says exactly what it does. The old wording promised that future payments
+    // from them would stop appearing -- which was true, and was the bug: it hid
+    // a real $998 client invoice. One payment, one dismissal, no memory.
+    if (!confirm(`Dismiss this ${money(row.amount)} payment? If they pay again it shows up again.`)) return
     setBusy(row.id)
     setError('')
     try {
@@ -225,7 +226,7 @@ export default function StripePanel() {
                       <button
                         onClick={() => dismiss(row)}
                         disabled={busy === row.id}
-                        title="Not one of our clients — a different business on this Stripe account"
+                        title="Not ours — dismisses this one payment. Nothing is remembered, so a new payment from them shows up again."
                         className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition whitespace-nowrap"
                       >
                         Not this business
