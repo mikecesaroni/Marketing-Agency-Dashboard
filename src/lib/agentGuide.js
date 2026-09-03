@@ -405,7 +405,7 @@ export const GOTCHAS = [
   },
   {
     title: 'Archived clients vanish from everything',
-    body: 'Archiving removes a client from MRR, the Meta sync and every list. A client who has "disappeared" is usually archived rather than deleted, and restoring is one click on their page.',
+    body: 'Archiving removes a client from MRR, the Meta sync and every list. A client who has "disappeared" is usually archived rather than deleted, and restoring is one click on their page. An archived client can also be deleted for good, from the archived banner on their page — but only when NO COLLECTED MONEY is attached, because every paid payment feeds the lifetime profit split and cascading one away would move money out of Ethan\'s column with nothing left to explain it. The database refuses that delete in a trigger, not just in the UI. So archiving is the answer for a client with history; permanent delete is for one created by accident.',
   },
   {
     title: 'There is no login',

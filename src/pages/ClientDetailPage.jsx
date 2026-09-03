@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useParams, useLocation, Link } from 'react-router-dom'
+import { useParams, useLocation, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { fetchAdDaily, summariseAds } from '../lib/queries'
 import Layout from '../components/Layout'
+import DeleteClientButton from '../components/DeleteClientButton'
 import Modal from '../components/Modal'
 import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
 import MetaAdAccountCard from '../components/MetaAdAccountCard'
@@ -57,6 +58,7 @@ function useHashScroll(ready) {
 
 export default function ClientDetailPage() {
   const { clientId } = useParams()
+  const navigate = useNavigate()
   const [client, setClient] = useState(null)
   const [tasks, setTasks] = useState([])
   const [newTask, setNewTask] = useState('')
@@ -314,8 +316,17 @@ export default function ClientDetailPage() {
         </Link>
 
         {client.archived && (
-          <div className="mb-3 p-3 bg-slate-100 border border-slate-300 rounded-lg text-sm text-slate-700">
-            This client is archived — excluded from MRR, the Meta sync and every list.
+          <div className="mb-3 p-3 bg-slate-100 border border-slate-300 rounded-lg flex flex-col gap-2 sm:flex-row sm:items-center">
+            <p className="text-sm text-slate-700">
+              This client is archived — excluded from MRR, the Meta sync and every list. Nothing has
+              been deleted.
+            </p>
+            {/* Permanent delete lives here rather than next to Archive, because
+                it only ever applies to a client that is already archived, and
+                because the two should not sit close enough to misclick. */}
+            <div className="sm:ml-auto sm:flex-shrink-0">
+              <DeleteClientButton client={client} onDeleted={() => navigate('/clients')} />
+            </div>
           </div>
         )}
 
