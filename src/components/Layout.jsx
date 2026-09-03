@@ -55,10 +55,10 @@ export default function Layout({ title, subtitle, actions, children }) {
             {/* A mark rather than a word. It is the one spot of brand colour in
                 the chrome, which is what makes the rest read as calm. */}
             <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold">
-              R
+              W
             </span>
             <p className="min-w-0 text-sm font-semibold leading-snug tracking-tight text-balance">
-              Roundtable Marketing Agency CRM
+              The Working Class Marketing CRM
             </p>
           </div>
         </div>
@@ -105,7 +105,7 @@ export default function Layout({ title, subtitle, actions, children }) {
         </nav>
 
         <div className="border-t border-white/5 px-5 py-3">
-          <p className="text-[11px] text-slate-500">Roundtable Marketing</p>
+          <p className="text-[11px] text-slate-500">The Working Class Marketing</p>
         </div>
       </aside>
 
