@@ -4,6 +4,7 @@ import { copyText } from '../lib/intakeSummary'
 import { splitOffer } from '../lib/clientChat'
 import { FIELD_LABELS, groupByField, suggestCopy } from '../lib/adCopy'
 import { extractPalette } from '../lib/logoColours'
+import Button from './ui/Button'
 import SavedAdsGallery from './SavedAdsGallery'
 import PublishToMetaPanel from './PublishToMetaPanel'
 import { fetchPublishedAds } from '../lib/metaPublish'
@@ -826,11 +827,13 @@ export default function AdStudioPanel({ client, intake, seed }) {
               onClick={() => setPublishing(null)}
               className="text-xs text-slate-500 hover:text-slate-800"
             >
-              ← Pick a different ad
+              {publishing === 'blank' ? '← Back' : '← Pick a different ad'}
             </button>
             <PublishToMetaPanel
               client={client}
-              set={publishing}
+              // 'blank' means the publish flow was opened without a saved
+              // image creative, which is how a video-only launch starts.
+              set={publishing === 'blank' ? null : publishing}
               intake={intake}
               alreadyPublished={published}
               onPublished={() =>
@@ -843,9 +846,16 @@ export default function AdStudioPanel({ client, intake, seed }) {
         ) : (
           <>
             <p className="text-sm text-slate-600">
-              Pick a saved ad to publish. It goes into {client.name}&rsquo;s Meta account paused —
-              nothing spends until you switch it on in Ads Manager.
+              Pick a saved ad to publish, or go straight through to publish a video. Either way it
+              goes into {client.name}&rsquo;s Meta account paused — nothing spends until you switch
+              it on in Ads Manager.
             </p>
+            {/* Without this there is no route to the publish flow for a client
+                who has no saved artboards, and videos were unreachable for
+                three clients that had them uploaded. */}
+            <Button variant="outline" size="md" onClick={() => setPublishing('blank')}>
+              🎬 Publish a video
+            </Button>
             <SavedAdsGallery
               key={savedAt}
               clientId={client.id}

@@ -438,14 +438,28 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
  *     against each other, and that test only means anything inside a single ad
  *     set — four ad sets is four auctions and a quarter of the data each.
  */
-export default function PublishToMetaPanel({ client, set, intake, alreadyPublished = [], onPublished }) {
+/**
+ * `set` is OPTIONAL, and that is the whole reason a video can be published.
+ *
+ * This panel used to be reachable only by pressing Publish on a saved image
+ * creative, so a client with no saved artboards could not open it at all --
+ * which meant Reliable, Plumbquick and MBD had videos uploaded and no route to
+ * an ad. With no set the panel opens empty and the video step is the way in.
+ */
+export default function PublishToMetaPanel({
+  client,
+  set = null,
+  intake,
+  alreadyPublished = [],
+  onPublished,
+}) {
   // Every saved creative for this client, so a launch can pick several without
   // going back to the gallery one at a time. The set that opened this panel is
   // the one that starts ticked.
-  const [sets, setSets] = useState([set])
-  const [picked, setPicked] = useState([String(set.stamp)])
+  const [sets, setSets] = useState(set ? [set] : [])
+  const [picked, setPicked] = useState(set ? [String(set.stamp)] : [])
   const [copies, setCopies] = useState({})
-  const [openCopy, setOpenCopy] = useState(String(set.stamp))
+  const [openCopy, setOpenCopy] = useState(set ? String(set.stamp) : '')
 
   // Videos are picked by storage path rather than stamp: they are not artboard
   // sets and have no stamp. They publish as ads in the SAME ad set as the
@@ -799,6 +813,12 @@ export default function PublishToMetaPanel({ client, set, intake, alreadyPublish
         title="Which creatives"
         hint="Tick everything going into this launch. They all land in one ad set, which is the only way testing them against each other means anything."
       >
+        {sets.length === 0 && (
+          <p className="text-xs text-slate-500">
+            No saved image ads for {client.name}. Design one on the Design tab, or publish a video
+            below — a launch can be video only.
+          </p>
+        )}
         <ul className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
           {sets.map((s) => {
             const stamp = String(s.stamp)

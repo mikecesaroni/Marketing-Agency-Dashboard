@@ -218,7 +218,7 @@ export default function VideoAdPicker({ client, picked, onPicked, copies, onCopy
                     controls
                     muted
                     preload="metadata"
-                    className="w-28 flex-shrink-0 rounded bg-slate-900"
+                    className="w-28 max-h-24 flex-shrink-0 rounded bg-slate-900 object-contain"
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-900 truncate">{v.file_name}</p>
