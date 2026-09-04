@@ -82,6 +82,24 @@ export default function ClientDetailPage() {
   const [briefAds, setBriefAds] = useState([])
   // Copy handed from the chat to the Ad Studio. Null means "start from intake".
   const [studioSeed, setStudioSeed] = useState(null)
+  // Whether the Ad Studio was reached from the chat. Only then is there a
+  // conversation to go back TO, so only then is a back button honest.
+  const [studioFromChat, setStudioFromChat] = useState(false)
+  /**
+   * Bumped every time a DIFFERENT ad is opened, and used as the Studio's key
+   * so a new one gets a fresh mount.
+   *
+   * Needed because the Studio now stays mounted while the chat sits on top of
+   * it, which is what makes going back keep your work. The seed effect in
+   * there applies a creative set over whatever state is already present, and
+   * three of the fields it sets are conditional on the set naming them --
+   * badge, accent, badge colour -- because those normally come from the client
+   * rather than the ad. On a mounted panel that means an accent named by the
+   * first ad would still be showing under the second one that did not name a
+   * colour: a hybrid of two ads, which is not what clicking the second one
+   * asks for. Remounting sidesteps it without touching that logic.
+   */
+  const [studioKey, setStudioKey] = useState(0)
 
   useHashScroll(!loading && !!client)
 
@@ -228,8 +246,29 @@ export default function ClientDetailPage() {
   // straight onto the artboards instead of being re-typed.
   const handleUseCreativeSet = (mapped) => {
     setStudioSeed(mapped)
+    setStudioKey((k) => k + 1)
+    setStudioFromChat(true)
     setShowChatModal(false)
     setShowStudioModal(true)
+  }
+
+  /**
+   * Back to the chat, to pick a different one of the ads it wrote.
+   *
+   * Deliberately leaves the Studio OPEN underneath. The chat modal renders
+   * after it and so paints on top, which means coming back finds the artboard
+   * exactly as it was left -- colours, photo, every edited line. Closing the
+   * Studio to show the chat would unmount it and throw all of that away, and
+   * the whole reason for going back is to try another angle without losing the
+   * work already done on this one.
+   *
+   * The conversation itself is reloaded from chat_messages on mount, and the
+   * creative-set cards are parsed back out of the stored replies, so the other
+   * ads are all still there to click.
+   */
+  const backToChat = () => {
+    setChatSeed(null)
+    setShowChatModal(true)
   }
 
   // Only ever called with 'kpis', 'worklog' or 'creative'. It used to carry
@@ -285,6 +324,8 @@ export default function ClientDetailPage() {
         size="lg"
         onClick={() => {
           setStudioSeed(null)
+          setStudioKey((k) => k + 1)
+          setStudioFromChat(false)
           setShowStudioModal(true)
         }}
         className="w-full md:w-auto"
@@ -683,11 +724,16 @@ export default function ClientDetailPage() {
         {/* MODALS */}
         <Modal
           isOpen={showStudioModal}
-          onClose={() => setShowStudioModal(false)}
+          onClose={() => {
+            setShowStudioModal(false)
+            setStudioFromChat(false)
+          }}
+          onBack={studioFromChat ? backToChat : undefined}
+          backLabel="Chat"
           title={`Ad Studio — ${client.name}`}
           wide
         >
-          <AdStudioPanel client={client} intake={intake} seed={studioSeed} />
+          <AdStudioPanel key={studioKey} client={client} intake={intake} seed={studioSeed} />
         </Modal>
 
         <Modal
