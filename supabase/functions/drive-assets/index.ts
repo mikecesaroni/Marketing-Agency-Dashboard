@@ -277,7 +277,15 @@ Deno.serve(async (req) => {
             `mimeType = 'application/pdf')`,
           fields: 'files(id,name,mimeType,size,modifiedTime,thumbnailLink)',
           orderBy: 'modifiedTime desc',
-          pageSize: '200',
+          // Drive's maximum, and it is needed rather than generous. 200 was
+          // fine for one folder and became a silent truncation the moment a
+          // client had several: Plumbquick's five folders returned exactly
+          // 200 of about 250 files, and because the order is newest-first the
+          // missing ones were the oldest -- gone from the picker with nothing
+          // to say so. There is no pagination here on purpose; a folder with
+          // more than a thousand usable files is a different problem than
+          // this feature has.
+          pageSize: '1000',
           // Without these a folder that lives on a Shared drive returns
           // nothing at all rather than an error, which is a confusing way to
           // find out the folder is fine and the query was not.
