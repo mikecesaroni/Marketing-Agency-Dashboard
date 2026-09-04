@@ -1353,14 +1353,36 @@ Deno.serve(async (req) => {
           // The form is only reachable from the ad, so there is no reason to
           // hide it from people the ad was not targeted at.
           block_display_for_non_targeted_viewer: false,
+          // THE THANK-YOU PAGE, WHICH HAS NEVER WORKED UNTIL NOW.
+          //
+          // Meta answers (#100) "Button text is missing for Thank You Page"
+          // when button_type is VIEW_WEBSITE and button_text is absent -- and
+          // it was absent, so every create with a thank-you message failed.
+          // LeadFormPicker prefills one, so that was every create from the
+          // CRM. Found by calling this for real rather than reading it.
+          //
+          // And the button only appears when there is somewhere worth going.
+          // The old fallback chain ended at the privacy policy, which means a
+          // homeowner who has just asked for a quote gets offered a privacy
+          // notice. Meta accepts button_type NONE (verified against the live
+          // API alongside the two other shapes), so with no website the form
+          // just says thank you.
           ...(body.thank_you_message
             ? {
-                thank_you_page: {
-                  title: 'Thanks — we got it',
-                  body: body.thank_you_message,
-                  button_type: 'VIEW_WEBSITE',
-                  website_url: body.follow_up_url || client.website_url || privacyUrl,
-                },
+                thank_you_page: (() => {
+                  const site = String(body.follow_up_url || client.website_url || '').trim()
+                  return {
+                    title: 'Thanks — we got it',
+                    body: body.thank_you_message,
+                    ...(site
+                      ? {
+                          button_type: 'VIEW_WEBSITE',
+                          button_text: 'Visit our website',
+                          website_url: site,
+                        }
+                      : { button_type: 'NONE' }),
+                  }
+                })(),
               }
             : {}),
         },

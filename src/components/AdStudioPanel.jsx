@@ -6,6 +6,7 @@ import { FIELD_LABELS, groupByField, suggestCopy } from '../lib/adCopy'
 import { extractPalette } from '../lib/logoColours'
 import Button from './ui/Button'
 import SavedAdsGallery from './SavedAdsGallery'
+import LeadFormStudio from './LeadFormStudio'
 import PublishToMetaPanel from './PublishToMetaPanel'
 import { fetchPublishedAds } from '../lib/metaPublish'
 import { recipeToContent, saveAdRecipe } from '../lib/savedAds'
@@ -282,6 +283,10 @@ function Tabs({ tab, setTab }) {
       {[
         ['design', 'Design'],
         ['saved', 'Saved ads'],
+        // Before Publish on purpose: the form has to exist first in practice,
+        // because a GoHighLevel workflow is wired to its id and that is step
+        // one, not an afterthought once the ad is built.
+        ['form', 'Lead form'],
         ['publish', 'Publish'],
       ].map(([key, label]) => (
         <button
@@ -813,6 +818,15 @@ export default function AdStudioPanel({ client, intake, seed }) {
           onEdit={editSaved}
           onPublish={startPublish}
         />
+      </div>
+    )
+  }
+
+  if (tab === 'form') {
+    return (
+      <div className="space-y-3">
+        <Tabs tab={tab} setTab={setTab} />
+        <LeadFormStudio client={client} />
       </div>
     )
   }

@@ -450,8 +450,36 @@ export async function discoverAssets(clientId) {
  * five near-identical forms means five places to go looking for them.
  */
 export async function listLeadForms(clientId) {
-  const data = await callFunction({ action: 'list_lead_forms', client_id: clientId })
+  const data = await callLeadForms({ action: 'list', client_id: clientId })
   return data?.forms || []
+}
+
+/**
+ * Instant forms go through their own function, not meta-publish.
+ *
+ * meta-publish still carries both actions, but its create has never worked
+ * with a thank-you message -- Meta wants a button_text that was not being
+ * sent -- and fixing it there meant re-deploying the whole 1,944-line file
+ * that creates every campaign and ad. lead-forms is that fix in isolation.
+ */
+async function callLeadForms(body) {
+  const { data, error } = await supabase.functions.invoke('lead-forms', { body })
+  if (error) {
+    const detail = await readFunctionError(error)
+    if (!detail.status || detail.status === 404) {
+      throw new Error('The lead-forms function is not deployed yet. Deploy it in Supabase.')
+    }
+    throw new Error(detail.detail || 'Could not reach the instant form service.')
+  }
+  if (data?.error) {
+    const err = new Error(data.error)
+    // The privacy policy URL is the one failure worth handling rather than
+    // just showing: none of the clients have one on file, so the panel offers
+    // the field instead of just refusing.
+    err.needsPrivacyUrl = Boolean(data.needs_privacy_url)
+    throw err
+  }
+  return data
 }
 
 /**
@@ -468,8 +496,8 @@ export async function createLeadForm({
   followUpUrl,
   thankYouMessage,
 }) {
-  return callFunction({
-    action: 'create_lead_form',
+  return callLeadForms({
+    action: 'create',
     client_id: clientId,
     form_name: formName,
     questions,
@@ -617,4 +645,32 @@ export function ageFromIntake(intake) {
   // that targets nobody.
   if (min > max) [min, max] = [max, min]
   return { min: String(min), max: String(max) }
+}
+
+/**
+ * Questions Claude recommends for this client's instant form.
+ *
+ * Reads the onboarding form and the latest chat SERVER-SIDE rather than being
+ * handed them: the transcript is large, and a caller should not be able to
+ * name a client whose conversation they want read out.
+ */
+export async function recommendFormQuestions(clientId) {
+  const { data, error } = await supabase.functions.invoke('form-questions', {
+    body: { client_id: clientId },
+  })
+  if (error) {
+    const detail = await readFunctionError(error)
+    throw new Error(
+      detail.detail ||
+        'Could not reach the question recommender. Deploy form-questions in Supabase if it is missing.'
+    )
+  }
+  if (data?.error) throw new Error(data.error)
+  return {
+    note: data?.note || '',
+    formName: data?.form_name || '',
+    thankYou: data?.thank_you || '',
+    questions: data?.questions || [],
+    usedChat: Boolean(data?.used_chat),
+  }
 }
