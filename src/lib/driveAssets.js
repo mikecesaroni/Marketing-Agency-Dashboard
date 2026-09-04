@@ -8,11 +8,13 @@ import { readFunctionError } from './functionError'
 // in the same field is what lets saved-ad recipes, the publish flow and the
 // pickers stay unchanged — they all just carry the string around.
 
-export const DRIVE_PREFIX = 'drive:'
+// Re-exported so the existing importers keep working, but DEFINED in
+// driveLabels.js, which has no Supabase import and can therefore be reached by
+// a check script. One definition on purpose: two would drift, and a drifted
+// prefix means a video that silently never matches its own registration.
+import { DRIVE_PREFIX, driveFileId, drivePath, isDrivePath } from './driveLabels'
 
-export const isDrivePath = (path) => typeof path === 'string' && path.startsWith(DRIVE_PREFIX)
-export const driveFileId = (path) => (isDrivePath(path) ? path.slice(DRIVE_PREFIX.length) : '')
-export const drivePath = (fileId) => `${DRIVE_PREFIX}${fileId}`
+export { DRIVE_PREFIX, driveFileId, drivePath, isDrivePath }
 
 /**
  * Pulls the folder id out of whatever someone pasted.

@@ -236,16 +236,24 @@ Deno.serve(async (req) => {
       const found = await driveJson(
         'files',
         {
-          // PDFs as well as images, because a logo arrives as one more often
-          // than not -- a designer exports vector, and "Logo Titos
-          // Appliances.pdf" sat in this folder invisible to the CRM while
-          // somebody refreshed the page wondering where it had gone. Drive
-          // renders a PDF to PNG the same way it renders HEIC (verified
-          // against this file: PNG bytes at both 400px and 2048px), so the
-          // unrenderable path below already handles it with nothing new.
+          // Images, PDFs and videos.
+          //
+          // PDFs because a logo arrives as one more often than not -- a
+          // designer exports vector, and "Logo Titos Appliances.pdf" sat in
+          // this folder invisible to the CRM while somebody refreshed the page
+          // wondering where it had gone. Drive renders a PDF to PNG the same
+          // way it renders HEIC (verified against that file: PNG bytes at both
+          // 400px and 2048px), so the unrenderable path below handles it.
+          //
+          // Videos because they can be published as video ads without being
+          // copied anywhere: Meta downloads them from Drive itself, through
+          // the drive-video function. That matters because Storage on the free
+          // plan refuses anything over 50MB, and ad clips are bigger. Drive
+          // renders a poster frame for them, which is what fills the grid.
           q:
             `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false and ` +
-            `(mimeType contains 'image/' or mimeType = 'application/pdf')`,
+            `(mimeType contains 'image/' or mimeType contains 'video/' or ` +
+            `mimeType = 'application/pdf')`,
           fields: 'files(id,name,mimeType,size,modifiedTime,thumbnailLink)',
           orderBy: 'modifiedTime desc',
           pageSize: '200',
@@ -294,15 +302,33 @@ Deno.serve(async (req) => {
         return json({ error: 'That file is not in this client\'s Drive folder.' }, 403)
       }
       const kind = String(meta.mimeType || '')
-      if (!kind.startsWith('image/') && kind !== 'application/pdf') {
-        return json({ error: `"${meta.name}" is not an image or a PDF.` }, 400)
+      const allowed =
+        kind.startsWith('image/') || kind.startsWith('video/') || kind === 'application/pdf'
+      if (!allowed) {
+        return json({ error: `"${meta.name}" is not an image, a video or a PDF.` }, 400)
+      }
+
+      // A VIDEO ONLY EVER COMES BACK AS ITS POSTER FRAME here, never as the
+      // clip. Tens of megabytes through this function to fill a thumbnail
+      // would be pointless, and nothing needs the bytes: the grid wants a
+      // still, playback opens Drive, and Meta downloads the video from
+      // drive-video instead. The unrenderable branch below returns Drive's
+      // render, which for a video is exactly that poster.
+      if (kind.startsWith('video/') && !meta.thumbnailLink) {
+        return json(
+          { error: `Drive has no poster frame for "${meta.name}" yet. Try again shortly.` },
+          415
+        )
       }
 
       // Two reasons to serve Drive's render rather than the original: the grid
       // wants a small image, and a format the browser cannot decode has to be
       // converted by someone. Drive already does both.
       const unrenderable = !BROWSER_RENDERABLE.has(String(meta.mimeType))
-      if (body.thumb || unrenderable) {
+      // Forced for video, so the raw-bytes fallback at the end of this branch
+      // can never stream a whole clip to a browser that asked for a picture.
+      const wantsRender = body.thumb || unrenderable
+      if (wantsRender) {
         if (!meta.thumbnailLink) {
           // Only fatal for a format we could not have displayed anyway.
           if (unrenderable) {

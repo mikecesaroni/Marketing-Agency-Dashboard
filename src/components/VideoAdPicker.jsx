@@ -10,6 +10,7 @@ import {
   statusLabel,
   validateVideo,
 } from '../lib/adVideos'
+import { driveFileId, isDrivePath } from '../lib/driveLabels'
 import { deleteVideo, fetchClientVideos, saveVideoAbout, uploadVideo } from '../lib/adVideoStore'
 
 /**
@@ -292,7 +293,8 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
       ) : videos.length === 0 ? (
         <p className="text-xs text-slate-500">
           No videos for {client.name} yet. Upload one below — .mp4 or .mov, up to{' '}
-          {megabytes(MAX_VIDEO_BYTES)}MB.
+          {megabytes(MAX_VIDEO_BYTES)}MB — or drop one in their Google Drive folder, where
+          there is no size limit because Meta downloads it from Drive directly.
         </p>
       ) : (
         <ul className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
@@ -311,21 +313,52 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                     className="mt-1 flex-shrink-0"
                     title={ready ? '' : 'Meta has to finish processing this first'}
                   />
-                  {/* Muted and preload=metadata: a list of autoplaying,
-                      audible clips is unusable, and preloading four full
-                      videos to show four thumbnails is wasteful. */}
-                  <video
-                    src={v.url}
-                    poster={v.thumb_url || undefined}
-                    controls
-                    muted
-                    preload="metadata"
-                    className="w-28 max-h-24 flex-shrink-0 rounded bg-slate-900 object-contain"
-                  />
+                  {/* A Drive clip has no bucket object to play from, and
+                      streaming tens of megabytes through the edge function
+                      just to fill a 112px box would be absurd. It gets Meta's
+                      poster frame once registered, and plays in Drive. */}
+                  {isDrivePath(v.storage_path) ? (
+                    <a
+                      href={`https://drive.google.com/file/d/${driveFileId(v.storage_path)}/view`}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`Play ${v.file_name} in Google Drive`}
+                      className="relative w-28 h-24 flex-shrink-0 rounded bg-slate-900 overflow-hidden flex items-center justify-center"
+                    >
+                      {v.thumb_url ? (
+                        <img src={v.thumb_url} alt="" className="w-full h-full object-contain" />
+                      ) : (
+                        <span className="text-white/70 text-[10px] px-1 text-center">
+                          In Google Drive
+                        </span>
+                      )}
+                      <span className="absolute inset-0 flex items-center justify-center text-white/90 text-xl">
+                        ▶
+                      </span>
+                    </a>
+                  ) : (
+                    /* Muted and preload=metadata: a list of autoplaying,
+                       audible clips is unusable, and preloading four full
+                       videos to show four thumbnails is wasteful. */
+                    <video
+                      src={v.url}
+                      poster={v.thumb_url || undefined}
+                      controls
+                      muted
+                      preload="metadata"
+                      className="w-28 max-h-24 flex-shrink-0 rounded bg-slate-900 object-contain"
+                    />
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-900 truncate">{v.file_name}</p>
                     <p className="text-[11px] text-slate-500 mb-1">
                       {megabytes(v.file_size)}MB
+                      {isDrivePath(v.storage_path) && (
+                        // Worth saying: it explains why there is no Delete
+                        // here, and why a clip far over the upload limit is
+                        // publishable at all.
+                        <span className="ml-1.5 text-slate-400">· Google Drive</span>
+                      )}
                     </p>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <Pill video={v} />
@@ -348,15 +381,20 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                               : 'Re-check'}
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={busy === v.storage_path}
-                        onClick={() => remove(v)}
-                        className="text-slate-400"
-                      >
-                        Delete
-                      </Button>
+                      {/* No Delete on a Drive clip: the service account holds
+                          read-only scope, so it could only ever fail, and the
+                          file is the client's. They remove it in Drive. */}
+                      {!isDrivePath(v.storage_path) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={busy === v.storage_path}
+                          onClick={() => remove(v)}
+                          className="text-slate-400"
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>

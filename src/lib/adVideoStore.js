@@ -1,5 +1,7 @@
 import { supabase } from './supabaseClient'
-import { mergeVideos, validateVideo, videoPath } from './adVideos'
+import { driveVideoFiles, mergeVideos, validateVideo, videoPath } from './adVideos'
+import { isDrivePath } from './driveLabels'
+import { listDriveImages } from './driveAssets'
 
 /**
  * Storage and database access for ad videos.
@@ -14,19 +16,33 @@ export function publicUrl(path) {
 }
 
 export async function fetchClientVideos(clientId, account) {
-  const [files, registered] = await Promise.all([
+  const [files, registered, drive] = await Promise.all([
     supabase
       .from('client_files')
       .select('id, file_name, storage_path, file_size, date_uploaded')
       .eq('client_id', clientId),
     supabase.from('ad_videos').select('*').eq('client_id', clientId),
+    // Videos sitting in the client's Drive folder, which are publishable
+    // without being copied anywhere. A client with no folder linked, or a
+    // Drive that is unreachable, must not stop the uploaded videos listing --
+    // it is an additional source, not a dependency.
+    listDriveImages(clientId).catch(() => []),
   ])
   if (files.error) throw files.error
+
+  // Drive rows are converted to the same shape BEFORE the join, so the join
+  // itself, isPublishable, statusLabel and everything downstream stay unaware
+  // that Drive exists.
+  const all = [...(files.data || []), ...driveVideoFiles(drive)]
+
   // A missing ad_videos table is not a reason to hide the files: they are
   // still there and still uploadable.
-  return mergeVideos(files.data, registered.data || [], account).map((v) => ({
+  return mergeVideos(all, registered.data || [], account).map((v) => ({
     ...v,
-    url: publicUrl(v.storage_path),
+    // A Drive clip has no bucket object, so there is no public URL to preview
+    // from. The row carries Meta's poster frame once it is registered, and the
+    // picker links out to Drive for playback.
+    url: isDrivePath(v.storage_path) ? '' : publicUrl(v.storage_path),
   }))
 }
 
@@ -87,6 +103,14 @@ export async function saveVideoAbout({ clientId, storagePath, about }) {
 }
 
 export async function deleteVideo(video) {
+  // A Drive clip is not ours to delete. The service account holds read-only
+  // scope, so this could only ever fail, and the file belongs to the client
+  // anyway -- they remove it in Drive.
+  if (isDrivePath(video.storage_path)) {
+    throw new Error(
+      `${video.file_name} lives in ${'the client\u2019s'} Google Drive. Delete it there and it stops showing here.`
+    )
+  }
   const { error: rmErr } = await supabase.storage.from('client-files').remove([video.storage_path])
   if (rmErr) throw rmErr
   const { error } = await supabase.from('client_files').delete().eq('id', video.id)

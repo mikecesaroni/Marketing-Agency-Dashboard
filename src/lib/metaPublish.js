@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { readFunctionError } from './functionError'
+import { driveFileId, isDrivePath } from './driveLabels'
 
 // What the publish form offers. Kept in step with the OBJECTIVES map in the
 // meta-publish Edge Function — the function is the one that enforces it, this
@@ -333,6 +334,26 @@ export async function callFunction(body) {
  * is for.
  */
 export async function registerAdVideo({ clientId, storagePath, fileName }) {
+  // A Drive video goes to its own function, because the two are handed to Meta
+  // differently: an uploaded video is a public bucket object, a Drive one is
+  // streamed out of Drive behind a short-lived grant. Everything AFTER
+  // registration is shared -- the ad_videos row it writes is what meta-publish
+  // looks up, so status polling and publishing are identical for both.
+  if (isDrivePath(storagePath)) {
+    const { data, error } = await supabase.functions.invoke('drive-video-register', {
+      body: { client_id: clientId, file_id: driveFileId(storagePath), file_name: fileName },
+    })
+    if (error) {
+      const detail = await readFunctionError(error)
+      throw new Error(
+        detail.detail ||
+          'Could not send that Drive video to Meta. Deploy drive-video-register in Supabase if it is missing.'
+      )
+    }
+    if (data?.error) throw new Error(data.error)
+    return data
+  }
+
   return callFunction({
     action: 'register_video',
     client_id: clientId,

@@ -14,17 +14,30 @@
  * clients is two Meta videos.
  */
 
+// The .js is required, not stylistic: scripts/check-ad-videos.mjs imports this
+// module in plain Node, which does not resolve an extensionless relative
+// specifier the way Vite does. Without it the checks cannot load this file.
+import { drivePath } from './driveLabels.js'
+
 // What Meta accepts and a browser can preview. Meta also takes .avi and .gif,
 // which no phone produces and no browser plays inline.
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm)$/i
 
 /**
- * Meta's own ceiling is 4 GB. This is far lower on purpose: the file goes
- * browser -> Supabase Storage -> Meta, the first leg is a single unresumable
- * PUT, and a half-gigabyte upload over a phone connection fails often enough
- * that allowing it would mostly produce mystery failures.
+ * The ceiling on an UPLOADED video, and it is Supabase's, not a preference.
+ *
+ * This project is on the free plan, where Storage refuses any object over
+ * 50MB. Verified rather than assumed: streaming a 69MB clip into the bucket
+ * came back 413 EntityTooLarge. This said 250MB before, which was a number
+ * nobody had tested -- every upload between 50MB and 250MB would have been
+ * accepted by the picker and then failed at the bucket, and a 30-second 1080p
+ * phone clip lands in exactly that range.
+ *
+ * A video already in the client's Drive folder is NOT subject to this. Nothing
+ * copies it: Meta is given a link and downloads it from Drive itself, so the
+ * bucket is never involved and the only limit is Meta's own 4GB.
  */
-export const MAX_VIDEO_BYTES = 250 * 1024 * 1024
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
 export function isVideoFile(name) {
   return VIDEO_EXT.test(String(name || ''))
@@ -80,6 +93,30 @@ export function accountKey(id) {
 }
 
 /**
+ * Drive's file list, in the shape mergeVideos already understands.
+ *
+ * Done this way on purpose: a Drive video becomes an ordinary row before the
+ * join happens, so mergeVideos, isPublishable, statusLabel and the whole
+ * publish path need no idea Drive exists. The registration in ad_videos is
+ * keyed on the drive: path exactly as it would be on a bucket path.
+ *
+ * `source` is the one field that differs, and only so the UI can say where a
+ * clip came from and not offer to delete a file it has read-only access to.
+ */
+export function driveVideoFiles(driveFiles) {
+  return (driveFiles || [])
+    .filter((f) => String(f.mime_type || '').startsWith('video/'))
+    .map((f) => ({
+      id: drivePath(f.id),
+      file_name: f.name,
+      storage_path: drivePath(f.id),
+      file_size: f.size || 0,
+      date_uploaded: f.modified_time || '',
+      source: 'drive',
+    }))
+}
+
+/**
  * Joins the client's video files to whatever Meta knows about them.
  *
  * Deliberately does NOT build the public URL: that needs the storage client,
@@ -120,6 +157,9 @@ export function mergeVideos(files, registered, account) {
         // the client in general, so without it three clips for one client all
         // get written from the same onboarding answers and read the same.
         about: meta?.about || '',
+        // 'drive' or undefined. Drive is read-only to this app, so a Drive
+        // clip must not be offered a Delete button that cannot work.
+        source: f.source || 'upload',
       }
     })
     .sort((a, b) => String(b.uploaded_at || '').localeCompare(String(a.uploaded_at || '')))

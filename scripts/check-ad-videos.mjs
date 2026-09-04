@@ -15,9 +15,11 @@
 // The second rule: only a video Meta has finished transcoding can go in an ad.
 // A creative referencing one that is still processing is rejected.
 
+import { DRIVE_PREFIX, driveFileId, drivePath, isDrivePath } from '../src/lib/driveLabels.js'
 import {
   MAX_VIDEO_BYTES,
   accountKey,
+  driveVideoFiles,
   isPublishable,
   isVideoFile,
   mergeVideos,
@@ -299,6 +301,115 @@ const FILES = [
   )
   check('a null note reads as empty', nulled.about, '')
   check('and does not block publishing either', isPublishable(nulled), true)
+}
+
+// --- videos that live in Google Drive --------------------------------------
+//
+// A clip in the client's Drive folder is publishable WITHOUT being copied
+// anywhere. That is not a convenience, it is the only thing that works: this
+// project is on Supabase's free plan, where Storage refuses any object over
+// 50MB, and the two clips in the folder that prompted this are 69MB and 344MB.
+// Verified rather than assumed -- streaming the 69MB one into the bucket
+// returned 413 EntityTooLarge.
+//
+// So Meta downloads it from Drive instead, and a Drive video is carried through
+// the app as `drive:<file id>`. The whole point of that convention is that
+// everything after registration -- the join, publishability, the status label,
+// the publish flow -- treats it as an ordinary path.
+
+check('a drive path is built and read back', driveFileId(drivePath('abc123')), 'abc123')
+check('the prefix is the shared one', drivePath('x').startsWith(DRIVE_PREFIX), true)
+check('a bucket path is not a drive path', isDrivePath('c1/1-clip.mp4'), false)
+check('a drive path is', isDrivePath('drive:abc123'), true)
+check('nothing is not a drive path', [isDrivePath(''), isDrivePath(null)], [false, false])
+check('a bucket path yields no file id', driveFileId('c1/1-clip.mp4'), '')
+
+{
+  // Drive's listing, as drive-assets really returns it: images, videos and a
+  // PDF together. Only the videos belong in the video picker -- a still goes
+  // to the image picker and a PDF logo to neither.
+  const listing = [
+    { id: 'v1', name: 'IMG_7599.MOV', mime_type: 'video/quicktime', size: 69815259, modified_time: '2026-08-31T19:29:51Z' },
+    { id: 'v2', name: 'IMG_7733.MOV', mime_type: 'video/quicktime', size: 343981450, modified_time: '2026-08-31T19:28:03Z' },
+    { id: 'p1', name: 'IMG_7782.HEIC', mime_type: 'image/heif', size: 2853751, modified_time: '2026-09-01T03:30:07Z' },
+    { id: 'd1', name: 'Logo Titos Appliances.pdf', mime_type: 'application/pdf', size: 11769, modified_time: '2026-09-04T16:15:39Z' },
+  ]
+  const rows = driveVideoFiles(listing)
+  check('only the videos are taken', rows.map((r) => r.file_name), ['IMG_7599.MOV', 'IMG_7733.MOV'])
+  check('each is keyed by its drive path', rows.map((r) => r.storage_path), ['drive:v1', 'drive:v2'])
+  check('and marked as coming from drive', rows.every((r) => r.source === 'drive'), true)
+  check('the size comes through for display', rows[1].file_size, 343981450)
+  check('an empty listing is empty', driveVideoFiles([]), [])
+  check('null does not throw', driveVideoFiles(null), [])
+}
+
+{
+  // THE POINT OF THE drive: CONVENTION. A Drive clip joins its Meta
+  // registration through exactly the same path as an uploaded one, so
+  // mergeVideos needed no idea Drive exists.
+  const listing = [
+    { id: 'v1', name: 'IMG_7599.MOV', mime_type: 'video/quicktime', size: 69815259, modified_time: '2026-08-31' },
+  ]
+  const files = [...FILES, ...driveVideoFiles(listing)]
+  const registered = [
+    {
+      storage_path: 'drive:v1',
+      meta_account_id: PREFIXED_ACCOUNT,
+      meta_video_id: 'v100',
+      status: 'ready',
+      thumb_url: 'https://x/thumb.jpg',
+    },
+  ]
+  const rows = mergeVideos(files, registered, BARE_ACCOUNT)
+  const drive = rows.find((r) => r.storage_path === 'drive:v1')
+  check('a drive clip appears in the video list', Boolean(drive), true)
+  check('it joins its registration', [drive.status, drive.meta_video_id], ['ready', 'v100'])
+  check('and is publishable like any other', isPublishable(drive), true)
+  check('and says so', statusLabel(drive), 'Ready to publish')
+  check('the uploaded videos are still there too', rows.length, 3)
+
+  // The per-account rule holds for Drive too: a registration in somebody
+  // else's ad account must not count, or publishing would use their video id.
+  const elsewhere = mergeVideos(
+    files,
+    [{ ...registered[0], meta_account_id: 'act_999999999999999' }],
+    BARE_ACCOUNT
+  ).find((r) => r.storage_path === 'drive:v1')
+  check("another account's drive registration does not count", elsewhere.status, 'new')
+}
+
+{
+  // 344MB is far over the UPLOAD limit and that must not matter, because
+  // nothing uploads it. If validateVideo were ever applied to a Drive clip
+  // this would be the symptom: the biggest and best footage refused.
+  const listing = [
+    { id: 'v2', name: 'IMG_7733.MOV', mime_type: 'video/quicktime', size: 343981450, modified_time: '2026-08-31' },
+  ]
+  const [big] = driveVideoFiles(listing)
+  check('the drive clip is way over the upload limit', big.file_size > MAX_VIDEO_BYTES, true)
+  check('and is still listed', big.storage_path, 'drive:v2')
+  check(
+    'and is publishable once registered',
+    isPublishable(
+      mergeVideos(
+        [big],
+        [{ storage_path: 'drive:v2', meta_account_id: PREFIXED_ACCOUNT, meta_video_id: 'm1', status: 'ready', thumb_url: 'https://x/t.jpg' }],
+        BARE_ACCOUNT
+      )[0]
+    ),
+    true
+  )
+}
+
+{
+  // The upload limit is Supabase's, and saying 250MB when the bucket refuses
+  // anything over 50MB meant the picker accepted files that then failed.
+  check('the upload limit is the bucket\'s real one', megabytes(MAX_VIDEO_BYTES), 50)
+  check(
+    'a 69MB upload is refused, since the bucket would refuse it',
+    validateVideo({ name: 'clip.mov', size: 69815259 }).includes('50MB limit'),
+    true
+  )
 }
 
 // --- empties ---------------------------------------------------------------
