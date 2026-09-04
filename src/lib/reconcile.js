@@ -93,7 +93,27 @@ export function feeMismatches(clients, payments) {
  * different identifiers for the same payment, so neither can see the other's
  * rows. Same client, same amount, same day is a strong enough signal to
  * surface — and never strong enough to act on automatically, because two
- * genuine identical charges on one day are possible.
+ * genuine identical charges on one day are possible. Luccia Brother Mechanicle
+ * really was charged $500 twice on 2026-09-03.
+ *
+ * WHAT THE STRIPE IDS DO AND DO NOT PROVE. The webhook writes one row per
+ * Stripe event, so a row carrying an event or invoice id has provenance and a
+ * row carrying none came from the CSV import. That means:
+ *
+ * - Exactly one row has an id: the classic double-import. The unidentified row
+ *   is the extra, and this is the only shape confident enough to offer a
+ *   delete.
+ * - Every row has its own DISTINCT id: each was written from a different
+ *   Stripe event. Usually two real payments — but not provably, because a
+ *   subscription's checkout.session.completed and its first invoice.paid are
+ *   the same money seen twice, and the webhook handles both. So it is shown
+ *   and explained, with no guess about which to remove.
+ * - No row has an id: nothing to go on at all.
+ *
+ * This used to call any group with at least one identified row "confident",
+ * which put a red "Remove the extra" button next to two rows that each had
+ * their own Stripe event, under a sentence claiming one of them had no Stripe
+ * ID. Clicking it would have deleted a real $500.
  */
 export function duplicateSuspects(payments, clients) {
   const byName = Object.fromEntries((clients || []).map((c) => [c.id, c.name]))
@@ -108,11 +128,23 @@ export function duplicateSuspects(payments, clients) {
   return Object.values(groups)
     .filter((rows) => rows.length > 1)
     .map((rows) => {
-      // The row carrying a Stripe invoice or event id came from the webhook and
-      // is the one with real provenance, so it is the keeper. Anything else in
-      // the group is the likely extra.
-      const confirmed = rows.filter((r) => r.stripe_invoice_id || r.stripe_event_id)
-      const keep = confirmed[0] || rows[0]
+      // Rows a person has already confirmed are real payments.
+      const reviewed = rows.filter((r) => r.duplicate_reviewed_at)
+      const identified = rows.filter((r) => r.stripe_invoice_id || r.stripe_event_id)
+      const ids = new Set(identified.map((r) => r.stripe_invoice_id || r.stripe_event_id))
+
+      // Every row traces to its own Stripe record, so the CRM cannot name an
+      // extra and there may not be one.
+      const separatelyEvidenced = identified.length === rows.length && ids.size === rows.length
+      // The double-import shape: one row with provenance, the rest without.
+      const confident = identified.length === 1 && rows.length > 1
+
+      const keep = reviewed[0] || identified[0] || rows[0]
+      // Never propose deleting a row somebody has already vouched for.
+      const extras = reviewed.length
+        ? rows.filter((r) => !r.duplicate_reviewed_at)
+        : rows.filter((r) => r.id !== keep.id)
+
       return {
         clientName: byName[rows[0].client_id] || 'Unknown client',
         clientId: rows[0].client_id,
@@ -120,10 +152,39 @@ export function duplicateSuspects(payments, clients) {
         paidDate: rows[0].paid_date,
         rows,
         keep,
-        extras: rows.filter((r) => r.id !== keep.id),
-        // Without a Stripe id on any row there is nothing to say which is real.
-        confident: confirmed.length > 0,
+        extras,
+        reviewedCount: reviewed.length,
+        separatelyEvidenced,
+        confident,
+        reason: duplicateReason({ rows, separatelyEvidenced, confident, reviewed }),
       }
     })
+    // A group whose every row has been vouched for is settled. Suppressed here
+    // rather than before grouping so that a genuine third charge arriving in
+    // the same group still raises the warning: that row is not reviewed, so
+    // the group is not either.
+    .filter((group) => group.reviewedCount < group.rows.length)
     .sort((a, b) => (b.paidDate || '').localeCompare(a.paidDate || ''))
+}
+
+/**
+ * The sentence shown under a suspected duplicate.
+ *
+ * Here rather than in the panel because it is an assertion about money and it
+ * has to follow from the rows. The panel used to hold two hardcoded sentences
+ * and pick between them on a flag, which is how it came to tell someone that
+ * one of two rows carried no Stripe ID when both of them did.
+ */
+export function duplicateReason({ rows, separatelyEvidenced, confident, reviewed }) {
+  if (reviewed?.length) {
+    return `${reviewed.length} of these ${rows.length} rows is already confirmed as real. This one arrived afterwards, so it is worth a look.`
+  }
+  if (confident) {
+    const plural = rows.length > 2 ? 'the others do' : 'the other does'
+    return `One of these carries a Stripe ID and ${plural} not — the unidentified row looks like the same payment recorded a second time by the CSV import.`
+  }
+  if (separatelyEvidenced) {
+    return `Each of these rows carries its own separate Stripe ID, so both were recorded from their own Stripe event. That usually means two real charges. Confirm it and this stops asking.`
+  }
+  return 'No row here carries a Stripe ID, so there is nothing to say which is real. Check Stripe before removing either.'
 }

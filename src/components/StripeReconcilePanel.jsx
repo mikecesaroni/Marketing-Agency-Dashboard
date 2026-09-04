@@ -69,9 +69,9 @@ export default function StripeReconcilePanel({ clients, payments, onFixed }) {
     if (!extra) return
     if (
       !confirm(
-        `Delete the duplicate ${money(group.amount)} payment for ${group.clientName} on ${group.paidDate}?\n\n` +
-          `Stripe recorded this payment once. The CRM has ${group.rows.length} rows for it, and the one being kept is the row carrying the Stripe invoice ID.\n\n` +
-          `This permanently deletes a payment record.`
+        `Delete one of the ${money(group.amount)} payments for ${group.clientName} on ${group.paidDate}?\n\n` +
+          `${group.reason}\n\n` +
+          `This permanently deletes a payment record and takes ${money(group.amount)} off what this client has paid. If both charges are real, press Cancel and use "Both are real" instead.`
       )
     )
       return
@@ -80,6 +80,40 @@ export default function StripeReconcilePanel({ clients, payments, onFixed }) {
     setError('')
     try {
       const { error: err } = await supabase.from('payments').delete().eq('id', extra.id)
+      if (err) throw err
+      await onFixed?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
+   * Records that a group really is two payments, so it stops being flagged.
+   *
+   * Written to the rows rather than held in this component: the payment rows
+   * are permanent, so hiding the warning without recording the judgement would
+   * show it again on the next page load. That is the opposite of dismissing an
+   * unmatched Stripe payment, which deliberately remembers nothing so that
+   * money always resurfaces until somebody matches it — here the money is
+   * already matched and it is the warning that is wrong.
+   *
+   * Marks every row in the group. A third charge landing in the same group
+   * later is not marked, so the warning comes back for it, which is what
+   * should happen — that row is new information.
+   */
+  const confirmBothReal = async (group) => {
+    setBusy(group.keep.id)
+    setError('')
+    try {
+      const { error: err } = await supabase
+        .from('payments')
+        .update({ duplicate_reviewed_at: new Date().toISOString() })
+        .in(
+          'id',
+          group.rows.map((r) => r.id)
+        )
       if (err) throw err
       await onFixed?.()
     } catch (err) {
@@ -186,22 +220,36 @@ export default function StripeReconcilePanel({ clients, payments, onFixed }) {
                     {group.rows.length} × {money(group.amount)} on {group.paidDate}
                   </span>
                 </p>
-                <p className="mt-0.5 text-xs text-slate-600">
-                  {group.confident
-                    ? 'One of these carries a Stripe invoice ID and one does not — the one without it looks like the same payment recorded a second time by the CSV import.'
-                    : 'Neither row carries a Stripe ID, so there is nothing here to say which is real. Check Stripe before removing either.'}
-                </p>
+                <p className="mt-0.5 text-xs text-slate-600">{group.reason}</p>
               </div>
-              {group.confident && (
+              {/* "Both are real" comes first, and is the only action offered
+                  unless the rows actually point at a double-import. Deleting a
+                  payment is the irreversible one of the two, and two identical
+                  charges on one day are a real thing that happens. */}
+              <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
                 <Button
                   size="sm"
-                  variant="danger"
-                  disabled={busy === group.extras[0]?.id}
-                  onClick={() => removeExtra(group)}
+                  variant="outline"
+                  disabled={busy === group.keep.id}
+                  onClick={() => confirmBothReal(group)}
                 >
-                  {busy === group.extras[0]?.id ? 'Removing…' : 'Remove the extra'}
+                  {busy === group.keep.id
+                    ? 'Saving…'
+                    : group.rows.length > 2
+                      ? 'All are real'
+                      : 'Both are real'}
                 </Button>
-              )}
+                {group.confident && (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    disabled={busy === group.extras[0]?.id}
+                    onClick={() => removeExtra(group)}
+                  >
+                    {busy === group.extras[0]?.id ? 'Removing…' : 'Remove the extra'}
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -7,7 +7,11 @@
 // identifiers and neither can see the other's rows.
 
 import assert from 'node:assert/strict'
-import { feeMismatches, duplicateSuspects, latestBillingMonth } from '../src/lib/reconcile.js'
+import {
+  feeMismatches,
+  duplicateSuspects,
+  latestBillingMonth,
+} from '../src/lib/reconcile.js'
 
 const client = (over) => ({ id: over.name, monthly_fee: 998, archived: false, ...over })
 const paid = (id, type, amount, date, stripe) => ({
@@ -163,6 +167,108 @@ const paid = (id, type, amount, date, stripe) => ({
     due_date: '2026-09-01', paid_date: null, status: 'pending' })
   assert.equal(duplicateSuspects([pending('1'), pending('2')], clients).length, 0)
   console.log('PASS  pending schedule rows are not duplicates')
+}
+
+// --- TWO REAL CHARGES ON ONE DAY -------------------------------------------
+//
+// THE REGRESSION, and it is about deleting real money.
+//
+// Luccia Brother Mechanicle was charged $500 twice on 2026-09-03. Both rows
+// came off the webhook and each carries its OWN Stripe event id. The panel
+// called that "confident", put a red "Remove the extra" button next to it, and
+// explained underneath that one of the rows carried no Stripe ID -- which was
+// false of these rows. Clicking it would have deleted a real $500.
+//
+// The ids below are the real ones off those rows.
+{
+  const clients = [{ id: 'luccia', name: 'Luccia Brother Mechanicle' }]
+  const evented = (id, evt) => ({
+    id, client_id: 'luccia', payment_type: 'setup', amount: 500,
+    paid_date: '2026-09-03', status: 'paid',
+    stripe_invoice_id: null, stripe_event_id: evt,
+  })
+  const a = evented('a', 'evt_1UBkRrC9acAUYi63QGKHrfov')
+  const b = evented('b', 'evt_1UBkR4C9acAUYi63lk5ZpuLr')
+
+  const [d] = duplicateSuspects([a, b], clients)
+  assert.ok(d, 'it is still surfaced, because two events can be one payment')
+  assert.equal(d.separatelyEvidenced, true, 'each row has its own Stripe event')
+  assert.equal(
+    d.confident,
+    false,
+    'NEVER confident: the CRM cannot name an extra when both rows have provenance'
+  )
+  assert.ok(
+    !/carries a Stripe ID and the other does not/.test(d.reason),
+    'and it must not claim one row lacks a Stripe ID when both have one'
+  )
+  assert.match(d.reason, /its own separate Stripe ID/)
+  console.log('PASS  two rows with their own Stripe events are not a confident duplicate')
+  console.log('PASS  and the reason given matches the rows')
+
+  // Two rows sharing ONE id is the same event written twice, which is a real
+  // duplicate and must stay distinguishable from the case above.
+  const twin = { ...b, stripe_event_id: a.stripe_event_id }
+  const [same] = duplicateSuspects([a, twin], clients)
+  assert.equal(same.separatelyEvidenced, false, 'one shared id is not separate evidence')
+  console.log('PASS  the same Stripe event recorded twice is not mistaken for two charges')
+}
+
+// --- confirming a group is real -------------------------------------------
+{
+  const clients = [{ id: 'luccia', name: 'Luccia Brother Mechanicle' }]
+  const row = (id, evt, reviewed) => ({
+    id, client_id: 'luccia', payment_type: 'setup', amount: 500,
+    paid_date: '2026-09-03', status: 'paid',
+    stripe_invoice_id: null, stripe_event_id: evt,
+    duplicate_reviewed_at: reviewed || null,
+  })
+  const a = row('a', 'evt_A', '2026-09-04T12:00:00Z')
+  const b = row('b', 'evt_B', '2026-09-04T12:00:00Z')
+
+  assert.equal(
+    duplicateSuspects([a, b], clients).length,
+    0,
+    'once every row is confirmed the warning stops'
+  )
+  console.log('PASS  confirming both real clears the warning for good')
+
+  // A THIRD charge arriving afterwards is new information and must re-raise
+  // it. Suppressing the group on "somebody looked once" would hide a genuine
+  // double-import behind a judgement made before that row existed.
+  const c = row('c', null, null)
+  const [again] = duplicateSuspects([a, b, c], clients)
+  assert.ok(again, 'a new row in a confirmed group raises the warning again')
+  assert.equal(again.reviewedCount, 2)
+  assert.deepEqual(
+    again.extras.map((r) => r.id),
+    ['c'],
+    'and only the unvouched row is offered for removal'
+  )
+  assert.match(again.reason, /already confirmed as real/)
+  console.log('PASS  a later charge in a confirmed group is raised again')
+  console.log('PASS  and a row already vouched for is never proposed for deletion')
+
+  // Half-confirmed is not confirmed.
+  assert.equal(duplicateSuspects([a, row('d', 'evt_D', null)], clients).length, 1)
+  console.log('PASS  one confirmed row does not clear the group')
+}
+
+// --- the double import still works ----------------------------------------
+// The case the feature exists for has to keep offering the delete, or fixing
+// the above would have traded one wrong answer for another.
+{
+  const clients = [{ id: 'rel', name: 'Reliable' }]
+  const hook = { id: 'h', client_id: 'rel', payment_type: 'monthly', amount: 399,
+    paid_date: '2026-08-28', status: 'paid', stripe_invoice_id: 'in_1', stripe_event_id: null }
+  const csv = { id: 'c', client_id: 'rel', payment_type: 'monthly', amount: 399,
+    paid_date: '2026-08-28', status: 'paid', stripe_invoice_id: null, stripe_event_id: null }
+  const [d] = duplicateSuspects([hook, csv], clients)
+  assert.equal(d.confident, true, 'one identified row and one not is still the clear case')
+  assert.equal(d.keep.id, 'h')
+  assert.deepEqual(d.extras.map((r) => r.id), ['c'])
+  assert.match(d.reason, /recorded a second time by the CSV import/)
+  console.log('PASS  the plain double-import is still caught and still actionable')
 }
 
 console.log('\nAll checks passed')
