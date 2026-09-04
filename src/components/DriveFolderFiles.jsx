@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listDriveImages } from '../lib/driveAssets'
+import { convertedLabel } from '../lib/driveLabels'
 import DriveThumbImage from './DriveThumb'
 
 // The client's Drive folder, shown beside the files they uploaded here.
@@ -102,9 +103,9 @@ export default function DriveFolderFiles({ clientId, driveFolderId }) {
               <DriveThumbImage clientId={clientId} file={f} />
               {f.converted && (
                 // Drive converts these on the way through; without the tag a
-                // HEIC that works here but not on a Mac preview looks odd.
+                // file that works here but not in a Mac preview looks odd.
                 <span className="absolute bottom-0 left-0 right-0 bg-black/55 text-white text-[9px] leading-4 text-center">
-                  HEIC
+                  {convertedLabel(f.mime_type)}
                 </span>
               )}
             </a>

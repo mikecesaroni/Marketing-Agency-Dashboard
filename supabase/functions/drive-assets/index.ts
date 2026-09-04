@@ -236,7 +236,16 @@ Deno.serve(async (req) => {
       const found = await driveJson(
         'files',
         {
-          q: `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false and mimeType contains 'image/'`,
+          // PDFs as well as images, because a logo arrives as one more often
+          // than not -- a designer exports vector, and "Logo Titos
+          // Appliances.pdf" sat in this folder invisible to the CRM while
+          // somebody refreshed the page wondering where it had gone. Drive
+          // renders a PDF to PNG the same way it renders HEIC (verified
+          // against this file: PNG bytes at both 400px and 2048px), so the
+          // unrenderable path below already handles it with nothing new.
+          q:
+            `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false and ` +
+            `(mimeType contains 'image/' or mimeType = 'application/pdf')`,
           fields: 'files(id,name,mimeType,size,modifiedTime,thumbnailLink)',
           orderBy: 'modifiedTime desc',
           pageSize: '200',
@@ -284,8 +293,9 @@ Deno.serve(async (req) => {
       if (!(meta.parents || []).includes(folderId)) {
         return json({ error: 'That file is not in this client\'s Drive folder.' }, 403)
       }
-      if (!String(meta.mimeType || '').startsWith('image/')) {
-        return json({ error: `"${meta.name}" is not an image.` }, 400)
+      const kind = String(meta.mimeType || '')
+      if (!kind.startsWith('image/') && kind !== 'application/pdf') {
+        return json({ error: `"${meta.name}" is not an image or a PDF.` }, 400)
       }
 
       // Two reasons to serve Drive's render rather than the original: the grid
