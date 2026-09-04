@@ -160,8 +160,13 @@ async function driveJson(path: string, params: Record<string, string>, token: st
   if (!res.ok) {
     const msg = body?.error?.message || `Drive returned ${res.status}`
     if (res.status === 404) {
+      // "as a Viewer" used to be the whole message and it sent somebody
+      // looking in the wrong place: Editor works exactly as well. Two of the
+      // folders this reads every day are shared as Editor. The scope here is
+      // read-only regardless, so a client granting write access changes
+      // nothing about what the CRM can do.
       throw new Error(
-        `${msg} — check the folder is shared with the service account's email as a Viewer.`
+        `${msg} — share the folder with the CRM service account address shown in the picker (Viewer or Editor both work), or paste the folder link again in case the id is wrong.`
       )
     }
     throw new Error(msg)
