@@ -149,6 +149,18 @@ What is on it:
 What you can do:
   - A button copies the whole guide as plain text.
 
+Ad approval link   /approve/:token
+----------------------------------
+NOT part of the CRM. This is what a business owner opens to approve creatives before they are published, from a private token in the link. It shows one image per ad and two buttons, Approve and Ask for a change. Read through the ad_approval_load function rather than the tables, so a token buys that one approval and nothing else. Never approve an ad on an owner's behalf.
+
+What is on it:
+  - One image per selected ad, at the single size chosen when the link was made.
+  - An Approve button and an Ask for a change button per ad, with a comment box that only appears once a change is asked for.
+  - The agency note, when one was written.
+
+What you can do:
+  - The owner approves or asks for changes per ad; the answer is written back and shows in Saved Ads next to the link.
+
 Client onboarding form   /onboarding/:token
 -------------------------------------------
 NOT part of the CRM. This is the form a client fills in, opened with a private token in the link, and it deliberately shows none of the agency navigation. Do not treat it as an admin page and do not fill it in on a client's behalf unless asked to.

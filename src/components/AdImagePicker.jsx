@@ -71,6 +71,7 @@ export default function AdImagePicker({
   const [dragging, setDragging] = useState(false)
   const [driveFiles, setDriveFiles] = useState(null)
   const [driveError, setDriveError] = useState('')
+  const [addingFolder, setAddingFolder] = useState(false)
   const [loadingDrive, setLoadingDrive] = useState(false)
   const [folderInput, setFolderInput] = useState('')
   const [serviceEmail, setServiceEmail] = useState('')
@@ -107,11 +108,11 @@ export default function AdImagePicker({
       .catch(() => {})
   }, [source, driveFolderId, serviceEmail])
 
-  const linkFolder = async () => {
+  const linkFolder = async (additional = false) => {
     setSavingFolder(true)
     setDriveError('')
     try {
-      const saved = await saveDriveFolder(client.id, folderInput)
+      const saved = await saveDriveFolder(client.id, folderInput, { additional })
       onFolderSaved?.(saved)
       setFolderInput('')
       setDriveFiles(null)
@@ -231,6 +232,46 @@ export default function AdImagePicker({
         </div>
       ) : (
         <div className="space-y-1.5">
+          {/* A SECOND FOLDER. Clients really do share more than one, and until
+              now there was one slot, so the second had nowhere to go and
+              simply never appeared. Both folders are read together, newest
+              file first across them. */}
+          {addingFolder ? (
+            <div className="flex gap-2">
+              <input
+                value={folderInput}
+                onChange={(e) => setFolderInput(e.target.value)}
+                placeholder="Another folder link — share it with the same address first"
+                className="flex-1 min-w-0 px-2 py-1.5 border border-slate-300 rounded text-xs"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  await linkFolder(true)
+                  setAddingFolder(false)
+                }}
+                disabled={savingFolder || !folderInput.trim()}
+                className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+              >
+                {savingFolder ? 'Linking...' : 'Add'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddingFolder(false)}
+                className="text-[11px] text-slate-500 underline"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAddingFolder(true)}
+              className="text-[11px] text-slate-500 underline hover:text-slate-800"
+            >
+              + Add another Drive folder
+            </button>
+          )}
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-slate-500">
               {loadingDrive

@@ -180,6 +180,21 @@ export const ROUTES = [
     actions: ['A button copies the whole guide as plain text.'],
   },
   {
+    path: '/approve/:token',
+    name: 'Ad approval link',
+    nav: null,
+    purpose:
+      'NOT part of the CRM. This is what a business owner opens to approve creatives before they are published, from a private token in the link. It shows one image per ad and two buttons, Approve and Ask for a change. Read through the ad_approval_load function rather than the tables, so a token buys that one approval and nothing else. Never approve an ad on an owner\'s behalf.',
+    contains: [
+      'One image per selected ad, at the single size chosen when the link was made.',
+      'An Approve button and an Ask for a change button per ad, with a comment box that only appears once a change is asked for.',
+      'The agency note, when one was written.',
+    ],
+    actions: [
+      'The owner approves or asks for changes per ad; the answer is written back and shows in Saved Ads next to the link.',
+    ],
+  },
+  {
     path: '/onboarding/:token',
     name: 'Client onboarding form',
     nav: null,

@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { copyText } from '../lib/intakeSummary'
 import { deleteSavedAd, fetchSavedAds } from '../lib/savedAds'
 import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
+import { SIZES } from '../lib/adCanvas'
+import { approvalStatusLine, onePerSet, sizesAvailable } from '../lib/adApproval'
+import { createApprovalLink, fetchApprovalLinks } from '../lib/adApprovalStore'
+import Button from './ui/Button'
 
 function when(date) {
   return date.toLocaleString(undefined, {
@@ -21,6 +25,14 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
   const [copied, setCopied] = useState('')
   const [busy, setBusy] = useState('')
   const [zipping, setZipping] = useState('')
+  // Ads ticked for sending to the owner, by stamp.
+  const [picked, setPicked] = useState(() => new Set())
+  // Which single size goes to the owner. One per ad, not three: an owner asked
+  // to approve four ads does not want twelve crops of them.
+  const [sendSize, setSendSize] = useState('square')
+  const [note, setNote] = useState('')
+  const [links, setLinks] = useState([])
+  const [made, setMade] = useState(null)
 
   const load = () =>
     fetchSavedAds(clientId)
@@ -32,6 +44,7 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
 
   useEffect(() => {
     load()
+    fetchApprovalLinks(clientId).then(setLinks).catch(() => setLinks([]))
   }, [clientId])
 
   const copyUrl = async (key, url) => {
@@ -84,6 +97,79 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
     }
   }
 
+  const chosen = (sets || []).filter((s) => picked.has(s.stamp))
+  // Only offer a size some selected ad actually has. Offering "Story" for a
+  // batch where nothing saved at 9:16 would send substitutes without saying so.
+  const available = sizesAvailable(chosen.length > 0 ? chosen : sets)
+  const toggle = (stamp) =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(stamp)) next.delete(stamp)
+      else next.add(stamp)
+      return next
+    })
+
+  /**
+   * One image from each ticked ad, in one archive.
+   *
+   * Zipped rather than several links fired in a row: browsers block or mangle
+   * rapid successive downloads from a single gesture, which is the same reason
+   * the per-set download already zips.
+   */
+  const downloadOneEach = async () => {
+    const items = onePerSet(chosen, sendSize)
+    if (items.length === 0) return
+    setZipping('batch')
+    setError('')
+    try {
+      const entries = []
+      const failed = []
+      for (const item of items) {
+        try {
+          const res = await fetch(item.url)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          // Stamped, so four ads do not become four files with one name that
+          // overwrite each other inside the archive.
+          entries.push({ sizeKey: `${item.sizeKey}-${item.stamp}`, blob: await res.blob() })
+        } catch {
+          failed.push(item.stamp)
+        }
+      }
+      const { blob } = await zipAdSizes({ clientName, entries })
+      if (!blob) throw new Error('None of the ads could be downloaded.')
+      saveBlob(blob, zipFileName(clientName))
+      if (failed.length > 0) {
+        setError(`${failed.length} of ${items.length} ads failed to download and are not in the zip.`)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setZipping('')
+    }
+  }
+
+  /** A link the owner opens to approve or ask for changes, ad by ad. */
+  const makeLink = async () => {
+    const items = onePerSet(chosen, sendSize)
+    if (items.length === 0) return
+    setBusy('link')
+    setError('')
+    try {
+      const link = await createApprovalLink({
+        clientId,
+        paths: items.map((i) => i.storage_path),
+        note,
+      })
+      setMade(link)
+      await copyUrl('made', link.url)
+      setLinks(await fetchApprovalLinks(clientId))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy('')
+    }
+  }
+
   const remove = async (set) => {
     if (!confirm(`Delete all ${set.ordered.length} sizes of this ad? This cannot be undone.`)) return
     setBusy(set.stamp)
@@ -108,6 +194,117 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
         </div>
       )}
 
+      {sets.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-slate-900">
+              Send to the owner for approval
+            </p>
+            <span className="text-xs text-slate-500">
+              {chosen.length === 0
+                ? 'Tick the ads you want to send'
+                : `${chosen.length} ad${chosen.length === 1 ? '' : 's'} selected`}
+            </span>
+            {sets.length > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setPicked((prev) =>
+                    prev.size === sets.length ? new Set() : new Set(sets.map((x) => x.stamp))
+                  )
+                }
+                className="text-xs text-slate-500 underline hover:text-slate-800"
+              >
+                {picked.size === sets.length ? 'Clear' : 'Select all'}
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* ONE size, not three. An owner approving four ads should see four
+                pictures; three crops each turns the question from "do you like
+                these" into "which one of these". */}
+            <label className="text-xs text-slate-600">
+              Size to send
+              <select
+                value={sendSize}
+                onChange={(e) => setSendSize(e.target.value)}
+                className="ml-1.5 px-2 py-1 border border-slate-300 rounded text-xs bg-white"
+              >
+                {SIZES.filter((sz) => available.includes(sz.key)).map((sz) => (
+                  <option key={sz.key} value={sz.key}>
+                    {sz.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              size="sm"
+              disabled={chosen.length === 0 || busy === 'link'}
+              onClick={makeLink}
+            >
+              {busy === 'link' ? 'Making the link…' : '🔗 Make an approval link'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={chosen.length === 0 || zipping === 'batch'}
+              onClick={downloadOneEach}
+            >
+              {zipping === 'batch' ? 'Zipping…' : '⬇ Download one of each'}
+            </Button>
+          </div>
+
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Optional note for the owner — e.g. these run next week, shout if anything is off"
+            className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
+          />
+
+          {made && (
+            <div className="rounded border border-green-200 bg-green-50 p-2">
+              <p className="text-xs font-medium text-green-900">
+                Link ready and copied. Send it to the owner.
+              </p>
+              <p className="mt-1 break-all font-mono text-[11px] text-green-800">{made.url}</p>
+            </div>
+          )}
+
+          {links.length > 0 && (
+            <div className="pt-1 space-y-1">
+              <p className="text-[11px] font-semibold text-slate-500">Links already sent</p>
+              {links.map((link) => (
+                <div key={link.token} className="flex flex-wrap items-center gap-2 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => copyUrl(link.token, link.url)}
+                    className="text-slate-600 underline hover:text-slate-900"
+                  >
+                    {copied === link.token ? 'Copied' : 'Copy link'}
+                  </button>
+                  <span className="text-slate-400">{when(new Date(link.created_at))}</span>
+                  {/* Whether they have looked, and what they said. "Not opened
+                      yet" is the difference between waiting on them and them
+                      never having got it. */}
+                  <span className="text-slate-600">
+                    {approvalStatusLine(link.items, Boolean(link.opened_at))}
+                  </span>
+                  {link.items.some((i) => i.comment) && (
+                    <span className="text-amber-700">
+                      {link.items
+                        .filter((i) => i.comment)
+                        .map((i) => `“${i.comment}”`)
+                        .join(' ')}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {sets.length === 0 ? (
         <div className="text-center py-10">
           <p className="text-3xl mb-2">🖼️</p>
@@ -121,8 +318,15 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
         sets.map((set) => (
           <div key={set.stamp} className="border border-slate-200 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2 gap-2">
-              <p className="text-xs font-medium text-slate-600 truncate">
-                {when(set.savedAt)}
+              <p className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={picked.has(set.stamp)}
+                  onChange={() => toggle(set.stamp)}
+                  className="flex-shrink-0"
+                  title="Send this ad to the owner"
+                />
+                <span className="truncate">{when(set.savedAt)}</span>
                 {set.recipe?.hook && (
                   <span className="ml-2 font-normal text-slate-500">{set.recipe.hook}</span>
                 )}

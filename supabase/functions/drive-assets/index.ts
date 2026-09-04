@@ -209,7 +209,8 @@ Deno.serve(async (req) => {
     // caller cannot name a folder of their own and have the service account
     // read it.
     const res = await fetch(
-      `${supabaseUrl}/rest/v1/clients?select=id,name,drive_folder_id&id=eq.${encodeURIComponent(clientId)}`,
+      `${supabaseUrl}/rest/v1/clients?select=id,name,drive_folder_id,extra_drive_folder_ids` +
+        `&id=eq.${encodeURIComponent(clientId)}`,
       { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
     )
     const client = (await res.json())?.[0]
@@ -219,8 +220,16 @@ Deno.serve(async (req) => {
     // deployment.
     if (!client) return json({ error: 'That client was not found.' }, 400)
 
-    const folderId = (client.drive_folder_id || '').trim()
-    if (!folderId) {
+    // EVERY folder linked for this client, not just the first.
+    //
+    // drive_folder_id came first and stays the primary; extra_drive_folder_ids
+    // holds any others. A client really does share more than one -- Plumbquick
+    // shared a second -- and with one column there was nowhere to put it.
+    const folderIds = [client.drive_folder_id, ...(client.extra_drive_folder_ids || [])]
+      .map((f) => String(f || '').trim())
+      .filter(Boolean)
+    const folderId = folderIds[0] || ''
+    if (folderIds.length === 0) {
       return json(
         { error: `${client.name} has no Drive folder linked yet.`, needs_folder: true },
         400
@@ -250,8 +259,15 @@ Deno.serve(async (req) => {
           // the drive-video function. That matters because Storage on the free
           // plan refuses anything over 50MB, and ad clips are bigger. Drive
           // renders a poster frame for them, which is what fills the grid.
+          //
+          // The parents clause is OR'd across every linked folder, in ONE
+          // request rather than one per folder: Drive charges the same quota
+          // either way, and a single query keeps the newest-first ordering
+          // meaningful ACROSS folders -- which is exactly what somebody who
+          // just dropped a file into one of them is looking for.
           q:
-            `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false and ` +
+            `(${folderIds.map((id) => `'${id.replace(/'/g, "\\'")}' in parents`).join(' or ')}) and ` +
+            `trashed = false and ` +
             `(mimeType contains 'image/' or mimeType contains 'video/' or ` +
             `mimeType = 'application/pdf')`,
           fields: 'files(id,name,mimeType,size,modifiedTime,thumbnailLink)',
@@ -298,8 +314,10 @@ Deno.serve(async (req) => {
       // the service account can see — including another client's folder, since
       // one account is shared across all of them. The client_id in the request
       // has to actually own the file.
-      if (!(meta.parents || []).includes(folderId)) {
-        return json({ error: 'That file is not in this client\'s Drive folder.' }, 403)
+      // Against EVERY linked folder, or a file in the second folder would be
+      // listed and then refused when something tried to read it.
+      if (!(meta.parents || []).some((p: string) => folderIds.includes(p))) {
+        return json({ error: 'That file is not in this client\'s Drive folders.' }, 403)
       }
       const kind = String(meta.mimeType || '')
       const allowed =

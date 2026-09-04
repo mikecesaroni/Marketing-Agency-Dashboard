@@ -137,16 +137,75 @@ export async function resolveImageSrc(clientId, path) {
   return supabase.storage.from('client-files').getPublicUrl(path).data.publicUrl
 }
 
-/** Persists the folder against the client. Returns the parsed id actually saved. */
-export async function saveDriveFolder(clientId, input) {
+/**
+ * Persists a folder against the client. Returns the parsed id actually saved.
+ *
+ * The FIRST folder goes in drive_folder_id and any others in
+ * extra_drive_folder_ids. That split is not cosmetic: drive-assets,
+ * drive-video and drive-video-register all read drive_folder_id, so a client
+ * with folders but a null primary would break each of them. Keeping the
+ * primary populated makes the extras purely additive.
+ */
+export async function saveDriveFolder(clientId, input, { additional = false } = {}) {
   const folderId = input.trim() ? parseFolderId(input) : ''
   if (input.trim() && !folderId) {
     throw new Error('That does not look like a Drive folder link or ID.')
   }
-  const { error } = await supabase
+
+  if (!additional) {
+    const { error } = await supabase
+      .from('clients')
+      .update({ drive_folder_id: folderId || null })
+      .eq('id', clientId)
+    if (error) throw new Error(error.message)
+    return folderId
+  }
+
+  if (!folderId) throw new Error('Paste the second folder\u2019s link or ID.')
+
+  const { data, error: readErr } = await supabase
     .from('clients')
-    .update({ drive_folder_id: folderId || null })
+    .select('drive_folder_id, extra_drive_folder_ids')
     .eq('id', clientId)
+    .single()
+  if (readErr) throw new Error(readErr.message)
+
+  // A folder already linked is not an error worth raising -- somebody pasting
+  // the same link twice means "make sure this is connected", and it is.
+  const already = [data.drive_folder_id, ...(data.extra_drive_folder_ids || [])].filter(Boolean)
+  if (already.includes(folderId)) return folderId
+
+  // With no primary yet, this IS the primary. Otherwise it joins the extras.
+  const patch = data.drive_folder_id
+    ? { extra_drive_folder_ids: [...(data.extra_drive_folder_ids || []), folderId] }
+    : { drive_folder_id: folderId }
+
+  const { error } = await supabase.from('clients').update(patch).eq('id', clientId)
   if (error) throw new Error(error.message)
   return folderId
+}
+
+/** Every folder linked for this client, primary first. */
+export async function fetchDriveFolders(clientId) {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('drive_folder_id, extra_drive_folder_ids')
+    .eq('id', clientId)
+    .single()
+  if (error) throw new Error(error.message)
+  return [data.drive_folder_id, ...(data.extra_drive_folder_ids || [])].filter(Boolean)
+}
+
+/** Unlinks one folder, whichever slot it is in. */
+export async function removeDriveFolder(clientId, folderId) {
+  const folders = await fetchDriveFolders(clientId)
+  const left = folders.filter((f) => f !== folderId)
+  // The first survivor becomes the primary, so the column is never left null
+  // while other folders remain.
+  const { error } = await supabase
+    .from('clients')
+    .update({ drive_folder_id: left[0] || null, extra_drive_folder_ids: left.slice(1) })
+    .eq('id', clientId)
+  if (error) throw new Error(error.message)
+  return left
 }
