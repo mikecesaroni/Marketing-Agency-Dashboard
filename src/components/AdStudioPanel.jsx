@@ -7,6 +7,7 @@ import { extractPalette } from '../lib/logoColours'
 import Button from './ui/Button'
 import SavedAdsGallery from './SavedAdsGallery'
 import LeadFormStudio from './LeadFormStudio'
+import ResearchPanel from './ResearchPanel'
 import PublishToMetaPanel from './PublishToMetaPanel'
 import { fetchPublishedAds } from '../lib/metaPublish'
 import { recipeToContent, saveAdRecipe } from '../lib/savedAds'
@@ -281,6 +282,8 @@ function Tabs({ tab, setTab }) {
   return (
     <div className="flex gap-1 border-b border-slate-200 -mt-1">
       {[
+        // First, because looking at what already works is where an ad starts.
+        ['research', 'Research'],
         ['design', 'Design'],
         ['saved', 'Saved ads'],
         // Before Publish on purpose: the form has to exist first in practice,
@@ -818,6 +821,15 @@ export default function AdStudioPanel({ client, intake, seed }) {
           onEdit={editSaved}
           onPublish={startPublish}
         />
+      </div>
+    )
+  }
+
+  if (tab === 'research') {
+    return (
+      <div className="space-y-3">
+        <Tabs tab={tab} setTab={setTab} />
+        <ResearchPanel client={client} intake={intake} />
       </div>
     )
   }
