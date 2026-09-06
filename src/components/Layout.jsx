@@ -1,4 +1,8 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { ROLE_LABELS, visibleNav } from '../lib/access'
+import ChangePasswordModal from './ChangePasswordModal'
 import {
   IconDashboard,
   IconClients,
@@ -41,11 +45,101 @@ const NAV_GROUPS = [
       { to: '/guide', label: 'Guide', short: 'Guide', Icon: IconCompass },
     ],
   },
+  {
+    label: 'Admin',
+    items: [
+      // Admin-only, and filtered out of a VA's sidebar by visibleNav below.
+      // Kept off the phone tabs: nine tabs do not fit, and adding a login is
+      // a desk job.
+      { to: '/team', label: 'Team', short: 'Team', Icon: IconTeam, mobile: false },
+    ],
+  },
 ]
 
-const MOBILE_ITEMS = NAV_GROUPS.flatMap((g) => g.items)
+function IconTeam({ className = 'h-5 w-5' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M15.5 14.2a4.5 4.5 0 0 1 5 4.3" />
+    </svg>
+  )
+}
+
+function initials(profile) {
+  const src = profile?.name || profile?.email || '?'
+  return src
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('')
+}
+
+// The signed-in person: who, as what, and the two things they can do about it.
+// One control for every screen size, in the header, so a phone has it too.
+function UserMenu() {
+  const { profile, role, signOut } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [changing, setChanging] = useState(false)
+  if (!profile) return null
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={profile.email}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white hover:bg-slate-700"
+      >
+        {initials(profile)}
+      </button>
+      {open && (
+        <>
+          <button className="fixed inset-0 z-30 cursor-default" aria-label="Close menu" onClick={() => setOpen(false)} />
+          <div
+            role="menu"
+            className="absolute right-0 z-40 mt-2 w-60 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg"
+          >
+            <div className="px-2.5 py-2">
+              <p className="truncate text-sm font-medium text-slate-900">{profile.name || profile.email}</p>
+              <p className="truncate text-xs text-slate-500">{profile.email}</p>
+              <p className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                {ROLE_LABELS[role] || role}
+              </p>
+            </div>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                setChanging(true)
+              }}
+              className="block w-full rounded px-2.5 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Change password
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => signOut()}
+              className="block w-full rounded px-2.5 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Sign out
+            </button>
+          </div>
+        </>
+      )}
+      <ChangePasswordModal isOpen={changing} onClose={() => setChanging(false)} />
+    </div>
+  )
+}
 
 export default function Layout({ title, subtitle, actions, children }) {
+  const { role } = useAuth()
+  // Only the pages this role may open. A VA gets no Money > Payments row and
+  // no Admin group at all, and RequireAuth turns them away from the URL too.
+  const groups = visibleNav(NAV_GROUPS, role)
+  const mobileItems = groups.flatMap((g) => g.items).filter((i) => i.mobile !== false)
   return (
     <div className="min-h-screen bg-slate-50">
       {/* DESKTOP SIDEBAR */}
@@ -64,7 +158,7 @@ export default function Layout({ title, subtitle, actions, children }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-5">
-          {NAV_GROUPS.map((group, i) => (
+          {groups.map((group, i) => (
             <div key={group.label || i} className="space-y-0.5">
               {group.label && (
                 <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
@@ -125,7 +219,10 @@ export default function Layout({ title, subtitle, actions, children }) {
             {/* Shrinkable on a phone so a long actions row scrolls inside itself
                 instead of widening the document; fixed from md up where
                 there is room for it. */}
-            {actions && <div className="flex min-w-0 gap-2 md:flex-shrink-0">{actions}</div>}
+            <div className="flex min-w-0 items-center gap-2 md:flex-shrink-0">
+              {actions && <div className="flex min-w-0 gap-2">{actions}</div>}
+              <UserMenu />
+            </div>
           </div>
         </header>
 
@@ -141,7 +238,7 @@ export default function Layout({ title, subtitle, actions, children }) {
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 backdrop-blur md:hidden"
       >
-        {MOBILE_ITEMS.map(({ to, short, Icon, end }) => (
+        {mobileItems.map(({ to, short, Icon, end }) => (
           <NavLink
             key={to}
             to={to}

@@ -3,6 +3,8 @@ import { useParams, useLocation, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { fetchAdDaily, summariseAds } from '../lib/queries'
 import Layout from '../components/Layout'
+import { useAuth } from '../context/AuthContext'
+import { isAdmin } from '../lib/access'
 import DeleteClientButton from '../components/DeleteClientButton'
 import Modal from '../components/Modal'
 import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
@@ -59,6 +61,7 @@ function useHashScroll(ready) {
 export default function ClientDetailPage() {
   const { clientId } = useParams()
   const navigate = useNavigate()
+  const { role } = useAuth()
   const [client, setClient] = useState(null)
   const [tasks, setTasks] = useState([])
   const [newTask, setNewTask] = useState('')
@@ -716,10 +719,14 @@ export default function ClientDetailPage() {
           />
         </div>
 
-        {/* PAYMENTS */}
-        <div className="mb-6 md:mb-8">
-          <PaymentTracker client={client} onClientUpdate={loadClientData} />
-        </div>
+        {/* PAYMENTS. Admin only: the database would hand a VA an empty tracker
+            anyway (row-level security on payments), and an empty money panel
+            reads as "this client has never paid". */}
+        {isAdmin(role) && (
+          <div className="mb-6 md:mb-8">
+            <PaymentTracker client={client} onClientUpdate={loadClientData} />
+          </div>
+        )}
 
         {/* MODALS */}
         <Modal

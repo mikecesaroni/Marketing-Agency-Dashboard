@@ -1,84 +1,100 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+
+// Supabase's own wording is "Invalid login credentials", which reads like a
+// server log. The person typing already knows what they typed.
+function friendly(message) {
+  if (/invalid login credentials/i.test(message)) return 'That email and password do not match.'
+  if (/email not confirmed/i.test(message)) return 'This login has not been activated yet. Ask an admin.'
+  if (/rate limit|too many/i.test(message)) return 'Too many tries. Wait a minute and try again.'
+  return message
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const { session, loading, signIn } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = location.state?.from && location.state.from !== '/login' ? location.state.from : '/'
 
-  const handleSubmit = async (e) => {
+  // Already in: straight through. Nobody should see a login form twice.
+  if (!loading && session) return <Navigate to={from} replace />
+
+  const submit = async (e) => {
     e.preventDefault()
     setError('')
-    setLoading(true)
-
-    const { error } = await login(email, password)
-
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-    } else {
-      navigate('/dashboard')
+    setBusy(true)
+    const { error: err } = await signIn(email, password)
+    if (err) {
+      setError(friendly(err.message))
+      setBusy(false)
+      return
     }
+    navigate(from, { replace: true })
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="max-w-sm w-full bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-        <h1 className="text-2xl font-semibold text-slate-900 mb-6 text-center">
-          Client Dashboard
-        </h1>
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+      <div className="max-w-sm w-full">
+        <div className="flex items-center gap-2.5 mb-6 justify-center">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-base font-bold text-white">
+            W
+          </span>
+          <p className="text-sm font-semibold text-white tracking-tight">The Working Class Marketing CRM</p>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={submit} className="bg-white rounded-xl shadow-lg p-7 space-y-4">
+          <h1 className="text-lg font-semibold text-slate-900">Sign in</h1>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="login-email">
               Email
             </label>
             <input
+              id="login-email"
               type="email"
+              autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400"
-              placeholder="you@example.com"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
+              autoFocus
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="login-password">
               Password
             </label>
             <input
+              id="login-password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400"
-              placeholder="••••••••"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
-            </div>
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
           )}
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full bg-slate-900 text-white py-2 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            disabled={busy}
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
           >
-            {loading ? 'Logging in...' : 'Log in'}
+            {busy ? 'Signing in…' : 'Sign in'}
           </button>
-        </form>
 
-        <p className="text-xs text-slate-500 text-center mt-6">
-          This dashboard is for you only. Enter the email and password you created in Supabase.
-        </p>
+          <p className="text-[11px] text-slate-500 text-center">
+            Logins are made by an admin on the Team page. Forgot your password? Ask an admin to reset it.
+          </p>
+        </form>
       </div>
     </div>
   )

@@ -10,6 +10,9 @@ import AiSearchPage from './pages/AiSearchPage'
 import ClientOnboardingPage from './pages/ClientOnboardingPage'
 import AdApprovalPage from './pages/AdApprovalPage'
 import AgentGuidePage from './pages/AgentGuidePage'
+import LoginPage from './pages/LoginPage'
+import TeamPage from './pages/TeamPage'
+import RequireAuth from './components/RequireAuth'
 
 export default function App() {
   return (
@@ -21,18 +24,25 @@ export default function App() {
       {/* Public, like the onboarding link: the token is the credential, and
           the page reads through ad_approval_load rather than the tables. */}
       <Route path="/approve/:token" element={<AdApprovalPage />} />
-      <Route path="/" element={<HomePage />} />
-      <Route path="/dashboard" element={<HomePage />} />
-      <Route path="/clients" element={<ClientsPage />} />
-      <Route path="/client/:clientId" element={<ClientDetailPage />} />
-      <Route path="/deliverables" element={<DeliverablesPage />} />
-      <Route path="/payments" element={<PaymentsPage />} />
-      <Route path="/reports" element={<ReportsPage />} />
-      <Route path="/sops" element={<SopsPage />} />
-      <Route path="/ai-search" element={<AiSearchPage />} />
-      {/* How to drive the place. Also served as plain text at /llms.txt for
-          anything that does not run JavaScript -- see src/lib/agentGuide.js. */}
-      <Route path="/guide" element={<AgentGuidePage />} />
+      <Route path="/login" element={<LoginPage />} />
+      {/* Everything else needs a login. RequireAuth also turns a VA away from
+          the admin-only paths (see src/lib/access.js), so /payments and /team
+          need no guard of their own. */}
+      <Route element={<RequireAuth />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/dashboard" element={<HomePage />} />
+        <Route path="/clients" element={<ClientsPage />} />
+        <Route path="/client/:clientId" element={<ClientDetailPage />} />
+        <Route path="/deliverables" element={<DeliverablesPage />} />
+        <Route path="/payments" element={<PaymentsPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/sops" element={<SopsPage />} />
+        <Route path="/ai-search" element={<AiSearchPage />} />
+        <Route path="/team" element={<TeamPage />} />
+        {/* How to drive the place. Also served as plain text at /llms.txt for
+            anything that does not run JavaScript -- see src/lib/agentGuide.js. */}
+        <Route path="/guide" element={<AgentGuidePage />} />
+      </Route>
     </Routes>
   )
 }

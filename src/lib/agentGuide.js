@@ -34,7 +34,7 @@ export const GUIDE_TITLE = 'Navigating this CRM'
 
 export const GUIDE_INTRO = [
   'This is the internal CRM for a marketing agency that runs paid advertising for home-services businesses — HVAC, plumbing, electrical and similar trades. Each of those businesses is a "client". The agency runs their Meta (Facebook and Instagram) ads, their Google Local Services Ads, their Google Business Profile, and for some of them a GoHighLevel account that handles automated texts and calls.',
-  'Everything is one screen deep. There is no login and no per-user permission: whoever opens the CRM sees all of it, and anything on screen can be changed by whoever is looking at it. Treat that as a reason for care rather than permission — a wrong edit here is a wrong number in a real client report.',
+  'Everything is one screen deep, behind a login. There are two roles: an admin sees everything; a VA sees everything except Payments, the Team page and the per-client payment tracker, and cannot read payment, expense or Stripe data at all — the database refuses it, not just the menu. Anything on screen can be changed by whoever is looking at it. Treat that as a reason for care rather than permission — a wrong edit here is a wrong number in a real client report.',
   'Numbers about ad performance are not live. A scheduled job copies yesterday from Meta each morning, so today is usually absent and the freshest figure is yesterday. Money is different: payments come from Stripe, and Stripe is treated as the truth whenever the CRM disagrees with it.',
 ]
 
@@ -169,6 +169,30 @@ export const ROUTES = [
     actions: [
       '"Run the scan" asks 15 real buyer questions with live web search. It takes a couple of minutes and shows its progress; do not assume it has hung.',
       'A scan attached to a client becomes their baseline, so a later scan can be measured against it.',
+    ],
+  },
+  {
+    path: '/login',
+    name: 'Sign in',
+    nav: null,
+    purpose:
+      'The only page an unsigned visitor sees. Email and password; both are made by an admin on the Team page, and there is no self-signup and no reset-by-email — a forgotten password is reset by an admin.',
+    contains: ['An email and password form.'],
+    actions: ['"Sign in" goes to the page that was asked for, or the dashboard.'],
+  },
+  {
+    path: '/team',
+    name: 'Team',
+    nav: 'Team',
+    purpose:
+      'Admins only. Who can sign in and as what. Adds a person with a temporary password (shown once, handed over by the admin), changes a role, resets a password, removes a login.',
+    contains: [
+      'Every member with their role and last sign-in.',
+      '"Add someone": name, email, role, temporary password with a generator.',
+    ],
+    actions: [
+      'Changing the Role dropdown applies at once. Nobody can demote or remove themself, and the last admin cannot be demoted or removed.',
+      '"Reset password" makes a new temporary one and shows it once. "Remove" signs the person out for good.',
     ],
   },
   {
