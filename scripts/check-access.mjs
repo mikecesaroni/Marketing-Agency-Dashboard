@@ -7,7 +7,10 @@
 
 import {
   ADMIN_ONLY,
+  LOGIN_REQUIRED,
   canOpen,
+  canOpenWithoutLogin,
+  navWithoutLogin,
   memberChangeProblem,
   passwordProblem,
   visibleNav,
@@ -55,6 +58,18 @@ check(
 )
 check('VA nav keeps the Money label for Reports', visibleNav(NAV, 'va')[1].label, 'Money')
 check('nobody logged in sees no nav', visibleNav(NAV, null), [])
+
+// --- login switched off --------------------------------------------------------
+
+check('the switch is currently off', LOGIN_REQUIRED, false)
+check('without login, payments opens', canOpenWithoutLogin('/payments'), true)
+check('without login, team does not', canOpenWithoutLogin('/team'), false)
+check('without login, a team sub-path does not', canOpenWithoutLogin('/team/x'), false)
+check(
+  'without login the nav keeps Money and drops the Admin group',
+  navWithoutLogin(NAV).map((g) => g.items.map((i) => i.to)),
+  [['/', '/clients'], ['/payments', '/reports']]
+)
 
 // --- passwords ---------------------------------------------------------------
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { ROLE_LABELS, visibleNav } from '../lib/access'
+import { LOGIN_REQUIRED, ROLE_LABELS, navWithoutLogin, visibleNav } from '../lib/access'
 import ChangePasswordModal from './ChangePasswordModal'
 import {
   IconDashboard,
@@ -83,7 +83,7 @@ function UserMenu() {
   const { profile, role, signOut } = useAuth()
   const [open, setOpen] = useState(false)
   const [changing, setChanging] = useState(false)
-  if (!profile) return null
+  if (!LOGIN_REQUIRED || !profile) return null
   return (
     <div className="relative flex-shrink-0">
       <button
@@ -138,7 +138,9 @@ export default function Layout({ title, subtitle, actions, children }) {
   const { role } = useAuth()
   // Only the pages this role may open. A VA gets no Money > Payments row and
   // no Admin group at all, and RequireAuth turns them away from the URL too.
-  const groups = visibleNav(NAV_GROUPS, role)
+  // With login switched off there is no role: everyone sees everything except
+  // the Team page.
+  const groups = LOGIN_REQUIRED ? visibleNav(NAV_GROUPS, role) : navWithoutLogin(NAV_GROUPS)
   const mobileItems = groups.flatMap((g) => g.items).filter((i) => i.mobile !== false)
   return (
     <div className="min-h-screen bg-slate-50">

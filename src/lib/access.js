@@ -16,6 +16,15 @@
 // Pure on purpose: scripts/check-access.mjs imports it, so nothing here may
 // touch the DOM, React or supabaseClient.
 
+// THE SWITCH. false: no sign-in, everyone who opens the CRM sees all of it,
+// exactly as before logins existed. true: the login page, the two roles and
+// the Team page all come back.
+//
+// Flipping it to true needs one database statement as well, to drop the anon
+// policies that migration open_access_while_login_is_off added (the statement
+// is in that migration's header). Flipping it to false needs the reverse.
+export const LOGIN_REQUIRED = false
+
 export const ROLES = ['admin', 'va']
 
 export const ROLE_LABELS = { admin: 'Admin', va: 'VA' }
@@ -42,6 +51,22 @@ export function canOpen(role, path) {
 export function visibleNav(groups, role) {
   return groups
     .map((g) => ({ ...g, items: g.items.filter((i) => canOpen(role, i.to)) }))
+    .filter((g) => g.items.length > 0)
+}
+
+/**
+ * What a visitor may open while LOGIN_REQUIRED is false: everything except
+ * the Team page, which manages logins that nobody is using, and whose
+ * function refuses a caller with no admin session anyway.
+ */
+export function canOpenWithoutLogin(path) {
+  const p = String(path || '')
+  return !(p === '/team' || p.startsWith('/team/'))
+}
+
+export function navWithoutLogin(groups) {
+  return groups
+    .map((g) => ({ ...g, items: g.items.filter((i) => canOpenWithoutLogin(i.to)) }))
     .filter((g) => g.items.length > 0)
 }
 

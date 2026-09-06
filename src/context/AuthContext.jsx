@@ -13,6 +13,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { LOGIN_REQUIRED } from '../lib/access'
 
 const AuthContext = createContext(null)
 
@@ -75,7 +76,9 @@ export function AuthProvider({ children }) {
     session: session || null,
     user: session?.user || null,
     profile,
-    role: profile?.role || null,
+    // With login switched off nobody has a profile, and every page that asks
+    // "is this an admin" (the client page's payment tracker) must say yes.
+    role: LOGIN_REQUIRED ? profile?.role || null : 'admin',
     loading: session === undefined || (Boolean(userId) && !profileLoaded),
     profileError,
     signIn,

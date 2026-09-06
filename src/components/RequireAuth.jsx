@@ -12,11 +12,17 @@
 
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { canOpen } from '../lib/access'
+import { LOGIN_REQUIRED, canOpen, canOpenWithoutLogin } from '../lib/access'
 
 export default function RequireAuth({ children }) {
   const { loading, session, profile, profileError, role, signOut } = useAuth()
   const location = useLocation()
+
+  // Login switched off: straight through, minus the Team page.
+  if (!LOGIN_REQUIRED) {
+    if (!canOpenWithoutLogin(location.pathname)) return <Navigate to="/" replace />
+    return children ?? <Outlet />
+  }
 
   if (loading) {
     return (

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { LOGIN_REQUIRED } from '../lib/access'
 
 // Supabase's own wording is "Invalid login credentials", which reads like a
 // server log. The person typing already knows what they typed.
@@ -21,8 +22,9 @@ export default function LoginPage() {
   const location = useLocation()
   const from = location.state?.from && location.state.from !== '/login' ? location.state.from : '/'
 
-  // Already in: straight through. Nobody should see a login form twice.
-  if (!loading && session) return <Navigate to={from} replace />
+  // Login switched off, or already in: straight through. Nobody should see a
+  // login form they do not need.
+  if (!LOGIN_REQUIRED || (!loading && session)) return <Navigate to={from} replace />
 
   const submit = async (e) => {
     e.preventDefault()
