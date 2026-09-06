@@ -28,7 +28,7 @@ export const TEAM_EMAIL = 'ejretreats1@gmail.com'
 
 const yes = (v) => v === true || /^(yes|true|y)$/i.test(String(v || '').trim())
 
-// ctx: { client, intake, link, ghl, driveUrl, onboardingUrl, closerName }
+// ctx: { client, intake, link, ghl, driveUrl, onboardingUrl, crmDriveEmail, closerName }
 export const CALL_SECTIONS = [
   {
     key: 'before',
@@ -290,14 +290,27 @@ function firstName(ctx) {
 export function preCallEmail(ctx) {
   const name = firstName(ctx)
   const business = String(ctx.client?.name || 'your business').trim()
+  const formLine = ctx.onboardingUrl
+    ? `   ${ctx.onboardingUrl}`
+    : '   (link to follow)'
+  // The photos live in THE CLIENT'S Drive, shared with the CRM's Drive address
+  // (the client keeps them; we read them). Once a folder is linked the ask is
+  // "keep adding"; before that it is "make one, share it, paste the link in
+  // the form", and the address is the one thing they could not guess.
+  const share = ctx.crmDriveEmail
+    ? `share it with ${ctx.crmDriveEmail} (Viewer is fine)`
+    : 'share it with the Drive address in the form'
+  const photosLines = ctx.driveUrl
+    ? `2. Photos. Keep adding to the folder you shared with us: real jobs, your trucks, you and your team. Phone photos are perfect.\n   ${ctx.driveUrl}`
+    : `2. Photos. In Google Drive, make a folder called "${business} Photos", drop in anything you have of real jobs, your trucks, you and your team (phone photos are perfect), ${share}, and paste the folder link into the form where it asks for it.`
   const lines = [
-    `Hi${name ? ` ${name}` : ''},`,
+    `Hi ${name || 'there'},`,
     '',
     `Looking forward to our onboarding call for ${business}. Two quick things before then, and they are the only two:`,
     '',
-    `1. Our onboarding form. About ten minutes, and it is how we learn what you sell, who you sell it to and what makes you different, so the ads sound like you.${ctx.onboardingUrl ? `\n   ${ctx.onboardingUrl}` : ''}`,
+    `1. Our onboarding form. About ten minutes, and it is how we learn what you sell, who you sell it to and what makes you different, so the ads sound like you.\n${formLine}`,
     '',
-    `2. Photos. Anything you have of real jobs, your trucks, you and your team. Phone photos are perfect. Drop them in this folder and keep adding as you go.${ctx.driveUrl ? `\n   ${ctx.driveUrl}` : ''}`,
+    photosLines,
     '',
     'On the call we will get everything else set up together on screen, so there is nothing to prepare beyond that. Please join from the Zoom app rather than the browser so I can drive your screen when we get into the account settings.',
     '',

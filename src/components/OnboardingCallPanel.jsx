@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Button, Card } from './ui'
 import { copyText } from '../lib/intakeSummary'
+import { driveServiceAccount } from '../lib/driveAssets'
 import {
   COPY_BLOCKS,
   callProgress,
@@ -30,6 +31,7 @@ export default function OnboardingCallPanel({ client, intake }) {
   const [ghl, setGhl] = useState(null)
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState('')
+  const [crmDriveEmail, setCrmDriveEmail] = useState('')
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
@@ -55,6 +57,12 @@ export default function OnboardingCallPanel({ client, intake }) {
     load()
   }, [load])
 
+  useEffect(() => {
+    // The email still reads without it; the address is the one thing the
+    // client could not guess, so it is worth trying and not worth blocking on.
+    driveServiceAccount().then(setCrmDriveEmail).catch(() => setCrmDriveEmail(''))
+  }, [])
+
   const ctx = useMemo(
     () => ({
       client,
@@ -63,9 +71,25 @@ export default function OnboardingCallPanel({ client, intake }) {
       ghl,
       onboardingUrl: link?.token ? `${window.location.origin}/onboarding/${link.token}` : '',
       driveUrl: client?.drive_folder_id ? `https://drive.google.com/drive/folders/${client.drive_folder_id}` : '',
+      crmDriveEmail,
     }),
-    [client, intake, link, ghl]
+    [client, intake, link, ghl, crmDriveEmail]
   )
+
+  // The pre-call email is the first thing that goes to a new client, so this
+  // is usually the moment the onboarding link comes into existence. Without
+  // this the email said "our onboarding form" and carried no link.
+  const ensureLink = async () => {
+    if (link?.token) return link
+    const { data, error: err } = await supabase
+      .from('onboarding_links')
+      .insert({ client_id: client.id })
+      .select('token, ghl_submitted_at, intake_submitted_at, revoked')
+      .single()
+    if (err) throw err
+    setLink(data)
+    return data
+  }
 
   const sections = useMemo(() => visibleSections(ctx), [ctx])
   const progress = useMemo(() => callProgress(ctx, done), [ctx, done])
@@ -102,7 +126,17 @@ export default function OnboardingCallPanel({ client, intake }) {
   const copy = async (step) => {
     const fn = COPY_BLOCKS[step.copy]
     if (!fn) return
-    const text = step.copy === 'recapEmail' ? fn(ctx, done) : fn(ctx)
+    let c = ctx
+    if (step.copy === 'preCallEmail') {
+      try {
+        const l = await ensureLink()
+        c = { ...ctx, link: l, onboardingUrl: `${window.location.origin}/onboarding/${l.token}` }
+      } catch (err) {
+        setError(`Could not make the onboarding link: ${err.message}`)
+        return
+      }
+    }
+    const text = step.copy === 'recapEmail' ? fn(c, done) : fn(c)
     await copyText(text)
     setCopied(step.key)
     setTimeout(() => setCopied(''), 1500)

@@ -88,10 +88,18 @@ const ctx = {
 const pre = preCallEmail(ctx)
 check('pre-call email greets by first name', pre.startsWith('Hi Travis,'), true)
 check('pre-call email carries the form link', pre.includes('https://crm.example/onboarding/tok'), true)
-check('pre-call email carries the photos folder', pre.includes('https://drive.google.com/drive/folders/abc'), true)
+check('folder already linked: keep adding to it', pre.includes('Keep adding to the folder you shared') && pre.includes('https://drive.google.com/drive/folders/abc'), true)
 check('pre-call email asks for the Zoom app', /Zoom app/.test(pre), true)
 check('pre-call email never lists access requests', /admin|Business Manager|Search Console|DNS/i.test(pre), false)
-check('no name, no dangling space', preCallEmail({ client: { name: 'X' }, intake: {} }).startsWith('Hi,'), true)
+
+const fresh2 = { client: { name: 'Dynamic Flow' }, intake: {}, crmDriveEmail: 'crm-drive@example.iam.gserviceaccount.com' }
+const preNew = preCallEmail(fresh2)
+check('no name: "Hi there," not "Hi ,"', preNew.startsWith('Hi there,'), true)
+check('no folder yet: tells them to make one named for the business', preNew.includes('"Dynamic Flow Photos"'), true)
+check('no folder yet: tells them to share it with the CRM Drive address', preNew.includes('share it with crm-drive@example.iam.gserviceaccount.com'), true)
+check('no folder yet: tells them to paste the link into the form', /paste the folder link into the form/.test(preNew), true)
+check('no link yet: says the link follows rather than leaving a blank', /\(link to follow\)/.test(preNew), true)
+check('CRM address unknown: still says to share, via the form', /share it with the Drive address in the form/.test(preCallEmail({ client: { name: 'X' }, intake: {} })), true)
 
 const opening = callOpening(ctx)
 check('opening names the closer', opening.includes('Ethan'), true)
