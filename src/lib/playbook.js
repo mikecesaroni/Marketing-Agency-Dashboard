@@ -135,8 +135,10 @@ mostly spend with no job.
 
 === CREATIVE DIRECTION: REAL BEATS PRODUCED, AND VIDEO BEATS STILL ===
 Our own numbers first (ad_daily, 40 ads with $50+ behind them, Sept 2026):
-video $38 a lead at 3.05% CTR over $13,627; image $66 a lead at 1.43% CTR over
-$4,972. Video won on every client that ran both. Within video, retention
+video $37 a lead at 2.99% CTR over $10,083, and 1 ad in 14 produced nothing;
+image $53 a lead at 2.32% CTR over $8,573, and 7 ads in 26 produced nothing.
+Video paid a higher CPM and was still cheaper at five of the seven clients
+that ran both; the two exceptions each had one clip that held nobody. Within video, retention
 tracked cost: the winners held 11-18% of viewers to ThruPlay and averaged
 6-10 seconds watched; the losers held 6-7% and 3-4 seconds. Industry
 benchmarks put cold ThruPlay at 18-28%, so even our best clips have room.

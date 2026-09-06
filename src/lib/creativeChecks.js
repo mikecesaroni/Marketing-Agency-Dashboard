@@ -2,13 +2,15 @@
 //
 // Every rule here came out of one study of the CRM's ad_daily table on
 // 2026-09-06: 40 ads with $50 or more behind them, $18,600 of spend across
-// eight clients, 435 leads. Nothing here is a marketing opinion; each warning
+// eight clients, 436 leads. Nothing here is a marketing opinion; each warning
 // names the pattern that lost money and what beat it.
 //
 // The findings, so the thresholds below can be argued with:
 //
-//   * FORMAT. Video: $38 per lead, 3.05% CTR over $13,627. Image: $66 per
-//     lead, 1.43% CTR over $4,972. Video won on every client that ran both.
+//   * FORMAT. Video: $37 per lead, 2.99% CTR over $10,083, one ad in
+//     fourteen with no leads. Image: $53 per lead, 2.32% CTR over $8,573,
+//     seven ads in twenty-six with none. Video was cheaper at five of the
+//     seven clients that ran both, and paid a higher CPM to do it.
 //   * OFFER SIZE. Every image ad under $100 off either produced nothing
 //     ("Repair Discount" $50, 0 leads; "$500 OFF condenser swap" 0 leads) or
 //     ran expensive ("$100 OFF New Furnace" $78 a lead). The winners led with
