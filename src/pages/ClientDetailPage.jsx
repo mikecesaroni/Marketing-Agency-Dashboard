@@ -20,6 +20,7 @@ import AddCreativeForm from '../components/AddCreativeForm'
 import ClientFilesSection from '../components/ClientFilesSection'
 import PaymentTracker from '../components/PaymentTracker'
 import ClientFormsPanel from '../components/ClientFormsPanel'
+import OnboardingCallPanel from '../components/OnboardingCallPanel'
 import { Button, Card } from '../components/ui'
 import {
   addTask,
@@ -464,6 +465,11 @@ export default function ClientDetailPage() {
             and it was previously three buttons in the header that gave no hint
             whether anything had come back. */}
         <ClientFormsPanel client={client} intake={intake} onDataChanged={loadClientData} />
+
+        {/* THE LIVE ONBOARDING CALL. The forms above are what the client sends
+            back; this is the Zoom where the agency gets every access done on
+            the owner's own screen, worked as a sheet. */}
+        <OnboardingCallPanel client={client} intake={intake} />
 
         {/* TASKS */}
         <Card padding="none" className="mb-6 p-4 md:mb-8 md:p-6">

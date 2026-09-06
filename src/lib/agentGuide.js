@@ -82,6 +82,7 @@ export const ROUTES = [
       'Everything about one client, on a single long page. This is where most work actually happens. Reach it by clicking a client on /clients rather than by constructing the URL — clientId is a UUID and is not guessable from the name.',
     contains: [
       'Status switches: Meta ads, Google LSA, Google Business Profile, GHL build, and — only once GHL build is on — GHL account.',
+      '"Live onboarding call": the sheet for the onboarding Zoom, worked top to bottom — pre-call email, opening lines, GoHighLevel, Meta (find the portfolio in Page setup, business.facebook.com/select, partner access, 2FA), Google (the "Own this business?" trick to find the owning account), website and domain, photos and other lead sources, recap email. Steps the CRM can already see (Drive folder linked, Meta connected, GHL live) tick themselves; the rest are ticked by hand and stored per client. Copy buttons produce the pre-call email, the opening lines, the why-admin explanation and a recap built from what is still open.',
       'Industry, Market, Meta budget per day, LSA budget per day.',
       '"Client forms" — whether the onboarding form and the GHL setup form have come back, and the links to send them.',
       'Tasks, with a progress bar.',
