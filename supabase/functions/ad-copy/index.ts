@@ -13,6 +13,8 @@
 // Secrets: ANTHROPIC_API_KEY, the same one client-chat uses.
 //
 // v7: carries the account's own creative findings (see src/lib/creativeChecks.js).
+// v8: appends last night's ad_learnings rows (agency-wide plus this client's),
+//     so the options quote what actually happened, not only what a rule says.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
 import { z } from 'npm:zod'
@@ -221,6 +223,32 @@ Deno.serve(async (req) => {
   const avoid = String(body.words_to_avoid || '').trim()
   const isVideo = body.medium === 'video'
 
+  // What the agency's own ad data said last night. Refreshed by
+  // refresh_ad_learnings() after the Meta sync; the table is small and the
+  // rows are already sentences. Read with the service key so this works
+  // whether or not the caller is signed in.
+  let learnings = ''
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const clientId = String(body.client_id || '')
+    const filter = /^[0-9a-f-]{36}$/i.test(clientId) ? `or=(scope.eq.account,client_id.eq.${clientId})` : 'scope=eq.account'
+    const res = await fetch(`${supabaseUrl}/rest/v1/ad_learnings?select=scope,kind,sort_order,headline&${filter}&order=scope.desc,sort_order.asc`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    })
+    const rows = (await res.json()) as { scope: string; headline: string }[]
+    if (Array.isArray(rows) && rows.length) {
+      const mine = rows.filter((r) => r.scope === 'client').map((r) => `- ${r.headline}`)
+      const acct = rows.filter((r) => r.scope === 'account').map((r) => `- ${r.headline}`)
+      learnings =
+        'WHAT OUR OWN DATA SAYS (recomputed nightly; newer than every rule above, and it wins):\n' +
+        (mine.length ? `THIS CLIENT:\n${mine.join('\n')}\n` : '') +
+        (acct.length ? `ACROSS THE AGENCY:\n${acct.join('\n')}` : '')
+    }
+  } catch {
+    // The options still make sense without it.
+  }
+
   try {
     const client = new Anthropic({ apiKey })
 
@@ -240,6 +268,7 @@ Deno.serve(async (req) => {
             `${videoAbout ? `WHAT THIS VIDEO SHOWS, from the person building the ad:\n"""\n${videoAbout}\n"""\n\n` : ''}` +
             `${isVideo ? 'THIS AD IS A VIDEO. There is no image and no artboard: write only primaryText, headline and description.\n\n' : ''}` +
             `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
+            `${learnings ? `${learnings}\n\n` : ''}` +
             `The ad as it stands:\n${slots}\n\nWhat I want: ${instruction}`,
         },
       ],

@@ -6,6 +6,9 @@
 // {"client_id":"..."} to refresh a single client.
 //
 // Secrets: META_ACCESS_TOKEN must be set on the project.
+//
+// v+: also pulls the video retention curve (2-second continuous views and the
+// 25/50/75/100% quartiles) into ad_daily's until-now-empty columns.
 
 const META_API_VERSION = 'v21.0'
 
@@ -95,7 +98,12 @@ async function fetchAdDaily(
     // whole request with "(#100) effective_status is not valid for fields
     // param" -- which cost every per-ad row for the account, not just the
     // status. It comes from fetchAdStatuses() below instead.
-    'ad_id,ad_name,campaign_id,campaign_name,adset_id,adset_name,spend,impressions,reach,clicks,actions,video_play_actions,video_thruplay_watched_actions,video_avg_time_watched_actions'
+    'ad_id,ad_name,campaign_id,campaign_name,adset_id,adset_name,spend,impressions,reach,clicks,actions,video_play_actions,video_thruplay_watched_actions,video_avg_time_watched_actions,' +
+      // Retention curve. The 2-second continuous view is the closest field to
+      // the "hook rate" the creative benchmarks are quoted in (plays that
+      // survive the first moment, over impressions), and the quartiles give the
+      // Ad Doctor the shape of the drop-off rather than one average.
+      'video_continuous_2_sec_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p100_watched_actions'
   )
   url.searchParams.set('level', 'ad')
   url.searchParams.set('time_increment', '1')
@@ -402,6 +410,11 @@ Deno.serve(async (req) => {
           video_plays: firstActionValue(row.video_play_actions),
           video_thruplays: firstActionValue(row.video_thruplay_watched_actions),
           video_avg_watch_seconds: firstActionValue(row.video_avg_time_watched_actions),
+          video_2s_views: firstActionValue(row.video_continuous_2_sec_watched_actions),
+          video_p25: firstActionValue(row.video_p25_watched_actions),
+          video_p50: firstActionValue(row.video_p50_watched_actions),
+          video_p75: firstActionValue(row.video_p75_watched_actions),
+          video_p100: firstActionValue(row.video_p100_watched_actions),
         })
       }
     } catch (err) {

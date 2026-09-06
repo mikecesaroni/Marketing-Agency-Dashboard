@@ -12,6 +12,7 @@ import { readFunctionError } from './functionError'
  */
 export async function suggestCopy({ client, current, instruction }) {
   return callAdCopy({
+    client_id: client?.id,
     client_name: client?.name,
     industry: client?.industry,
     market: client?.market,

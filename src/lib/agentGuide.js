@@ -89,7 +89,7 @@ export const ROUTES = [
       'Weekly KPI History, Weekly Work Log, Creative Log.',
       'The Meta ad account connection: which ad account, Page and pixel this client advertises with.',
       'Ad performance, anchored at #ad-performance so it can be linked to directly.',
-      'Ad Doctor — kill and scale verdicts from the playbook, run against the last 30 days of synced data, with the arithmetic shown. It never pauses anything on its own.',
+      'Ad Doctor — kill, watch and scale verdicts run against the last 30 days of synced data with the arithmetic shown, plus the 2026 signals: whether a cost rise is the creative (click rate down, CPM flat) or the auction (CPM up, click rate flat), video hold and hook rates against benchmarks, and each ad set\'s learning status. Every verdict carries a prescription. "Full diagnosis" hands the table, the Meta knowledge base and last night\'s agency-wide learnings to the chat, which writes the plan; it lands in the client chat history. It never pauses anything on its own.',
       'Deliverables for this client, Client Files, and Payments & Billing.',
     ],
     actions: [

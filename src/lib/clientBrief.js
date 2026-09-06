@@ -11,6 +11,8 @@
 
 import { formatIntake } from './intakeSummary'
 import { PLAYBOOK } from './playbook'
+import { META_KNOWLEDGE } from './metaKnowledge'
+import { learningsBlock } from './adLearnings'
 
 // Below this daily budget the playbook says stay on one broad ad set. Splitting
 // a small budget across campaigns starves each of data and none exit learning.
@@ -85,14 +87,24 @@ so there is no winner to protect and no loser to avoid.`
   const leads = ads.reduce((t, a) => t + a.leads, 0)
   const cpl = leads > 0 ? spend / leads : 0
 
+  // Everything the Ad Doctor reads, on one line per ad, so the chat reasons
+  // from the same numbers the screen shows: format, click rate, CPM and, for
+  // video, how much of it people actually watched.
   const line = (a) => {
     const hook = guessHook(a.ad_name)
+    const fmt = a.isVideo ? 'video' : 'image'
+    const extras = []
+    if (a.ctr > 0) extras.push(`${a.ctr.toFixed(2)}% CTR`)
+    if (a.cpm > 0) extras.push(`$${a.cpm.toFixed(1)} CPM`)
+    if (a.holdRate != null) extras.push(`${a.holdRate.toFixed(0)}% hold to ThruPlay`)
+    if (a.avgWatch != null) extras.push(`${a.avgWatch.toFixed(1)}s avg watch`)
     return (
       `- ${a.ad_name || a.ad_id}` +
-      (hook === 'unclassified' ? '' : ` (${hook})`) +
+      ` (${fmt}${hook === 'unclassified' ? '' : `, ${hook}`})` +
       `, ${a.live ? 'live' : 'paused'}, ` +
       `$${a.spend.toFixed(2)}, ${a.leads} leads, ` +
-      `${a.cpl > 0 ? `$${a.cpl.toFixed(2)} per lead` : 'no leads'}`
+      `${a.cpl > 0 ? `$${a.cpl.toFixed(2)} per lead` : 'no leads'}` +
+      (extras.length ? `, ${extras.join(', ')}` : '')
     )
   }
 
@@ -129,7 +141,7 @@ function ctaFor(intake) {
   return 'Get Quote'
 }
 
-export function buildBrief({ client, intake, ads }) {
+export function buildBrief({ client, intake, ads, learnings }) {
   const i = intake || {}
   const name = i.business_name || client?.name || 'this client'
   const daily = Number(i.meta_ad_budget_per_day) || 0
@@ -367,5 +379,9 @@ ${'='.repeat(62)}
 
 ${formatIntake(i, name)}
 ${'='.repeat(62)}
-${PLAYBOOK}`
+${PLAYBOOK}
+
+${'='.repeat(62)}
+${META_KNOWLEDGE}
+${learningsBlock(learnings, client?.id) ? `\n${learningsBlock(learnings, client?.id)}` : ''}`
 }

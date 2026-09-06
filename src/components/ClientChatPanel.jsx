@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildBrief } from '../lib/clientBrief'
+import { fetchLearnings } from '../lib/adLearningsStore'
 import {
   clearChat,
   creativeSetToStudio,
@@ -136,7 +137,24 @@ export default function ClientChatPanel({
 
   // Rebuilt every render from current CRM data, so the model is never working
   // from a snapshot taken when the conversation started.
-  const brief = useMemo(() => buildBrief({ client, intake, ads }), [client, intake, ads])
+  // Last night's findings from every client's ad data, appended to the brief
+  // so the chat quotes the agency's own numbers, not only the playbook's.
+  const [learnings, setLearnings] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    fetchLearnings(client?.id)
+      .then((rows) => {
+        if (!cancelled) setLearnings(rows)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [client?.id])
+  const brief = useMemo(
+    () => buildBrief({ client, intake, ads, learnings }),
+    [client, intake, ads, learnings]
+  )
 
   useEffect(() => {
     fetchChatHistory(client.id)
