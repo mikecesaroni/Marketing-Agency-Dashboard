@@ -116,6 +116,8 @@ export default function ClientsPage() {
     }
   }
 
+  const liveCount = useMemo(() => clients.filter((c) => !c.archived).length, [clients])
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
     return clients.filter((c) => {
@@ -152,7 +154,10 @@ export default function ClientsPage() {
   return (
     <Layout
       title="Clients"
-      subtitle={`${clients.length} total`}
+      // Live clients only. The archived ones are still in the list (they show
+      // under their own filter), but a headcount that includes a former client
+      // reads as one more paying account than there is.
+      subtitle={`${liveCount} live`}
       actions={addButton}
     >
       {error && (
