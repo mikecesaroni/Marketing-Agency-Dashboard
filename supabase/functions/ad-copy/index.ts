@@ -11,6 +11,8 @@
 // silently editing an ad someone is in the middle of building.
 //
 // Secrets: ANTHROPIC_API_KEY, the same one client-chat uses.
+//
+// v7: carries the account's own creative findings (see src/lib/creativeChecks.js).
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
 import { z } from 'npm:zod'
@@ -122,6 +124,22 @@ primaryText, headline and description. Write them for someone who is being
 shown a video with the sound off, so the primaryText has to carry the offer on
 its own -- and never describe the video or refer to it ("watch this", "see the
 video"). The words are read beside it, not about it.
+
+WHAT THIS ACCOUNT'S OWN RESULTS SAY, and it outranks any general rule. Forty
+ads with $50 or more behind them, $18,600 of spend, September 2026:
+- On a STILL IMAGE, a problem, fear or question hook was the worst pattern we
+  ran ("Problem-Question Hook B" $258 a lead; "Cost of Waiting" 0 leads). The
+  image hooks that pulled led with the OFFER or with TRUST, as a concrete,
+  sensory, owner-voiced claim: "You Deal With The Owner, Not A Call Center",
+  "Hard Water Is Coating Your Skin". Save symptom lists and cost-of-waiting for
+  a video, where the clip shows the thing.
+- A dollar-off under $250 did not move anyone. The winners led with a number
+  that changes a decision: "$2,500 OFF", a free component ("FREE AIR HANDLER"),
+  months with no payments, or a tripwire PRICE for small work. If the offer you
+  are given is a small discount, say so in the note and suggest the strongest
+  honest reframing of the same offer rather than a bigger number you invented.
+- Every top-quartile ad carried proof. If proof is empty and you were given a
+  rating, a review count or a guarantee, offer it as a proof option.
 
 Write like the business owner talks. Concrete over clever. No em dashes, no
 square brackets, no placeholders. Never invent a number, a rating, a review

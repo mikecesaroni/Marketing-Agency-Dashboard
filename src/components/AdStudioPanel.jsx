@@ -11,6 +11,7 @@ import ResearchPanel from './ResearchPanel'
 import PublishToMetaPanel from './PublishToMetaPanel'
 import { fetchPublishedAds } from '../lib/metaPublish'
 import { recipeToContent, saveAdRecipe } from '../lib/savedAds'
+import { creativeWarnings } from '../lib/creativeChecks'
 import AdImagePicker from './AdImagePicker'
 import { resolveImageSrc } from '../lib/driveAssets'
 import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
@@ -469,6 +470,14 @@ export default function AdStudioPanel({ client, intake, seed }) {
 
   const refs = useRef(SIZES.map(() => null))
   const intakeProof = useMemo(() => proofFromIntake(intake), [intake])
+  // What the account's own results say about this ad, shown under the fields
+  // while it is being built. Warnings, never blocks: the data is one account
+  // over one summer, and the person building the ad may know why this one is
+  // the exception.
+  const warnings = useMemo(
+    () => creativeWarnings({ hook, offerAmount, offerDetail, subhead, proof }),
+    [hook, offerAmount, offerDetail, subhead, proof]
+  )
 
   // Every slot the copy assistant is allowed to write, and the setter for each.
   // Nothing outside this map can be applied, whatever comes back.
@@ -1012,6 +1021,16 @@ export default function AdStudioPanel({ client, intake, seed }) {
           </div>
         </div>
       </div>
+
+      {warnings.length > 0 && (
+        <ul className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1.5">
+          {warnings.map((w) => (
+            <li key={w.code} className="text-xs text-amber-900 leading-snug">
+              <span className="font-semibold">What the account data says:</span> {w.text}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <details className="rounded-lg border border-slate-200 bg-slate-50 p-3" open={Boolean(primaryText)}>
         <summary className="cursor-pointer text-xs font-medium text-slate-700">

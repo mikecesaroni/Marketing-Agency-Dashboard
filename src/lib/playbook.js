@@ -57,10 +57,19 @@ Always drop in the real city and real service.
    sell lowers ad resistance and builds the trust that wins the emergency call
    later.
 
-FEAR vs CURIOSITY vs OFFER: fear-of-loss hooks (cost-of-waiting, symptom
-checklist) usually beat pure-offer hooks for REPAIR intent; offer hooks win for
-MAINTENANCE (a tune-up has no fear to tap). Match the emotion to the job type,
-and never manufacture fear you can't substantiate - "that leak is a $9,000
+FEAR vs CURIOSITY vs OFFER, and it depends on the FORMAT. Our own account
+data (40 ads, $18,600, Sept 2026) is unambiguous: fear and problem hooks
+painted on a STILL IMAGE were the worst ads we ran ("Problem-Question Hook B"
+$258 a lead, "Cost of Waiting" $66 for zero leads, "Stop Paying To Patch A
+Dying AC" 0.57% CTR). The same emotion worked in VIDEO ("Furnace Fear 60 days"
+$40 a lead), because the clip can show the symptom. So:
+- On a static, lead with the OFFER or with TRUST. The image hooks that pulled
+  were "You Deal With The Owner, Not A Call Center" (5.88% CTR) and "Hard
+  Water Is Coating Your Skin" (6.90% CTR): a concrete, sensory, owner-voiced
+  claim, never a symptom list or a question.
+- Save fear-of-loss, cost-of-waiting and symptom checklists for video, and
+  only when the footage shows the thing.
+Never manufacture fear you can't substantiate - "that leak is a $9,000
 problem" needs to be a real number from real jobs.
 
 Avoid: vague brand fluff, anything a renter would click, claims you can't back up.
@@ -77,10 +86,17 @@ The rule: price the small stuff, finance the big stuff, quote the middle.
 - MID-TICKET / VARIABLE (repairs, custom work): no price. "Get Quote" - price
   talk belongs in the follow-up call, not the ad.
 
-Discounts: a concrete dollar-off ("$100 off installs this month") works as
-urgency and pre-qualifies price-shoppers honestly. Percentage discounts read
-weaker. NEVER stack discounts, and never lead with a discount on emergency
-work - someone with a burst pipe needs speed, not $50 off.
+Discounts: SIZE IS THE WHOLE GAME. In our account every image ad under $100
+off either produced nothing ("Repair Discount" $50 off, 0 leads; "$500 OFF
+condenser swap", 0 leads) or ran expensive ("$100 OFF New Furnace", $78 a
+lead). The offers that pulled led with a number that changes a decision:
+"$2,500 OFF a new system" ($34 a lead, 87 leads), "FREE AIR HANDLER" with a
+new condenser ($46), "NO PAYMENTS FOR 6 MONTHS" ($37), a "$1,200 upgrade,
+yours free" (6.9% CTR). Rule: a dollar-off under $250 is not an offer, it is
+a coupon; either make it a free component, a months-no-payments term, or a
+tripwire PRICE, or drop it and lead with trust. Percentage discounts read
+weaker still. NEVER stack discounts, and never lead with a discount on
+emergency work - someone with a burst pipe needs speed, not $50 off.
 
 The trade nobody says out loud: price-led ads pull MORE leads of LOWER average
 quality. That is fine for Low-LTV volume campaigns and wrong for High-LTV
@@ -117,7 +133,17 @@ nobody can call within 15 minutes during business hours, run Call ads and
 maintenance offers instead of lead forms - a form lead that ages overnight is
 mostly spend with no job.
 
-=== CREATIVE DIRECTION: REAL BEATS PRODUCED ===
+=== CREATIVE DIRECTION: REAL BEATS PRODUCED, AND VIDEO BEATS STILL ===
+Our own numbers first (ad_daily, 40 ads with $50+ behind them, Sept 2026):
+video $38 a lead at 3.05% CTR over $13,627; image $66 a lead at 1.43% CTR over
+$4,972. Video won on every client that ran both. Within video, retention
+tracked cost: the winners held 11-18% of viewers to ThruPlay and averaged
+6-10 seconds watched; the losers held 6-7% and 3-4 seconds. Industry
+benchmarks put cold ThruPlay at 18-28%, so even our best clips have room.
+Default every client to video; a still image is the fallback, not the plan.
+80-85% of Meta video plays with the sound off, so the hook and the offer must
+be ON SCREEN as text in the first two seconds, not only spoken.
+
 The visual hierarchy for trades, best first:
 1. Real tech/owner to camera, branded shirt, job site behind them (video)
 2. Real before/after of an actual job (image or video)
