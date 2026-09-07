@@ -31,6 +31,14 @@ function AssetCell({ label, verdict }) {
         {verdict.state === 'ok' && !verdict.full && (
           <span className="text-[11px] text-slate-500">no full control</span>
         )}
+        {label === 'Facebook Page' && ['ok', 'partial'].includes(verdict.state) && verdict.leads === false && (
+          <span
+            className="text-[11px] text-amber-800"
+            title="Leads access is a separate switch when a client shares a Page. Without it the Page does not show up in GoHighLevel's Facebook integration and no lead form can be pulled from it."
+          >
+            no leads access (GHL cannot see this Page)
+          </span>
+        )}
       </div>
       {verdict.state === 'partial' && (
         <p className="mt-0.5 text-[11px] text-amber-800">

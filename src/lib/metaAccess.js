@@ -42,6 +42,7 @@ export const normaliseTasks = (tasks) => (tasks || []).map(normaliseTask)
 // be worked with, and telling them otherwise would be crying wolf.
 export const PAGE_REQUIRED = ['ADVERTISE', 'CREATE_CONTENT']
 export const PAGE_FULL = 'MANAGE'
+export const PAGE_LEADS = 'MANAGE_LEADS'
 
 export const AD_ACCOUNT_REQUIRED = ['ADVERTISE']
 export const AD_ACCOUNT_FULL = 'MANAGE'
@@ -100,6 +101,12 @@ export function taskCheck(permittedTasks, required, fullTask) {
   return {
     state: lacking.length > 0 ? 'partial' : 'ok',
     full: tasks.includes(fullTask),
+    // Leads access is a separate switch in the Page sharing flow and it is
+    // the one clients skip. Without it the Page never appears in
+    // GoHighLevel's Facebook integration and no lead form can be pulled from
+    // it, while everything the CRM itself does (build, publish, report) still
+    // works. Only meaningful for Pages; ad accounts have no such task.
+    leads: tasks.includes(PAGE_LEADS),
     tasks,
     lacking,
   }
@@ -207,6 +214,9 @@ export function chaseLine(row) {
     asks.push(
       `raise the Page permissions so we can ${row.page.lacking.map(describeTask).join(' and ')}`
     )
+  }
+  if (['ok', 'partial'].includes(row.page.state) && row.page.leads === false) {
+    asks.push('turn on Leads access for the Page (Business Settings, Pages, Partners) so GoHighLevel can pull the leads')
   }
 
   if (asks.length === 0) return ''

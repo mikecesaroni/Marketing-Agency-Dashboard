@@ -50,6 +50,7 @@ const PAGES = [
       'PROFILE_PLUS_CREATE_CONTENT',
       'PROFILE_PLUS_FACEBOOK_ACCESS',
       'PROFILE_PLUS_MANAGE',
+      'PROFILE_PLUS_MANAGE_LEADS',
     ],
   },
   // The one that started this. Shared, and cannot be published from.
@@ -101,6 +102,14 @@ check(
   half.lacking.join(',')
 )
 check('a partial grant is not reported as full', half.full === false)
+check('a Page shared without Leads access says so', full.leads === true && half.leads === false)
+const withLeads = assetVerdict({
+  crmId: '369396186258733',
+  granted: [{ id: '369396186258733', name: 'Active Air', permitted_tasks: ['PROFILE_PLUS_MANAGE', 'PROFILE_PLUS_ADVERTISE', 'PROFILE_PLUS_CREATE_CONTENT', 'PROFILE_PLUS_MANAGE_LEADS'] }],
+  required: ['ADVERTISE', 'CREATE_CONTENT'],
+  fullTask: 'MANAGE',
+})
+check('and one shared with it reads as having leads access', withLeads.leads === true)
 
 check(
   'an asset the CRM names but Meta does not list reads missing',
@@ -190,7 +199,8 @@ check(
 // --- the sentence you forward -------------------------------------------
 check(
   'the chase line names the specific gap',
-  chaseLine(plumb) === 'Plumb Quick: needs to raise the Page permissions so we can post as the Page.',
+  chaseLine(plumb) ===
+    'Plumb Quick: needs to raise the Page permissions so we can post as the Page and turn on Leads access for the Page (Business Settings, Pages, Partners) so GoHighLevel can pull the leads.',
   chaseLine(plumb)
 )
 check(
@@ -199,6 +209,19 @@ check(
   chaseLine(revoked)
 )
 check('a client with nothing wrong gets no line', chaseLine(horizon) === '')
+// Everything the CRM needs, but the Leads switch was skipped: the Page will
+// not appear in GoHighLevel, and that is the only thing to chase.
+const noLeads = accessReport({
+  clients: [{ id: 'c6', name: 'Titos', meta_page_id: '1300608046464638', meta_ad_account_id: null }],
+  pages: [{ id: '1300608046464638', name: 'Titos', permitted_tasks: ['PROFILE_PLUS_MANAGE', 'PROFILE_PLUS_ADVERTISE', 'PROFILE_PLUS_CREATE_CONTENT'] }],
+  adAccounts: [],
+}).clients[0]
+check('a full grant without Leads access is still ok for the CRM', noLeads.page.state === 'ok' && noLeads.needsAttention === false)
+check(
+  'but the chase line asks for the Leads switch alone',
+  chaseLine(noLeads) === 'Titos: needs to turn on Leads access for the Page (Business Settings, Pages, Partners) so GoHighLevel can pull the leads.',
+  chaseLine(noLeads)
+)
 check(
   'a partial ad account is described by what it cannot do',
   chaseLine(reporting) === 'Reporting Only Co: needs to raise the ad account permissions so we can run ads.',
