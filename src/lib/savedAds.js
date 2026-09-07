@@ -43,6 +43,11 @@ export async function saveAdRecipe({ clientId, stamp, content, backgroundPath, l
     badge_color: content.badgeColor,
     hook_plate: Boolean(content.hookPlate),
     safe_mode: safeMode,
+    // The card layout and where the photo sits on it. 'cover' with no
+    // colour and no position is exactly what every ad before this was.
+    layout: content.layout || 'cover',
+    bg_color: content.layout === 'card' ? content.bgColor || null : null,
+    photo_pos: content.layout === 'card' ? content.photo || null : null,
     // Copy that never touches the artboard: it goes in the feed above and
     // below the image. Stored because publishing has to send it, and until
     // this existed it lived only in a read-only banner and was lost on save.
@@ -68,6 +73,9 @@ export function recipeToContent(row) {
     accent: row.accent,
     badgeColor: row.badge_color,
     hookPlate: Boolean(row.hook_plate),
+    layout: row.layout || 'cover',
+    bgColor: row.bg_color || null,
+    photo: row.photo_pos || null,
     primaryText: row.primary_text || '',
     headline: row.headline || '',
     description: row.description || '',

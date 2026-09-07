@@ -43,6 +43,17 @@ export const SAFE_MODES = [
 
 import { readableTextOn } from './logoColours'
 
+// How the photo sits in the frame.
+//
+// 'cover' is the default and the only way the Studio ever worked: the photo
+// fills the frame and the text sits on scrims over it. 'card' is opt-in: a
+// flat background colour, and the photo placed on it as an object that can
+// be dragged and resized on the artboard. It exists for a product shot, a
+// logo-heavy layout or a photo whose edges are not worth showing, and it is
+// never chosen for someone.
+export { DEFAULT_BG, DEFAULT_PHOTO, LAYOUTS, photoRect } from './adLayout'
+import { DEFAULT_BG, DEFAULT_PHOTO, photoRect } from './adLayout'
+
 export const DEFAULT_ACCENT = '#C81E1E' // offer block
 export const DEFAULT_BADGE = '#1E3A8A' // location badge
 
@@ -179,6 +190,25 @@ function drawCover(ctx, img, w, h) {
   ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh)
 }
 
+// The photo as an object on the card layout: rounded, with a soft drop shadow
+// so it reads as placed rather than pasted.
+function drawPlaced(ctx, img, w, h, photo) {
+  const r = photoRect(w, h, img, photo)
+  ctx.save()
+  ctx.shadowColor = 'rgba(2,6,23,0.35)'
+  ctx.shadowBlur = 40
+  ctx.shadowOffsetY = 16
+  ctx.fillStyle = '#000'
+  roundRect(ctx, r.x, r.y, r.w, r.h, 28)
+  ctx.fill()
+  ctx.restore()
+  ctx.save()
+  roundRect(ctx, r.x, r.y, r.w, r.h, 28)
+  ctx.clip()
+  ctx.drawImage(img, r.x, r.y, r.w, r.h)
+  ctx.restore()
+}
+
 /**
  * Paints one ad onto a canvas.
  *
@@ -212,8 +242,19 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     accent = DEFAULT_ACCENT,
     badgeColor = DEFAULT_BADGE,
     hookPlate = false,
+    layout = 'cover',
+    bgColor = DEFAULT_BG,
+    photo = DEFAULT_PHOTO,
   } = content
   const { background, logo } = assets || {}
+
+  // On the card layout the text sits on the chosen colour, not on a scrimmed
+  // photo, so it has to flip to dark on a pale background.
+  const card = layout === 'card'
+  const ink = card ? readableTextOn(bgColor || DEFAULT_BG) : '#FFFFFF'
+  const lightInk = ink.toUpperCase() === '#FFFFFF'
+  const deckInk = lightInk ? '#E2E8F0' : '#334155'
+  const plateFill = card && !lightInk ? 'rgba(255,255,255,0.72)' : 'rgba(2,6,23,0.55)'
 
   canvas.width = w
   canvas.height = h
@@ -270,40 +311,45 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   const footerTop = contentBottom - footer.height
 
   // ---- BACKGROUND ----
-  ctx.fillStyle = '#0F172A'
+  ctx.fillStyle = card ? bgColor || DEFAULT_BG : '#0F172A'
   ctx.fillRect(0, 0, w, h)
-  if (background) drawCover(ctx, background, w, h)
+  if (background && !card) drawCover(ctx, background, w, h)
+  if (background && card) drawPlaced(ctx, background, w, h, photo)
 
-  // Scrim. Without it, white text over a bright work photo is unreadable,
-  // which is the single most common failure in this kind of ad. Three passes:
-  // an overall knock-down so the photo reads as a backdrop, then extra weight
-  // behind the header and behind the footer. The lower ramp is anchored to the
-  // footer rather than to a fixed fraction, so it still sits behind the text
-  // when Reels pushes everything up the frame.
-  ctx.fillStyle = 'rgba(2,6,23,0.20)'
-  ctx.fillRect(0, 0, w, h)
+  // No scrims on the card layout: the colour is the contrast.
+  if (!card) {
 
-  // Reaches past the deck as well, or a subhead under a three-line hook falls
-  // off the bottom of the gradient onto the bare photo.
-  const topEnd = Math.max(h * 0.2, hookTop + 260 + deckH + deckGap)
-  const topScrim = ctx.createLinearGradient(0, 0, 0, topEnd)
-  topScrim.addColorStop(0, 'rgba(2,6,23,0.58)')
-  topScrim.addColorStop(0.55, 'rgba(2,6,23,0.28)')
-  topScrim.addColorStop(1, 'rgba(2,6,23,0)')
-  ctx.fillStyle = topScrim
-  ctx.fillRect(0, 0, w, topEnd)
+    // Scrim. Without it, white text over a bright work photo is unreadable,
+    // which is the single most common failure in this kind of ad. Three passes:
+    // an overall knock-down so the photo reads as a backdrop, then extra weight
+    // behind the header and behind the footer. The lower ramp is anchored to the
+    // footer rather than to a fixed fraction, so it still sits behind the text
+    // when Reels pushes everything up the frame.
+    ctx.fillStyle = 'rgba(2,6,23,0.20)'
+    ctx.fillRect(0, 0, w, h)
 
-  // Ramped over more stops than feels necessary: with only two, a tall frame
-  // shows a visible horizontal seam where the gradient begins.
-  const botStart = Math.max(0, footerTop - 220)
-  const botScrim = ctx.createLinearGradient(0, botStart, 0, h)
-  botScrim.addColorStop(0, 'rgba(2,6,23,0)')
-  botScrim.addColorStop(0.3, 'rgba(2,6,23,0.34)')
-  botScrim.addColorStop(0.55, 'rgba(2,6,23,0.66)')
-  botScrim.addColorStop(0.78, 'rgba(2,6,23,0.86)')
-  botScrim.addColorStop(1, 'rgba(2,6,23,0.93)')
-  ctx.fillStyle = botScrim
-  ctx.fillRect(0, botStart, w, h - botStart)
+    // Reaches past the deck as well, or a subhead under a three-line hook falls
+    // off the bottom of the gradient onto the bare photo.
+    const topEnd = Math.max(h * 0.2, hookTop + 260 + deckH + deckGap)
+    const topScrim = ctx.createLinearGradient(0, 0, 0, topEnd)
+    topScrim.addColorStop(0, 'rgba(2,6,23,0.58)')
+    topScrim.addColorStop(0.55, 'rgba(2,6,23,0.28)')
+    topScrim.addColorStop(1, 'rgba(2,6,23,0)')
+    ctx.fillStyle = topScrim
+    ctx.fillRect(0, 0, w, topEnd)
+
+    // Ramped over more stops than feels necessary: with only two, a tall frame
+    // shows a visible horizontal seam where the gradient begins.
+    const botStart = Math.max(0, footerTop - 220)
+    const botScrim = ctx.createLinearGradient(0, botStart, 0, h)
+    botScrim.addColorStop(0, 'rgba(2,6,23,0)')
+    botScrim.addColorStop(0.3, 'rgba(2,6,23,0.34)')
+    botScrim.addColorStop(0.55, 'rgba(2,6,23,0.66)')
+    botScrim.addColorStop(0.78, 'rgba(2,6,23,0.86)')
+    botScrim.addColorStop(1, 'rgba(2,6,23,0.93)')
+    ctx.fillStyle = botScrim
+    ctx.fillRect(0, botStart, w, h - botStart)
+  }
 
   // ---- HEADER ----
   if (badgeLabel) {
@@ -385,7 +431,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
       ? deckBaselines[deckBaselines.length - 1]
       : hookLastBaseline
 
-    ctx.fillStyle = 'rgba(2,6,23,0.55)'
+    ctx.fillStyle = plateFill
     roundRect(
       ctx,
       padX - padPlateX,
@@ -399,7 +445,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
 
   if (hookLines?.length) {
     setFont(ctx, '800', hookPx, -0.5)
-    ctx.fillStyle = '#FFFFFF'
+    ctx.fillStyle = ink
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
 
@@ -414,7 +460,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   // the hook's weight would give the frame two things shouting at once.
   if (deck) {
     setFont(ctx, '500', deck.px, 0)
-    ctx.fillStyle = '#E2E8F0'
+    ctx.fillStyle = deckInk
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
     deck.lines.forEach((line, i) => ctx.fillText(line, padX, deckBaselines[i]))
@@ -424,7 +470,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   if (logoBox) {
     ctx.drawImage(logo, w - padX - logoBox.w, contentBottom - logoBox.h, logoBox.w, logoBox.h)
   }
-  drawFooter(ctx, footer, { padX, contentBottom, maxWidth, accent })
+  drawFooter(ctx, footer, { padX, contentBottom, maxWidth, accent, ink })
 
   if (opts.guides) drawGuides(ctx, w, h, safeTop, safeBottom, safeSide, safeOn)
 
@@ -503,14 +549,14 @@ function measureFooter(ctx, { offerAmount, offerDetail, proof }, maxWidth) {
 }
 
 // Draws what measureFooter worked out, stacking upward from the bottom.
-function drawFooter(ctx, parts, { padX, contentBottom, accent }) {
+function drawFooter(ctx, parts, { padX, contentBottom, accent, ink = '#FFFFFF' }) {
   let cursor = contentBottom
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 
   if (parts.proof) {
     setFont(ctx, '700', parts.proof.px, 0)
-    ctx.fillStyle = '#FFFFFF'
+    ctx.fillStyle = ink
     ctx.fillText(parts.proof.text, padX, cursor)
     cursor -= parts.proof.px + 22
   }

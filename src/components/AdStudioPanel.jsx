@@ -18,6 +18,9 @@ import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
 import {
   DEFAULT_ACCENT,
   DEFAULT_BADGE,
+  DEFAULT_BG,
+  DEFAULT_PHOTO,
+  LAYOUTS,
   brandColours,
   SAFE_MODES,
   SIZES,
@@ -93,19 +96,58 @@ function ZoomedArtboard({ source, size, pinned, onClose }) {
   )
 }
 
-function Artboard({ size, canvasRef, onZoom, onUnzoom, onPin }) {
+function Artboard({ size, canvasRef, onZoom, onUnzoom, onPin, draggable, onDragPhoto }) {
+  // Dragging the photo on the card layout. Deltas are fractions of the
+  // preview's on-screen size, which are the same fractions of the 1080px
+  // frame, so what you see is where it lands on export. A drag must not
+  // also count as the click that pins the zoom overlay.
+  const drag = useRef(null)
+  const suppressClick = useRef(false)
+  const down = (e) => {
+    if (!draggable) return
+    drag.current = { x: e.clientX, y: e.clientY, moved: false }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const move = (e) => {
+    const d = drag.current
+    if (!d) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const dx = (e.clientX - d.x) / rect.width
+    const dy = (e.clientY - d.y) / rect.height
+    if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 2) d.moved = true
+    d.x = e.clientX
+    d.y = e.clientY
+    onDragPhoto?.(dx, dy)
+  }
+  const up = () => {
+    if (drag.current?.moved) suppressClick.current = true
+    drag.current = null
+  }
+  const click = () => {
+    if (suppressClick.current) {
+      suppressClick.current = false
+      return
+    }
+    onPin?.()
+  }
   return (
     <div className="flex-shrink-0">
       <canvas
         ref={canvasRef}
         onMouseEnter={onZoom}
         onMouseLeave={onUnzoom}
-        onClick={onPin}
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={up}
+        onClick={click}
         // Deliberately no title attribute: a native tooltip paints above every
         // layer on the page, including the zoom overlay this hover just opened,
         // so it lands in the middle of the enlarged ad. The overlay captions
         // itself instead.
-        className="border border-slate-300 rounded bg-slate-100 cursor-zoom-in transition hover:border-orange-400 hover:ring-2 hover:ring-orange-200"
+        className={`border border-slate-300 rounded bg-slate-100 transition hover:border-orange-400 hover:ring-2 hover:ring-orange-200 ${
+          draggable ? 'cursor-move touch-none' : 'cursor-zoom-in'
+        }`}
         style={{ width: size.w / 5, height: size.h / 5 }}
       />
       <p className="text-[11px] text-slate-500 mt-1">
@@ -439,6 +481,10 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // Off by default: the scrim handles most photos, and a plate on a clean
   // background is just a box.
   const [hookPlate, setHookPlate] = useState(false)
+  // Photo layout. 'cover' unless somebody switches it; see LAYOUTS in adCanvas.
+  const [layout, setLayout] = useState('cover')
+  const [bgColor, setBgColor] = useState(DEFAULT_BG)
+  const [photo, setPhoto] = useState(DEFAULT_PHOTO)
 
   // Meta's interface covers the top and bottom of a 9:16. Reels is the
   // strictest of the placements, so it is the default: a CTA hidden behind the
@@ -629,7 +675,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // first paint measures with a fallback face and wraps differently.
   useEffect(() => {
     let cancelled = false
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate }
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo }
     ensureFonts().then(() => {
       if (cancelled) return
       SIZES.forEach((size, i) => {
@@ -640,12 +686,12 @@ export default function AdStudioPanel({ client, intake, seed }) {
     return () => {
       cancelled = true
     }
-  }, [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, assets, safeMode, guides])
+  }, [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo, assets, safeMode, guides])
 
   // Guides are a preview aid. Repaint clean, export, then put them back, so a
   // saved PNG can never carry the red bands into the ad account.
   const withoutGuides = (fn) => async (...args) => {
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate }
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo }
     const repaint = (g) =>
       SIZES.forEach((size, i) => {
         const c = refs.current[i]
@@ -681,6 +727,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
     if (r.accent) setAccent(r.accent)
     if (r.badgeColor) setBadgeColor(r.badgeColor)
     setHookPlate(Boolean(r.hookPlate))
+    setLayout(r.layout || 'cover')
+    setBgColor(r.bgColor || DEFAULT_BG)
+    setPhoto(r.photo || DEFAULT_PHOTO)
     // Colours came from the saved ad, so a logo reload must not replace them.
     setFromLogo(false)
     setBackgroundPath(r.backgroundPath)
@@ -760,6 +809,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
             accent,
             badgeColor,
             hookPlate,
+            layout,
+            bgColor,
+            photo,
             primaryText,
             headline: metaHeadline,
             description: metaDescription,
@@ -1082,6 +1134,49 @@ export default function AdStudioPanel({ client, intake, seed }) {
       </details>
 
       <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+        <span className="text-xs font-medium text-slate-600">Photo</span>
+        <div className="flex gap-1">
+          {LAYOUTS.map((l) => (
+            <button
+              key={l.key}
+              onClick={() => setLayout(l.key)}
+              title={l.hint}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition ${
+                layout === l.key
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'
+              }`}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+        {layout === 'card' && (
+          <>
+            <ColourField label="Background colour" value={bgColor} onChange={setBgColor} swatches={swatches} />
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              Size
+              <input
+                type="range"
+                min="0.25"
+                max="1.2"
+                step="0.01"
+                value={photo.scale ?? DEFAULT_PHOTO.scale}
+                onChange={(e) => setPhoto((p) => ({ ...p, scale: Number(e.target.value) }))}
+              />
+            </label>
+            <button onClick={() => setPhoto(DEFAULT_PHOTO)} className="text-[11px] text-slate-400 hover:text-slate-700">
+              Recentre
+            </button>
+            <p className="text-[11px] text-slate-500 basis-full">
+              Drag the photo on any artboard to place it; the text stays put. Pick the background from the
+              logo swatches or type a hex. On a pale colour the text flips to dark on its own.
+            </p>
+          </>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
         <span className="text-xs font-medium text-slate-600">9:16 safe area</span>
         <div className="flex gap-1">
           {SAFE_MODES.map((m) => (
@@ -1146,6 +1241,14 @@ export default function AdStudioPanel({ client, intake, seed }) {
                 setZoom(i)
                 setZoomPinned(true)
               }}
+              draggable={layout === 'card'}
+              onDragPhoto={(dx, dy) =>
+                setPhoto((p) => ({
+                  ...p,
+                  x: Math.min(1, Math.max(0, (p.x ?? 0.5) + dx)),
+                  y: Math.min(1, Math.max(0, (p.y ?? 0.55) + dy)),
+                }))
+              }
             />
             <button
               onClick={() => download(i)}
