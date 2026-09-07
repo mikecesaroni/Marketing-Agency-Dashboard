@@ -8,6 +8,7 @@ import { createApprovalLink, fetchApprovalLinks } from '../lib/adApprovalStore'
 import { actionableChanges, describeApplied } from '../lib/adRevise'
 import { reviseSavedAd } from '../lib/adRevisionStore'
 import Button from './ui/Button'
+import ZoomImage from './ui/ZoomImage'
 
 function when(date) {
   return date.toLocaleString(undefined, {
@@ -444,9 +445,10 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
                 const key = `${set.stamp}-${size.key}`
                 return (
                   <div key={size.key} className="flex-shrink-0">
-                    <img
+                    <ZoomImage
                       src={file.url}
                       alt={`${size.label} ad for ${clientName}`}
+                      caption={`${size.label} · ${size.w}×${size.h}`}
                       loading="lazy"
                       className="border border-slate-300 rounded bg-slate-100 object-cover"
                       style={{ width: size.w / 7, height: size.h / 7 }}

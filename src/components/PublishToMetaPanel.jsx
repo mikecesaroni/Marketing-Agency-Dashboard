@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import ZoomImage from './ui/ZoomImage'
 import LocationPicker from './LocationPicker'
 import LeadFormPicker from './LeadFormPicker'
 import VideoAdPicker from './VideoAdPicker'
@@ -349,9 +350,10 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
           className="mt-1 flex-shrink-0 accent-orange-600"
         />
         {thumb && (
-          <img
+          <ZoomImage
             src={thumb}
             alt=""
+            caption={set.recipe?.hook || set.ordered[0]?.size?.label}
             loading="lazy"
             className="w-12 h-12 object-cover rounded border border-slate-300 flex-shrink-0"
           />
