@@ -51,7 +51,7 @@ import { readableTextOn } from './logoColours'
 // be dragged and resized on the artboard. It exists for a product shot, a
 // logo-heavy layout or a photo whose edges are not worth showing, and it is
 // never chosen for someone.
-export { DEFAULT_BG, DEFAULT_PHOTO, LAYOUTS, photoRect } from './adLayout'
+export { DEFAULT_BG, DEFAULT_PHOTO, LAYOUTS, dragPhoto, photoRect } from './adLayout'
 import { DEFAULT_BG, DEFAULT_PHOTO, photoRect } from './adLayout'
 
 export const DEFAULT_ACCENT = '#C81E1E' // offer block
@@ -192,8 +192,8 @@ function drawCover(ctx, img, w, h) {
 
 // The photo as an object on the card layout: rounded, with a soft drop shadow
 // so it reads as placed rather than pasted.
-function drawPlaced(ctx, img, w, h, photo) {
-  const r = photoRect(w, h, img, photo)
+function drawPlaced(ctx, img, w, h, photo, band) {
+  const r = photoRect(w, h, img, photo, band)
   ctx.save()
   ctx.shadowColor = 'rgba(2,6,23,0.35)'
   ctx.shadowBlur = 40
@@ -310,11 +310,57 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   const footer = measureFooter(ctx, { offerAmount, offerDetail, proof }, maxWidth)
   const footerTop = contentBottom - footer.height
 
+  // The hook: the largest element on the frame, and the only one allowed to
+  // claim whatever space is left between the badge and the offer block. The
+  // deck takes its share of that room first, so a long subhead shrinks the hook
+  // instead of pushing it into the footer.
+  let hookLines = null
+  let hookPx = 0
+  let hookFirstBaseline = 0
+  let hookLastBaseline = 0
+  let deckTop = hookTop
+
+  if (hook?.trim()) {
+    const room = footerTop - 30 - hookTop - deckH - deckGap
+    const fit = fitText(ctx, typographic(hook), maxWidth, 3, 60, 38, '800', -0.5, {
+      maxHeight: room,
+      lineRatio: 1.13,
+    })
+    hookLines = fit.lines
+    hookPx = fit.px
+    hookFirstBaseline = hookTop + hookPx
+    hookLastBaseline = hookFirstBaseline + (hookLines.length - 1) * hookPx * 1.13
+    // Descenders reach about 0.24em below the baseline, so the deck clears
+    // them rather than tucking under a comma.
+    deckTop = hookLastBaseline + hookPx * 0.24 + deckGap
+  }
+
+  // Worked out before anything is painted, so the plate below can cover the
+  // hook and the deck as a single block.
+  const deckBaselines = []
+  if (deck) {
+    let y = deckTop + deck.px
+    for (let i = 0; i < deck.lines.length; i++) {
+      deckBaselines.push(y)
+      y += deck.px * 1.34
+    }
+  }
+
+  // The free band: from under the last line of text to above the offer block.
+  // On the card layout the photo lives here, so it can never sit on the
+  // headline or the footer unless somebody drags it there on purpose.
+  const textBottom = deckBaselines.length
+    ? deckBaselines[deckBaselines.length - 1] + (deck?.px || 0) * 0.3
+    : hookLines?.length
+      ? hookLastBaseline + hookPx * 0.24
+      : hookTop
+  const band = { top: Math.min(textBottom + 36, footerTop - 60), bottom: footerTop - 36 }
+
   // ---- BACKGROUND ----
   ctx.fillStyle = card ? bgColor || DEFAULT_BG : '#0F172A'
   ctx.fillRect(0, 0, w, h)
   if (background && !card) drawCover(ctx, background, w, h)
-  if (background && card) drawPlaced(ctx, background, w, h, photo)
+  if (background && card) drawPlaced(ctx, background, w, h, photo, band)
 
   // No scrims on the card layout: the colour is the contrast.
   if (!card) {
@@ -366,42 +412,6 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
     ctx.fillText(badgeLabel, padX + 19, headerTop + badgeH / 2 + 1)
-  }
-
-  // The hook: the largest element on the frame, and the only one allowed to
-  // claim whatever space is left between the badge and the offer block. The
-  // deck takes its share of that room first, so a long subhead shrinks the hook
-  // instead of pushing it into the footer.
-  let hookLines = null
-  let hookPx = 0
-  let hookFirstBaseline = 0
-  let hookLastBaseline = 0
-  let deckTop = hookTop
-
-  if (hook?.trim()) {
-    const room = footerTop - 30 - hookTop - deckH - deckGap
-    const fit = fitText(ctx, typographic(hook), maxWidth, 3, 60, 38, '800', -0.5, {
-      maxHeight: room,
-      lineRatio: 1.13,
-    })
-    hookLines = fit.lines
-    hookPx = fit.px
-    hookFirstBaseline = hookTop + hookPx
-    hookLastBaseline = hookFirstBaseline + (hookLines.length - 1) * hookPx * 1.13
-    // Descenders reach about 0.24em below the baseline, so the deck clears
-    // them rather than tucking under a comma.
-    deckTop = hookLastBaseline + hookPx * 0.24 + deckGap
-  }
-
-  // Worked out before anything is painted, so the plate below can cover the
-  // hook and the deck as a single block.
-  const deckBaselines = []
-  if (deck) {
-    let y = deckTop + deck.px
-    for (let i = 0; i < deck.lines.length; i++) {
-      deckBaselines.push(y)
-      y += deck.px * 1.34
-    }
   }
 
   // A busy photo behind the hook beats any amount of gradient: faces and
@@ -475,7 +485,9 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   if (opts.guides) drawGuides(ctx, w, h, safeTop, safeBottom, safeSide, safeOn)
 
   ctx.letterSpacing = '0px'
-  return canvas
+  // The band is handed back so the Studio can turn a drag on the preview into
+  // band fractions.
+  return { canvas, band }
 }
 
 // Works out the footer's total height without drawing, so the hook above it

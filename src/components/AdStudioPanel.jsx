@@ -21,6 +21,7 @@ import {
   DEFAULT_BG,
   DEFAULT_PHOTO,
   LAYOUTS,
+  dragPhoto,
   brandColours,
   SAFE_MODES,
   SIZES,
@@ -485,6 +486,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [layout, setLayout] = useState('cover')
   const [bgColor, setBgColor] = useState(DEFAULT_BG)
   const [photo, setPhoto] = useState(DEFAULT_PHOTO)
+  // The free band each artboard last painted the photo into, so a drag on the
+  // preview moves the photo by the same amount the pointer moved.
+  const bands = useRef([])
 
   // Meta's interface covers the top and bottom of a 9:16. Reels is the
   // strictest of the placements, so it is the default: a CTA hidden behind the
@@ -680,7 +684,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
       if (cancelled) return
       SIZES.forEach((size, i) => {
         const canvas = refs.current[i]
-        if (canvas) renderAd(canvas, size, content, assets, { safeMode, guides })
+        if (canvas) bands.current[i] = renderAd(canvas, size, content, assets, { safeMode, guides })?.band
       })
     })
     return () => {
@@ -695,7 +699,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
     const repaint = (g) =>
       SIZES.forEach((size, i) => {
         const c = refs.current[i]
-        if (c) renderAd(c, size, content, assets, { safeMode, guides: g })
+        if (c) bands.current[i] = renderAd(c, size, content, assets, { safeMode, guides: g })?.band
       })
     if (guides) repaint(false)
     try {
@@ -1242,13 +1246,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
                 setZoomPinned(true)
               }}
               draggable={layout === 'card'}
-              onDragPhoto={(dx, dy) =>
-                setPhoto((p) => ({
-                  ...p,
-                  x: Math.min(1, Math.max(0, (p.x ?? 0.5) + dx)),
-                  y: Math.min(1, Math.max(0, (p.y ?? 0.55) + dy)),
-                }))
-              }
+              onDragPhoto={(dx, dy) => setPhoto((p) => dragPhoto(p, dx, dy, size.h, bands.current[i]))}
             />
             <button
               onClick={() => download(i)}
