@@ -409,7 +409,8 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
               )}
               {set.recipe ? (
                 <button
-                  onClick={() => onEdit?.(set.recipe)}
+                  onClick={() => onEdit?.(set)}
+                  title="Opens it on the Design tab. Save writes over this ad; nothing is duplicated."
                   className="px-2 py-1 rounded bg-orange-600 text-white text-[11px] font-medium hover:bg-orange-700 transition"
                 >
                   Edit

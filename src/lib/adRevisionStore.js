@@ -3,7 +3,7 @@ import { SIZES, canvasToBlob, ensureFonts, loadImage, renderAd } from './adCanva
 import { resolveImageSrc } from './driveAssets'
 import { applyCopyChange } from './adCopy'
 import { applyChanges } from './adRevise'
-import { recipeToContent } from './savedAds'
+import { overwriteSavedAd, recipeToContent } from './savedAds'
 
 /**
  * Applies an owner's note to a saved ad and REPLACES it: same stamp, same
@@ -36,43 +36,24 @@ export async function reviseSavedAd({ client, set, instruction, token }) {
   const [background, logo] = await Promise.all([bitmap(current.backgroundPath), bitmap(current.logoPath)])
   const assets = { background, logo }
 
-  for (const { size, file } of set.ordered || []) {
+  const blobs = {}
+  for (const { size } of set.ordered || []) {
     const spec = SIZES.find((s) => s.key === size.key)
     if (!spec) continue
     const canvas = document.createElement('canvas')
     renderAd(canvas, spec, content, assets, { safeMode: current.safeMode })
-    const blob = await canvasToBlob(canvas)
-    const { error: upErr } = await supabase.storage
-      .from('client-files')
-      .upload(file.storage_path, blob, { contentType: 'image/png', upsert: true })
-    if (upErr) throw upErr
-    // date_uploaded is the version the approval page and the gallery append
-    // to the URL, so the CDN hands out the new picture rather than the cached one.
-    const { error: rowErr } = await supabase
-      .from('client_files')
-      .update({ file_size: blob.size, date_uploaded: new Date().toISOString() })
-      .eq('id', file.id)
-    if (rowErr) throw rowErr
+    blobs[size.key] = await canvasToBlob(canvas)
   }
-
-  const { error: recErr } = await supabase
-    .from('saved_ads')
-    .update({
-      badge: content.badge,
-      hook: content.hook,
-      offer_amount: content.offerAmount,
-      offer_detail: content.offerDetail,
-      subhead: content.subhead,
-      proof: content.proof,
-      primary_text: content.primaryText || null,
-      headline: content.headline || null,
-      description: content.description || null,
-      revised_at: new Date().toISOString(),
-      revision_note: note,
-      revisions: (recipe.revisions || 0) + 1,
-    })
-    .eq('id', recipe.id)
-  if (recErr) throw recErr
+  await overwriteSavedAd({
+    clientId: client.id,
+    set,
+    blobs,
+    content,
+    backgroundPath: current.backgroundPath,
+    logoPath: current.logoPath,
+    safeMode: current.safeMode,
+    note,
+  })
 
   // The owner's "needs changes" is answered, so it comes off the link: the ad
   // goes back to waiting and they approve the revised one on the same page.

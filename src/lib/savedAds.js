@@ -29,10 +29,9 @@ function parseStamp(storagePath) {
  * A flattened PNG cannot be edited; without this row a "saved ad" is a picture
  * and nothing more.
  */
-export async function saveAdRecipe({ clientId, stamp, content, backgroundPath, logoPath, safeMode }) {
-  const { error } = await supabase.from('saved_ads').insert({
-    client_id: clientId,
-    stamp: String(stamp),
+// The recipe columns for one ad, from the Studio's content shape.
+function recipeColumns(content, backgroundPath, logoPath, safeMode) {
+  return {
     badge: content.badge,
     hook: content.hook,
     offer_amount: content.offerAmount,
@@ -57,7 +56,67 @@ export async function saveAdRecipe({ clientId, stamp, content, backgroundPath, l
     description: content.description || null,
     background_path: backgroundPath || null,
     logo_path: logoPath || null,
+  }
+}
+
+export async function saveAdRecipe({ clientId, stamp, content, backgroundPath, logoPath, safeMode }) {
+  const { error } = await supabase.from('saved_ads').insert({
+    client_id: clientId,
+    stamp: String(stamp),
+    ...recipeColumns(content, backgroundPath, logoPath, safeMode),
   })
+  if (error) throw error
+}
+
+/**
+ * Writes new pixels and a new recipe OVER an existing saved ad.
+ *
+ * Same stamp, same storage paths, same recipe row: editing a saved ad is an
+ * edit, not a sibling. Safe for a live ad, because meta-publish uploads the
+ * bytes to Meta and the ad runs on Meta's copy; the approval link is the one
+ * reader of the bucket, and it is meant to show the fix. `note` says why, for
+ * the "revised" tag in the gallery and the owner's page.
+ *
+ * `blobs` is keyed by size (square, feed, story). A size the set never had is
+ * added under the same stamp; a size with no blob is left as it was.
+ */
+export async function overwriteSavedAd({ clientId, set, blobs, content, backgroundPath, logoPath, safeMode, note }) {
+  const recipe = set?.recipe
+  if (!recipe?.id) throw new Error('This ad was saved before the Studio kept its text, so there is nothing to save over.')
+  const now = new Date().toISOString()
+
+  for (const size of SIZES) {
+    const blob = blobs?.[size.key]
+    if (!blob) continue
+    const existing = set.files?.[size.key]
+    const path = existing?.storage_path || `${ADS_PREFIX(clientId)}${set.stamp}-${size.key}.png`
+    const { error: upErr } = await supabase.storage
+      .from('client-files')
+      .upload(path, blob, { contentType: 'image/png', upsert: true })
+    if (upErr) throw upErr
+    // date_uploaded is the version the gallery and the owner's page put on
+    // the URL, so the CDN hands out the new picture and not the cached one.
+    const { error: rowErr } = existing
+      ? await supabase.from('client_files').update({ file_size: blob.size, date_uploaded: now }).eq('id', existing.id)
+      : await supabase.from('client_files').insert({
+          client_id: clientId,
+          file_name: `ad-${set.stamp}-${size.key}.png`,
+          file_type: 'image/png',
+          file_size: blob.size,
+          storage_path: path,
+        })
+    if (rowErr) throw rowErr
+  }
+
+  const { error } = await supabase
+    .from('saved_ads')
+    .update({
+      ...recipeColumns(content, backgroundPath, logoPath, safeMode),
+      revised_at: now,
+      revision_note: note || null,
+      revisions: (recipe.revisions || 0) + 1,
+    })
+    .eq('id', recipe.id)
   if (error) throw error
 }
 

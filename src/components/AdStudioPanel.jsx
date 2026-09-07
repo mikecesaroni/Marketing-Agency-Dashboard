@@ -10,7 +10,7 @@ import LeadFormStudio from './LeadFormStudio'
 import ResearchPanel from './ResearchPanel'
 import PublishToMetaPanel from './PublishToMetaPanel'
 import { fetchPublishedAds } from '../lib/metaPublish'
-import { recipeToContent, saveAdRecipe } from '../lib/savedAds'
+import { overwriteSavedAd, recipeToContent, saveAdRecipe } from '../lib/savedAds'
 import { creativeWarnings } from '../lib/creativeChecks'
 import AdImagePicker from './AdImagePicker'
 import { resolveImageSrc } from '../lib/driveAssets'
@@ -521,6 +521,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState('')
+  // The saved ad open for editing, if any. Saving writes over it; nothing is
+  // duplicated. Cleared by "Save as a new ad" or "Stop editing".
+  const [editing, setEditing] = useState(null)
   const [zipping, setZipping] = useState(false)
 
   const refs = useRef(SIZES.map(() => null))
@@ -712,13 +715,16 @@ export default function AdStudioPanel({ client, intake, seed }) {
   /**
    * Reopens a saved ad for editing.
    *
-   * Saving afterwards writes a NEW set rather than replacing the old one. The
-   * old images keep their public URLs, and those URLs may already be attached
-   * to a live Meta ad; overwriting them would change a running ad's creative
-   * with no way to tell it happened.
+   * Saving afterwards writes OVER the same ad: same stamp, same three files,
+   * same recipe row. An edit is an edit, not a sibling. This is safe for a
+   * live ad because meta-publish uploads the bytes to Meta and the ad runs on
+   * Meta's copy; the approval link is the one reader of the bucket, and it is
+   * meant to show the fix. "Save as a new ad" is there for a real variant.
    */
-  const editSaved = (row) => {
+  const editSaved = (set) => {
+    const row = set?.recipe || set
     const r = recipeToContent(row)
+    setEditing(set?.recipe ? set : null)
     setBadge(r.badge)
     setHook(r.hook)
     setOfferAmount(r.offerAmount)
@@ -771,6 +777,55 @@ export default function AdStudioPanel({ client, intake, seed }) {
 
   // Saves all three sizes back into the same public bucket. Public is exactly
   // what Meta's image uploader needs: it fetches the bytes with no auth.
+  const contentNow = () => ({
+    badge,
+    hook,
+    offerAmount,
+    offerDetail,
+    subhead,
+    proof,
+    accent,
+    badgeColor,
+    hookPlate,
+    layout,
+    bgColor,
+    photo,
+    primaryText,
+    headline: metaHeadline,
+    description: metaDescription,
+  })
+
+  // Writes the artboards over the saved ad that was opened for editing.
+  const saveOver = withoutGuides(async () => {
+    if (!editing) return
+    setSaving(true)
+    setSaved('')
+    setError('')
+    try {
+      const blobs = {}
+      for (let i = 0; i < SIZES.length; i++) {
+        const canvas = refs.current[i]
+        if (canvas) blobs[SIZES[i].key] = await canvasToBlob(canvas)
+      }
+      await overwriteSavedAd({
+        clientId: client.id,
+        set: editing,
+        blobs,
+        content: contentNow(),
+        backgroundPath,
+        logoPath,
+        safeMode,
+        note: 'Edited in the Studio',
+      })
+      setSaved('Saved over the original. Same files, same links; nothing was duplicated.')
+      setSavedAt(Date.now())
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  })
+
   const saveAll = withoutGuides(async () => {
     setSaving(true)
     setSaved('')
@@ -828,6 +883,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
         console.warn('Ad saved but its recipe was not stored:', recipeErr.message)
       }
       setSaved(`Saved ${urls.length} sizes. Find them any time on the Saved ads tab.`)
+      setEditing(null)
       setSavedAt(Date.now())
     } catch (err) {
       setError(err.message)
@@ -984,6 +1040,19 @@ export default function AdStudioPanel({ client, intake, seed }) {
       )}
 
       {seed && <SeedBanner seed={seed} />}
+
+      {editing && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+          <span className="font-semibold">Editing a saved ad</span>
+          <span>
+            from {new Date(Number(editing.stamp)).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.
+            Save writes over it; nothing is duplicated.
+          </span>
+          <button onClick={() => setEditing(null)} className="ml-auto text-[11px] text-blue-700 underline hover:text-blue-900">
+            Stop editing
+          </button>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-3">
         <AdImagePicker
@@ -1274,12 +1343,32 @@ export default function AdStudioPanel({ client, intake, seed }) {
 
       <div className="flex items-center gap-3 pt-2 border-t border-slate-200">
         <button
-          onClick={saveAll}
+          onClick={editing ? saveOver : saveAll}
           disabled={saving}
+          title={editing ? 'Writes these artboards over the saved ad you opened. Nothing is duplicated.' : undefined}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
         >
-          {saving ? 'Saving...' : 'Save all 3 sizes'}
+          {saving ? 'Saving...' : editing ? 'Save changes' : 'Save all 3 sizes'}
         </button>
+        {editing && (
+          <>
+            <button
+              onClick={saveAll}
+              disabled={saving}
+              title="Keeps the original and saves this as a separate ad"
+              className="text-[11px] text-slate-500 underline hover:text-slate-900"
+            >
+              Save as a new ad instead
+            </button>
+            <button
+              onClick={() => setEditing(null)}
+              className="text-[11px] text-slate-400 hover:text-slate-700"
+              title="Keep what is on the artboards but stop pointing at the saved ad. The next save makes a new ad."
+            >
+              Stop editing
+            </button>
+          </>
+        )}
         <button
           onClick={downloadAll}
           disabled={zipping}
