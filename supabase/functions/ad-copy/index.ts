@@ -15,6 +15,9 @@
 // v7: carries the account's own creative findings (see src/lib/creativeChecks.js).
 // v8: appends last night's ad_learnings rows (agency-wide plus this client's),
 //     so the options quote what actually happened, not only what a rule says.
+// v9: mode 'apply'. An owner's "needs changes" note from the approval link is
+//     applied to the ad as CHANGES (one value per field that must move), not
+//     options. The Studio re-renders and overwrites the saved ad with them.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
 import { z } from 'npm:zod'
@@ -60,6 +63,40 @@ const Reply = z.object({
   note: z.string(),
   options: z.array(Suggestion),
 })
+
+// mode 'apply': the answer is the change itself, not a menu.
+const Change = z.object({ field: z.enum(FIELDS), value: z.string() })
+const Applied = z.object({
+  // One line for the person in the CRM: what moved, or why nothing could.
+  note: z.string(),
+  changes: z.array(Change),
+})
+
+const APPLY_SYSTEM = `You apply a business owner's change request to a single
+home services ad that has already been built and sent to them for approval.
+You are given every slot's current value and the owner's note, written on
+their phone under the picture of the ad. Notes are short and shorthand:
+"Pennsylvania instead", "Delaware to PA instead", "say free estimate not $49",
+"drop the review count".
+
+Return CHANGES: one entry per field that must move, with its complete new
+value. Change the FEWEST fields that carry out the request, and keep every
+other slot exactly as it is. Where the request touches a fact that appears in
+several slots (a town in the badge and again in the subhead), change every
+slot it appears in, so the ad does not contradict itself. Keep each field's
+role and length: the badge stays two to four words, the hook five to eight,
+the offerAmount keeps its symbol. Use the owner's own spelling of a place or a
+price. Never invent a number, a rating, a review count, a licence or a
+guarantee.
+
+There is NO BUTTON painted on the image, so never write copy that acts like
+one.
+
+If the note asks for something copy cannot do (a different photo, a colour, a
+bigger logo, "make it pop"), return no changes and say in the note, in one
+plain sentence, that this one needs a person in the Studio and why. If the
+note is ambiguous between two readings, take the one an owner most plausibly
+meant and say which you took in the note.`
 
 const SYSTEM = `You rewrite copy for a single home services ad that someone is
 building right now in an ad studio. You are given every slot's current value
@@ -251,6 +288,33 @@ Deno.serve(async (req) => {
 
   try {
     const client = new Anthropic({ apiKey })
+
+    if (body.mode === 'apply') {
+      const applied = await client.messages.parse({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        thinking: { type: 'adaptive' },
+        system: [{ type: 'text', text: APPLY_SYSTEM, cache_control: { type: 'ephemeral' } }],
+        output_config: { format: zodOutputFormat(Applied, 'ad_copy_changes') },
+        messages: [
+          {
+            role: 'user',
+            content:
+              `${about ? `${about}\n\n` : ''}` +
+              `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
+              `The ad as it stands:\n${slots}\n\nThe owner's note under this ad: "${instruction.slice(0, 1000)}"`,
+          },
+        ],
+      })
+      const out = applied.parsed_output
+      if (!out) {
+        return json({ error: 'Claude replied but not in a shape the studio could read. Try again.' }, 502)
+      }
+      return json({
+        note: out.note,
+        changes: out.changes.filter((c) => (FIELDS as readonly string[]).includes(c.field)),
+      })
+    }
 
     const response = await client.messages.parse({
       model: MODEL,

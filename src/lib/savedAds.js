@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { SIZES } from './adCanvas'
+import { versioned } from './adRevise'
 
 // Saved artboards live under ads/<client id>/<stamp>-<size>.png in the same
 // public bucket the client's other files use. The stamp is what ties the three
@@ -105,7 +106,9 @@ export async function fetchSavedAds(clientId) {
     if (!stamp) continue
     const key = row.storage_path.replace(/.*-(\w+)\.png$/, '$1')
     const set = sets.get(stamp) || { stamp, savedAt: new Date(Number(stamp)), files: {} }
-    set.files[key] = { ...row, url: publicUrl(row.storage_path) }
+    // Versioned by upload time: a revised ad is written to the same path, and
+    // the CDN would otherwise keep serving the old picture for an hour.
+    set.files[key] = { ...row, url: versioned(publicUrl(row.storage_path), row.date_uploaded) }
     sets.set(stamp, set)
   }
 

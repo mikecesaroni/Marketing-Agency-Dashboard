@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { decideApproval, loadApproval } from '../lib/adApprovalStore'
 import { approvalSummary } from '../lib/adApproval'
 import { publicUrl } from '../lib/savedAds'
+import { versioned } from '../lib/adRevise'
 
 /**
  * The page a business owner opens to approve creatives before they run.
@@ -104,7 +105,8 @@ export default function AdApprovalPage() {
 
       <div className="mt-4 space-y-6">
         {items.map((item, i) => {
-          const url = publicUrl(item.storage_path)
+          const url = versioned(publicUrl(item.storage_path), item.version)
+          const revised = item.revised_at && !item.decision
           const wantsChanges = item.decision === 'changes'
           return (
             <div key={item.storage_path} className="rounded-xl border border-slate-200 p-3">
@@ -134,6 +136,12 @@ export default function AdApprovalPage() {
                 />
               </a>
 
+              {revised && (
+                <p className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5 text-sm text-blue-900">
+                  <span className="font-medium">Updated</span>
+                  {item.revision_note ? <> after your note: &ldquo;{item.revision_note}&rdquo;.</> : '.'} Have another look and approve if it is right now.
+                </p>
+              )}
               {item.comment && (
                 <p className="mt-2 text-sm text-slate-700">
                   <span className="font-medium">You said:</span> {item.comment}

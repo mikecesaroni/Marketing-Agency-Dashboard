@@ -41,7 +41,28 @@ async function callAdCopy(body) {
 
   if (data?.error) throw new Error(data.error)
 
-  return { note: data?.note || '', options: data?.options || [] }
+  return { note: data?.note || '', options: data?.options || [], changes: data?.changes || [] }
+}
+
+/**
+ * Applies an owner's "needs changes" note to a saved ad's copy.
+ *
+ * Unlike suggestCopy this asks for the change itself, one value per field
+ * that must move, because the person who wrote the note is not in the room to
+ * click a chip. adRevise.applyChanges then decides which of those fields may
+ * actually move.
+ */
+export async function applyCopyChange({ client, current, instruction }) {
+  const { note, changes } = await callAdCopy({
+    mode: 'apply',
+    client_id: client?.id,
+    client_name: client?.name,
+    industry: client?.industry,
+    market: client?.market,
+    current,
+    instruction,
+  })
+  return { note, changes }
 }
 
 /**
@@ -80,19 +101,7 @@ export async function suggestVideoCopy({ client, intake, current, instruction, a
   })
 }
 
-// What each slot is called on screen. The function answers with the state key,
-// which is not what the field is labelled in the form.
-export const FIELD_LABELS = {
-  badge: 'Location badge',
-  hook: 'Hook',
-  offerAmount: 'Offer amount',
-  offerDetail: 'Offer detail',
-  subhead: 'Subhead',
-  proof: 'Proof strip',
-  primaryText: 'Primary text',
-  headline: 'Headline',
-  description: 'Description',
-}
+export { FIELD_LABELS } from './adRevise'
 
 // Suggestions arrive as a flat list and are far easier to choose between when
 // all the hooks sit together. Insertion order is kept inside each group so the

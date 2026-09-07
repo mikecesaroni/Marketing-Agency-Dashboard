@@ -5,6 +5,8 @@ import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
 import { SIZES } from '../lib/adCanvas'
 import { approvalStatusLine, onePerSet, sizesAvailable } from '../lib/adApproval'
 import { createApprovalLink, fetchApprovalLinks } from '../lib/adApprovalStore'
+import { actionableChanges, describeApplied } from '../lib/adRevise'
+import { reviseSavedAd } from '../lib/adRevisionStore'
 import Button from './ui/Button'
 
 function when(date) {
@@ -19,7 +21,7 @@ function when(date) {
 // Everything saved out of the Studio, grouped back into the three-size sets it
 // was saved as. The public URL matters more than the picture: that is the
 // address Meta fetches the image bytes from.
-export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublish }) {
+export default function SavedAdsGallery({ client, clientId, clientName, onEdit, onPublish }) {
   const [sets, setSets] = useState(null)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState('')
@@ -33,6 +35,9 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
   const [note, setNote] = useState('')
   const [links, setLinks] = useState([])
   const [made, setMade] = useState(null)
+  // Applying an owner's note: which one is running, and what each one did.
+  const [applying, setApplying] = useState('')
+  const [appliedNotes, setAppliedNotes] = useState({})
 
   const load = () =>
     fetchSavedAds(clientId)
@@ -170,6 +175,36 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
     }
   }
 
+  /**
+   * Applies what the owner asked for and replaces the ad in place. The old
+   * pictures are overwritten at the same paths, so the link they already have
+   * shows the fix and the "needs changes" comes off it.
+   */
+  const applyNote = async (link, item) => {
+    const key = `${link.token}:${item.storage_path}`
+    setApplying(key)
+    setError('')
+    try {
+      const result = await reviseSavedAd({
+        client: client || { id: clientId, name: clientName },
+        set: item.set,
+        instruction: item.comment,
+        token: link.token,
+      })
+      const lines = describeApplied(result.applied)
+      setAppliedNotes((n) => ({
+        ...n,
+        [key]: lines.length ? `Applied “${item.comment}”: ${lines.join('; ')}` : `Not applied: ${result.note}`,
+      }))
+      await load()
+      setLinks(await fetchApprovalLinks(clientId))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setApplying('')
+    }
+  }
+
   const remove = async (set) => {
     if (!confirm(`Delete all ${set.ordered.length} sizes of this ad? This cannot be undone.`)) return
     setBusy(set.stamp)
@@ -290,14 +325,36 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
                   <span className="text-slate-600">
                     {approvalStatusLine(link.items, Boolean(link.opened_at))}
                   </span>
-                  {link.items.some((i) => i.comment) && (
-                    <span className="text-amber-700">
-                      {link.items
-                        .filter((i) => i.comment)
-                        .map((i) => `“${i.comment}”`)
-                        .join(' ')}
-                    </span>
-                  )}
+                  {actionableChanges(link, sets).map((item) => {
+                    const key = `${link.token}:${item.storage_path}`
+                    return (
+                      <span key={item.storage_path} className="inline-flex items-center gap-1.5 text-amber-700">
+                        “{item.comment}”
+                        {item.canApply ? (
+                          <button
+                            type="button"
+                            disabled={Boolean(applying)}
+                            onClick={() => applyNote(link, item)}
+                            title="Rewrites the ad to what they asked, repaints all sizes and replaces the saved ad in place. Their link shows the new version and goes back to waiting on them."
+                            className="rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                          >
+                            {applying === key ? 'Applying…' : 'Apply & replace'}
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400" title="Saved before the Studio kept the text, so it has to be rebuilt by hand.">
+                            edit by hand
+                          </span>
+                        )}
+                      </span>
+                    )
+                  })}
+                  {Object.entries(appliedNotes)
+                    .filter(([k]) => k.startsWith(`${link.token}:`))
+                    .map(([k, text]) => (
+                      <span key={k} className={text.startsWith('Not applied') ? 'text-slate-500' : 'text-green-700'}>
+                        {text}
+                      </span>
+                    ))}
                 </div>
               ))}
             </div>
@@ -329,6 +386,14 @@ export default function SavedAdsGallery({ clientId, clientName, onEdit, onPublis
                 <span className="truncate">{when(set.savedAt)}</span>
                 {set.recipe?.hook && (
                   <span className="ml-2 font-normal text-slate-500">{set.recipe.hook}</span>
+                )}
+                {set.recipe?.revised_at && (
+                  <span
+                    className="ml-2 flex-shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700"
+                    title={`Revised ${when(new Date(set.recipe.revised_at))} for the owner's note: “${set.recipe.revision_note || ''}”`}
+                  >
+                    revised
+                  </span>
                 )}
               </p>
               <div className="flex items-center gap-3 flex-shrink-0">

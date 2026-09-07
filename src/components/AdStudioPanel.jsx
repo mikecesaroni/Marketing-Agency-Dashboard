@@ -887,6 +887,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
       <div className="space-y-4">
         <Tabs tab={tab} setTab={setTab} />
         <SavedAdsGallery
+          client={client}
           key={savedAt}
           clientId={client.id}
           clientName={client.name}
@@ -955,6 +956,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
               🎬 Publish a video
             </Button>
             <SavedAdsGallery
+              client={client}
               key={savedAt}
               clientId={client.id}
               clientName={client.name}
