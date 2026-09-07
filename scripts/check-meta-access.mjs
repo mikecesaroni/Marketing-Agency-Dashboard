@@ -199,8 +199,7 @@ check(
 // --- the sentence you forward -------------------------------------------
 check(
   'the chase line names the specific gap',
-  chaseLine(plumb) ===
-    'Plumb Quick: needs to raise the Page permissions so we can post as the Page and turn on Leads access for the Page (Business Settings, Pages, Partners) so GoHighLevel can pull the leads.',
+  chaseLine(plumb) === 'Plumb Quick: needs to raise the Page permissions so we can post as the Page.',
   chaseLine(plumb)
 )
 check(
@@ -209,19 +208,18 @@ check(
   chaseLine(revoked)
 )
 check('a client with nothing wrong gets no line', chaseLine(horizon) === '')
-// Everything the CRM needs, but the Leads switch was skipped: the Page will
-// not appear in GoHighLevel, and that is the only thing to chase.
+// Everything the CRM needs, but the Leads switch was skipped. Not a fault:
+// the CRM does not use it, and GHL goes through a person's own Page role
+// (Belk has no Leads task on the business grant and GHL works). So it is
+// reported on the row and never chased.
 const noLeads = accessReport({
   clients: [{ id: 'c6', name: 'Titos', meta_page_id: '1300608046464638', meta_ad_account_id: null }],
   pages: [{ id: '1300608046464638', name: 'Titos', permitted_tasks: ['PROFILE_PLUS_MANAGE', 'PROFILE_PLUS_ADVERTISE', 'PROFILE_PLUS_CREATE_CONTENT'] }],
   adAccounts: [],
 }).clients[0]
-check('a full grant without Leads access is still ok for the CRM', noLeads.page.state === 'ok' && noLeads.needsAttention === false)
-check(
-  'but the chase line asks for the Leads switch alone',
-  chaseLine(noLeads) === 'Titos: needs to turn on Leads access for the Page (Business Settings, Pages, Partners) so GoHighLevel can pull the leads.',
-  chaseLine(noLeads)
-)
+check('a full grant without Leads access is still ok and needs no attention', noLeads.page.state === 'ok' && noLeads.needsAttention === false)
+check('it is visible on the row', noLeads.page.leads === false)
+check('and is never chased', chaseLine(noLeads) === '', chaseLine(noLeads))
 check(
   'a partial ad account is described by what it cannot do',
   chaseLine(reporting) === 'Reporting Only Co: needs to raise the ad account permissions so we can run ads.',

@@ -33,10 +33,10 @@ function AssetCell({ label, verdict }) {
         )}
         {label === 'Facebook Page' && ['ok', 'partial'].includes(verdict.state) && verdict.leads === false && (
           <span
-            className="text-[11px] text-amber-800"
-            title="Leads access is a separate switch when a client shares a Page. Without it the Page does not show up in GoHighLevel's Facebook integration and no lead form can be pulled from it."
+            className="text-[11px] text-slate-500"
+            title="Leads access is a separate switch when a client shares a Page with a business. The CRM does not need it. It only matters if you reach the Page through the business: GoHighLevel connects with your own Facebook login, so a Page you have a direct role on works in GHL regardless."
           >
-            no leads access (GHL cannot see this Page)
+            no leads access on the business grant
           </span>
         )}
       </div>
