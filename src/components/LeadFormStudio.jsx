@@ -116,6 +116,7 @@ export default function LeadFormStudio({ client }) {
   const [newCustom, setNewCustom] = useState('')
   const [newOptions, setNewOptions] = useState('')
   const [privacyUrl, setPrivacyUrl] = useState(client.privacy_policy_url || '')
+  const [higherIntent, setHigherIntent] = useState(true)
   const [thankYou, setThankYou] = useState(
     'Thanks — we have your details and will call you shortly.'
   )
@@ -195,6 +196,7 @@ export default function LeadFormStudio({ client }) {
         questions,
         privacyPolicyUrl: privacyUrl.trim() || undefined,
         thankYouMessage: thankYou.trim() || undefined,
+        higherIntent,
       })
       setMade({ id: out.form_id, name: formName.trim() })
       await load()
@@ -337,6 +339,24 @@ export default function LeadFormStudio({ client }) {
           placeholder="What they read after submitting"
           className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
         />
+        <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2 text-xs">
+          <input
+            type="checkbox"
+            checked={higherIntent}
+            onChange={(e) => setHigherIntent(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-medium text-slate-900">Higher Intent</span>
+            <span className="ml-1.5 text-[10px] text-green-700">recommended</span>
+            <span className="mt-0.5 block text-slate-500">
+              Meta shows a review screen before the lead submits. About 30 to 40% fewer junk leads for
+              15 to 20% fewer submissions. Off is the "More Volume" form, which people submit by
+              accident. There is no text-a-code step on Meta forms; that is a GoHighLevel workflow
+              after the lead lands.
+            </span>
+          </span>
+        </label>
         <input
           value={privacyUrl}
           onChange={(e) => setPrivacyUrl(e.target.value)}

@@ -495,6 +495,9 @@ export async function createLeadForm({
   privacyPolicyUrl,
   followUpUrl,
   thankYouMessage,
+  // Higher Intent (Meta's review screen before submit). Defaults to on in the
+  // function as well, so a caller that does not know about it still gets it.
+  higherIntent = true,
 }) {
   return callLeadForms({
     action: 'create',
@@ -504,6 +507,7 @@ export async function createLeadForm({
     privacy_policy_url: privacyPolicyUrl,
     follow_up_url: followUpUrl,
     thank_you_message: thankYouMessage,
+    higher_intent: higherIntent,
   })
 }
 

@@ -22,6 +22,7 @@
 // Secrets: META_ACCESS_TOKEN.
 //
 // v2: CUSTOM questions with two or more options are sent as multiple choice.
+// v3: Higher Intent (review screen) on by default via is_optimized_for_quality.
 
 const GRAPH = 'https://graph.facebook.com/v21.0'
 
@@ -217,6 +218,12 @@ Deno.serve(async (req) => {
       // for the field itself, which is not the same as putting it on a button.
       follow_up_action_url: site || privacyUrl,
       locale: 'EN_US',
+      // HIGHER INTENT. Meta shows a review screen before submit, which cuts
+      // junk leads 30 to 40% for 15 to 20% fewer submissions. Every form the
+      // CRM made before v3 was the More Volume kind because this was absent.
+      // On unless the caller says otherwise, and the Studio only ever says
+      // otherwise on purpose.
+      is_optimized_for_quality: body.higher_intent === false ? 'false' : 'true',
       // The form is only reachable from the ad, so there is no reason to hide
       // it from people the ad was not targeted at.
       block_display_for_non_targeted_viewer: 'false',
