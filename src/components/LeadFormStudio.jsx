@@ -29,7 +29,6 @@ import {
 const PREFILLED = new Set(FORM_QUESTIONS.map((q) => q.type))
 
 function QuestionRow({ q, on, toggle, why }) {
-  const custom = q.type === 'CUSTOM'
   return (
     <label
       className={`flex items-start gap-2 rounded-lg border p-2 text-xs transition ${
@@ -39,15 +38,67 @@ function QuestionRow({ q, on, toggle, why }) {
       <input type="checkbox" checked={on} onChange={toggle} className="mt-0.5 flex-shrink-0" />
       <span className="min-w-0">
         <span className="font-medium text-slate-900">{q.label}</span>
-        {!custom && PREFILLED.has(q.type) && (
+        {PREFILLED.has(q.type) && (
           // The single most useful thing to know while choosing: a prefilled
           // answer barely dents completion, a typed one does.
           <span className="ml-1.5 text-[10px] text-green-700">prefilled — nearly free</span>
         )}
-        {custom && <span className="ml-1.5 text-[10px] text-amber-700">typed — costs completions</span>}
         {why && <span className="mt-0.5 block text-slate-500">{why}</span>}
       </span>
     </label>
+  )
+}
+
+// Splits "I own it, I rent" into options, keeping what the person typed.
+function parseOptions(text) {
+  return String(text || '')
+    .split(/[,\n]/)
+    .map((o) => o.trim())
+    .filter(Boolean)
+}
+
+/**
+ * A custom question: the label, its tap-to-answer options, and the why.
+ *
+ * Every custom question is meant to be multiple choice. Two or more options
+ * make it one on the form; fewer and Meta renders a typed box, which costs
+ * completions and cannot be mapped to a GoHighLevel field, so that state is
+ * shown in amber rather than allowed to pass quietly.
+ */
+function CustomRow({ c, onRemove, onOptions }) {
+  const choice = (c.options || []).length >= 2
+  return (
+    <div className="rounded-lg border border-orange-300 bg-orange-50 p-2 text-xs">
+      <div className="flex items-start gap-2">
+        <input type="checkbox" checked onChange={onRemove} className="mt-0.5 flex-shrink-0" title="Remove" />
+        <div className="min-w-0 flex-1">
+          <span className="font-medium text-slate-900">{c.label}</span>
+          {choice ? (
+            <span className="ml-1.5 text-[10px] text-green-700">multiple choice — one tap</span>
+          ) : (
+            <span className="ml-1.5 text-[10px] text-amber-700">
+              typed — costs completions. Add at least two options to make it a tap.
+            </span>
+          )}
+          {c.why && <span className="mt-0.5 block text-slate-500">{c.why}</span>}
+          {choice && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {c.options.map((o, i) => (
+                <span key={`${o}-${i}`} className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-800">
+                  {o}
+                </span>
+              ))}
+            </div>
+          )}
+          <input
+            defaultValue={(c.options || []).join(', ')}
+            onBlur={(e) => onOptions(parseOptions(e.target.value))}
+            placeholder="Options, comma separated — e.g. I own it, I rent"
+            className="mt-1.5 w-full rounded border border-slate-300 bg-white px-2 py-1 text-[11px]"
+          />
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -63,6 +114,7 @@ export default function LeadFormStudio({ client }) {
   const [picked, setPicked] = useState(['FULL_NAME', 'PHONE', 'EMAIL', 'ZIP'])
   const [customs, setCustoms] = useState([])
   const [newCustom, setNewCustom] = useState('')
+  const [newOptions, setNewOptions] = useState('')
   const [privacyUrl, setPrivacyUrl] = useState(client.privacy_policy_url || '')
   const [thankYou, setThankYou] = useState(
     'Thanks — we have your details and will call you shortly.'
@@ -110,7 +162,7 @@ export default function LeadFormStudio({ client }) {
       const typed = out.questions.filter((q) => q.type === 'CUSTOM')
 
       setPicked(standard.map((q) => q.type))
-      setCustoms(typed.map((q) => ({ label: q.label, why: q.why })))
+      setCustoms(typed.map((q) => ({ label: q.label, why: q.why, options: q.options || [] })))
       setWhy(Object.fromEntries(out.questions.map((q) => [q.type === 'CUSTOM' ? q.label : q.type, q.why])))
       if (out.formName) setFormName(out.formName)
       if (out.thankYou) setThankYou(out.thankYou)
@@ -135,7 +187,7 @@ export default function LeadFormStudio({ client }) {
     try {
       const questions = [
         ...picked.map((type) => ({ type })),
-        ...customs.map((c) => ({ type: 'CUSTOM', label: c.label })),
+        ...customs.map((c) => ({ type: 'CUSTOM', label: c.label, options: c.options || [] })),
       ]
       const out = await createLeadForm({
         clientId: client.id,
@@ -232,31 +284,40 @@ export default function LeadFormStudio({ client }) {
         {customs.length > 0 && (
           <div className="space-y-1.5">
             {customs.map((c, i) => (
-              <QuestionRow
+              <CustomRow
                 key={`${c.label}-${i}`}
-                q={{ type: 'CUSTOM', label: c.label }}
-                on
-                toggle={() => setCustoms((cur) => cur.filter((_, j) => j !== i))}
-                why={c.why}
+                c={c}
+                onRemove={() => setCustoms((cur) => cur.filter((_, j) => j !== i))}
+                onOptions={(options) =>
+                  setCustoms((cur) => cur.map((x, j) => (j === i ? { ...x, options } : x)))
+                }
               />
             ))}
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <input
             value={newCustom}
             onChange={(e) => setNewCustom(e.target.value)}
             placeholder="Ask something in their words — e.g. What is the unit doing?"
-            className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-xs"
+            className="min-w-0 rounded border border-slate-300 px-2 py-1.5 text-xs"
+          />
+          <input
+            value={newOptions}
+            onChange={(e) => setNewOptions(e.target.value)}
+            placeholder="Options, comma separated — e.g. No cooling, Weird noise, Want a quote"
+            className="min-w-0 rounded border border-slate-300 px-2 py-1.5 text-xs"
           />
           <Button
             size="sm"
             variant="outline"
-            disabled={!newCustom.trim()}
+            disabled={!newCustom.trim() || parseOptions(newOptions).length < 2}
+            title={parseOptions(newOptions).length < 2 ? 'Give it at least two options so it is a tap, not a typed box' : ''}
             onClick={() => {
-              setCustoms((cur) => [...cur, { label: newCustom.trim(), why: '' }])
+              setCustoms((cur) => [...cur, { label: newCustom.trim(), why: '', options: parseOptions(newOptions) }])
               setNewCustom('')
+              setNewOptions('')
             }}
           >
             Add
@@ -289,7 +350,12 @@ export default function LeadFormStudio({ client }) {
           </Button>
           <span className="text-[11px] text-slate-500">
             {total} question{total === 1 ? '' : 's'}
-            {customs.length > 0 && ` · ${customs.length} typed`}
+            {customs.length > 0 &&
+              ` · ${customs.length} multiple choice${
+                customs.some((c) => (c.options || []).length < 2)
+                  ? ` (${customs.filter((c) => (c.options || []).length < 2).length} still typed)`
+                  : ''
+              }`}
           </span>
         </div>
       </div>

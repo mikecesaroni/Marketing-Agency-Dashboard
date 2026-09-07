@@ -5,7 +5,9 @@
 // lead is a name and a shrug; too many and nobody finishes. Meta's own data
 // and every account here agree that prefilled fields are nearly free and typed
 // answers are expensive, so the recommendation is mostly about which ONE or
-// TWO typed questions earn their place.
+// TWO custom questions earn their place. Every custom question is multiple
+// choice: a tap costs little, typing costs completions and cannot be mapped to
+// a GoHighLevel field.
 //
 // Everything it needs is already in the CRM and is read here rather than
 // passed in: the onboarding form (including "What do you need to know from a
@@ -47,6 +49,9 @@ const Question = z.object({
   // prefilled fields.
   type: z.enum([...STANDARD, 'CUSTOM']),
   label: z.string(),
+  // For a CUSTOM question: the tap-to-answer choices, two to five short ones.
+  // Every custom question is multiple choice. Always empty for a standard field.
+  options: z.array(z.string()),
   why: z.string(),
 })
 
@@ -66,12 +71,20 @@ THE ONE THING THAT MATTERS: a lead has to be callable, and worth calling. That
 means a name and a phone number always, and then the smallest number of extra
 questions that stop the office ringing people they cannot help.
 
-PREFILLED VERSUS TYPED. Meta fills FULL_NAME, PHONE, EMAIL, CITY, ZIP,
+PREFILLED VERSUS CUSTOM. Meta fills FULL_NAME, PHONE, EMAIL, CITY, ZIP,
 STREET_ADDRESS and the rest from the viewer's profile, so those cost almost
-nothing in completion rate. A CUSTOM question is typed by hand and costs real
-completions -- every one has to earn its place. One typed question is normal.
-Two is the most you should ever recommend, and only when the second genuinely
-changes who gets called first.
+nothing in completion rate. A CUSTOM question is one the person answers
+themselves, and EVERY CUSTOM QUESTION YOU RECOMMEND IS MULTIPLE CHOICE: you
+supply two to five short options and the person taps one. A tap costs little;
+typing costs real completions, and a typed answer cannot be mapped to a field
+in GoHighLevel, so never recommend a typed question. If something genuinely
+needs a description, the sales call is where it gets asked. Options are one to
+four words each, in the order the owner would list them, with the answer you
+most want first ("I own it"). Add an "Other" or "Not sure" option only when the
+list genuinely cannot be complete.
+
+Two CUSTOM questions total is the most you should ever recommend, and only
+when the second genuinely changes who gets called first.
 
 ALWAYS INCLUDE FULL_NAME and PHONE. Nothing else is a lead.
 
@@ -86,11 +99,13 @@ EMAIL is worth it as the fallback when nobody answers the phone. Include it
 unless the client has said they only call.
 
 WHAT MAKES A GOOD CUSTOM QUESTION: it sorts the list. "What is going on with
-your unit?" tells a dispatcher whether this is an emergency. "Is this for a
-home you own or rent?" filters out tenants who cannot authorise work. "When
-did you want this done?" separates now from someday. Ask it the way the owner
-would ask it on the phone, in their words, and keep it under about twelve
-words.
+your unit?" with options like "No cooling", "Weird noise or smell", "Want a
+quote on a new system", "Routine tune-up" tells a dispatcher whether this is
+an emergency in one tap. "Do you own or rent the home?" with "I own it" / "I
+rent" filters out tenants who cannot authorise work. "When did you want this
+done?" with "As soon as possible" / "In the next few weeks" / "Just looking"
+separates now from someday. Ask it the way the owner would ask it on the
+phone, in their words, and keep it under about twelve words.
 
 WHAT MAKES A BAD ONE: anything the business can look up itself, anything with
 an obvious answer, anything that reads like a survey, and anything asking for
@@ -257,9 +272,14 @@ Deno.serve(async (req) => {
       // Belt and braces on the type even though the schema constrains it: a
       // type meta-publish does not accept would be dropped there and the form
       // would quietly not ask the question.
-      questions: parsed.questions.filter(
-        (q) => q.type === 'CUSTOM' || (STANDARD as readonly string[]).includes(q.type)
-      ),
+      questions: parsed.questions
+        .filter((q) => q.type === 'CUSTOM' || (STANDARD as readonly string[]).includes(q.type))
+        // Options only mean something on a CUSTOM question; a stray list on a
+        // standard field would confuse the Studio's labels.
+        .map((q) => ({
+          ...q,
+          options: q.type === 'CUSTOM' ? (q.options || []).map((o) => String(o).trim()).filter(Boolean).slice(0, 8) : [],
+        })),
       used_chat: Boolean(said),
     })
   } catch (err) {

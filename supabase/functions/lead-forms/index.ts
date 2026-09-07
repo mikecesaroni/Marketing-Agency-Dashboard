@@ -20,6 +20,8 @@
 // same fix, so whenever it is next deployed for its own reasons the two agree.
 //
 // Secrets: META_ACCESS_TOKEN.
+//
+// v2: CUSTOM questions with two or more options are sent as multiple choice.
 
 const GRAPH = 'https://graph.facebook.com/v21.0'
 
@@ -54,25 +56,46 @@ function json(body: unknown, status = 200) {
   })
 }
 
-function buildQuestions(questions: any[]): Record<string, string>[] {
-  const built: Record<string, string>[] = []
+// Meta keys answers (and options) by this, and it is what shows up in the CSV
+// export and in a GoHighLevel mapping, so it has to be stable and free of
+// punctuation.
+function slug(text: string, max = 60): string {
+  return String(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, max)
+}
+
+function buildQuestions(questions: any[]): Record<string, unknown>[] {
+  const built: Record<string, unknown>[] = []
   for (const q of questions || []) {
     const type = String(q?.type || '').toUpperCase()
     if (STANDARD_QUESTIONS.has(type)) {
       built.push({ type })
     } else if (type === 'CUSTOM' && q?.label) {
-      built.push({
+      const question: Record<string, unknown> = {
         type: 'CUSTOM',
         label: String(q.label),
-        // Meta keys the answer by this, and it is what shows up in the CSV
-        // export and in a GoHighLevel mapping, so it has to be stable and
-        // free of punctuation.
-        key: String(q.key || q.label)
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '_')
-          .replace(/^_+|_+$/g, '')
-          .slice(0, 60),
-      })
+        key: slug(q.key || q.label),
+      }
+      // Two or more options make it MULTIPLE CHOICE on the form: the person
+      // taps one instead of typing. Meta wants each option as {key, value}
+      // and the keys unique within the question. Fewer than two options is a
+      // typed question, so the list is dropped rather than sent half-formed.
+      const options = (Array.isArray(q.options) ? q.options : [])
+        .map((o: unknown) => String(o ?? '').trim())
+        .filter(Boolean)
+      if (options.length >= 2) {
+        const seen = new Set<string>()
+        question.options = options.map((value, i) => {
+          let key = slug(value, 40) || `option_${i + 1}`
+          while (seen.has(key)) key = `${key}_${i + 1}`
+          seen.add(key)
+          return { key, value }
+        })
+      }
+      built.push(question)
     }
   }
   return built
