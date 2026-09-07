@@ -449,6 +449,11 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // Set once the colours came from the logo, so a later logo change can replace
   // them without stamping over a colour picked by hand.
   const [fromLogo, setFromLogo] = useState(false)
+  // Set when a person picks or uploads a logo, cleared once its colours have
+  // been read. A logo chosen on purpose recolours the ad even if the accent
+  // was already set by a chat recipe or an intake colour: picking a logo IS
+  // the instruction. Colours restored from a saved ad or a seed do not set it.
+  const logoChosen = useRef(false)
   const [tab, setTab] = useState('design')
   // Bumped after a save so the gallery refetches instead of showing a stale list.
   const [savedAt, setSavedAt] = useState(0)
@@ -606,7 +611,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
           !stated.accent &&
           !stated.badge &&
           (fromLogo || (accent === DEFAULT_ACCENT && badgeColor === DEFAULT_BADGE))
-        if (untouched) {
+        const chosen = logoChosen.current
+        logoChosen.current = false
+        if (chosen || untouched) {
           setAccent(palette.accent)
           setBadgeColor(palette.badge)
           setFromLogo(true)
@@ -936,8 +943,14 @@ export default function AdStudioPanel({ client, intake, seed }) {
           client={client}
           files={files}
           value={logoPath}
-          onChange={setLogoPath}
-          onUpload={(f) => upload(f, setLogoPath)}
+          onChange={(p) => {
+            logoChosen.current = true
+            setLogoPath(p)
+          }}
+          onUpload={(f) => {
+            logoChosen.current = true
+            return upload(f, setLogoPath)
+          }}
           driveFolderId={driveFolderId}
           onFolderSaved={setDriveFolderId}
         />

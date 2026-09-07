@@ -28,9 +28,9 @@
 //   list {client_id}                     -> images in that client's folder
 //   file {client_id, file_id, thumb?}    -> the bytes, as image/*
 //
-// Scope note: `list` returns the folder's DIRECT children only. Drive has no
-// cheap recursive listing, and walking a tree on every picker open would be
-// slow and easy to abuse. Subfolders are not traversed.
+// Scope note: `list` reads the linked folders AND the folders inside them, two
+// levels down, capped at 60 folders (see expandFolders). Drive's "in parents"
+// means the direct parent only, and clients keep their photos in subfolders.
 
 const DRIVE = 'https://www.googleapis.com/drive/v3'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
@@ -174,6 +174,52 @@ async function driveJson(path: string, params: Record<string, string>, token: st
   return body
 }
 
+// The linked folders plus every folder inside them, two levels down.
+//
+// Clients organise Drive the way they organise a truck: a top folder, then
+// "Logos", "Job photos", "HALO artwork" inside it, then more inside those.
+// Plumbquick's second share was a folder whose every file sat in subfolders,
+// and the CRM showed it as empty because Drive's "in parents" means the direct
+// parent only. Linking each inner folder by hand worked once and would have
+// had to be repeated for every new subfolder anyone made.
+//
+// Two levels and a cap of 60 folders, so a runaway tree costs at most a
+// handful of requests rather than the whole quota. Each level is ONE request,
+// OR'd across the parents found so far.
+async function expandFolders(folderIds: string[], token: string): Promise<{ ids: string[]; subfolders: { id: string; name: string }[] }> {
+  const ids = [...folderIds]
+  const subfolders: { id: string; name: string }[] = []
+  let frontier = [...folderIds]
+  for (let level = 0; level < 2 && frontier.length > 0 && ids.length < 60; level++) {
+    const found = await driveJson(
+      'files',
+      {
+        q:
+          `(${frontier.map((id) => `'${id.replace(/'/g, "\\'")}' in parents`).join(' or ')}) and ` +
+          `trashed = false and mimeType = 'application/vnd.google-apps.folder'`,
+        fields: 'files(id,name)',
+        pageSize: '100',
+        supportsAllDrives: 'true',
+        includeItemsFromAllDrives: 'true',
+      },
+      token
+    )
+    frontier = []
+    for (const f of found.files || []) {
+      if (!f?.id || ids.includes(f.id)) continue
+      // Apple's junk tree. A zipped Mac folder unpacks with a __MACOSX twin
+      // full of 0KB "._" files that Drive labels as images; it was nearly
+      // linked as artwork once already.
+      if (String(f.name || '').startsWith('__MACOSX')) continue
+      ids.push(f.id)
+      subfolders.push({ id: f.id, name: String(f.name || '') })
+      frontier.push(f.id)
+      if (ids.length >= 60) break
+    }
+  }
+  return { ids, subfolders }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return json({}, 200)
 
@@ -243,6 +289,10 @@ Deno.serve(async (req) => {
 
     const token = await accessToken()
 
+    // Everything below reads from the linked folders AND their subfolders.
+    const expanded = await expandFolders(folderIds, token)
+    const allFolderIds = expanded.ids
+
     // -----------------------------------------------------------------------
     // LIST
     // -----------------------------------------------------------------------
@@ -271,7 +321,7 @@ Deno.serve(async (req) => {
           // meaningful ACROSS folders -- which is exactly what somebody who
           // just dropped a file into one of them is looking for.
           q:
-            `(${folderIds.map((id) => `'${id.replace(/'/g, "\\'")}' in parents`).join(' or ')}) and ` +
+            `(${allFolderIds.map((id) => `'${id.replace(/'/g, "\\'")}' in parents`).join(' or ')}) and ` +
             `trashed = false and ` +
             `(mimeType contains 'image/' or mimeType contains 'video/' or ` +
             `mimeType = 'application/pdf')`,
@@ -307,7 +357,10 @@ Deno.serve(async (req) => {
         converted: !BROWSER_RENDERABLE.has(String(f.mimeType)),
       }))
 
-      return json({ files, folder_id: folderId })
+      // folder_ids are the linked folders; subfolders are what was found inside
+      // them, so the picker can say "including Job photos, Logos" rather than
+      // leaving someone to wonder why files they did not link are listed.
+      return json({ files, folder_id: folderId, folder_ids: folderIds, subfolders: expanded.subfolders })
     }
 
     // -----------------------------------------------------------------------
@@ -329,7 +382,7 @@ Deno.serve(async (req) => {
       // has to actually own the file.
       // Against EVERY linked folder, or a file in the second folder would be
       // listed and then refused when something tried to read it.
-      if (!(meta.parents || []).some((p: string) => folderIds.includes(p))) {
+      if (!(meta.parents || []).some((p: string) => allFolderIds.includes(p))) {
         return json({ error: 'That file is not in this client\'s Drive folders.' }, 403)
       }
       const kind = String(meta.mimeType || '')

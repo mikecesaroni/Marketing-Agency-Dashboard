@@ -137,6 +137,28 @@ Deno.serve(async (req) => {
 
     const token = await accessToken()
 
+    // The linked folders plus the folders inside them, two levels down, the
+    // same way drive-assets lists them. A video that lives in "Job videos"
+    // inside the shared folder lists in the CRM and registers with Meta, so
+    // it has to stream from here too, or Meta's download 404s with nothing on
+    // screen to explain why.
+    let frontier = [...folderIds]
+    for (let level = 0; level < 2 && frontier.length > 0 && folderIds.length < 60; level++) {
+      const q =
+        `(${frontier.map((id) => `'${id.replace(/'/g, "\\'")}' in parents`).join(' or ')}) and ` +
+        `trashed = false and mimeType = 'application/vnd.google-apps.folder'`
+      const found = await fetch(
+        `${DRIVE}/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then((r) => r.json())
+      frontier = []
+      for (const f of found?.files || []) {
+        if (!f?.id || folderIds.includes(f.id) || String(f.name || '').startsWith('__MACOSX')) continue
+        folderIds.push(f.id)
+        frontier.push(f.id)
+      }
+    }
+
     const meta = await fetch(
       `${DRIVE}/files/${encodeURIComponent(grant.drive_file_id)}` +
         `?fields=id,name,mimeType,size,parents&supportsAllDrives=true`,
