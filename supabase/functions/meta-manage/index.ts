@@ -52,6 +52,9 @@ const EDITABLE: Record<string, Set<string>> = {
     'bid_amount',
     'start_time',
     'end_time',
+    // Only ever written by drop_location_types below: the current targeting
+    // read back with one retired field removed, never a spec from the caller.
+    'targeting',
   ]),
   ad: new Set(['status', 'name']),
 }
@@ -368,6 +371,29 @@ Deno.serve(async (req) => {
       }
       if (body.start_time !== undefined) fields.start_time = String(body.start_time)
       if (body.end_time !== undefined) fields.end_time = String(body.end_time)
+
+      // September 2026: Meta retired geo_locations.location_types and refuses
+      // to publish any ad set still carrying it (#1870194). Every ad set the
+      // CRM built before then has it. Targeting can only be written whole, so
+      // this reads the ad set's current spec, removes that one field, and
+      // writes the rest back unchanged.
+      if (body.drop_location_types === true) {
+        if (level !== 'adset') return json({ error: 'drop_location_types only applies to an ad set.' }, 400)
+        const current = await graphGet(encodeURIComponent(objectId), { fields: 'targeting,account_id' }, token)
+        if (actId(String(current?.account_id || '')) !== account) {
+          return json({ error: `That ad set does not belong to ${client.name}'s ad account.` }, 400)
+        }
+        const targeting = { ...(current?.targeting || {}) }
+        if (targeting.geo_locations && typeof targeting.geo_locations === 'object') {
+          const geo = { ...(targeting.geo_locations as Record<string, unknown>) }
+          if (!('location_types' in geo)) {
+            return json({ ok: true, level, object_id: objectId, changed: {}, note: 'No location_types on this ad set; nothing to remove.' })
+          }
+          delete geo.location_types
+          targeting.geo_locations = geo
+        }
+        fields.targeting = targeting
+      }
 
       for (const key of Object.keys(fields)) {
         if (!allowed.has(key)) {
