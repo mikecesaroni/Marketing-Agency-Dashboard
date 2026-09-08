@@ -10,22 +10,24 @@ import {
 } from '../lib/partnerData'
 import { Badge, Button, Card, Field, Input, StatCard } from './ui'
 
-// One running balance, the payments it is made of, and the payment it justifies.
+// The split with Ethan, answering three questions and nothing else on the
+// first screen:
 //
-// The whole design goal is that a payout is never a number somebody has to
-// take on trust. Every line of the arithmetic is on screen, in the order it
-// happens, and underneath it the actual client payments the total is made of --
-// each one saying whether it has been split with Ethan yet.
+//   1. What is owed to Ethan right now, and from which clients.
+//   2. What has already been paid to him, and which client payments each
+//      transfer covered.
+//   3. Every client payment, with its client, its date, Ethan's share of it,
+//      and whether that share has been paid or is still owed.
 //
-// SETTLING UP IS THE SAME ARITHMETIC, OVER FEWER ROWS. Tick the payments this
-// transfer covers and the amount is `payoutPreview` over exactly those: the
-// same `ledger` function that produces the balance above. There is no second
-// formula that could drift from the first, which is why ticking a box can be
-// trusted to move the number correctly.
+// The arithmetic behind the numbers (collected, less costs, split, less sent)
+// is still all here, folded away under "How this is worked out", because the
+// balance must never be a number somebody has to take on trust -- but it is
+// the audit trail, not the headline.
 //
-// Everything unsettled starts ticked, so the common case -- "send him his half
-// of everything since last time" -- is one click and its amount already agrees
-// with what the balance says is owed. Unticking is for the times it does not.
+// SETTLING UP IS THE SAME ARITHMETIC OVER FEWER ROWS. Every owed payment
+// starts ticked; the "Send" button's amount is `payoutPreview` over exactly
+// the ticked ones, which is the same `ledger` that produces the balance, so
+// the two cannot disagree. Untick a payment to hold it back.
 
 function Line({ label, value, sub, strong, negative, rule }) {
   return (
@@ -49,14 +51,6 @@ function Line({ label, value, sub, strong, negative, rule }) {
   )
 }
 
-/**
- * Records the transfer and marks what it covered.
- *
- * The amount is prefilled from the ticked payments but stays editable, because
- * what actually left the bank is the fact worth recording. Typing a different
- * figure is allowed and then reported: the balance shows the gap rather than
- * quietly disagreeing with the payments it says are settled.
- */
 function RecordPayout({ preview, onDone }) {
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState('')
@@ -97,10 +91,8 @@ function RecordPayout({ preview, onDone }) {
     return (
       <Button variant="dark" onClick={start} disabled={preview.count === 0 || preview.negative}>
         {preview.count === 0
-          ? 'Tick the payments to settle'
-          : `Send ${money(preview.amount)} for ${preview.count} ${
-              preview.count === 1 ? 'payment' : 'payments'
-            }`}
+          ? 'Tick the payments to pay out'
+          : `Record ${money(preview.amount)} paid to Ethan`}
       </Button>
     )
   }
@@ -120,9 +112,9 @@ function RecordPayout({ preview, onDone }) {
       </div>
 
       <p className="text-[11px] text-slate-500">
-        Marks {preview.count} {preview.count === 1 ? 'payment' : 'payments'} as split with Ethan
+        Marks the {preview.count} ticked {preview.count === 1 ? 'payment' : 'payments'} as paid to Ethan
         {preview.expensesDeducted > 0 && `, along with ${money(preview.expensesDeducted)} of costs`}.
-        To undo it, delete the payout from the list below — the payments go back to unsettled.
+        To undo it, remove the transfer from the &ldquo;Paid to Ethan&rdquo; list.
       </p>
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">{error}</p>}
@@ -139,34 +131,27 @@ function RecordPayout({ preview, onDone }) {
   )
 }
 
-/**
- * One transfer that was sent, and the client payments it covered.
- *
- * "$3,498 to Ethan" is not a checkable statement on its own; "$3,498, being
- * half of these four payments" is. So the row opens.
- *
- * The tie-out line at the bottom is the point of opening it: what it covers,
- * what that entitled him to, and what actually went. On a payout recorded from
- * a selection those agree and the line simply confirms it. The two migrated
- * rows have nothing attributed, and that reads as "no payments recorded
- * against this one" rather than as money gone missing.
- */
-function SentRow({ entry, onDelete }) {
-  const [open, setOpen] = useState(false)
-  const off = Math.abs(entry.difference) >= 0.01
+function ClientName({ name, clientId, className = '' }) {
+  return clientId ? (
+    <Link to={`/client/${clientId}`} className={`hover:text-blue-600 ${className}`}>
+      {name}
+    </Link>
+  ) : (
+    <span className={className}>{name}</span>
+  )
+}
 
+/**
+ * One transfer to Ethan and the client payments it covered, always open:
+ * "$3,498 to Ethan" is not checkable, "$3,498, being half of these four" is.
+ */
+function PaidRow({ entry, onDelete }) {
+  const off = Math.abs(entry.difference) >= 0.01
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full flex-wrap items-center gap-2 px-2.5 py-2 text-left transition hover:bg-slate-50"
-      >
-        <span className="text-sm font-semibold tabular-nums text-slate-900">
-          {money(entry.amount)}
-        </span>
-        <span className="text-xs text-slate-500">
-          to {entry.partner === 'ethan' ? 'Ethan' : 'you'} · {entry.paidOn}
-        </span>
+    <div className="rounded-lg border border-slate-200">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+        <span className="text-base font-bold tabular-nums text-slate-900">{money(entry.amount)}</span>
+        <span className="text-xs text-slate-500">paid {entry.paidOn}</span>
         {entry.method && (
           <Badge tone="neutral" className="capitalize">
             {entry.method}
@@ -174,104 +159,49 @@ function SentRow({ entry, onDelete }) {
         )}
         <span className="text-[11px] text-slate-400">
           {entry.covers === 0
-            ? 'nothing recorded'
-            : `${entry.payments.length} payment${entry.payments.length === 1 ? '' : 's'}${
-                entry.costs.length > 0 ? ` · ${entry.costs.length} cost${entry.costs.length === 1 ? '' : 's'}` : ''
+            ? 'no payments recorded against it'
+            : `covers ${entry.payments.length} client ${entry.payments.length === 1 ? 'payment' : 'payments'}${
+                entry.costs.length > 0 ? ` and ${entry.costs.length} cost${entry.costs.length === 1 ? '' : 's'}` : ''
               }`}
         </span>
-        <span className="ml-auto text-xs text-slate-400">{open ? '−' : '+'}</span>
-      </button>
+        <button
+          onClick={() => onDelete(entry)}
+          className="ml-auto flex-shrink-0 text-[11px] text-slate-400 underline hover:text-red-600"
+          title="No money moves. The record goes and these payments go back to owed."
+        >
+          Remove
+        </button>
+      </div>
 
-      {open && (
-        <div className="border-t border-slate-200 bg-slate-50/60 px-2.5 py-1.5">
-          {entry.payments.length === 0 ? (
-            <p className="py-1 text-[11px] text-slate-500">
-              No payments were recorded against this transfer — it predates being able to tick
-              them. The money is counted in the balance either way; only the attribution is
-              missing.
-            </p>
-          ) : (
-            <>
-              {entry.payments.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-slate-200/70 py-1 last:border-0"
-                >
-                  <span className="w-20 flex-shrink-0 text-[11px] tabular-nums text-slate-500">
-                    {r.paidDate}
-                  </span>
-                  {r.clientId ? (
-                    <Link
-                      to={`/client/${r.clientId}`}
-                      className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800 hover:text-blue-600"
-                    >
-                      {r.client}
-                    </Link>
-                  ) : (
-                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800">
-                      {r.client}
-                    </span>
-                  )}
-                  {r.type && (
-                    <span className="flex-shrink-0 text-[10px] uppercase text-slate-400">
-                      {r.type}
-                    </span>
-                  )}
-                  <span className="w-20 flex-shrink-0 text-right text-xs tabular-nums text-slate-900">
-                    {money(r.amount)}
-                  </span>
-                </div>
-              ))}
-
-              {entry.costs.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-slate-200/70 py-1 last:border-0"
-                >
-                  <span className="w-20 flex-shrink-0 text-[11px] tabular-nums text-slate-500">
-                    {c.spentOn}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-xs text-slate-600">
-                    {c.payee}
-                    {c.frontedByEthan && (
-                      <span className="ml-1 text-[10px] text-slate-400">he fronted it</span>
-                    )}
-                  </span>
-                  <span className="w-20 flex-shrink-0 text-right text-xs tabular-nums text-red-700">
-                    − {money(c.amount)}
-                  </span>
-                </div>
-              ))}
-            </>
-          )}
-
-          {entry.covers > 0 && (
-            <p className="mt-1.5 border-t border-slate-300 pt-1.5 text-[11px] text-slate-600">
-              {money(entry.paymentsTotal)} of payments
-              {entry.costsTotal > 0 && `, less ${money(entry.costsTotal)} of costs`} — his share of
-              that is <span className="font-semibold">{money(entry.entitled)}</span>, and{' '}
-              {money(entry.amount)} was sent
-              {off ? '.' : ', which ties out exactly.'}
-            </p>
-          )}
-
-          <div className="flex items-center justify-between gap-2 pt-1.5">
-            {off ? (
-              <span className="text-[11px] text-amber-800">
-                {entry.difference > 0
-                  ? `${money(entry.difference)} more was sent than these rows come to.`
-                  : `${money(Math.abs(entry.difference))} less was sent than these rows come to.`}
+      {entry.covers > 0 && (
+        <div className="border-t border-slate-200 bg-slate-50/60 px-3 py-1">
+          {entry.payments.map((r) => (
+            <div key={r.id} className="flex items-center gap-x-3 border-b border-slate-200/70 py-1 last:border-0">
+              <span className="w-20 flex-shrink-0 text-[11px] tabular-nums text-slate-500">{r.paidDate}</span>
+              <ClientName name={r.client} clientId={r.clientId} className="min-w-0 flex-1 text-xs font-medium leading-tight text-slate-800" />
+              {r.type && <span className="hidden sm:block flex-shrink-0 text-[10px] uppercase text-slate-400">{r.type}</span>}
+              <span className="hidden sm:block w-20 flex-shrink-0 text-right text-xs tabular-nums text-slate-600">{money(r.amount)}</span>
+              <span className="w-20 sm:w-24 flex-shrink-0 text-right text-xs font-medium tabular-nums text-slate-900">
+                {money(r.ethanCut)}
               </span>
-            ) : (
-              <span />
-            )}
-            <button
-              onClick={() => onDelete(entry)}
-              className="flex-shrink-0 text-[11px] text-slate-400 underline hover:text-red-600"
-            >
-              Remove this record
-            </button>
-          </div>
+            </div>
+          ))}
+          {entry.costs.map((c) => (
+            <div key={c.id} className="flex items-center gap-x-3 border-b border-slate-200/70 py-1 last:border-0">
+              <span className="w-20 flex-shrink-0 text-[11px] tabular-nums text-slate-500">{c.spentOn}</span>
+              <span className="min-w-0 flex-1 truncate text-xs text-slate-600">
+                {c.payee}
+                {c.frontedByEthan && <span className="ml-1 text-[10px] text-slate-400">Ethan fronted it</span>}
+              </span>
+              <span className="w-20 sm:w-24 flex-shrink-0 text-right text-xs tabular-nums text-red-700">− {money(c.amount)}</span>
+              <span className="hidden sm:block w-20 flex-shrink-0" />
+            </div>
+          ))}
+          {off && (
+            <p className="py-1 text-[11px] text-amber-800">
+              These rows come to {money(entry.entitled)} for Ethan; {money(entry.amount)} was sent.
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -279,25 +209,12 @@ function SentRow({ entry, onDelete }) {
 }
 
 /**
- * The payments still to split, and on request the ones already split.
- *
- * SHOWS ONLY WHAT IS STILL TO SETTLE by default -- including in the group
- * totals, which is the part that matters. Showing a client at $11,498 when
- * $2,500 of that was settled weeks ago makes the section describe history
- * rather than work, and the number you want to see next to a tick box is the
- * number that tick box is worth. "Show already split" switches the whole card
- * over: same groups, full totals, settled rows badged.
- *
- * Grouped by client and collapsed, because the useful question is "which
- * clients is this money from" and the row-by-row detail is the follow-up. The
- * per-payment cut is the cut BEFORE costs and is labelled as such -- costs are
- * pooled, so pretending an employee's wage belongs to one client's invoice
- * would be a tidier screen and a worse number.
+ * What is owed, client by client. Each client opens to its payments. Tick
+ * boxes decide what the next transfer covers; everything starts ticked.
  */
-function CountedPayments({ book, preview, selected, onToggle, onToggleGroup, onSelectAll, onClear }) {
+function OwedByClient({ book, preview, selected, onToggle, onToggleGroup, onSelectAll, onClear, onDone }) {
   const [open, setOpen] = useState(() => new Set())
-  const [showSettled, setShowSettled] = useState(false)
-  const groups = useMemo(() => countedByClient(book.counted), [book.counted])
+  const groups = useMemo(() => countedByClient(book.counted).filter((g) => g.openCount > 0), [book.counted])
 
   const toggleOpen = (client) =>
     setOpen((prev) => {
@@ -307,243 +224,303 @@ function CountedPayments({ book, preview, selected, onToggle, onToggleGroup, onS
       return next
     })
 
-  if (book.counted.length === 0) {
-    return (
-      <Card padding="lg">
-        <h3 className="font-semibold text-slate-900">Payments to split with Ethan</h3>
-        <p className="py-4 text-center text-sm text-slate-500">
-          No payments marked paid yet, so there is nothing to split.
-        </p>
-      </Card>
-    )
-  }
-
-  const shown = groups.filter((g) => showSettled || g.openCount > 0)
-
-  // Every tick box on screen. The master box acts on exactly these, so
-  // "all" always means what is visible rather than something hidden below.
   const tickable = book.counted.filter((r) => !r.settled).map((r) => r.id)
   const ticked = tickable.filter((id) => selected.has(id)).length
   const allTicked = tickable.length > 0 && ticked === tickable.length
 
   return (
     <Card padding="lg">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start">
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-slate-900">
-            {showSettled ? 'Every payment in the balance' : 'Payments to split with Ethan'}
-          </h3>
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="font-semibold text-slate-900">Owed to Ethan, by client</h3>
           <p className="mt-0.5 text-sm text-slate-600">
-            {showSettled ? (
-              <>
-                All {book.collectedCount} payments behind the {money(book.collected)} collected,
-                the {book.settledCount} already split included. The {book.splitPercent}% shown against each is{' '}
-                <span className="text-slate-400">before costs</span>.
-              </>
-            ) : (
-              <>
-                The {book.unsettledCount} {book.unsettledCount === 1 ? 'payment' : 'payments'} not
-                yet split with Ethan, worth {money(book.unsettledTotal)}. Tick what a transfer
-                covers — the amount to send is worked out above.
-              </>
-            )}
+            {book.unsettledCount === 0
+              ? 'Every collected payment has been paid out. Nothing owed.'
+              : `${book.unsettledCount} collected ${book.unsettledCount === 1 ? 'payment' : 'payments'} not yet paid out to Ethan. Open a client to see each one.`}
           </p>
         </div>
-        {book.settledCount > 0 && (
-          <button
-            onClick={() => setShowSettled((v) => !v)}
-            className="flex-shrink-0 text-xs text-slate-500 underline hover:text-slate-800"
-          >
-            {showSettled
-              ? 'Only what is left to split'
-              : `Show ${book.settledCount} already split`}
-          </button>
-        )}
+        {book.unsettledCount > 0 && <RecordPayout preview={preview} onDone={onDone} />}
       </div>
 
-      {/* One box for the whole list, because "send him his half of everything
-          since last time" is the normal case and it should cost one click. */}
-      {tickable.length > 0 && (
-        <label className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-          <input
-            type="checkbox"
-            checked={allTicked}
-            ref={(el) => {
-              if (el) el.indeterminate = ticked > 0 && !allTicked
-            }}
-            onChange={() => (allTicked ? onClear() : onSelectAll())}
-            className="h-4 w-4 flex-shrink-0 rounded"
-          />
-          <span className="text-sm font-medium text-slate-900">
-            All {tickable.length} unsettled
-          </span>
-          <span className="ml-auto text-xs text-slate-500">
-            {ticked} ticked ·{' '}
-            {preview.negative ? (
-              <>
-                short by{' '}
-                <span className="font-semibold tabular-nums text-amber-800">
-                  {money(Math.abs(preview.amount))}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="font-semibold tabular-nums text-slate-900">
-                  {money(preview.amount)}
-                </span>{' '}
-                to send
-              </>
-            )}
-          </span>
-        </label>
-      )}
+      {groups.length > 0 && (
+        <>
+          <label className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <input
+              type="checkbox"
+              checked={allTicked}
+              ref={(el) => {
+                if (el) el.indeterminate = ticked > 0 && !allTicked
+              }}
+              onChange={() => (allTicked ? onClear() : onSelectAll())}
+              className="h-4 w-4 flex-shrink-0 rounded"
+            />
+            <span className="text-sm text-slate-700">
+              {ticked === tickable.length ? 'All' : ticked} of {tickable.length} ticked for the next payout
+            </span>
+            <span className="ml-auto text-sm tabular-nums">
+              {preview.negative ? (
+                <span className="text-amber-800">short by {money(Math.abs(preview.amount))}</span>
+              ) : (
+                <>
+                  <span className="font-semibold text-slate-900">{money(preview.amount)}</span>
+                  <span className="text-slate-500"> to send</span>
+                </>
+              )}
+            </span>
+          </label>
 
-      <div className="space-y-1.5">
-        {shown.map((g) => {
-          const isOpen = open.has(g.client)
-          const rows = book.counted.filter(
-            (r) => r.client === g.client && (showSettled || !r.settled)
-          )
-          const ticked = g.openIds.filter((id) => selected.has(id)).length
-          const allTicked = g.openCount > 0 && ticked === g.openCount
-          // The figures next to a tick box have to be what that box is worth,
-          // so they are the unsettled ones unless the settled rows are on show.
-          const count = showSettled ? g.count : g.openCount
-          const total = showSettled ? g.total : g.openTotal
-          const cut = showSettled ? g.ethanCut : g.openEthanCut
+          <div className="hidden sm:flex items-center gap-x-3 px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <span className="w-4 flex-shrink-0" />
+            <span className="min-w-0 flex-1">Client</span>
+            <span className="hidden sm:block w-24 flex-shrink-0 text-right">Collected</span>
+            <span className="w-24 sm:w-28 flex-shrink-0 text-right">Owed to Ethan</span>
+            <span className="w-6 flex-shrink-0" />
+          </div>
 
-          return (
-            <div key={g.client} className="overflow-hidden rounded-lg border border-slate-200">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={allTicked}
-                  // Some but not all: the box shows the group is partly in.
-                  ref={(el) => {
-                    if (el) el.indeterminate = ticked > 0 && !allTicked
-                  }}
-                  disabled={g.openCount === 0}
-                  onChange={() => onToggleGroup(g.openIds, !allTicked)}
-                  className="h-4 w-4 flex-shrink-0 rounded disabled:opacity-30"
-                  title={g.openCount === 0 ? 'All settled' : `Tick all of ${g.client}`}
-                />
-                <button
-                  onClick={() => toggleOpen(g.client)}
-                  className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-left"
-                >
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
-                    {g.client}
-                  </span>
-                  <span className="flex-shrink-0 text-[11px] text-slate-400">
-                    {count} {count === 1 ? 'payment' : 'payments'}
-                    {showSettled && g.settledCount > 0 && ` · ${g.settledCount} split`}
-                  </span>
-                  <span className="w-24 flex-shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">
-                    {money(total)}
-                  </span>
-                  <span className="w-28 flex-shrink-0 text-right text-xs tabular-nums text-slate-500">
-                    {money(cut)} → Ethan
-                  </span>
-                  <span className="w-6 flex-shrink-0 text-right text-xs text-slate-400">
-                    {isOpen ? '−' : '+'}
-                  </span>
-                </button>
-              </div>
-
-              {isOpen && (
-                <div className="border-t border-slate-200 bg-slate-50/60 px-3 py-1">
-                  {rows.map((r) => (
-                    <div
-                      key={r.id}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-200/70 py-1.5 last:border-0"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(r.id)}
-                        disabled={r.settled}
-                        onChange={() => onToggle(r.id)}
-                        className="h-4 w-4 flex-shrink-0 rounded disabled:opacity-30"
-                        title={
-                          r.settled
-                            ? 'Already split with Ethan. Delete its payout to undo.'
-                            : 'Include in the next payout'
-                        }
-                      />
-                      <span className="w-20 flex-shrink-0 text-xs tabular-nums text-slate-500">
-                        {r.paidDate}
+          <div className="space-y-1.5">
+            {groups.map((g) => {
+              const isOpen = open.has(g.client)
+              const rows = book.counted.filter((r) => r.client === g.client && !r.settled)
+              const gTicked = g.openIds.filter((id) => selected.has(id)).length
+              const gAll = gTicked === g.openCount
+              return (
+                <div key={g.client} className="overflow-hidden rounded-lg border border-slate-200">
+                  <div className="flex items-center gap-x-3 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={gAll}
+                      ref={(el) => {
+                        if (el) el.indeterminate = gTicked > 0 && !gAll
+                      }}
+                      onChange={() => onToggleGroup(g.openIds, !gAll)}
+                      className="h-4 w-4 flex-shrink-0 rounded"
+                      title={`Tick all of ${g.client}`}
+                    />
+                    <button onClick={() => toggleOpen(g.client)} className="flex min-w-0 flex-1 items-center gap-x-3 text-left">
+                      <span className="min-w-0 flex-1 text-sm font-semibold leading-tight text-slate-900">
+                        {g.client}
+                        <span className="ml-2 whitespace-nowrap text-[11px] font-normal text-slate-400">
+                          {g.openCount} {g.openCount === 1 ? 'payment' : 'payments'}
+                        </span>
                       </span>
-                      {r.type && (
-                        <Badge tone="neutral" className="flex-shrink-0 capitalize">
-                          {r.type}
-                        </Badge>
+                      <span className="hidden sm:block w-24 flex-shrink-0 text-right text-sm tabular-nums text-slate-600">{money(g.openTotal)}</span>
+                      <span className="w-24 sm:w-28 flex-shrink-0 text-right text-sm font-bold tabular-nums text-slate-900">
+                        {money(g.openEthanCut)}
+                      </span>
+                      <span className="w-6 flex-shrink-0 text-right text-xs text-slate-400">{isOpen ? '−' : '+'}</span>
+                    </button>
+                  </div>
+
+                  {isOpen && (
+                    <div className="border-t border-slate-200 bg-slate-50/60 px-3 py-1">
+                      {rows.map((r) => (
+                        <div key={r.id} className="flex items-center gap-x-3 border-b border-slate-200/70 py-1.5 last:border-0">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(r.id)}
+                            onChange={() => onToggle(r.id)}
+                            className="h-4 w-4 flex-shrink-0 rounded"
+                            title="Include in the next payout"
+                          />
+                          <span className="w-20 flex-shrink-0 text-xs tabular-nums text-slate-500">{r.paidDate}</span>
+                          <span className="min-w-0 flex-1 text-[10px] uppercase text-slate-400">{r.type || ''}</span>
+                          <span className="hidden sm:block w-24 flex-shrink-0 text-right text-sm tabular-nums text-slate-600">{money(r.amount)}</span>
+                          <span className="w-24 sm:w-28 flex-shrink-0 text-right text-sm font-medium tabular-nums text-slate-900">
+                            {money(r.ethanCut)}
+                          </span>
+                          <span className="w-6 flex-shrink-0" />
+                        </div>
+                      ))}
+                      {g.clientId && (
+                        <div className="py-1.5">
+                          <Link to={`/client/${g.clientId}`} className="text-xs text-slate-500 underline hover:text-slate-800">
+                            Open {g.client}
+                          </Link>
+                        </div>
                       )}
-                      <span className="min-w-0 flex-1">
-                        {r.settled && (
-                          <Badge tone="success" className="flex-shrink-0">
-                            split &amp; sent {r.settledOn}
-                          </Badge>
-                        )}
-                      </span>
-                      <span className="w-24 flex-shrink-0 text-right text-sm tabular-nums text-slate-900">
-                        {money(r.amount)}
-                      </span>
-                      <span className="w-28 flex-shrink-0 text-right text-xs tabular-nums text-slate-500">
-                        {money(r.ethanCut)} → Ethan
-                      </span>
-                      <span className="w-6 flex-shrink-0" />
-                    </div>
-                  ))}
-                  {g.clientId && (
-                    <div className="py-1.5">
-                      <Link
-                        to={`/client/${g.clientId}`}
-                        className="text-xs text-slate-500 underline hover:text-slate-800"
-                      >
-                        Open {g.client}
-                      </Link>
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+              )
+            })}
+          </div>
 
-      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 border-t border-slate-300 pt-2 text-sm">
-        <span className="font-semibold text-slate-900">
-          {showSettled ? (
-            <>
-              {book.collectedCount} {book.collectedCount === 1 ? 'payment' : 'payments'} counted
-              <span className="ml-2 font-normal text-slate-500">
-                {book.settledCount} split with Ethan, {book.unsettledCount} not yet
-              </span>
-            </>
-          ) : (
-            <>
-              {book.unsettledCount} {book.unsettledCount === 1 ? 'payment' : 'payments'} to split
-              {book.settledCount > 0 && (
-                <span className="ml-2 font-normal text-slate-500">
-                  {book.settledCount} already split, {money(book.settledTotal)}
-                </span>
-              )}
-            </>
+          <div className="mt-3 flex items-center gap-x-3 border-t border-slate-300 px-3 pt-2 text-sm">
+            <span className="w-4 flex-shrink-0" />
+            <span className="min-w-0 flex-1 font-semibold text-slate-900">Total owed</span>
+            <span className="hidden sm:block w-24 flex-shrink-0 text-right tabular-nums text-slate-600">{money(book.unsettledTotal)}</span>
+            <span className="w-24 sm:w-28 flex-shrink-0 text-right font-bold tabular-nums text-slate-900">
+              {money(book.owed.ethan)}
+            </span>
+            <span className="w-6 flex-shrink-0" />
+          </div>
+          {book.sharedExpenses > 0 && (
+            <p className="mt-1 px-3 text-[11px] text-slate-500">
+              The per-client figures are Ethan&rsquo;s share before costs. The total owed has the shared
+              costs taken off, which is why it can be lower than the column above it.
+            </p>
           )}
-        </span>
-        <span className="font-bold tabular-nums text-slate-900">
-          {money(showSettled ? book.collected : book.unsettledTotal)}
-        </span>
+        </>
+      )}
+    </Card>
+  )
+}
+
+/** Every collected payment, one row each, with where its share stands. */
+function EveryPayment({ book }) {
+  const [filter, setFilter] = useState('all')
+  const rows = book.counted.filter((r) => (filter === 'all' ? true : filter === 'owed' ? !r.settled : r.settled))
+
+  return (
+    <Card padding="lg">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="font-semibold text-slate-900">Every payment</h3>
+          <p className="mt-0.5 text-sm text-slate-600">
+            All {book.collectedCount} collected payments, newest first, with Ethan&rsquo;s {book.splitPercent}% of each
+            and whether it has been paid to him.
+          </p>
+        </div>
+        <div className="flex flex-shrink-0 gap-1 text-xs">
+          {[
+            ['all', `All ${book.collectedCount}`],
+            ['owed', `Owed ${book.unsettledCount}`],
+            ['paid', `Paid ${book.settledCount}`],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`rounded-full px-2.5 py-1 ${
+                filter === key ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Why the total is smaller than the payments page shows. Left
-          unexplained, this is the first thing that makes someone distrust the
-          number. */}
+      {rows.length === 0 ? (
+        <p className="py-4 text-center text-sm text-slate-500">Nothing here.</p>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {rows.map((r) => (
+            <div key={r.id} className="flex items-start gap-3 py-2">
+              <div className="min-w-0 flex-1">
+                <ClientName name={r.client} clientId={r.clientId} className="block text-sm font-medium leading-tight text-slate-900" />
+                <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">
+                  {r.paidDate}
+                  {r.type && <span className="ml-1.5 uppercase text-slate-400">{r.type}</span>}
+                  <span className="ml-1.5">{money(r.amount)} collected</span>
+                </p>
+              </div>
+              <div className="flex-shrink-0 text-right">
+                <p className="text-sm font-semibold tabular-nums text-slate-900">{money(r.ethanCut)}</p>
+                <p className="mt-0.5">
+                  {r.settled ? <Badge tone="success">paid {r.settledOn}</Badge> : <Badge tone="warning">owed</Badge>}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {book.uncountedCount > 0 && (
         <p className="mt-2 text-[11px] text-slate-500">
-          {book.uncountedCount} other {book.uncountedCount === 1 ? 'payment' : 'payments'} worth{' '}
-          {money(book.uncounted)} are not in this total — they are not marked paid, or have no paid
-          date. They join the split the day they are marked collected.
+          {book.uncountedCount} other {book.uncountedCount === 1 ? 'payment' : 'payments'} worth {money(book.uncounted)} are
+          not in here because they are not marked paid yet. They join the day they are collected.
         </p>
+      )}
+    </Card>
+  )
+}
+
+/** The derivation, folded away. Everything the headline numbers are made of. */
+function HowItWorks({ book, splitPercent, onSplitChange }) {
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(splitPercent))
+
+  useEffect(() => setDraft(String(splitPercent)), [splitPercent])
+
+  const save = async () => {
+    const n = Number(draft)
+    if (!(n > 0 && n < 100)) return
+    await onSplitChange(n)
+    setEditing(false)
+  }
+
+  return (
+    <Card padding="lg">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between text-left">
+        <span className="font-semibold text-slate-900">How this is worked out</span>
+        <span className="text-xs text-slate-400">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open && (
+        <div className="mt-3 grid gap-6 lg:grid-cols-2">
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">All time</p>
+            <Line label="Collected" sub={`${book.collectedCount} payments`} value={book.collected} />
+            <Line label="Shared expenses" sub={`${book.sharedExpenseCount} items`} value={book.sharedExpenses} negative />
+            <Line label="Net profit" value={book.net} strong rule />
+            <div className="mt-3 space-y-0.5">
+              <Line label={`Ethan's ${book.splitPercent}%`} value={book.shares.ethan} />
+              <Line label={`Remaining ${100 - book.splitPercent}%`} value={book.shares.me} />
+            </div>
+            {(book.fronted.ethan > 0 || book.fronted.me > 0) && (
+              <div className="mt-3 rounded-lg bg-slate-50 p-2">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Paid out of pocket, owed back</p>
+                {book.fronted.ethan > 0 && <Line label="Ethan fronted" value={book.fronted.ethan} />}
+                {book.fronted.me > 0 && <Line label="The other partner fronted" value={book.fronted.me} />}
+              </div>
+            )}
+            {book.personalExpenses > 0 && (
+              <p className="mt-2 text-[11px] text-slate-500">
+                {money(book.personalExpenses)} of personal costs recorded and deliberately left out of the split.
+              </p>
+            )}
+            <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+              {editing ? (
+                <>
+                  <Input value={draft} onChange={(e) => setDraft(e.target.value)} inputMode="decimal" className="w-20" />
+                  <Button variant="dark" size="sm" onClick={save}>
+                    Save
+                  </Button>
+                  <button onClick={() => setEditing(false)} className="underline">
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => setEditing(true)} className="underline hover:text-slate-800" title="Ethan's percentage. The other partner takes the remainder.">
+                  Split is {splitPercent}/{100 - splitPercent}. Change it
+                </button>
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ethan</p>
+            <Line label="Earned" sub={book.fronted.ethan > 0 ? 'share plus what he fronted' : 'his share'} value={book.earned.ethan} strong />
+            <Line label="Paid to him" sub={`${book.payoutCount} transfer${book.payoutCount === 1 ? '' : 's'}`} value={book.paid.ethan} negative />
+            <Line label={book.owed.ethan < 0 ? 'Overpaid' : 'Owed'} value={Math.abs(book.owed.ethan)} strong rule />
+            {book.owed.ethan < 0 && (
+              <p className="mt-1 text-[11px] text-amber-800">
+                Ethan has had {money(Math.abs(book.owed.ethan))} more than the split works out to. It comes off the next payment.
+              </p>
+            )}
+            {Math.abs(book.unattributed) >= 0.01 && (
+              <p className="mt-3 text-[11px] text-amber-800">
+                {book.unattributed > 0
+                  ? `${money(book.unattributed)} of what has been paid is not accounted for by the payments marked paid.`
+                  : `${money(Math.abs(book.unattributed))} less has been paid than the payments marked paid came to.`}{' '}
+                The balance above is the one to trust.
+              </p>
+            )}
+            <p className="mt-3 text-[11px] text-slate-500">
+              Cash basis, all time. Payments count when collected, costs when spent, transfers when sent. A late
+              expense moves the balance instead of restating a month.
+            </p>
+          </div>
+        </div>
       )}
     </Card>
   )
@@ -551,15 +528,10 @@ function CountedPayments({ book, preview, selected, onToggle, onToggleGroup, onS
 
 export default function PartnerSplitPanel({ payments, expenses, payouts, onChanged }) {
   const [splitPercent, setSplitPercent] = useState(50)
-  const [editingSplit, setEditingSplit] = useState(false)
-  const [splitDraft, setSplitDraft] = useState('50')
   const [selected, setSelected] = useState(() => new Set())
 
   useEffect(() => {
-    fetchSplitPercent().then((p) => {
-      setSplitPercent(p)
-      setSplitDraft(String(p))
-    })
+    fetchSplitPercent().then(setSplitPercent)
   }, [])
 
   const book = useMemo(
@@ -567,13 +539,10 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
     [payments, expenses, payouts, splitPercent]
   )
 
-  const unsettledIds = useMemo(
-    () => book.counted.filter((r) => !r.settled).map((r) => r.id),
-    [book.counted]
-  )
+  const unsettledIds = useMemo(() => book.counted.filter((r) => !r.settled).map((r) => r.id), [book.counted])
 
-  // Everything not yet settled, ticked, whenever the data changes -- including
-  // after recording a payout, when what is unsettled has just changed.
+  // Everything owed starts ticked, so "pay him everything since last time" is
+  // one click and already agrees with the balance.
   useEffect(() => {
     setSelected(new Set(unsettledIds))
   }, [unsettledIds])
@@ -601,18 +570,15 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
       return next
     })
 
-  const saveSplit = async () => {
-    const n = Number(splitDraft)
-    if (!(n > 0 && n < 100)) return
+  const changeSplit = async (n) => {
     await saveSplitPercent(n)
     setSplitPercent(n)
-    setEditingSplit(false)
   }
 
   const removePayout = async (p) => {
     if (
       !confirm(
-        `Remove the ${money(p.amount)} sent on ${p.paid_on}? No money moves — the record goes, the balance goes back up, and any payments it covered go back to unsettled.`
+        `Remove the ${money(p.amount)} paid on ${p.paidOn}? No money moves. The record goes, and the payments it covered go back to owed.`
       )
     )
       return
@@ -622,15 +588,27 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
 
   return (
     <div className="mb-4 space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-        <StatCard label="Collected all time" value={money(book.collected)} sub={`${book.collectedCount} payments`} />
-        <StatCard label="Expenses" value={money(book.sharedExpenses)} sub="shared, off the top" />
-        <StatCard label="Net profit" value={money(book.net)} sub="what gets split" />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
         <StatCard
+          className="col-span-2 md:col-span-1"
           label={book.owed.ethan < 0 ? 'Ethan overpaid' : 'Owed to Ethan'}
           value={money(Math.abs(book.owed.ethan))}
-          sub={`${money(book.paid.ethan)} sent so far`}
+          sub={`${book.unsettledCount} ${book.unsettledCount === 1 ? 'payment' : 'payments'} not yet paid out`}
           alert={book.owed.ethan > 0}
+        />
+        <StatCard
+          label="Paid to Ethan"
+          value={money(book.paid.ethan)}
+          sub={`${book.payoutCount} transfer${book.payoutCount === 1 ? '' : 's'}, covering ${book.settledCount} payments`}
+        />
+        <StatCard
+          label="Collected all time"
+          value={money(book.collected)}
+          sub={
+            book.sharedExpenses > 0
+              ? `${book.collectedCount} payments, ${money(book.sharedExpenses)} costs off the top`
+              : `${book.collectedCount} payments, no shared costs yet`
+          }
         />
       </div>
 
@@ -638,206 +616,14 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
         <Card tone="danger" padding="lg">
           <p className="text-sm font-semibold text-red-800">These numbers do not balance.</p>
           <p className="mt-1 text-xs text-red-700">
-            What the two partners have earned between them ({money(book.earned.ethan + book.earned.me)}
-            ) does not add up to what the business account did ({money(book.businessCashChange)}).
-            That is a data problem rather than a rounding one — do not pay from this until it is
-            found.
+            What the two partners have earned between them ({money(book.earned.ethan + book.earned.me)}) does not add up
+            to what the business account did ({money(book.businessCashChange)}). That is a data problem, not rounding.
+            Do not pay from this until it is found.
           </p>
         </Card>
       )}
 
-      <Card padding="lg">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start">
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-slate-900">The split, all time</h3>
-            <p className="mt-0.5 text-sm text-slate-600">
-              One running balance. Everything ever collected, minus everything ever spent, split,
-              minus everything ever sent. Nothing closes off, so a late expense just moves the
-              balance instead of restating a month.
-            </p>
-          </div>
-          <div className="flex flex-shrink-0 items-center gap-2">
-            {editingSplit ? (
-              <>
-                <Input
-                  value={splitDraft}
-                  onChange={(e) => setSplitDraft(e.target.value)}
-                  inputMode="decimal"
-                  className="w-20"
-                />
-                <Button variant="dark" size="sm" onClick={saveSplit}>
-                  Save
-                </Button>
-              </>
-            ) : (
-              <button
-                onClick={() => setEditingSplit(true)}
-                className="text-xs text-slate-500 underline hover:text-slate-800"
-                title="Ethan's percentage. The other partner takes the remainder."
-              >
-                {splitPercent}/{100 - splitPercent} split
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              All time
-            </p>
-
-            <Line
-              label="Collected"
-              sub={`${book.collectedCount} payment${book.collectedCount === 1 ? '' : 's'}`}
-              value={book.collected}
-            />
-            <Line
-              label="Shared expenses"
-              sub={`${book.sharedExpenseCount} item${book.sharedExpenseCount === 1 ? '' : 's'}`}
-              value={book.sharedExpenses}
-              negative
-            />
-            <Line label="Net profit" value={book.net} strong rule />
-
-            <div className="mt-3 space-y-0.5">
-              <Line label={`Ethan's ${book.splitPercent}%`} value={book.shares.ethan} />
-              <Line label={`Your ${100 - book.splitPercent}%`} value={book.shares.me} />
-            </div>
-
-            {(book.fronted.ethan > 0 || book.fronted.me > 0) && (
-              <div className="mt-3 rounded-lg bg-slate-50 p-2">
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Paid out of pocket, owed back
-                </p>
-                {book.fronted.ethan > 0 && <Line label="Ethan fronted" value={book.fronted.ethan} />}
-                {book.fronted.me > 0 && <Line label="You fronted" value={book.fronted.me} />}
-              </div>
-            )}
-
-            {book.personalExpenses > 0 && (
-              <p className="mt-2 text-[11px] text-slate-500">
-                {money(book.personalExpenses)} of personal costs recorded and deliberately left out
-                of the split.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Ethan
-            </p>
-
-            <Line
-              label="Earned"
-              sub={book.fronted.ethan > 0 ? 'share plus what he fronted' : 'his share'}
-              value={book.earned.ethan}
-              strong
-            />
-            <Line
-              label="Sent"
-              sub={`${book.payoutCount} payment${book.payoutCount === 1 ? '' : 's'}`}
-              value={book.paid.ethan}
-              negative
-            />
-            <Line
-              label={book.owed.ethan < 0 ? 'Overpaid' : 'Owed'}
-              value={Math.abs(book.owed.ethan)}
-              strong
-              rule
-            />
-
-            {book.owed.ethan < 0 && (
-              <p className="mt-1 text-[11px] text-amber-800">
-                Ethan has had {money(Math.abs(book.owed.ethan))} more than the split works out to.
-                It comes off the next payment rather than needing to be sent back.
-              </p>
-            )}
-
-            {/* The next transfer, worked out from the ticked payments. Same
-                arithmetic as the column on the left, over fewer rows. */}
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Settle up
-              </p>
-
-              {book.unsettledCount === 0 && preview.count === 0 ? (
-                <p className="py-1 text-sm text-slate-600">
-                  Every payment has been split with Ethan. Nothing to settle.
-                </p>
-              ) : (
-                <>
-                  <Line
-                    label="Ticked payments"
-                    sub={`${preview.count} of ${book.unsettledCount} unsettled`}
-                    value={preview.selectedTotal}
-                  />
-                  <Line label={`His ${book.splitPercent}%`} value={preview.grossCut} />
-                  {preview.expensesDeducted > 0 && (
-                    <Line
-                      label="Less his share of costs"
-                      sub={`${money(preview.expensesDeducted)} not yet settled`}
-                      value={preview.expenseShare}
-                      negative
-                    />
-                  )}
-                  {preview.frontedBack > 0 && (
-                    <Line label="Plus what he fronted" value={preview.frontedBack} />
-                  )}
-                  <Line
-                    label={preview.negative ? 'Short by' : 'To send'}
-                    value={Math.abs(preview.amount)}
-                    negative={preview.negative}
-                    strong
-                    rule
-                  />
-
-                  {preview.negative && (
-                    <p className="mt-1 text-[11px] text-amber-800">
-                      The unsettled costs come to more than these payments earn. Tick more
-                      payments, or the business genuinely lost money over the ones ticked.
-                    </p>
-                  )}
-
-                  <div className="mt-3">
-                    <RecordPayout preview={preview} onDone={onChanged} />
-                  </div>
-                </>
-              )}
-            </div>
-
-            {book.coverage.length > 0 && (
-              <div className="mt-4">
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Everything sent
-                  <span className="ml-1.5 font-normal normal-case tracking-normal text-slate-400">
-                    open one to see which payments it covered
-                  </span>
-                </p>
-                <div className="max-h-80 space-y-1 overflow-y-auto">
-                  {book.coverage.map((entry) => (
-                    <SentRow key={entry.id} entry={entry} onDelete={removePayout} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Sent, versus what the payments marked settled actually entitled
-                him to. Zero unless somebody typed a different figure, and
-                worth saying out loud when it is not. */}
-            {Math.abs(book.unattributed) >= 0.01 && (
-              <p className="mt-3 text-[11px] text-amber-800">
-                {book.unattributed > 0
-                  ? `${money(book.unattributed)} of what has been sent is not accounted for by the payments marked settled.`
-                  : `${money(Math.abs(book.unattributed))} less has been sent than the payments marked settled came to.`}{' '}
-                Both figures are real — the balance above is the one to trust.
-              </p>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      <CountedPayments
+      <OwedByClient
         book={book}
         preview={preview}
         selected={selected}
@@ -845,7 +631,26 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
         onToggleGroup={toggleGroup}
         onSelectAll={() => setSelected(new Set(unsettledIds))}
         onClear={() => setSelected(new Set())}
+        onDone={onChanged}
       />
+
+      <Card padding="lg">
+        <h3 className="font-semibold text-slate-900">Paid to Ethan</h3>
+        <p className="mt-0.5 mb-3 text-sm text-slate-600">
+          {book.coverage.length === 0
+            ? 'Nothing paid out yet.'
+            : `${book.coverage.length} transfer${book.coverage.length === 1 ? '' : 's'}, ${money(book.paid.ethan)} in total. Each one lists the client payments it covered.`}
+        </p>
+        <div className="space-y-2">
+          {book.coverage.map((entry) => (
+            <PaidRow key={entry.id} entry={entry} onDelete={removePayout} />
+          ))}
+        </div>
+      </Card>
+
+      <EveryPayment book={book} />
+
+      <HowItWorks book={book} splitPercent={splitPercent} onSplitChange={changeSplit} />
     </div>
   )
 }
