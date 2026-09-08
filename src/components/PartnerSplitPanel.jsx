@@ -114,7 +114,7 @@ function RecordPayout({ preview, onDone }) {
       <p className="text-[11px] text-slate-500">
         Marks the {preview.count} ticked {preview.count === 1 ? 'payment' : 'payments'} as paid to Ethan
         {preview.expensesDeducted > 0 && `, along with ${money(preview.expensesDeducted)} of costs`}.
-        To undo it, remove the transfer from the &ldquo;Paid to Ethan&rdquo; list.
+        To undo it, remove the transfer from the &ldquo;Paid to Ethan Already&rdquo; list.
       </p>
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">{error}</p>}
@@ -597,7 +597,7 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
           alert={book.owed.ethan > 0}
         />
         <StatCard
-          label="Paid to Ethan"
+          label="Paid to Ethan Already"
           value={money(book.paid.ethan)}
           sub={`${book.payoutCount} transfer${book.payoutCount === 1 ? '' : 's'}, covering ${book.settledCount} payments`}
         />
@@ -635,7 +635,7 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
       />
 
       <Card padding="lg">
-        <h3 className="font-semibold text-slate-900">Paid to Ethan</h3>
+        <h3 className="font-semibold text-slate-900">Paid to Ethan Already</h3>
         <p className="mt-0.5 mb-3 text-sm text-slate-600">
           {book.coverage.length === 0
             ? 'Nothing paid out yet.'
