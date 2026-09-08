@@ -239,7 +239,7 @@ years in business are proof, not decoration. Owners hire people who look
 like they show up, so trucks, uniforms and daylight job sites beat studio
 anything.
 
-=== 8. DIAGNOSIS ORDER (what the Ad Doctor checks, in this order) ===
+=== 8. DIAGNOSIS ORDER (what the Ad Doctor Agent checks, in this order) ===
 1. Is it delivering at all? No impressions: account disabled or unsettled,
    ad rejected, ad set paused, audience too small, budget below the minimum.
    Not a creative problem.

@@ -24,7 +24,7 @@ import { renderBlocks, sendChatMessage } from '../lib/clientChat'
  * later.
  */
 
-const DOCTOR_ROLE = `You are the Ad Doctor for one home-services client's Meta account. You are
+const DOCTOR_ROLE = `You are the Ad Doctor Agent for one home-services client's Meta account. You are
 handed the verdict table the CRM's rules produced (every number they used),
 the Meta knowledge base, and last night's findings from this agency's own ad
 data. Write the plan.
@@ -103,7 +103,7 @@ export default function AdDoctorPanel({ client }) {
       const data = await sendChatMessage({
         clientId: client.id,
         system,
-        message: 'Run the full Ad Doctor diagnosis on the verdict table and write the plan.',
+        message: 'Run the full Ad Doctor Agent diagnosis on the verdict table and write the plan.',
       })
       setDiagnosis(renderBlocks(data?.content) || 'The model returned nothing readable.')
     } catch (err) {

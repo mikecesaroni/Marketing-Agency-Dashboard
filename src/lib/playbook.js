@@ -205,7 +205,7 @@ SCALE when: CPL <= 0.7x account median with 10+ leads. Raise budget <= 20% at a
 time (more resets learning), or duplicate the winning creative into the next
 format instead of raising budget at all.
 
-The CRM's Ad Doctor runs these exact rules against the daily sync data and
+The CRM's Ad Doctor Agent runs these exact rules against the daily sync data and
 flags the verdicts. Trust it for the arithmetic; overrule it with context it
 can't see (a seasonal push, a client request, a tracking gap).
 
