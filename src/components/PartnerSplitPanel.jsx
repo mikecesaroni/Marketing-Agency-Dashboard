@@ -24,10 +24,10 @@ import { Badge, Button, Card, Field, Input, StatCard } from './ui'
 // balance must never be a number somebody has to take on trust -- but it is
 // the audit trail, not the headline.
 //
-// SETTLING UP IS THE SAME ARITHMETIC OVER FEWER ROWS. Every owed payment
-// starts ticked; the "Send" button's amount is `payoutPreview` over exactly
-// the ticked ones, which is the same `ledger` that produces the balance, so
-// the two cannot disagree. Untick a payment to hold it back.
+// SETTLING UP IS THE SAME ARITHMETIC OVER FEWER ROWS. Nothing starts ticked;
+// tick the payments a transfer covers (or the master box for all of them) and
+// the "Record" button's amount is `payoutPreview` over exactly those, which is
+// the same `ledger` that produces the balance, so the two cannot disagree.
 
 function Line({ label, value, sub, strong, negative, rule }) {
   return (
@@ -255,10 +255,10 @@ function OwedByClient({ book, preview, selected, onToggle, onToggleGroup, onSele
               className="h-4 w-4 flex-shrink-0 rounded"
             />
             <span className="text-sm text-slate-700">
-              {ticked === tickable.length ? 'All' : ticked} of {tickable.length} ticked for the next payout
+              {ticked === 0 ? 'Tick what the next payout covers, or tick here for all' : `${ticked === tickable.length ? 'All' : ticked} of ${tickable.length} ticked for the next payout`}
             </span>
             <span className="ml-auto text-sm tabular-nums">
-              {preview.negative ? (
+              {ticked === 0 ? null : preview.negative ? (
                 <span className="text-amber-800">short by {money(Math.abs(preview.amount))}</span>
               ) : (
                 <>
@@ -541,10 +541,12 @@ export default function PartnerSplitPanel({ payments, expenses, payouts, onChang
 
   const unsettledIds = useMemo(() => book.counted.filter((r) => !r.settled).map((r) => r.id), [book.counted])
 
-  // Everything owed starts ticked, so "pay him everything since last time" is
-  // one click and already agrees with the balance.
+  // Nothing starts ticked. A payout covers exactly what somebody chose to
+  // tick, and the master box is there for "everything since last time". When
+  // the data changes (a payout recorded, a payment collected), any tick that
+  // no longer points at an owed payment is dropped.
   useEffect(() => {
-    setSelected(new Set(unsettledIds))
+    setSelected((prev) => new Set([...prev].filter((id) => unsettledIds.includes(id))))
   }, [unsettledIds])
 
   const preview = useMemo(
