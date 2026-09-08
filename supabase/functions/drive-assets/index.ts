@@ -27,6 +27,8 @@
 //   whoami {}                            -> the service account's email
 //   list {client_id}                     -> images in that client's folder
 //   file {client_id, file_id, thumb?}    -> the bytes, as image/*
+//        ... with base64: true            -> {data_url} instead of raw bytes, for
+//                                           callers that cannot take a binary body
 //
 // Scope note: `list` reads the linked folders AND the folders inside them, two
 // levels down, capped at 60 folders (see expandFolders). Drive's "in parents"
@@ -68,6 +70,15 @@ function json(body: unknown, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json', ...CORS },
   })
+}
+
+// The same bytes as a data: URL. pg_net and other text-only callers cannot
+// carry a binary body, so `file` with base64: true answers in JSON instead.
+async function asDataUrl(res: Response, contentType: string): Promise<Response> {
+  const buf = new Uint8Array(await res.arrayBuffer())
+  let s = ''
+  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000))
+  return json({ data_url: `data:${contentType};base64,${btoa(s)}` })
 }
 
 function b64url(bytes: Uint8Array): string {
@@ -411,7 +422,9 @@ Deno.serve(async (req) => {
       const unrenderable = !BROWSER_RENDERABLE.has(String(meta.mimeType))
       // Forced for video, so the raw-bytes fallback at the end of this branch
       // can never stream a whole clip to a browser that asked for a picture.
-      const wantsRender = body.thumb || unrenderable
+      // `size` (longest edge, px) asks Drive for a render at that size; used
+      // with base64 by callers that want something between a thumb and 2048.
+      const wantsRender = body.thumb || unrenderable || Number(body.size) > 0
       if (wantsRender) {
         if (!meta.thumbnailLink) {
           // Only fatal for a format we could not have displayed anyway.
@@ -424,11 +437,12 @@ Deno.serve(async (req) => {
             )
           }
         } else {
-          const size = body.thumb ? THUMB_PX : RENDER_PX
+          const size = Number(body.size) > 0 ? Math.min(2048, Math.round(Number(body.size))) : body.thumb ? THUMB_PX : RENDER_PX
           const rendered = await fetch(
             String(meta.thumbnailLink).replace(/=s\d+$/, `=s${size}`)
           )
           if (rendered.ok) {
+            if (body.base64) return await asDataUrl(rendered, rendered.headers.get('Content-Type') || 'image/jpeg')
             return new Response(rendered.body, {
               headers: {
                 'Content-Type': rendered.headers.get('Content-Type') || 'image/jpeg',
@@ -459,6 +473,7 @@ Deno.serve(async (req) => {
         return json({ error: `Drive would not return the file (${bytes.status}).` }, 502)
       }
 
+      if (body.base64) return await asDataUrl(bytes, meta.mimeType)
       return new Response(bytes.body, {
         headers: {
           'Content-Type': meta.mimeType,
