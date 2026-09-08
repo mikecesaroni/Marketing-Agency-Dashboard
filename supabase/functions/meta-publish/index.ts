@@ -516,13 +516,14 @@ function buildTargeting(locations: any[], ageMin?: number, ageMax?: number) {
     }
   }
 
-  // People who LIVE here, not people passing through. Meta defaults to
-  // ["home","recent"] when omitted, and "recent" is how Summit Water Pros got a
-  // lead from Sacramento, three hours away. Accepted on CREATE only -- updating
-  // an existing ad set is refused ("Please remove all values from the
-  // location_types field"), so a running ad set has to be replaced rather than
-  // narrowed. Full story and the regression guard: scripts/check-targeting.mjs.
-  if (Object.keys(geo).length > 0) geo.location_types = ['home']
+  // NO location_types. Meta retired the field in September 2026: an ad set
+  // that still carries it is refused with #1870194 ("a location targeting
+  // option that has been removed"), and the only behaviour left is Meta's
+  // default of people living in OR recently in the area. This used to be set
+  // to ['home'] after Summit Water Pros got a lead from Sacramento off the
+  // "recent" half of that default; the field is gone, so the defence against
+  // out-of-area leads is now the radius and the form's qualifying question.
+  // Regression guard: scripts/check-targeting.mjs.
 
   return {
     geo_locations: geo,

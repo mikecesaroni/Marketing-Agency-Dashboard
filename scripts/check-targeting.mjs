@@ -55,24 +55,19 @@ const BUILDERS = [
   },
 ]
 
+// September 2026: Meta RETIRED location_types. An ad set that carries it is
+// refused with #1870194 ("a location targeting option that has been removed"),
+// so the guard now runs the other way: neither builder may set it. The
+// Sacramento problem above is real and still unsolved at the targeting layer;
+// what is left is a tight radius and a qualifying question on the form.
 for (const builder of BUILDERS) {
   const src = read(builder.file)
   const assignments = [...src.matchAll(/location_types\s*=\s*(\[[^\]]*\])/g)].map((m) => m[1])
-
   check(
-    `${builder.what} sets location_types at all`,
-    assignments.length > 0,
-    'Meta defaults to ["home","recent"] when it is omitted, which targets visitors'
+    `${builder.what} does not set location_types`,
+    assignments.length === 0,
+    `found location_types = ${assignments.join(' / ')} — Meta refuses it (#1870194)`
   )
-
-  for (const value of assignments) {
-    const types = [...value.matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
-    check(
-      `${builder.what} targets home only`,
-      types.length === 1 && types[0] === 'home',
-      `found [${types.join(', ')}] — "recent" and "travel_in" both buy people who do not live there`
-    )
-  }
 }
 
 // The search endpoint takes a location_types parameter too, meaning something
