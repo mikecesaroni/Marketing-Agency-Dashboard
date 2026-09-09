@@ -10,6 +10,7 @@ import Modal from '../components/Modal'
 import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
 import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import LiveToggle from '../components/LiveToggle'
+import GbpAgentPromptButton from '../components/GbpAgentPromptButton'
 import AdPerformanceSection from '../components/AdPerformanceSection'
 import AdDoctorPanel from '../components/AdDoctorPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
@@ -401,6 +402,7 @@ export default function ClientDetailPage() {
                 onChange={loadClientData}
                 doneWord="optimized"
               />
+              <GbpAgentPromptButton client={client} intake={intake} />
               {/* Two switches, because GHL is the one service here that not
                   every client buys. The first says whether we are building it
                   at all; the second only exists once they are on the plan,
