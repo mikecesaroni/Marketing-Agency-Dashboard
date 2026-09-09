@@ -708,7 +708,7 @@ export default function ClientDetailPage() {
         </div>
 
         {/* AD DOCTOR — the playbook's kill/scale rules run on the sync data */}
-        <Card padding="none" className="mt-6 p-4 md:mt-8 md:p-6">
+        <Card id="ad-doctor" padding="none" className="mt-6 p-4 md:mt-8 md:p-6 scroll-mt-4">
           <h2 className="text-lg md:text-xl font-bold text-slate-900 mb-3">Ad Doctor Agent</h2>
           <AdDoctorPanel client={client} />
         </Card>

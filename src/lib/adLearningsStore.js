@@ -11,3 +11,10 @@ export async function fetchLearnings(clientId) {
   if (error) throw error
   return data || []
 }
+
+/** Every row, account-wide and per-client, for the dashboard digest. */
+export async function fetchAllLearnings() {
+  const { data, error } = await supabase.from('ad_learnings').select('scope, client_id, kind, sort_order, headline, evidence, computed_at')
+  if (error) throw error
+  return data || []
+}

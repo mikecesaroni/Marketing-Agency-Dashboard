@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import FormSubmissionAlerts from '../components/FormSubmissionAlerts'
 import AdDeliveryAlerts from '../components/AdDeliveryAlerts'
+import AdDoctorAlerts from '../components/AdDoctorAlerts'
 import { adsReady } from '../lib/adsReady'
 import {
   Badge,
@@ -351,6 +352,11 @@ export default function HomePage() {
           money right now, and it is the one thing here nobody would otherwise
           notice. Renders nothing when all is well. */}
       <AdDeliveryAlerts clients={clients} delivery={delivery} todayDate={now} />
+
+      {/* Then the Ad Doctor Agent's kill and scale verdicts across every
+          client: an ad burning budget with no leads, or a winner starved of
+          it. Same rules as each client's page; renders nothing on a quiet day. */}
+      <AdDoctorAlerts />
 
       {/* Then a client waiting on us, which is more urgent than a number that
           has not moved since yesterday. Also renders nothing when there is
