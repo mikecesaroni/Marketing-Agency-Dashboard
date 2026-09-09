@@ -353,17 +353,17 @@ export default function HomePage() {
           notice. Renders nothing when all is well. */}
       <AdDeliveryAlerts clients={clients} delivery={delivery} todayDate={now} />
 
-      {/* Then the Ad Doctor Agent's kill and scale verdicts across every
-          client: an ad burning budget with no leads, or a winner starved of
-          it. Same rules as each client's page; renders nothing on a quiet day. */}
-      <AdDoctorAlerts />
-
       {/* Then a client waiting on us, which is more urgent than a number that
           has not moved since yesterday. Also renders nothing when there is
           nothing unread, so it costs no space on a quiet day. */}
       <div className="mb-6 empty:mb-0 md:mb-8">
         <FormSubmissionAlerts />
       </div>
+
+      {/* Then the Ad Doctor Agent's kill and scale verdicts across every
+          client: an ad burning budget with no leads, or a winner starved of
+          it. Same rules as each client's page; renders nothing on a quiet day. */}
+      <AdDoctorAlerts />
 
       {/* The state of the book of work. Money lives on the Payments tab; this
           page answers "where does every client stand", which is a different
