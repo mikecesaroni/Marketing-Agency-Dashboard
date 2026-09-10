@@ -19,8 +19,10 @@ import {
   DEFAULT_ACCENT,
   DEFAULT_BADGE,
   DEFAULT_BG,
+  DEFAULT_FOCUS,
   DEFAULT_PHOTO,
   LAYOUTS,
+  dragFocus,
   dragPhoto,
   brandColours,
   SAFE_MODES,
@@ -486,6 +488,10 @@ export default function AdStudioPanel({ client, intake, seed }) {
   const [layout, setLayout] = useState('cover')
   const [bgColor, setBgColor] = useState(DEFAULT_BG)
   const [photo, setPhoto] = useState(DEFAULT_PHOTO)
+  // Cover layout: which spot on the photo the crop keeps. Dragging any
+  // artboard moves it, and all three sizes follow, so pulling the square down
+  // until both faces show fixes the portrait and the Stories crop with it.
+  const [focus, setFocus] = useState(DEFAULT_FOCUS)
   // The free band each artboard last painted the photo into, so a drag on the
   // preview moves the photo by the same amount the pointer moved.
   const bands = useRef([])
@@ -682,7 +688,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // first paint measures with a fallback face and wraps differently.
   useEffect(() => {
     let cancelled = false
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo }
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo, focus }
     ensureFonts().then(() => {
       if (cancelled) return
       SIZES.forEach((size, i) => {
@@ -693,12 +699,12 @@ export default function AdStudioPanel({ client, intake, seed }) {
     return () => {
       cancelled = true
     }
-  }, [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo, assets, safeMode, guides])
+  }, [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo, focus, assets, safeMode, guides])
 
   // Guides are a preview aid. Repaint clean, export, then put them back, so a
   // saved PNG can never carry the red bands into the ad account.
   const withoutGuides = (fn) => async (...args) => {
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo }
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo, focus }
     const repaint = (g) =>
       SIZES.forEach((size, i) => {
         const c = refs.current[i]
@@ -740,6 +746,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
     setLayout(r.layout || 'cover')
     setBgColor(r.bgColor || DEFAULT_BG)
     setPhoto(r.photo || DEFAULT_PHOTO)
+    setFocus(r.focus || DEFAULT_FOCUS)
     // Colours came from the saved ad, so a logo reload must not replace them.
     setFromLogo(false)
     setBackgroundPath(r.backgroundPath)
@@ -790,6 +797,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
     layout,
     bgColor,
     photo,
+    focus,
     primaryText,
     headline: metaHeadline,
     description: metaDescription,
@@ -871,6 +879,7 @@ export default function AdStudioPanel({ client, intake, seed }) {
             layout,
             bgColor,
             photo,
+            focus,
             primaryText,
             headline: metaHeadline,
             description: metaDescription,
@@ -1226,6 +1235,17 @@ export default function AdStudioPanel({ client, intake, seed }) {
             </button>
           ))}
         </div>
+        {layout === 'cover' && (
+          <>
+            <button onClick={() => setFocus(DEFAULT_FOCUS)} className="text-[11px] text-slate-400 hover:text-slate-700">
+              Recentre
+            </button>
+            <p className="text-[11px] text-slate-500 basis-full">
+              Drag the photo on any artboard to choose what the crop keeps: pull it down until both faces
+              show, and the other two sizes follow the same spot.
+            </p>
+          </>
+        )}
         {layout === 'card' && (
           <>
             <ColourField label="Background colour" value={bgColor} onChange={setBgColor} swatches={swatches} />
@@ -1316,8 +1336,12 @@ export default function AdStudioPanel({ client, intake, seed }) {
                 setZoom(i)
                 setZoomPinned(true)
               }}
-              draggable={layout === 'card'}
-              onDragPhoto={(dx, dy) => setPhoto((p) => dragPhoto(p, dx, dy, size.h, bands.current[i]))}
+              draggable={layout === 'card' || Boolean(assets.background)}
+              onDragPhoto={(dx, dy) =>
+                layout === 'card'
+                  ? setPhoto((p) => dragPhoto(p, dx, dy, size.h, bands.current[i]))
+                  : setFocus((f) => dragFocus(f, dx, dy, size.w, size.h, assets.background))
+              }
             />
             <button
               onClick={() => download(i)}

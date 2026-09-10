@@ -30,6 +30,21 @@ function parseStamp(storagePath) {
  * and nothing more.
  */
 // The recipe columns for one ad, from the Studio's content shape.
+// photo_pos: the card layout's placement, the cover layout's focal point, or
+// both. Null when everything is at its default, which is what every ad saved
+// before either existed looks like.
+const CENTRE = { x: 0.5, y: 0.5 }
+function photoPos(content) {
+  const f = content.focus
+  const focus = f && (Number(f.x) !== CENTRE.x || Number(f.y) !== CENTRE.y) ? { x: Number(f.x), y: Number(f.y) } : null
+  if (content.layout === 'card') {
+    const photo = content.photo || null
+    if (!photo && !focus) return null
+    return focus ? { ...(photo || {}), focus } : photo
+  }
+  return focus ? { focus } : null
+}
+
 function recipeColumns(content, backgroundPath, logoPath, safeMode) {
   return {
     badge: content.badge,
@@ -47,7 +62,9 @@ function recipeColumns(content, backgroundPath, logoPath, safeMode) {
     // colour and no position is exactly what every ad before this was.
     layout: content.layout || 'cover',
     bg_color: content.layout === 'card' ? content.bgColor || null : null,
-    photo_pos: content.layout === 'card' ? content.photo || null : null,
+    // On the cover layout the same column holds the focal point the crop
+    // keeps, so a photo dragged to show both faces stays that way on reload.
+    photo_pos: photoPos(content),
     // Copy that never touches the artboard: it goes in the feed above and
     // below the image. Stored because publishing has to send it, and until
     // this existed it lived only in a read-only banner and was lost on save.
@@ -135,7 +152,8 @@ export function recipeToContent(row) {
     hookPlate: Boolean(row.hook_plate),
     layout: row.layout || 'cover',
     bgColor: row.bg_color || null,
-    photo: row.photo_pos || null,
+    photo: row.layout === 'card' ? row.photo_pos || null : null,
+    focus: row.photo_pos?.focus || null,
     primaryText: row.primary_text || '',
     headline: row.headline || '',
     description: row.description || '',

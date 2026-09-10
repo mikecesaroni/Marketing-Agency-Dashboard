@@ -51,8 +51,8 @@ import { readableTextOn } from './logoColours'
 // be dragged and resized on the artboard. It exists for a product shot, a
 // logo-heavy layout or a photo whose edges are not worth showing, and it is
 // never chosen for someone.
-export { DEFAULT_BG, DEFAULT_PHOTO, LAYOUTS, dragPhoto, photoRect } from './adLayout'
-import { DEFAULT_BG, DEFAULT_PHOTO, photoRect } from './adLayout'
+export { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, LAYOUTS, coverRect, dragFocus, dragPhoto, photoRect } from './adLayout'
+import { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, coverRect, photoRect } from './adLayout'
 
 export const DEFAULT_ACCENT = '#C81E1E' // offer block
 export const DEFAULT_BADGE = '#1E3A8A' // location badge
@@ -183,11 +183,12 @@ function fitText(ctx, text, maxWidth, maxLines, startPx, minPx, weight, tracking
 }
 
 // Draws a cover-fit image, cropping the overflow rather than distorting it.
-function drawCover(ctx, img, w, h) {
-  const scale = Math.max(w / img.width, h / img.height)
-  const dw = img.width * scale
-  const dh = img.height * scale
-  ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh)
+// `focus` picks which part of the photo the crop keeps (see coverRect): the
+// default is the centre, which on a portrait of two people standing cuts
+// their heads off in a square frame.
+function drawCover(ctx, img, w, h, focus) {
+  const r = coverRect(w, h, img, focus)
+  ctx.drawImage(img, r.x, r.y, r.w, r.h)
 }
 
 // The photo as an object on the card layout: rounded, with a soft drop shadow
@@ -245,6 +246,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     layout = 'cover',
     bgColor = DEFAULT_BG,
     photo = DEFAULT_PHOTO,
+    focus = DEFAULT_FOCUS,
   } = content
   const { background, logo } = assets || {}
 
@@ -359,7 +361,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   // ---- BACKGROUND ----
   ctx.fillStyle = card ? bgColor || DEFAULT_BG : '#0F172A'
   ctx.fillRect(0, 0, w, h)
-  if (background && !card) drawCover(ctx, background, w, h)
+  if (background && !card) drawCover(ctx, background, w, h, focus)
   if (background && card) drawPlaced(ctx, background, w, h, photo, band)
 
   // No scrims on the card layout: the colour is the contrast.
