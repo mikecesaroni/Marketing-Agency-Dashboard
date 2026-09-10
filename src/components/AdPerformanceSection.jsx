@@ -308,14 +308,18 @@ export default function AdPerformanceSection({ clientId }) {
   const [period, setPeriod] = useState('day')
   const [metricKey, setMetricKey] = useState('spend')
 
-  useEffect(() => {
+  // The window's start date, shared by every read on the section and handed to
+  // the preview modal so "Where it ran" covers the same days as the row that
+  // opened it.
+  const since = useMemo(() => {
     const days = RANGES.find((r) => r.key === range).days
-    let since = null
-    if (days) {
-      const d = new Date()
-      d.setDate(d.getDate() - days)
-      since = formatDate(d)
-    }
+    if (!days) return null
+    const d = new Date()
+    d.setDate(d.getDate() - days)
+    return formatDate(d)
+  }, [range])
+
+  useEffect(() => {
     fetchAdDaily(clientId, since)
       .then((r) => {
         setRows(r)
@@ -328,7 +332,7 @@ export default function AdPerformanceSection({ clientId }) {
     fetchPlatformRows({ clientId, since })
       .then(setPlatformRows)
       .catch(() => setPlatformRows([]))
-  }, [clientId, range])
+  }, [clientId, since])
 
   // One filter feeds the tiles, the chart and the tree, so the headline number
   // always matches what the table below it adds up to.
@@ -555,7 +559,7 @@ export default function AdPerformanceSection({ clientId }) {
       )}
 
       {openAd && (
-        <AdPreviewModal clientId={clientId} ad={openAd} onClose={() => setOpenAd(null)} />
+        <AdPreviewModal clientId={clientId} ad={openAd} since={since} onClose={() => setOpenAd(null)} />
       )}
     </div>
   )

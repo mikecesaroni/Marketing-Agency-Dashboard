@@ -41,7 +41,15 @@ function srcFrom(iframeHtml) {
   return match[1].replace(/&amp;/g, '&')
 }
 
-export default function AdPreviewModal({ clientId, ad, onClose }) {
+/**
+ * `since` is the section's window start, so the placement split here adds up
+ * to the same spend as the row that opened it. `ad` carries that row's totals;
+ * when the split covers less, the footnote says so rather than letting two
+ * numbers for one ad sit on screen unexplained (the placement breakdown was
+ * only collected from mid-August 2026, and MBD's video showed 37 leads here
+ * against 50 in the table until those weeks were backfilled).
+ */
+export default function AdPreviewModal({ clientId, ad, since = null, onClose }) {
   const [preview, setPreview] = useState(null)
   const [rows, setRows] = useState(null)
   const [tab, setTab] = useState('feed')
@@ -62,7 +70,7 @@ export default function AdPreviewModal({ clientId, ad, onClose }) {
     // Side by side rather than in sequence: the preview is a round trip to
     // Meta and the rows are a local query, and waiting for the slow one to
     // start the fast one just makes the panel feel slower than it is.
-    Promise.allSettled([fetchAdPreview(clientId, adId), fetchPlatformRows({ clientId, adId })])
+    Promise.allSettled([fetchAdPreview(clientId, adId), fetchPlatformRows({ clientId, adId, since })])
       .then(([p, r]) => {
         if (cancelled) return
         if (p.status === 'fulfilled') setPreview(p.value)
@@ -76,7 +84,7 @@ export default function AdPreviewModal({ clientId, ad, onClose }) {
     return () => {
       cancelled = true
     }
-  }, [clientId, adId])
+  }, [clientId, adId, since])
 
   const available = (preview?.previews || []).map((p) => p.key)
   const shown = available.includes(tab) ? tab : available[0]
@@ -88,6 +96,13 @@ export default function AdPreviewModal({ clientId, ad, onClose }) {
   const positions = rows ? byPosition(rows, 'spend', 5) : []
   const spend = rows ? rows.reduce((t, r) => t + (Number(r.spend) || 0), 0) : 0
   const leads = rows ? rows.reduce((t, r) => t + (Number(r.leads) || 0), 0) : 0
+
+  // The row's totals come from ad_daily; the split from ad_platform_daily.
+  // Meta rounds the two differently by a few cents, so only a real shortfall
+  // (a day the breakdown was never collected) earns the note.
+  const rowSpend = Number(ad?.spend) || 0
+  const rowLeads = Number(ad?.leads) || 0
+  const shortfall = rows && rowSpend > 0 && (rowSpend - spend > 1 || rowLeads > leads)
 
   return (
     <Modal isOpen={Boolean(ad)} onClose={onClose} title={ad?.ad_name || ad?.ad_id || 'Ad'}>
@@ -174,6 +189,15 @@ export default function AdPreviewModal({ clientId, ad, onClose }) {
                     {leads === 1 ? 'lead' : 'leads'}
                   </p>
                 </div>
+
+                {shortfall && (
+                  <p className="text-xs text-amber-700">
+                    The placement split covers {money(spend)} and {leads} {leads === 1 ? 'lead' : 'leads'} of
+                    this ad's {money(rowSpend)} and {rowLeads} {rowLeads === 1 ? 'lead' : 'leads'} in this
+                    window. Meta's placement breakdown was not collected for the rest of the days; the
+                    table's totals are the complete ones.
+                  </p>
+                )}
 
                 <PlatformSplit data={platforms} metric="spend" />
 
