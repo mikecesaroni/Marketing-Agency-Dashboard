@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { fetchAllRows } from './pagedQuery'
 import { GHL_REQUIRED_KEYS, ghlStage } from './ghlSetupFields'
 
 // Re-exported so the many callers that reach for these through queries.js keep
@@ -287,18 +288,19 @@ export async function fetchDashboardData() {
 }
 
 // ---------- per-ad performance ----------
-export async function fetchAdDaily(clientId, since) {
-  let q = supabase
-    .from('ad_daily')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('date', { ascending: true })
-
-  if (since) q = q.gte('date', since)
-
-  const { data, error } = await q
-  if (error) throw error
-  return data || []
+export function fetchAdDaily(clientId, since) {
+  // Paged: a client's all-time rows pass 1000 within a few months of running
+  // a handful of ads.
+  return fetchAllRows(() => {
+    let q = supabase
+      .from('ad_daily')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('date', { ascending: true })
+      .order('id', { ascending: true })
+    if (since) q = q.gte('date', since)
+    return q
+  })
 }
 
 // Rolls daily rows into weeks (Monday-keyed, matching weekly_kpis) or calendar
@@ -520,15 +522,17 @@ export function groupCampaigns(rows) {
  * and all-time in memory. Refetching on a toggle would make the scope buttons
  * feel like page loads, and the two scopes want the same rows anyway.
  */
-export async function fetchAdRowsForRange(since) {
-  let q = supabase
-    .from('ad_daily')
-    .select('client_id, date, spend, leads, impressions, clicks, effective_status, clients(name, is_internal)')
-    .order('date', { ascending: true })
-
-  if (since) q = q.gte('date', since)
-
-  const { data, error } = await q
-  if (error) throw error
-  return data || []
+export function fetchAdRowsForRange(since) {
+  // Paged. Sixty days across every client crossed 1000 rows in September
+  // 2026, and the unpaged read dropped the newest days, which is exactly where
+  // a client who has just gone live sits.
+  return fetchAllRows(() => {
+    let q = supabase
+      .from('ad_daily')
+      .select('client_id, date, spend, leads, impressions, clicks, effective_status, clients(name, is_internal)')
+      .order('date', { ascending: true })
+      .order('id', { ascending: true })
+    if (since) q = q.gte('date', since)
+    return q
+  })
 }

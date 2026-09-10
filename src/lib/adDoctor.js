@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { fetchAllRows } from './pagedQuery'
 
 // The Ad Doctor: the playbook's kill/scale rules plus the 2026 fatigue and
 // retention signals, run as arithmetic against the daily sync.
@@ -34,28 +35,20 @@ export async function fetchAdDoctorData(clientId) {
 }
 
 // Every client's last 30 days in one go, for the dashboard digest. Paged,
-// because eight clients already put the month near PostgREST's 1000-row page
-// and a silently truncated result would drop whole clients off the board.
+// because eight clients already put the month near PostgREST's 1000-row page.
 export async function fetchAdDoctorDataAll() {
   const since = new Date()
   since.setDate(since.getDate() - 30)
   const sinceStr = since.toISOString().slice(0, 10)
 
-  const PAGE = 1000
-  const rows = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
+  return fetchAllRows(() =>
+    supabase
       .from('ad_daily')
       .select(
         'client_id, ad_id, ad_name, campaign_name, adset_id, adset_name, effective_status, date, spend, impressions, reach, clicks, leads, video_plays, video_thruplays, video_2s_views, clients(name, is_internal)'
       )
       .gte('date', sinceStr)
       .order('date', { ascending: true })
-      .order('ad_id', { ascending: true })
-      .range(from, from + PAGE - 1)
-    if (error) throw error
-    rows.push(...(data || []))
-    if (!data || data.length < PAGE) break
-  }
-  return rows
+      .order('id', { ascending: true })
+  )
 }

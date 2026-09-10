@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { readFunctionError } from './functionError'
+import { fetchAllRows } from './pagedQuery'
 
 /**
  * Where a client's ads actually ran.
@@ -9,19 +10,20 @@ import { readFunctionError } from './functionError'
  * surface something was delivered on -- so a client running feed-only returns a
  * handful of rows rather than a grid of zeroes.
  */
-export async function fetchPlatformRows({ clientId, adId, since }) {
-  let q = supabase
-    .from('ad_platform_daily')
-    .select('ad_id, date, platform, position, spend, impressions, clicks, leads')
-    .order('date', { ascending: true })
-
-  if (clientId) q = q.eq('client_id', clientId)
-  if (adId) q = q.eq('ad_id', adId)
-  if (since) q = q.gte('date', since)
-
-  const { data, error } = await q
-  if (error) throw error
-  return data || []
+export function fetchPlatformRows({ clientId, adId, since }) {
+  // Paged: one client's all-time platform rows were already 1,700 when this
+  // was written, and the unpaged read had been quietly showing the first 1000.
+  return fetchAllRows(() => {
+    let q = supabase
+      .from('ad_platform_daily')
+      .select('ad_id, date, platform, position, spend, impressions, clicks, leads')
+      .order('date', { ascending: true })
+      .order('id', { ascending: true })
+    if (clientId) q = q.eq('client_id', clientId)
+    if (adId) q = q.eq('ad_id', adId)
+    if (since) q = q.gte('date', since)
+    return q
+  })
 }
 
 // How the platforms are named to a person. Meta's own vocabulary is stored;
