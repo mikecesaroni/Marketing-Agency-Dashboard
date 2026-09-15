@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Button from './ui/Button'
 import { copyText } from '../lib/intakeSummary'
+import { describeForm, formToBuilder, isHigherIntent, metaFormsLibraryUrl, summariseForm } from '../lib/leadFormDetails'
 import {
   FORM_QUESTIONS,
   createLeadForm,
@@ -102,6 +103,129 @@ function CustomRow({ c, onRemove, onOptions }) {
   )
 }
 
+/**
+ * The forms already on the Page, first and clickable.
+ *
+ * A form's name and id say nothing about what it asks, and the question that
+ * actually comes up is "which of these is the one with the ZIP on it?" Each
+ * row opens to the questions Meta says are on it, the thank-you text, the
+ * privacy URL and whether the review screen is on. From there: copy the id
+ * for GoHighLevel, open Meta's forms library (edit, preview, download leads),
+ * or start a new form from this one's questions.
+ */
+function ExistingForms({ forms, pageId, copied, onCopy, onStartFrom }) {
+  const [open, setOpen] = useState(null)
+  const library = metaFormsLibraryUrl(pageId)
+
+  if (forms === null) return <p className="text-xs text-slate-500">Reading the Page…</p>
+  if (forms.length === 0) return <p className="text-xs text-slate-500">None yet. The first one is built below.</p>
+
+  return (
+    <ul className="space-y-1.5">
+      {forms.map((f) => {
+        const isOpen = open === f.id
+        const questions = describeForm(f)
+        const leads = Number(f.leads_count) || 0
+        const made = f.created_time ? new Date(f.created_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+        return (
+          <li key={f.id} className={`rounded-lg border ${isOpen ? 'border-orange-300 bg-orange-50/40' : 'border-slate-200 bg-white'}`}>
+            <button
+              type="button"
+              onClick={() => setOpen(isOpen ? null : f.id)}
+              className="flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-2 text-left text-xs hover:bg-slate-50"
+              aria-expanded={isOpen}
+            >
+              <span className="text-slate-400">{isOpen ? '▾' : '▸'}</span>
+              <span className="font-medium text-slate-900">{f.name}</span>
+              <span className="text-slate-500">
+                {leads} lead{leads === 1 ? '' : 's'}
+              </span>
+              <span className="text-slate-400">{summariseForm(f)}</span>
+              {f.status && f.status !== 'ACTIVE' && <span className="text-amber-700">{f.status}</span>}
+              {made && <span className="ml-auto text-[11px] text-slate-400">made {made}</span>}
+            </button>
+
+            {isOpen && (
+              <div className="space-y-2.5 border-t border-slate-200 px-3 py-2.5 text-xs">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">What it asks</p>
+                  {questions.length === 0 ? (
+                    <p className="mt-1 text-slate-500">Meta did not return the questions for this form.</p>
+                  ) : (
+                    <ol className="mt-1 space-y-1">
+                      {questions.map((q, i) => (
+                        <li key={`${q.type}-${i}`} className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                          <span className="text-slate-400">{i + 1}.</span>
+                          <span className="font-medium text-slate-900">{q.label}</span>
+                          {q.prefilled ? (
+                            <span className="text-[10px] text-green-700">prefilled</span>
+                          ) : q.options.length >= 2 ? (
+                            <span className="text-[10px] text-green-700">multiple choice</span>
+                          ) : (
+                            <span className="text-[10px] text-amber-700">typed</span>
+                          )}
+                          {q.options.length > 0 && (
+                            <span className="flex flex-wrap gap-1">
+                              {q.options.map((o) => (
+                                <span key={o} className="rounded-full border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] text-slate-700">
+                                  {o}
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+
+                <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
+                  <dt className="text-slate-500">Review screen</dt>
+                  <dd className="text-slate-800">{isHigherIntent(f) ? 'On (Higher Intent)' : 'Off (More Volume)'}</dd>
+                  {f.thank_you_page && (f.thank_you_page.body || f.thank_you_page.title) && (
+                    <>
+                      <dt className="text-slate-500">After submitting</dt>
+                      <dd className="text-slate-800">{f.thank_you_page.body || f.thank_you_page.title}</dd>
+                    </>
+                  )}
+                  {f.privacy_policy_url && (
+                    <>
+                      <dt className="text-slate-500">Privacy policy</dt>
+                      <dd className="break-all text-slate-800">{f.privacy_policy_url}</dd>
+                    </>
+                  )}
+                  <dt className="text-slate-500">Form ID</dt>
+                  <dd className="flex flex-wrap items-center gap-2">
+                    <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700">{f.id}</code>
+                    <button type="button" onClick={() => onCopy(f.id, f.id)} className="text-slate-500 underline hover:text-slate-800">
+                      {copied === f.id ? 'Copied' : 'Copy ID'}
+                    </button>
+                  </dd>
+                </dl>
+
+                <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                  {library && (
+                    <a href={library} target="_blank" rel="noreferrer" className="text-blue-600 underline hover:text-blue-800">
+                      Open in Meta&rsquo;s forms library ↗
+                    </a>
+                  )}
+                  <button type="button" onClick={() => onStartFrom(f)} className="text-blue-600 underline hover:text-blue-800">
+                    Start a new form from this one
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Meta does not let a form change once it has leads, so edits mean a new form. The library is
+                  where to preview it as a person sees it and download the leads it already holds.
+                </p>
+              </div>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 export default function LeadFormStudio({ client }) {
   const [forms, setForms] = useState(null)
   const [error, setError] = useState('')
@@ -182,6 +306,22 @@ export default function LeadFormStudio({ client }) {
   const toggle = (type) =>
     setPicked((cur) => (cur.includes(type) ? cur.filter((t) => t !== type) : [...cur, type]))
 
+  // Loads an existing form's questions into the builder. Meta forms cannot be
+  // edited once they hold leads, so "change the ZIP question" is really "make
+  // the same form again with that one difference", and this saves retyping it.
+  const startFrom = (f) => {
+    const b = formToBuilder(f)
+    setFormName(b.formName)
+    setPicked(b.picked)
+    setCustoms(b.customs)
+    setWhy({})
+    if (b.thankYou) setThankYou(b.thankYou)
+    if (b.privacyUrl) setPrivacyUrl(b.privacyUrl)
+    setHigherIntent(b.higherIntent)
+    setMade(null)
+    setNote(`Loaded the questions from "${f.name}". Change what you need and create it as a new form.`)
+  }
+
   const build = async () => {
     setBusy('build')
     setError('')
@@ -225,6 +365,21 @@ export default function LeadFormStudio({ client }) {
           {error}
         </div>
       )}
+
+      {/* FIRST, because the answer to "do they already have a form?" decides
+          whether anything below is needed. Click a form to see what it asks. */}
+      <div className="rounded-lg border border-slate-200 p-3">
+        <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-xs font-semibold text-slate-700">
+            Forms already on the Page
+            {forms && forms.length > 0 && <span className="ml-1.5 font-normal text-slate-400">{forms.length}</span>}
+          </p>
+          {forms && forms.length > 0 && (
+            <p className="text-[11px] text-slate-500">Click one to see what it asks. Reuse beats a fifth near-identical form: a form owns its leads.</p>
+          )}
+        </div>
+        <ExistingForms forms={forms} pageId={client.meta_page_id} copied={copied} onCopy={copy} onStartFrom={startFrom} />
+      </div>
 
       {/* SAID UP FRONT, because Meta refuses every form without one and no
           client here has one on file. Learning that after choosing the
@@ -380,42 +535,6 @@ export default function LeadFormStudio({ client }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 p-3">
-        <p className="mb-1.5 text-xs font-semibold text-slate-700">
-          Forms already on the Page
-          {/* leads_count is why reuse beats making another one: a form owns its
-              leads, so five near-identical forms is five places to look. */}
-        </p>
-        {forms === null ? (
-          <p className="text-xs text-slate-500">Reading the Page…</p>
-        ) : forms.length === 0 ? (
-          <p className="text-xs text-slate-500">None yet.</p>
-        ) : (
-          <ul className="space-y-1">
-            {forms.map((f) => (
-              <li key={f.id} className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="font-medium text-slate-900">{f.name}</span>
-                <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700">
-                  {f.id}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => copy(f.id, f.id)}
-                  className="text-slate-500 underline hover:text-slate-800"
-                >
-                  {copied === f.id ? 'Copied' : 'Copy ID'}
-                </button>
-                <span className="text-slate-500">
-                  {Number(f.leads_count) || 0} lead{Number(f.leads_count) === 1 ? '' : 's'}
-                </span>
-                {f.status && f.status !== 'ACTIVE' && (
-                  <span className="text-amber-700">{f.status}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </div>
   )
 }

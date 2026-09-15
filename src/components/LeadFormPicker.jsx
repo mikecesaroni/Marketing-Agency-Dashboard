@@ -5,6 +5,7 @@ import {
   createLeadForm,
   listLeadForms,
 } from '../lib/metaPublish'
+import { describeForm, isHigherIntent } from '../lib/leadFormDetails'
 
 /**
  * Picks an existing instant form, or builds a new one on the client's Page.
@@ -212,9 +213,23 @@ export default function LeadFormPicker({ client, value, onChange }) {
       )}
 
       {value && !building && (
-        <p className="text-[11px] text-green-700">
-          Leads from this ad go to &ldquo;{value.name}&rdquo;.
-        </p>
+        <div className="space-y-1">
+          <p className="text-[11px] text-green-700">
+            Leads from this ad go to &ldquo;{value.name}&rdquo;.
+          </p>
+          {/* What the chosen form asks, so picking one is not a guess from its name. */}
+          {(() => {
+            const chosen = forms.find((f) => f.id === value.id)
+            const qs = chosen ? describeForm(chosen) : []
+            if (!chosen || qs.length === 0) return null
+            return (
+              <p className="text-[11px] text-slate-500">
+                Asks: {qs.map((q) => q.label).join(', ')} · review screen{' '}
+                {isHigherIntent(chosen) ? 'on' : 'off'} · {Number(chosen.leads_count) || 0} leads so far
+              </p>
+            )
+          })()}
+        </div>
       )}
     </div>
   )

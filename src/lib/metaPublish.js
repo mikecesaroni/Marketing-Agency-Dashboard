@@ -46,14 +46,7 @@ export const OBJECTIVES = [
  * Every custom question is a real question and costs completions, so the form
  * builder nudges towards few.
  */
-export const FORM_QUESTIONS = [
-  { type: 'FULL_NAME', label: 'Full name', prefilled: true },
-  { type: 'PHONE', label: 'Phone number', prefilled: true },
-  { type: 'EMAIL', label: 'Email', prefilled: true },
-  { type: 'STREET_ADDRESS', label: 'Street address', prefilled: true },
-  { type: 'CITY', label: 'City', prefilled: true },
-  { type: 'ZIP', label: 'ZIP code', prefilled: true },
-]
+export { FORM_QUESTIONS } from './formQuestions.js'
 
 // What a home-services form asks by default. Name and phone are what actually
 // gets someone called back; email is the fallback when nobody picks up.

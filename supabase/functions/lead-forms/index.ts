@@ -23,6 +23,9 @@
 //
 // v2: CUSTOM questions with two or more options are sent as multiple choice.
 // v3: Higher Intent (review screen) on by default via is_optimized_for_quality.
+// v4: list returns each form's questions, thank-you page, privacy URL and
+//     intent setting, so the Studio can show what an existing form asks and
+//     reuse it, instead of a name and an id that mean nothing a week later.
 
 const GRAPH = 'https://graph.facebook.com/v21.0'
 
@@ -178,7 +181,9 @@ Deno.serve(async (req) => {
     if (action === 'list') {
       const res = await fetch(
         `${GRAPH}/${client.meta_page_id}/leadgen_forms` +
-          `?fields=id,name,status,leads_count,created_time&limit=50` +
+          `?fields=id,name,status,leads_count,expired_leads_count,created_time,` +
+          `questions{type,key,label,options},privacy_policy_url,thank_you_page,` +
+          `follow_up_action_url,is_optimized_for_quality&limit=50` +
           `&access_token=${encodeURIComponent(pToken)}`
       )
       const found = await res.json()
