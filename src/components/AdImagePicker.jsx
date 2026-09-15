@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { copyText } from '../lib/intakeSummary'
 import DriveThumbImage from './DriveThumb'
+import { publicUrl } from '../lib/savedAds'
+import { isHeic } from '../lib/imageUpload'
 import {
   drivePath,
   driveFileId,
@@ -52,6 +54,49 @@ function DriveThumb({ client, file, selected, onPick }) {
         >
           HEIC
         </span>
+      )}
+    </button>
+  )
+}
+
+/**
+ * One uploaded photo, as a tile. The bucket is public, so the thumbnail is
+ * just the file; the browser scales it. A HEIC cannot be shown (only Safari
+ * decodes it), so it gets a labelled tile instead and converts when picked.
+ */
+function UploadedThumb({ file, selected, converting, onPick }) {
+  const [broken, setBroken] = useState(false)
+  const heic = isHeic(file.storage_path)
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(file)}
+      title={file.file_name}
+      className={`relative aspect-square rounded border overflow-hidden bg-slate-50 transition ${
+        selected ? 'border-blue-600 ring-2 ring-blue-200' : 'border-slate-300 hover:border-slate-400'
+      }`}
+    >
+      {heic || broken ? (
+        <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 px-1 text-center text-[10px] leading-tight text-slate-500">
+          <span className="truncate w-full">{file.file_name}</span>
+          <span className="text-slate-400">{converting ? 'converting…' : heic ? 'iPhone photo · tap to convert' : 'no preview'}</span>
+        </span>
+      ) : (
+        <img
+          src={publicUrl(file.storage_path)}
+          alt={file.file_name}
+          loading="lazy"
+          onError={() => setBroken(true)}
+          className="w-full h-full object-cover"
+        />
+      )}
+      {selected && (
+        <span className="absolute top-1 right-1 bg-blue-600 text-white rounded-full w-4 h-4 text-[10px] leading-4 text-center">
+          ✓
+        </span>
+      )}
+      {heic && !converting && (
+        <span className="absolute bottom-0 left-0 right-0 bg-black/55 text-white text-[9px] leading-4 text-center">HEIC</span>
       )}
     </button>
   )
@@ -174,39 +219,58 @@ export default function AdImagePicker({
       </div>
 
       {source === 'files' ? (
-        <div className="flex gap-2">
-          <select
-            value={isDrivePath(value) ? '' : value}
-            onChange={(e) => onChange(e.target.value)}
-            className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-xs min-w-0"
-          >
-            <option value="">None</option>
-            {files.map((f) => (
-              <option key={f.storage_path} value={f.storage_path}>
-                {f.file_name}
-                {/\.(heic|heif)$/i.test(f.storage_path) ? (converting === f.storage_path ? ' — converting…' : ' — iPhone photo, converts when picked') : ''}
-              </option>
-            ))}
-          </select>
-          {onRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              title="Reload the list — photos uploaded elsewhere, or from a phone, show up here"
-              className="px-2 py-1.5 bg-slate-100 border border-slate-300 rounded text-xs hover:bg-slate-200"
-            >
-              ↻
-            </button>
+        <div className="space-y-1.5">
+          {/* A grid, like the Drive tab, rather than a dropdown of file names:
+              a name like IMG_8721 says nothing about which photo it is. */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-slate-500">
+              {files.length} photo{files.length === 1 ? '' : 's'} uploaded
+            </span>
+            <span className="flex items-center gap-2">
+              {value && !isDrivePath(value) && (
+                <button type="button" onClick={() => onChange('')} className="text-[11px] text-slate-500 hover:underline">
+                  Clear
+                </button>
+              )}
+              {onRefresh && (
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  title="Reload the list — photos uploaded elsewhere, or from a phone, show up here"
+                  className="text-[11px] text-blue-600 hover:underline"
+                >
+                  Refresh
+                </button>
+              )}
+              <label className="px-2 py-1 bg-slate-100 border border-slate-300 rounded text-[11px] cursor-pointer hover:bg-slate-200 whitespace-nowrap">
+                Upload
+                <input
+                  type="file"
+                  accept="image/*,.heic,.heif"
+                  className="hidden"
+                  onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
+                />
+              </label>
+            </span>
+          </div>
+
+          {files.length > 0 ? (
+            <div className="grid grid-cols-4 gap-1.5 max-h-44 overflow-y-auto">
+              {files.map((f) => (
+                <UploadedThumb
+                  key={f.storage_path}
+                  file={f}
+                  selected={value === f.storage_path}
+                  converting={converting === f.storage_path}
+                  onPick={(picked) => onChange(picked.storage_path)}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-500">
+              Nothing uploaded for {client.name} yet. Drop a photo here or use Upload.
+            </p>
           )}
-          <label className="px-2 py-1.5 bg-slate-100 border border-slate-300 rounded text-xs cursor-pointer hover:bg-slate-200 whitespace-nowrap">
-            Upload
-            <input
-              type="file"
-              accept="image/*,.heic,.heif"
-              className="hidden"
-              onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
-            />
-          </label>
         </div>
       ) : !driveFolderId ? (
         <div className="space-y-1.5">
