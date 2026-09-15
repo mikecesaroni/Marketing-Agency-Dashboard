@@ -14,6 +14,7 @@ import { overwriteSavedAd, recipeToContent, saveAdRecipe } from '../lib/savedAds
 import { creativeWarnings } from '../lib/creativeChecks'
 import AdImagePicker from './AdImagePicker'
 import { resolveImageSrc } from '../lib/driveAssets'
+import { heicToJpegBlob, isHeic, jpegName, jpegPath, toUploadable } from '../lib/imageUpload'
 import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
 import {
   DEFAULT_ACCENT,
@@ -33,7 +34,10 @@ import {
   renderAd,
 } from '../lib/adCanvas'
 
-const IMAGE_RE = /\.(png|jpe?g|webp)$/i
+// HEIC is listed so an iPhone photo is not silently missing; it is converted
+// to JPEG the moment it is picked (see convertHeic), since no browser but
+// Safari can draw one.
+const IMAGE_RE = /\.(png|jpe?g|webp|heic|heif)$/i
 
 function publicUrl(path) {
   return supabase.storage.from('client-files').getPublicUrl(path).data.publicUrl
@@ -440,6 +444,8 @@ function proofFromIntake(intake) {
 
 export default function AdStudioPanel({ client, intake, seed }) {
   const [files, setFiles] = useState([])
+  // The HEIC path being converted to JPEG right now, for the picker's label.
+  const [converting, setConverting] = useState('')
   // Mirrors clients.drive_folder_id so linking a folder updates the pickers
   // without a page reload.
   const [driveFolderId, setDriveFolderId] = useState(client.drive_folder_id || '')
@@ -624,13 +630,64 @@ export default function AdStudioPanel({ client, intake, seed }) {
     }
   }, [seed, intakeProof])
 
-  useEffect(() => {
+  // The client's uploaded images. Reloadable, because the Studio stays
+  // mounted under the chat and the Files section: a photo added there, or
+  // from a phone, has to be reachable without a page reload.
+  const loadFiles = () =>
     supabase
       .from('client_files')
       .select('id, file_name, storage_path')
       .eq('client_id', client.id)
+      .order('date_uploaded', { ascending: false })
       .then(({ data }) => setFiles((data || []).filter((f) => IMAGE_RE.test(f.storage_path))))
+
+  useEffect(() => {
+    loadFiles()
   }, [client.id])
+
+  /**
+   * Replaces an uploaded HEIC with its JPEG, in place: same client_files row,
+   * same stamp, .jpg. The browser fetches the HEIC bytes from the public
+   * bucket, decodes them with libheif and uploads the JPEG; the HEIC object
+   * is then removed so the bucket does not carry two copies of every phone
+   * photo. Returns the new path, which the caller picks.
+   */
+  const convertHeic = async (path) => {
+    const row = files.find((f) => f.storage_path === path)
+    const { data: pub } = supabase.storage.from('client-files').getPublicUrl(path)
+    const res = await fetch(pub.publicUrl)
+    if (!res.ok) throw new Error(`Could not read ${row?.file_name || path} from storage (${res.status}).`)
+    const jpeg = await heicToJpegBlob(await res.blob())
+    const newPath = jpegPath(path)
+    const newName = jpegName(row?.file_name || path.split('/').pop())
+    const { error: upErr } = await supabase.storage.from('client-files').upload(newPath, jpeg, { contentType: 'image/jpeg', upsert: true })
+    if (upErr) throw upErr
+    if (row?.id) {
+      const { error: rowErr } = await supabase
+        .from('client_files')
+        .update({ file_name: newName, file_type: 'image/jpeg', file_size: jpeg.size, storage_path: newPath })
+        .eq('id', row.id)
+      if (rowErr) throw rowErr
+    }
+    await supabase.storage.from('client-files').remove([path])
+    setFiles((cur) => cur.map((f) => (f.storage_path === path ? { ...f, file_name: newName, storage_path: newPath } : f)))
+    return newPath
+  }
+
+  // A pick that lands on a HEIC converts it first, so what gets drawn and
+  // later sent to Meta is always a JPEG.
+  const pick = (setPath) => async (path) => {
+    if (!isHeic(path)) return setPath(path)
+    setError('')
+    setConverting(path)
+    try {
+      setPath(await convertHeic(path))
+    } catch (err) {
+      setError(`Could not convert that iPhone photo: ${err.message}`)
+    } finally {
+      setConverting('')
+    }
+  }
 
   // What has already gone to Meta, so the Publish tab can warn before creating
   // a second copy of the same ad. A missing published_ads table means the
@@ -757,9 +814,11 @@ export default function AdStudioPanel({ client, intake, seed }) {
     setTab('design')
   }
 
-  const upload = async (file, setPath) => {
+  const upload = async (original, setPath) => {
     setError('')
     try {
+      // An iPhone HEIC becomes a JPEG before it goes anywhere.
+      const file = await toUploadable(original)
       const path = `${client.id}/${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`
       const { error: upErr } = await supabase.storage.from('client-files').upload(path, file)
       if (upErr) throw upErr
@@ -1069,8 +1128,10 @@ export default function AdStudioPanel({ client, intake, seed }) {
           client={client}
           files={files}
           value={backgroundPath}
-          onChange={setBackgroundPath}
+          onChange={pick(setBackgroundPath)}
           onUpload={(f) => upload(f, setBackgroundPath)}
+          onRefresh={loadFiles}
+          converting={converting}
           driveFolderId={driveFolderId}
           onFolderSaved={setDriveFolderId}
         />
@@ -1081,12 +1142,14 @@ export default function AdStudioPanel({ client, intake, seed }) {
           value={logoPath}
           onChange={(p) => {
             logoChosen.current = true
-            setLogoPath(p)
+            return pick(setLogoPath)(p)
           }}
           onUpload={(f) => {
             logoChosen.current = true
             return upload(f, setLogoPath)
           }}
+          onRefresh={loadFiles}
+          converting={converting}
           driveFolderId={driveFolderId}
           onFolderSaved={setDriveFolderId}
         />

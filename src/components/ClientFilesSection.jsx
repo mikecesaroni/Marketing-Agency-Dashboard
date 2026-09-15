@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import JSZip from 'jszip'
 import { supabase } from '../lib/supabaseClient'
+import { toUploadable } from '../lib/imageUpload'
 import Modal from './Modal'
 import DriveFolderFiles from './DriveFolderFiles'
 
@@ -44,7 +45,10 @@ export default function ClientFilesSection({ clientId, clientName, driveFolderId
     setError('')
 
     try {
-      for (const file of selected) {
+      for (const original of selected) {
+        // iPhone HEIC photos become JPEGs here, so the Ad Studio and Meta can
+        // use them. Everything else is stored as it came.
+        const file = await toUploadable(original)
         const fileExt = file.name.split('.').pop()
         const fileName = `${clientId}/${Date.now()}-${Math.random()
           .toString(36)

@@ -65,6 +65,8 @@ export default function AdImagePicker({
   onUpload,
   label,
   driveFolderId,
+  onRefresh,
+  converting = '',
   onFolderSaved,
 }) {
   const [source, setSource] = useState('files')
@@ -182,14 +184,25 @@ export default function AdImagePicker({
             {files.map((f) => (
               <option key={f.storage_path} value={f.storage_path}>
                 {f.file_name}
+                {/\.(heic|heif)$/i.test(f.storage_path) ? (converting === f.storage_path ? ' — converting…' : ' — iPhone photo, converts when picked') : ''}
               </option>
             ))}
           </select>
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              title="Reload the list — photos uploaded elsewhere, or from a phone, show up here"
+              className="px-2 py-1.5 bg-slate-100 border border-slate-300 rounded text-xs hover:bg-slate-200"
+            >
+              ↻
+            </button>
+          )}
           <label className="px-2 py-1.5 bg-slate-100 border border-slate-300 rounded text-xs cursor-pointer hover:bg-slate-200 whitespace-nowrap">
             Upload
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,.heic,.heif"
               className="hidden"
               onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
             />
