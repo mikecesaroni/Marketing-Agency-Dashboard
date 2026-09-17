@@ -42,10 +42,25 @@ export function digestAdDoctor(rows, { learnings = [], today } = {}) {
         campaign: v.campaign,
         verdict: v.verdict,
         reason: v.reasons[0] || '',
+        // Everything the client page shows, so "why?" can be answered here
+        // without a round trip: every reason, the retention signals, the
+        // attribution and the numbers the rules used.
+        reasons: v.reasons || [],
+        signals: v.signals || [],
         prescription: v.prescription || '',
+        cause: v.cause || null,
+        isVideo: Boolean(v.isVideo),
+        days: v.days,
         spend: v.spend,
         leads: v.leads,
         cpl: v.cpl,
+        ctr: v.ctr,
+        cpm: v.cpm,
+        frequency: v.frequency,
+        ctrDecay: v.ctrDecay,
+        cpmChange: v.cpmChange,
+        holdRate: v.holdRate,
+        hookRate: v.hookRate,
         medianCpl: result.medianCpl,
         usingFallback: result.usingFallback,
       })
@@ -86,4 +101,24 @@ export function digestNumbers(item) {
   const lead = item.leads === 1 ? 'lead' : 'leads'
   const cpl = item.cpl != null ? `${money(item.cpl)}/lead` : 'no leads'
   return `${money(item.spend)} spent, ${item.leads} ${lead}, ${cpl} · account median ${money(item.medianCpl)}${item.usingFallback ? ' (fallback)' : ''}`
+}
+
+/**
+ * The numbers behind a verdict as label/value pairs, in the order a person
+ * checks them: what it cost, how it is being received, how that is moving.
+ * Nulls (an image ad has no hold rate; a young ad has no trend) are left out
+ * rather than printed as n/a.
+ */
+export function digestDetails(item) {
+  const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`
+  const rows = []
+  rows.push(['Spent', `${money(item.spend)} over ${item.days} day${item.days === 1 ? '' : 's'}`])
+  rows.push(['Leads', `${item.leads} · ${item.cpl != null ? `${money(item.cpl)} per lead` : 'no leads yet'} · account median ${money(item.medianCpl)}${item.usingFallback ? ' (industry fallback)' : ''}`])
+  if (item.ctr != null) rows.push(['Click rate', `${(item.ctr * 100).toFixed(2)}%${item.ctrDecay != null ? ` · ${item.ctrDecay >= 0 ? 'down' : 'up'} ${Math.abs(Math.round(item.ctrDecay * 100))}% vs its first week` : ''}`])
+  if (item.cpm != null) rows.push(['CPM', `$${item.cpm.toFixed(1)}${item.cpmChange != null ? ` · ${item.cpmChange >= 0 ? 'up' : 'down'} ${Math.abs(Math.round(item.cpmChange * 100))}% week over week` : ''}`])
+  if (item.frequency != null) rows.push(['Frequency', `${item.frequency.toFixed(1)} views per person (daily proxy, true figure is higher)`])
+  if (item.holdRate != null) rows.push(['Video hold', `${item.holdRate.toFixed(0)}% of plays reach ThruPlay`])
+  if (item.hookRate != null) rows.push(['Hook rate', `${item.hookRate.toFixed(0)}% watch past two seconds`])
+  if (item.cause) rows.push(['Cause', item.cause === 'market' ? 'the auction got dearer, not the ad' : item.cause === 'both' ? 'the creative is tiring and the auction got dearer' : 'the creative is tiring'])
+  return rows
 }

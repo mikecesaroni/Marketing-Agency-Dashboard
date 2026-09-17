@@ -6,7 +6,7 @@
 // CLIENT PAGE WOULD, ONE CLIENT NEVER LEAKS INTO ANOTHER'S MEDIAN, AND
 // INTERNAL BUSINESSES STAY OFF THE BOARD.
 
-import { digestAdDoctor, digestCounts, digestHeadline, digestNumbers } from '../src/lib/adDoctorDigest.js'
+import { digestAdDoctor, digestCounts, digestDetails, digestHeadline, digestNumbers } from '../src/lib/adDoctorDigest.js'
 import { diagnoseAds } from '../src/lib/adDoctorRules.js'
 
 let failures = 0
@@ -97,6 +97,17 @@ check('within kills, biggest spend first', two.filter((i) => i.verdict === 'kill
 
 check('empty input', digestAdDoctor([], {}), [])
 check('rows without a client are skipped', digestAdDoctor([{ ad_id: 'z', date: day(1), spend: 500 }], {}), [])
+
+// The row carries the whole verdict, so "why?" needs no second query.
+check('every reason and the signals ride along', [Array.isArray(items[0].reasons), Array.isArray(items[0].signals), typeof items[0].days], [true, true, 'number'])
+check('the numbers the rules used ride along', ['ctr', 'cpm', 'frequency', 'ctrDecay', 'cpmChange', 'holdRate', 'hookRate', 'cause'].every((k) => k in items[0]), true)
+const det = digestDetails({ spend: 529, days: 30, leads: 6, cpl: 88.2, medianCpl: 79, usingFallback: false, ctr: 0.0123, ctrDecay: 0.51, cpm: 14.26, cpmChange: -0.03, frequency: 1.8, holdRate: null, hookRate: null, cause: 'creative' })
+check('details: spent and leads first', det.slice(0, 2), [['Spent', '$529 over 30 days'], ['Leads', '6 · $88 per lead · account median $79']])
+check('details: click rate with its decay', det[2], ['Click rate', '1.23% · down 51% vs its first week'])
+check('details: CPM with its week-over-week move', det[3], ['CPM', '$14.3 · down 3% week over week'])
+check('details: no video rows for an image ad', det.some(([k]) => k === 'Video hold' || k === 'Hook rate'), false)
+check('details: cause in words', det[det.length - 1], ['Cause', 'the creative is tiring'])
+check('details: nulls are left out, not printed', digestDetails({ spend: 100, days: 3, leads: 0, cpl: null, medianCpl: 60, usingFallback: true, ctr: null, cpm: null, frequency: null, ctrDecay: null, cpmChange: null, holdRate: null, hookRate: null, cause: null }).map(([k]) => k), ['Spent', 'Leads'])
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)
 process.exit(failures === 0 ? 0 : 1)
