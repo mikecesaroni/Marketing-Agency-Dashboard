@@ -24,15 +24,29 @@ function squash(name) {
   return tokens(name).join('')
 }
 
-/** How alike two business names are: shared meaningful words, or one name inside the other once spaces are gone. */
+/**
+ * How alike two business names are.
+ *
+ * Shared words count, weighted by where they sit in the client's name: the
+ * brand comes first ("Active Air"), the trade last ("Heating and Cooling"),
+ * and a Page that shares only the trade words is another business in the
+ * same trade. Unweighted, "Active Air Heating and Cooling" tied between
+ * "Active Air" and "Belk Heating & Cooling". One name inside the other once
+ * the spaces are gone ("Plumbquick" in "Plumb Quick Company") counts as a
+ * full match.
+ */
 export function nameScore(clientName, pageName) {
   const a = tokens(clientName)
   const b = tokens(pageName)
   if (a.length === 0 || b.length === 0) return 0
-  const shared = a.filter((t) => b.includes(t)).length
+  const full = (a.length * (a.length + 1)) / 2
+  let shared = 0
+  a.forEach((t, i) => {
+    if (b.includes(t)) shared += a.length - i
+  })
   const sa = squash(clientName)
   const sb = squash(pageName)
-  const contained = sa.length >= 5 && sb.length >= 5 && (sa.includes(sb) || sb.includes(sa)) ? 2 : 0
+  const contained = sa.length >= 5 && sb.length >= 5 && (sa.includes(sb) || sb.includes(sa)) ? full : 0
   return Math.max(shared, contained)
 }
 

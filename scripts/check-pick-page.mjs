@@ -42,6 +42,7 @@ check('Luccia Brother Mechanicle: blank', pickPage('Luccia Brother Mechanicle', 
 check('a Page the ads already use wins whatever it is called', pickPage('Perfect Breeze LLC', [{ id: 'x', name: 'Something Else', ads_using: 3 }, ...pages]), 'x')
 check('exactly one Page is the answer', pickPage('Anything', [{ id: 'only', name: 'Unrelated Name', ads_using: 0 }]), 'only')
 check('a tie between two equally good names is blank', pickPage('Horizon', [{ id: 'a', name: 'Horizon Water Co' }, { id: 'b', name: 'Horizon HVAC' }]), null)
+check('brand words outweigh trade words', nameScore('Active Air Heating and Cooling', 'Active Air') > nameScore('Active Air Heating and Cooling', 'Belk Heating & Cooling'), true)
 check('no pages', pickPage('X', []), null)
 check('stop words do not match on their own', nameScore('The Company LLC', 'Company Inc'), 0)
 
