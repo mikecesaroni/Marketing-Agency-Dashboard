@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { refreshAdAccounts, runMetaSync, summariseSync } from '../lib/metaSync'
 import { discoverAssets } from '../lib/metaPublish'
+import { pickPage } from '../lib/pickPage'
 
 export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate }) {
   const [editing, setEditing] = useState(false)
@@ -36,7 +37,11 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
       setDetected(found)
       // Only fill blanks. A value already typed is a decision, and silently
       // replacing it would be worse than not detecting at all.
-      if (found.suggested_page_id && !pageId) setPageId(found.suggested_page_id)
+      // The function's suggestion is list order once no ad uses any Page,
+      // which is how Perfect Breeze was saved with Tito's. Decide here from
+      // the evidence, and leave a blank when there is none.
+      const suggested = pickPage(client.name, found.pages)
+      if (suggested && !pageId) setPageId(suggested)
       if (found.suggested_pixel_id && !pixelId) setPixelId(found.suggested_pixel_id)
     } catch (err) {
       setError(err.message)
@@ -190,7 +195,8 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
       try {
         const found = await discoverAssets(client.id)
         const fill = {}
-        if (!pageId.trim() && found.suggested_page_id) fill.meta_page_id = found.suggested_page_id
+        const suggested = pickPage(client.name, found.pages)
+        if (!pageId.trim() && suggested) fill.meta_page_id = suggested
         if (!pixelId.trim() && found.suggested_pixel_id) fill.meta_pixel_id = found.suggested_pixel_id
 
         if (Object.keys(fill).length > 0) {
