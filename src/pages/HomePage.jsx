@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import FormSubmissionAlerts from '../components/FormSubmissionAlerts'
 import AdDeliveryAlerts from '../components/AdDeliveryAlerts'
 import AdDoctorAlerts from '../components/AdDoctorAlerts'
+import LaunchReadyAlerts from '../components/LaunchReadyAlerts'
 import { adsReady } from '../lib/adsReady'
 import {
   Badge,
@@ -249,7 +250,7 @@ export default function HomePage() {
     },
     {
       Icon: IconAlert,
-      title: 'GHL built, waiting on Meta access',
+      title: 'Ready for ads, waiting on Meta access',
       tone: 'warning',
       items: forAds.blocked.map((c) => ({
         key: `ads-blocked-${c.id}`,
@@ -364,6 +365,11 @@ export default function HomePage() {
           client: an ad burning budget with no leads, or a winner starved of
           it. Same rules as each client's page; renders nothing on a quiet day. */}
       <AdDoctorAlerts />
+
+      {/* A client with Meta connected, ads off, and GoHighLevel live or not
+          on their plan has nothing in the way but us. Renders nothing when
+          there is nobody like that. */}
+      <LaunchReadyAlerts ready={forAds.ready} blocked={forAds.blocked} />
 
       {/* The state of the book of work. Money lives on the Payments tab; this
           page answers "where does every client stand", which is a different

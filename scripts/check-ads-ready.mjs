@@ -131,7 +131,18 @@ check(
 
 // --- who is excluded outright ----------------------------------------------
 check('ads already live: not a queue of work to start', run([client({ meta_ads_active: true })], backend('c1')).ready.length === 0)
-check('not on the GHL plan: their backend is not ours', run([client({ ghl_plan: false })], backend('c1')).ready.length === 0)
+// --- not on the GHL plan: nothing of ours to wait for ------------------------
+const noPlan = run([client({ ghl_plan: false, ghl_active: false })], [])
+check('not on the GHL plan, Meta connected, ads off: ready', noPlan.ready.length === 1 && noPlan.blocked.length === 0)
+check('and the row says there is no GHL build', noPlan.ready[0].note === 'no GHL build · nothing in the way', noPlan.ready[0]?.note)
+check(
+  'not on the plan, missing URLs: named the same way',
+  run([client({ ghl_plan: false, website_url: null })], []).ready[0].note === 'no GHL build · needs landing page URL'
+)
+const noPlanNoPage = run([client({ ghl_plan: false, meta_page_id: null })], [])
+check('not on the plan but no Page: blocked, naming the Page', noPlanNoPage.blocked.length === 1 && noPlanNoPage.blocked[0].note === 'waiting on their Facebook Page')
+check('not on the plan, ads already live: excluded', run([client({ ghl_plan: false, meta_ads_active: true })], []).ready.length === 0)
+check('on the plan but GHL not live and nothing built: still NOT ready', run([client({ ghl_plan: true, ghl_active: false })], []).ready.length === 0)
 check('archived: gone from everything', run([client({ archived: true })], backend('c1')).ready.length === 0)
 check(
   'an internal business is included — work is work',

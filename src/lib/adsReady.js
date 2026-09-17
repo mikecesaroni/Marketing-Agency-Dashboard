@@ -19,7 +19,9 @@
 //             a request to the client, and it is the thing standing between us
 //             and spending their money well.
 //
-// A client with no backend yet is in neither: they are not waiting on ads.
+// A client on the GHL plan with no backend yet is in neither: they are not
+// waiting on ads. A client NOT on the plan has no backend to wait for, so a
+// connected Meta account with the ads off puts them straight in.
 
 /** The four that make up "the GHL backend is built". */
 export const GHL_BACKEND_KEYS = ['ghl-a2p', 'ghl-template', 'ghl-meta-form', 'ghl-sms']
@@ -94,28 +96,35 @@ export function adsReady({ clients = [], deliverables = [] } = {}) {
 
   for (const client of clients) {
     if (client.archived) continue
-    // Not on GoHighLevel: their backend is not ours to have built, so its
-    // state says nothing about whether ads can run.
-    if (!client.ghl_plan) continue
     // Already running. This is a queue of work to start, not a status board.
     if (client.meta_ads_active) continue
 
-    const backend = backendState(client, deliverables)
+    // Not on GoHighLevel: there is no backend of ours to wait for, so a
+    // connected Meta account with the ads off is the whole story. They used
+    // to be skipped here, which hid exactly the client this queue is for.
+    const onPlan = Boolean(client.ghl_plan)
+    const backend = onPlan ? backendState(client, deliverables) : { built: true, allDone: false, flagged: false, doneCount: 0, total: 0, openLabels: [], none: true }
     if (!backend.built) continue
 
     const meta = metaState(client)
+    const ghlWord = backend.none
+      ? 'no GHL build'
+      : backend.allDone
+        ? 'GHL built'
+        : `GHL marked live · ${backend.total - backend.doneCount} of ${backend.total} items still open`
     const row = {
       id: client.id,
       name: client.name,
+      onPlan,
       backend,
       meta,
       // What the row should say, in the fewest words that are still true.
       note: meta.connected
-        ? backend.allDone
+        ? backend.none || backend.allDone
           ? meta.soft.length > 0
-            ? `GHL built · needs ${meta.soft.join(' and ')}`
-            : 'GHL built · nothing in the way'
-          : `GHL marked live · ${backend.total - backend.doneCount} of ${backend.total} items still open`
+            ? `${ghlWord} · needs ${meta.soft.join(' and ')}`
+            : `${ghlWord} · nothing in the way`
+          : ghlWord
         : `waiting on their ${meta.missing.join(' and ')}`,
     }
 
