@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabaseClient'
 import { today } from '../lib/queries'
 import { fetchNextStepsForAll } from '../lib/nextStepsData'
 import { OWNER, urgency } from '../lib/nextSteps'
+import { MODAL_KINDS, stepHref } from '../lib/stepLinks'
 import { DELIVERABLE_STATUSES, TYPE_ICONS, isLate } from '../lib/deliverables'
 import { Badge, Button, Card } from '../components/ui'
 
@@ -58,31 +59,6 @@ function OwnerChip({ owner }) {
     <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800">us</span>
   )
 }
-
-/** Where a step's button goes when it cannot be done on this page. */
-function stepHref(clientId, step) {
-  switch (step?.action?.kind) {
-    case 'call':
-      return `/client/${clientId}#onboarding-call`
-    case 'ghl-toggle':
-    case 'meta-toggle':
-      return `/client/${clientId}#channels`
-    case 'studio':
-      return `/client/${clientId}?open=studio`
-    case 'publish':
-      return `/client/${clientId}?open=publish`
-    case 'kpis':
-      return `/client/${clientId}?open=kpis`
-    case 'payments':
-      return '/payments'
-    case 'report':
-      return '/reports'
-    default:
-      return `/client/${clientId}#deliverables`
-  }
-}
-
-const MODAL_KINDS = new Set(['send-onboarding', 'send-ghl', 'meta-access', 'lsa-access', 'gbp'])
 
 function StepButton({ clientId, step, onModal, size = 'sm' }) {
   const cls = `rounded-lg px-2.5 py-1 text-xs font-semibold ${size === 'lg' ? 'text-white ' + (step.owner === OWNER.us ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700') : 'text-blue-700 hover:underline'}`

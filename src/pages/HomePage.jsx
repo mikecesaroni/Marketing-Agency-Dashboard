@@ -5,19 +5,16 @@ import FormSubmissionAlerts from '../components/FormSubmissionAlerts'
 import AdDeliveryAlerts from '../components/AdDeliveryAlerts'
 import AdDoctorAlerts from '../components/AdDoctorAlerts'
 import LaunchReadyAlerts from '../components/LaunchReadyAlerts'
+import NextUpDigest from '../components/NextUpDigest'
 import { adsReady } from '../lib/adsReady'
 import {
   Badge,
   Card,
   Delta,
-  IconAlert,
   IconCheckCircle,
   IconClipboard,
   IconClock,
   IconDeliverables,
-  IconLaunch,
-  IconPin,
-  IconSops,
   StatCard,
 } from '../components/ui'
 import {
@@ -191,17 +188,10 @@ export default function HomePage() {
 
   const live = clients.filter((c) => !c.archived)
   const metaLive = live.filter((c) => c.meta_ads_active)
-  const metaNotYet = live.filter((c) => !c.meta_ads_active)
-  const lsaNotYet = live.filter((c) => !c.lsa_active)
 
-  // Split by who is holding it up, because the two need opposite actions: one
-  // is an email to the client, the other is a job for us. Lumping them into
-  // "GHL outstanding" would hide which.
-  const ghlWaiting = live.filter((c) => c.ghlStage?.key === 'waiting')
-  const ghlReady = live.filter((c) => c.ghlStage?.key === 'ready')
-
-  // Backend standing, ads still off. The most valuable thing on the page,
-  // because it is revenue sitting still with nothing in the way.
+  // Meta connected, ads off, GHL live or not on the plan: nothing in the way
+  // but us. Feeds the launch-ready notice; everything else about "where does
+  // each client stand" now comes from the pipeline digest below it.
   const forAds = adsReady({ clients: live, deliverables })
 
   const lsaLive = live.filter((c) => c.lsa_active)
@@ -233,32 +223,9 @@ export default function HomePage() {
 
   const missingKPIs = clients.filter((c) => c.hasMissingKPIs)
 
+  // Dated work only. Where each client stands, and whose move it is, lives in
+  // the pipeline digest above; these are the things with a date on them.
   const actionGroups = [
-    // First on purpose. Everything below it is something going wrong; this is
-    // money waiting to be made, and it is the thing most easily missed because
-    // nothing is broken.
-    {
-      Icon: IconLaunch,
-      title: 'Ready to build ads',
-      tone: 'success',
-      items: forAds.ready.map((c) => ({
-        key: `ads-ready-${c.id}`,
-        to: `/client/${c.id}`,
-        label: c.name,
-        meta: c.note,
-      })),
-    },
-    {
-      Icon: IconAlert,
-      title: 'Ready for ads, waiting on Meta access',
-      tone: 'warning',
-      items: forAds.blocked.map((c) => ({
-        key: `ads-blocked-${c.id}`,
-        to: `/client/${c.id}`,
-        label: c.name,
-        meta: c.note,
-      })),
-    },
     {
       Icon: IconClock,
       title: 'Deliverables past due',
@@ -290,50 +257,6 @@ export default function HomePage() {
         to: '/deliverables',
         label: `${d.clients?.name || 'Unknown'} — ${d.title}`,
         meta: `due ${d.due_date}`,
-      })),
-    },
-    {
-      Icon: IconLaunch,
-      title: 'Meta not live yet',
-      tone: 'info',
-      items: metaNotYet.map((c) => ({
-        key: c.id,
-        to: `/client/${c.id}`,
-        label: c.name,
-        meta: `added ${c.date_added}`,
-      })),
-    },
-    {
-      Icon: IconSops,
-      title: 'GHL ready to build',
-      tone: 'info',
-      items: ghlReady.map((c) => ({
-        key: `ghl-ready-${c.id}`,
-        to: `/client/${c.id}`,
-        label: c.name,
-        meta: 'details are in',
-      })),
-    },
-    {
-      Icon: IconClipboard,
-      title: 'GHL waiting on the client',
-      tone: 'warning',
-      items: ghlWaiting.map((c) => ({
-        key: `ghl-wait-${c.id}`,
-        to: `/client/${c.id}`,
-        label: c.name,
-        meta: 'send setup form',
-      })),
-    },
-    {
-      Icon: IconPin,
-      title: 'LSA not live yet',
-      tone: 'info',
-      items: lsaNotYet.map((c) => ({
-        key: c.id,
-        to: `/client/${c.id}`,
-        label: c.name,
-        meta: 'needs setup',
       })),
     },
   ]
@@ -370,6 +293,10 @@ export default function HomePage() {
           on their plan has nothing in the way but us. Renders nothing when
           there is nobody like that. */}
       <LaunchReadyAlerts ready={forAds.ready} blocked={forAds.blocked} />
+
+      {/* Every client's next move, ours and theirs, from the same pipeline
+          the client page and the Deliverables board show. */}
+      <NextUpDigest />
 
       {/* The state of the book of work. Money lives on the Payments tab; this
           page answers "where does every client stand", which is a different
