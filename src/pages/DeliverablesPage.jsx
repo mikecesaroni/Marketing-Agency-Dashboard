@@ -34,7 +34,7 @@ function DoneButton({ step, onDone, onUndo, size = 'sm' }) {
       title="Mark this step done"
       className={`flex-shrink-0 rounded-lg border border-green-300 bg-white text-green-700 hover:bg-green-50 ${size === 'lg' ? 'px-2.5 py-1.5 text-xs font-semibold' : 'px-1.5 py-0.5 text-[11px]'}`}
     >
-      ✓ Done
+      ✓ Mark done
     </button>
   )
 }
