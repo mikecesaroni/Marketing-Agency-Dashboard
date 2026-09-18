@@ -31,6 +31,7 @@ export default function DeliverableForm({
     priority: deliverable?.priority || 'normal',
     due_date: deliverable?.due_date || '',
     notes: deliverable?.notes || '',
+    assigned_to: deliverable?.assigned_to || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -66,6 +67,7 @@ export default function DeliverableForm({
       priority: form.priority,
       due_date: form.due_date || null,
       notes: form.notes.trim() || null,
+      assigned_to: form.assigned_to.trim() || null,
       completed_date:
         form.status === 'done'
           ? deliverable?.completed_date || new Date().toISOString().split('T')[0]
@@ -242,6 +244,20 @@ export default function DeliverableForm({
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Due date</label>
           <input type="date" value={form.due_date} onChange={set('due_date')} className={inputClass} />
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+          Assigned to <span className="font-normal text-slate-500">optional</span>
+        </label>
+        <input
+          type="text"
+          value={form.assigned_to}
+          onChange={set('assigned_to')}
+          className={inputClass}
+          placeholder="A teammate's name"
+          list="team-names"
+        />
       </div>
 
       <div>

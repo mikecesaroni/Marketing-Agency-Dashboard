@@ -29,7 +29,11 @@ export async function fetchNextStepsForAll() {
         .order('created_at', { ascending: false }),
       supabase.from('ghl_setup').select(`client_id, ${GHL_REQUIRED_KEYS.join(', ')}`),
       fetchAllRows(() =>
-        supabase.from('deliverables').select('id, client_id, title, status, template_key, phase, sort_order, due_date, assigned_to, notes').order('sort_order').order('id')
+        supabase
+          .from('deliverables')
+          .select('id, client_id, title, type, status, priority, source, template_key, phase, sort_order, due_date, completed_date, assigned_to, notes, updated_at')
+          .order('sort_order')
+          .order('id')
       ),
       supabase.from('client_payment_state').select('client_id, payment_type, status'),
       supabase.from('onboarding_call_steps').select('client_id, step_key'),
@@ -86,7 +90,7 @@ export async function fetchNextStepsForAll() {
       },
       today: today(),
     }
-    return { client, deliverables: ctx.deliverables, result: nextSteps(ctx) }
+    return { client, intake: ctx.intake, deliverables: ctx.deliverables, result: nextSteps(ctx) }
   })
 }
 

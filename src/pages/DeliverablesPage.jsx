@@ -7,20 +7,35 @@ import LsaSetupPanel from '../components/LsaSetupPanel'
 import MetaSetupPanel from '../components/MetaSetupPanel'
 import GbpSetupPanel from '../components/GbpSetupPanel'
 import MetaAccessReport from '../components/MetaAccessReport'
+import SetupMessageModal from '../components/SetupMessageModal'
+import OnboardingLinkPanel from '../components/OnboardingLinkPanel'
+import { PipelineStrip } from '../components/NextUpBar'
 import { supabase } from '../lib/supabaseClient'
-import { fetchDeliverables, hasInternalColumn, today } from '../lib/queries'
-import {
-  DELIVERABLE_STATUSES,
-  TYPE_ICONS,
-  groupByClient,
-  groupByStage,
-  isLate,
-  launchSummary,
-  mergeOverallProgress,
-} from '../lib/deliverables'
-import { Badge, Button, Card, Select, StatCard } from '../components/ui'
+import { today } from '../lib/queries'
+import { fetchNextStepsForAll } from '../lib/nextStepsData'
+import { OWNER, urgency } from '../lib/nextSteps'
+import { DELIVERABLE_STATUSES, TYPE_ICONS, isLate } from '../lib/deliverables'
+import { Badge, Button, Card } from '../components/ui'
 
-const STATUS_FILTERS = ['open', 'todo', 'in progress', 'review', 'done', 'all']
+/**
+ * The team board.
+ *
+ * One row per client, every client at once, sorted by who needs a hand
+ * first: clients with a step of ours open, then clients waiting longest on
+ * something of theirs, then launched-and-quiet. Each row is the same
+ * pipeline the client page's Next-up bar shows, so the two never disagree,
+ * and the row's button does the step right here: copy the message, open the
+ * Studio on the right tab, jump to the toggle.
+ *
+ * Open a row for the whole plan plus the hand-typed work for that client,
+ * with an assignee on each item. The filters and the counts stay pinned at
+ * the top while the list scrolls.
+ *
+ * The old view was eight seeded rows per client and a status dropdown each.
+ * Those rows still exist and still complete themselves; they are read by the
+ * pipeline rather than shown as a list, and anything typed by hand shows in
+ * the row's Extra work.
+ */
 
 const STATUS_STYLES = {
   todo: 'bg-slate-100 text-slate-700',
@@ -29,78 +44,92 @@ const STATUS_STYLES = {
   done: 'bg-green-100 text-green-800',
 }
 
-// How far along, at a glance. Green only at 100%, because a bar that is green
-// at 60% reads as "fine" when the honest answer is "not finished".
-function Bar({ percent }) {
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-      <div
-        className={`h-full rounded-full transition-all ${
-          percent === 100 ? 'bg-green-500' : 'bg-blue-500'
-        }`}
-        style={{ width: `${percent}%` }}
-      />
-    </div>
+const VIEWS = [
+  ['us', 'Needs us'],
+  ['client', 'Waiting on client'],
+  ['all', 'Everyone'],
+  ['launched', 'Launched'],
+]
+
+function OwnerChip({ owner }) {
+  return owner === OWNER.client ? (
+    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">client</span>
+  ) : (
+    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800">us</span>
   )
 }
 
-/**
- * One deliverable.
- *
- * The title opens the edit form and the status changes in place, because
- * moving something forward is the common action by a wide margin and should
- * not need a modal. An auto-created item that completed itself says so, so
- * nobody wonders who ticked it.
- */
-function Row({ deliverable, onEdit, onStatus, showClient }) {
-  const late = isLate(deliverable, today())
-  const autoDone =
-    deliverable.source === 'auto' &&
-    deliverable.status === 'done' &&
-    ['meta-access', 'meta-live'].includes(deliverable.template_key)
+/** Where a step's button goes when it cannot be done on this page. */
+function stepHref(clientId, step) {
+  switch (step?.action?.kind) {
+    case 'call':
+      return `/client/${clientId}#onboarding-call`
+    case 'ghl-toggle':
+    case 'meta-toggle':
+      return `/client/${clientId}#channels`
+    case 'studio':
+      return `/client/${clientId}?open=studio`
+    case 'publish':
+      return `/client/${clientId}?open=publish`
+    case 'kpis':
+      return `/client/${clientId}?open=kpis`
+    case 'payments':
+      return '/payments'
+    case 'report':
+      return '/reports'
+    default:
+      return `/client/${clientId}#deliverables`
+  }
+}
 
+const MODAL_KINDS = new Set(['send-onboarding', 'send-ghl', 'meta-access', 'lsa-access', 'gbp'])
+
+function StepButton({ clientId, step, onModal, size = 'sm' }) {
+  const cls = `rounded-lg px-2.5 py-1 text-xs font-semibold ${size === 'lg' ? 'text-white ' + (step.owner === OWNER.us ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700') : 'text-blue-700 hover:underline'}`
+  if (MODAL_KINDS.has(step.action.kind)) {
+    return (
+      <button type="button" onClick={() => onModal(step)} className={cls}>
+        {step.action.label}
+      </button>
+    )
+  }
   return (
-    <div
-      className={`flex flex-col gap-2 rounded-lg border px-3 py-2 sm:flex-row sm:items-center ${
-        late ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white'
-      }`}
-    >
-      <button onClick={() => onEdit(deliverable)} className="group min-w-0 flex-1 text-left">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex-shrink-0">{TYPE_ICONS[deliverable.type] || TYPE_ICONS.other}</span>
-          <span
-            className={`truncate text-sm font-medium transition group-hover:text-blue-600 ${
-              deliverable.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-900'
-            }`}
-          >
-            {showClient ? deliverable.clients?.name || 'Unknown client' : deliverable.title}
-          </span>
-          {deliverable.priority === 'high' && deliverable.status !== 'done' && (
-            <Badge tone="danger" className="flex-shrink-0 uppercase">
-              High
-            </Badge>
-          )}
-        </div>
+    <Link to={stepHref(clientId, step)} className={cls}>
+      {step.action.label}
+    </Link>
+  )
+}
 
-        {(deliverable.due_date || deliverable.notes || autoDone) && (
-          <p className="mt-0.5 pl-6 text-[11px] text-slate-500">
-            {deliverable.due_date && (
-              <span className={late ? 'font-semibold text-red-600' : ''}>
-                due {deliverable.due_date}
-              </span>
-            )}
-            {deliverable.due_date && (deliverable.notes || autoDone) && ' · '}
-            {autoDone ? 'completed automatically by the CRM' : deliverable.notes}
-          </p>
+/** One hand-typed deliverable: title, assignee, status. */
+function ExtraRow({ d, onEdit, onStatus, onAssign }) {
+  const late = isLate(d, today())
+  return (
+    <div className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 ${late ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white'}`}>
+      <button type="button" onClick={() => onEdit(d)} className="min-w-0 flex-1 text-left">
+        <span className="flex items-center gap-2">
+          <span>{TYPE_ICONS[d.type] || TYPE_ICONS.other}</span>
+          <span className={`truncate text-sm font-medium ${d.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{d.title}</span>
+          {d.priority === 'high' && d.status !== 'done' && <Badge tone="danger">High</Badge>}
+        </span>
+        {(d.due_date || d.notes) && (
+          <span className="mt-0.5 block pl-6 text-[11px] text-slate-500">
+            {d.due_date && <span className={late ? 'font-semibold text-red-600' : ''}>due {d.due_date}</span>}
+            {d.due_date && d.notes && ' · '}
+            {d.notes}
+          </span>
         )}
       </button>
-
+      <input
+        defaultValue={d.assigned_to || ''}
+        onBlur={(e) => e.target.value.trim() !== (d.assigned_to || '') && onAssign(d, e.target.value.trim())}
+        placeholder="Assign"
+        list="team-names"
+        className="w-28 rounded border border-slate-200 px-2 py-1 text-xs"
+      />
       <select
-        value={deliverable.status}
-        onChange={(e) => onStatus(deliverable, e.target.value)}
-        className={`flex-shrink-0 cursor-pointer rounded-lg border-0 px-2.5 py-1.5 text-xs font-semibold capitalize ${
-          STATUS_STYLES[deliverable.status]
-        }`}
+        value={d.status}
+        onChange={(e) => onStatus(d, e.target.value)}
+        className={`cursor-pointer rounded-lg border-0 px-2.5 py-1.5 text-xs font-semibold capitalize ${STATUS_STYLES[d.status]}`}
       >
         {DELIVERABLE_STATUSES.map((s) => (
           <option key={s} value={s}>
@@ -112,366 +141,330 @@ function Row({ deliverable, onEdit, onStatus, showClient }) {
   )
 }
 
+function ClientRow({ row, open, onToggle, onModal, onEdit, onStatus, onAssign, onAssignClient, onAdd }) {
+  const { client, result, deliverables } = row
+  const next = result.next
+  const extras = deliverables.filter((d) => d.source !== 'auto')
+  const openExtras = extras.filter((d) => d.status !== 'done')
+  const lastMoved = deliverables.reduce((m, d) => (d.updated_at && d.updated_at > m ? d.updated_at : m), '')
+  const stripe = result.launched && !next ? 'bg-green-500' : next?.owner === OWNER.us ? 'bg-blue-500' : next ? 'bg-amber-400' : 'bg-slate-300'
+
+  return (
+    <Card padding="none" className="overflow-hidden">
+      <div className="flex">
+        <div className={`w-1 flex-shrink-0 ${stripe}`} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start gap-x-4 gap-y-2 p-4">
+            <button type="button" onClick={onToggle} aria-expanded={open} className="flex-shrink-0 pt-0.5 text-slate-400 hover:text-slate-700" aria-label={open ? 'Collapse' : 'Expand'}>
+              {open ? '▾' : '▸'}
+            </button>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <Link to={`/client/${client.id}`} className="text-sm font-semibold text-slate-900 hover:text-blue-700 hover:underline">
+                  {client.name}
+                </Link>
+                <span className="text-[11px] uppercase tracking-wide text-slate-400">{result.phase}</span>
+                <span className="text-[11px] tabular-nums text-slate-400">
+                  {result.progress.done}/{result.progress.total}
+                </span>
+                {result.launched && !next && <Badge tone="success">Running</Badge>}
+                <input
+                  defaultValue={client.assigned_to || ''}
+                  onBlur={(e) => e.target.value.trim() !== (client.assigned_to || '') && onAssignClient(client, e.target.value.trim())}
+                  placeholder="Owner"
+                  list="team-names"
+                  title="Who on the team owns this client"
+                  className="ml-auto w-24 rounded border border-slate-200 px-2 py-0.5 text-[11px]"
+                />
+              </div>
+              <div className="mt-1">
+                <PipelineStrip result={result} compact />
+              </div>
+              {next ? (
+                <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-xs">
+                  <span className="text-slate-500">Next:</span>
+                  <span className="font-medium text-slate-900">{next.title}</span>
+                  <OwnerChip owner={next.owner} />
+                  <span className="text-slate-600">{next.detail}</span>
+                  {next.waitingDays > 0 && <span className="text-amber-700">{next.waitingDays}d waiting</span>}
+                </p>
+              ) : (
+                <p className="mt-1.5 text-xs text-slate-600">{result.launched ? 'Nothing outstanding this week.' : 'Nothing outstanding.'}</p>
+              )}
+              <p className="mt-0.5 text-[11px] text-slate-400">
+                {result.ours.length} step{result.ours.length === 1 ? '' : 's'} ours · {result.theirs.length} on the client
+                {openExtras.length > 0 && ` · ${openExtras.length} extra task${openExtras.length === 1 ? '' : 's'}`}
+                {lastMoved && ` · last moved ${lastMoved.slice(0, 10)}`}
+              </p>
+            </div>
+            {next && (
+              <div className="flex-shrink-0">
+                <StepButton clientId={client.id} step={next} onModal={onModal} size="lg" />
+              </div>
+            )}
+          </div>
+
+          {open && (
+            <div className="space-y-3 border-t border-slate-100 bg-slate-50/60 p-4">
+              <div>
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">The plan</p>
+                <ol className="grid gap-1.5 md:grid-cols-2">
+                  {result.steps.map((s) => (
+                    <li
+                      key={s.key}
+                      className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 text-xs ${
+                        s.done ? 'border-green-100 bg-green-50/60' : s.blocked ? 'border-slate-100 bg-white text-slate-500' : 'border-slate-200 bg-white'
+                      }`}
+                    >
+                      <span className={`mt-1 inline-block h-2 w-2 flex-shrink-0 rounded-full ${s.done ? 'bg-green-500' : s.blocked ? 'bg-slate-200' : s.owner === OWNER.client ? 'bg-amber-400' : 'bg-blue-500'}`} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-baseline gap-x-1.5">
+                          <span className={`font-medium ${s.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{s.title}</span>
+                          {!s.done && <OwnerChip owner={s.owner} />}
+                          {s.blocked && <span className="text-slate-400">after: {result.steps.find((x) => x.key === s.blockedBy)?.title || s.blockedBy}</span>}
+                        </span>
+                        <span className="block text-slate-600">{s.detail}</span>
+                      </span>
+                      {!s.done && !s.blocked && <StepButton clientId={client.id} step={s} onModal={onModal} />}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                    Extra work <span className="font-normal tabular-nums text-slate-400">{openExtras.length} open</span>
+                  </p>
+                  <button type="button" onClick={() => onAdd(client)} className="text-xs text-blue-600 hover:underline">
+                    + Add a task
+                  </button>
+                </div>
+                {extras.length === 0 ? (
+                  <p className="text-xs text-slate-500">Nothing beyond the standard launch.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {[...extras].sort((a, b) => (a.status === 'done') - (b.status === 'done')).map((d) => (
+                      <ExtraRow key={d.id} d={d} onEdit={onEdit} onStatus={onStatus} onAssign={onAssign} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 export default function DeliverablesPage() {
-  const [deliverables, setDeliverables] = useState([])
-  const [clients, setClients] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
-  const [view, setView] = useState('client')
-  const [statusFilter, setStatusFilter] = useState('open')
-  const [clientFilter, setClientFilter] = useState('all')
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [editing, setEditing] = useState(null)
-  // Only the ones the reader has deliberately opened or shut. Everything else
-  // follows the default, which depends on whether there is anything left to do.
+  const [view, setView] = useState('us')
+  const [who, setWho] = useState('all')
+  const [query, setQuery] = useState('')
   const [toggled, setToggled] = useState({})
+  const [modal, setModal] = useState(null) // { kind, row }
+  const [editing, setEditing] = useState(null)
+  const [adding, setAdding] = useState(null) // client or 'any'
+
+  const load = () =>
+    fetchNextStepsForAll()
+      .then((r) => {
+        setRows(r)
+        setError('')
+      })
+      .catch((err) => setError(err.message))
 
   useEffect(() => {
-    loadData()
+    load()
   }, [])
 
-  const loadData = async () => {
-    try {
-      let clientsQuery = supabase
-        .from('clients')
-        .select('id, name, meta_ads_active')
-        .eq('archived', false)
-        .order('name')
-      if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
-
-      const [items, clientsRes] = await Promise.all([fetchDeliverables(), clientsQuery])
-      if (clientsRes.error) throw clientsRes.error
-      setDeliverables(items)
-      setClients(clientsRes.data || [])
-      setError('')
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+  const names = useMemo(() => {
+    const set = new Set()
+    for (const r of rows || []) {
+      if (r.client.assigned_to) set.add(r.client.assigned_to)
+      for (const d of r.deliverables) if (d.assigned_to) set.add(d.assigned_to)
     }
-  }
+    return [...set].sort()
+  }, [rows])
 
-  const changeStatus = async (deliverable, status) => {
-    setDeliverables((prev) =>
-      prev.map((d) => (d.id === deliverable.id ? { ...d, status } : d))
-    )
-    const { error: err } = await supabase
-      .from('deliverables')
-      .update({ status, completed_date: status === 'done' ? today() : null })
-      .eq('id', deliverable.id)
+  const sorted = useMemo(() => [...(rows || [])].sort((a, b) => urgency(b.result) - urgency(a.result) || a.client.name.localeCompare(b.client.name)), [rows])
 
+  const shown = useMemo(
+    () =>
+      sorted.filter((r) => {
+        if (who !== 'all' && (r.client.assigned_to || '') !== who) return false
+        if (query && !r.client.name.toLowerCase().includes(query.toLowerCase())) return false
+        if (view === 'us') return r.result.ours.length > 0
+        if (view === 'client') return r.result.theirs.length > 0 && r.result.ours.length === 0
+        if (view === 'launched') return r.result.launched
+        return true
+      }),
+    [sorted, view, who, query]
+  )
+
+  const counts = useMemo(() => {
+    const all = rows || []
+    return {
+      us: all.filter((r) => r.result.ours.length > 0).length,
+      client: all.filter((r) => r.result.theirs.length > 0 && r.result.ours.length === 0).length,
+      launched: all.filter((r) => r.result.launched).length,
+      all: all.length,
+      stale: all.filter((r) => r.result.theirs.some((s) => (s.waitingDays || 0) >= 7)).length,
+    }
+  }, [rows])
+
+  const changeStatus = async (d, status) => {
+    setRows((prev) => prev.map((r) => ({ ...r, deliverables: r.deliverables.map((x) => (x.id === d.id ? { ...x, status } : x)) })))
+    const { error: err } = await supabase.from('deliverables').update({ status, completed_date: status === 'done' ? today() : null }).eq('id', d.id)
     if (err) {
       setError(err.message)
-      loadData()
+      load()
     }
   }
+  const assign = async (d, name) => {
+    const { error: err } = await supabase.from('deliverables').update({ assigned_to: name || null }).eq('id', d.id)
+    if (err) setError(err.message)
+    load()
+  }
+  const assignClient = async (client, name) => {
+    const { error: err } = await supabase.from('clients').update({ assigned_to: name || null }).eq('id', client.id)
+    if (err) setError(err.message)
+    load()
+  }
 
-  const filtered = useMemo(
-    () =>
-      deliverables.filter((d) => {
-        if (clientFilter !== 'all' && d.client_id !== clientFilter) return false
-        if (statusFilter === 'all') return true
-        if (statusFilter === 'open') return d.status !== 'done'
-        return d.status === statusFilter
-      }),
-    [deliverables, statusFilter, clientFilter]
-  )
+  const openRow = (id, fallback) => toggled[id] ?? fallback
+  const toggle = (id, fallback) => setToggled((prev) => ({ ...prev, [id]: !(prev[id] ?? fallback) }))
 
-  // The summary reads the whole book of work, not the filtered slice. Filtering
-  // to "done" should not make it say every client is launched.
-  const allGroups = useMemo(() => groupByClient(deliverables), [deliverables])
-  const summary = launchSummary(allGroups)
-  const lateCount = deliverables.filter((d) => isLate(d, today())).length
-
-  // Rows come from the filtered list, counts from the whole one — see
-  // mergeOverallProgress for why they cannot both come from the same place.
-  const allStages = useMemo(() => groupByStage(deliverables), [deliverables])
-  const clientGroups = useMemo(
-    () => mergeOverallProgress(groupByClient(filtered), allGroups),
-    [filtered, allGroups]
-  )
-  const stageGroups = useMemo(
-    () => mergeOverallProgress(groupByStage(filtered), allStages, 'key'),
-    [filtered, allStages]
-  )
-
-  const isOpen = (key, fallback) => toggled[key] ?? fallback
-  const toggle = (key, fallback) =>
-    setToggled((prev) => ({ ...prev, [key]: !(prev[key] ?? fallback) }))
-
-  const tableMissing = error.toLowerCase().includes('deliverables')
+  const modalRow = modal?.row
+  const modalKind = modal?.step?.action?.kind
 
   return (
     <Layout
       title="Deliverables"
-      subtitle={
-        loading
-          ? 'Loading…'
-          : `${summary.inFlight} in flight · ${summary.launched} launched` +
-            (lateCount > 0 ? ` · ${lateCount} past due` : '')
-      }
+      subtitle={rows ? `${counts.us} need us · ${counts.client} waiting on a client · ${counts.launched} launched` : 'Loading…'}
       actions={
-        <Button variant="dark" size="lg" onClick={() => setShowAddModal(true)} className="w-full md:w-auto">
-          + New Deliverable
+        <Button variant="dark" size="lg" onClick={() => setAdding('any')} className="w-full md:w-auto">
+          + New task
         </Button>
       }
     >
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {tableMissing ? (
-            <>
-              <p className="mb-1 font-semibold">The deliverables table doesn&rsquo;t exist yet.</p>
-              <p>
-                Open the Supabase SQL Editor and run{' '}
-                <code className="rounded bg-red-100 px-1">supabase/deliverables.sql</code>, then{' '}
-                <code className="rounded bg-red-100 px-1">
-                  supabase/deliverable-templates.sql
-                </code>
-                , and refresh.
-              </p>
-            </>
-          ) : (
-            `Error: ${error}`
-          )}
-        </div>
-      )}
+      <datalist id="team-names">
+        {names.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
 
-      <div className="mb-6 grid grid-cols-3 gap-3 md:gap-4">
-        <StatCard label="Clients in flight" value={summary.inFlight} sub="launch not finished" />
-        <StatCard
-          label="Fully launched"
-          value={summary.launched}
-          sub={`of ${summary.clients} clients`}
-        />
-        <StatCard
-          label="Past due"
-          value={lateCount}
-          sub={lateCount === 0 ? 'nothing overdue' : 'needs a date moved or the work done'}
-          alert={lateCount > 0}
-        />
-      </div>
+      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
-      {/* Two questions, two groupings. By client is "what is left for Belk";
-          by stage is "how many videos do I owe", which is the one that lets
-          four of the same job be done in one sitting. */}
-      {/* Two rows rather than one. Crammed onto a single line the six status
-          filters got squeezed to single letters between the view toggle and
-          the client dropdown -- the grouping is the primary control and should
-          not have to fight for width. */}
-      <div className="mb-4 space-y-2">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex gap-1.5">
-            {[
-              ['client', 'By client'],
-              ['stage', 'By stage'],
-            ].map(([key, label]) => (
-              <Button
-                key={key}
-                variant={view === key ? 'dark' : 'outline'}
-                onClick={() => setView(key)}
-                className="whitespace-nowrap"
-              >
+      {/* Pinned: the state of the book of work and the filters stay in view
+          while the list scrolls. */}
+      <div className="sticky top-[68px] z-20 -mx-4 mb-4 border-b border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur md:top-[76px] md:-mx-8 md:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            {VIEWS.map(([key, label]) => (
+              <Button key={key} size="sm" variant={view === key ? 'dark' : 'outline'} onClick={() => setView(key)} className="whitespace-nowrap">
                 {label}
+                <span className="ml-1.5 tabular-nums opacity-70">{counts[key] ?? ''}</span>
               </Button>
             ))}
           </div>
-          <Select
-            value={clientFilter}
-            onChange={(e) => setClientFilter(e.target.value)}
-            className="w-auto sm:ml-auto"
-          >
-            <option value="all">All clients</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
-          {STATUS_FILTERS.map((s) => (
-            <Button
-              key={s}
-              size="sm"
-              variant={statusFilter === s ? 'primary' : 'outline'}
-              onClick={() => setStatusFilter(s)}
-              className="capitalize whitespace-nowrap"
-            >
-              {s}
-            </Button>
-          ))}
+          <div className="flex flex-1 items-center gap-2 sm:justify-end">
+            {counts.stale > 0 && (
+              <span className="hidden text-[11px] text-amber-700 sm:inline" title="A client-side step open seven days or more">
+                {counts.stale} waiting 7d+
+              </span>
+            )}
+            <select value={who} onChange={(e) => setWho(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs">
+              <option value="all">Any owner</option>
+              {names.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a client" className="w-36 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs" />
+          </div>
         </div>
       </div>
 
-      {loading ? (
-        <p className="text-slate-500">Loading...</p>
-      ) : filtered.length === 0 ? (
-        <Card padding="lg" className="text-center">
-          <p className="text-slate-500">
-            {deliverables.length === 0
-              ? 'No deliverables yet. They are created automatically for a new client — add one by hand for anything outside the standard launch.'
-              : 'Nothing matches these filters.'}
-          </p>
+      {!rows ? (
+        <p className="text-slate-500">Loading…</p>
+      ) : shown.length === 0 ? (
+        <Card padding="lg" className="text-center text-sm text-slate-500">
+          {view === 'us' ? 'Nothing needs us right now. Check "Waiting on client" for the chases.' : 'Nothing here.'}
         </Card>
-      ) : view === 'client' ? (
-        <div className="space-y-3">
-          {clientGroups.map((group) => {
-            // Finished clients arrive shut. They are the ones you do not need
-            // to look at, and leaving them open buries the ones you do.
-            const defaultOpen = group.done < group.total
-            const open = isOpen(group.clientId, defaultOpen)
-
-            return (
-              <Card key={group.clientId} padding="none" className="overflow-hidden">
-                <div className="flex items-center gap-3 p-4">
-                  <button
-                    onClick={() => toggle(group.clientId, defaultOpen)}
-                    className="flex-shrink-0 text-slate-400 hover:text-slate-700"
-                    aria-label={open ? 'Collapse' : 'Expand'}
-                  >
-                    {open ? '▾' : '▸'}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Link
-                        to={`/client/${group.clientId}`}
-                        className="truncate font-semibold text-slate-900 hover:text-blue-600"
-                      >
-                        {group.clientName}
-                      </Link>
-                      {group.done === group.total && (
-                        <Badge tone="success" className="flex-shrink-0">
-                          Launched
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <Bar percent={group.percent} />
-                      <span className="flex-shrink-0 text-xs tabular-nums text-slate-500">
-                        {group.done}/{group.total}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {open && (
-                  <div className="space-y-3 border-t border-slate-100 bg-slate-50/60 p-4">
-                    {group.phases.map((phase) => (
-                      <div key={phase.phase}>
-                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                          {phase.phase}{' '}
-                          <span className="font-normal tabular-nums text-slate-400">
-                            {phase.done}/{phase.total}
-                          </span>
-                        </p>
-                        <div className="space-y-1.5">
-                          {phase.items.map((d) => (
-                            <Row
-                              key={d.id}
-                              deliverable={d}
-                              onEdit={setEditing}
-                              onStatus={changeStatus}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            )
-          })}
-        </div>
       ) : (
         <div className="space-y-3">
-          {stageGroups.map((stage) => {
-            const defaultOpen = stage.done < stage.total
-            const open = isOpen(stage.key, defaultOpen)
-
-            return (
-              <Card key={stage.key} padding="none" className="overflow-hidden">
-                <div className="flex items-center gap-3 p-4">
-                  <button
-                    onClick={() => toggle(stage.key, defaultOpen)}
-                    className="flex-shrink-0 text-slate-400 hover:text-slate-700"
-                    aria-label={open ? 'Collapse' : 'Expand'}
-                  >
-                    {open ? '▾' : '▸'}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span>{TYPE_ICONS[stage.type] || TYPE_ICONS.other}</span>
-                      <span className="truncate font-semibold text-slate-900">{stage.title}</span>
-                      <Badge tone="neutral" className="flex-shrink-0">
-                        {stage.phase}
-                      </Badge>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <Bar percent={stage.percent} />
-                      <span className="flex-shrink-0 text-xs tabular-nums text-slate-500">
-                        {stage.done}/{stage.total} clients
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {open && (
-                  <div className="space-y-1.5 border-t border-slate-100 bg-slate-50/60 p-4">
-                    {stage.items.map((d) => (
-                      <Row
-                        key={d.id}
-                        deliverable={d}
-                        onEdit={setEditing}
-                        onStatus={changeStatus}
-                        showClient
-                      />
-                    ))}
-                  </div>
-                )}
-              </Card>
-            )
-          })}
+          {shown.map((r) => (
+            <ClientRow
+              key={r.client.id}
+              row={r}
+              open={openRow(r.client.id, false)}
+              onToggle={() => toggle(r.client.id, false)}
+              onModal={(step) => setModal({ step, row: r })}
+              onEdit={setEditing}
+              onStatus={changeStatus}
+              onAssign={assign}
+              onAssignClient={assignClient}
+              onAdd={(client) => setAdding(client)}
+            />
+          ))}
         </div>
       )}
 
-      {/* Below the queue, not above it. These are agency-wide tools for asking
-          a client for access — the thing the first Meta deliverable needs —
-          rather than per-client work, and they were pushing the actual list
-          off the screen. */}
-      <div className="mt-8 border-t border-slate-200 pt-6">
-        <h2 className="mb-1 text-lg font-semibold tracking-tight text-slate-900">
-          Ask a client for access
-        </h2>
-        <p className="mb-4 text-sm text-slate-500">
-          Who still needs each channel connected, and the message to send them. Connecting a Meta
-          ad account completes that client&rsquo;s access deliverable on its own.
+      {/* Agency-wide access tools, folded: the per-client rows above carry the
+          same messages, so this is for the sweep, not the daily work. */}
+      <details className="mt-8 border-t border-slate-200 pt-6">
+        <summary className="cursor-pointer text-lg font-semibold tracking-tight text-slate-900">Access sweep: who still needs each channel</summary>
+        <p className="mb-4 mt-1 text-sm text-slate-500">
+          Every client missing a channel, with the message to send. Connecting a Meta ad account completes that client&rsquo;s access step on its own.
         </p>
-        {/* First, because "did it actually arrive" is the question you have
-            after sending the message, and the answer used to be to try
-            building something and watch it fail. */}
         <MetaAccessReport />
         <MetaSetupPanel />
         <LsaSetupPanel />
         <GbpSetupPanel />
-      </div>
+      </details>
 
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="New Deliverable">
-        <DeliverableForm
-          clients={clients}
-          onSuccess={loadData}
-          onClose={() => setShowAddModal(false)}
+      {modalRow && ['meta-access', 'lsa-access', 'gbp'].includes(modalKind) && (
+        <SetupMessageModal
+          channel={modalKind === 'meta-access' ? 'meta' : modalKind === 'lsa-access' ? 'lsa' : 'gbp'}
+          client={modalRow.client}
+          intake={modalRow.intake}
+          onClose={() => setModal(null)}
         />
-      </Modal>
-
-      <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit Deliverable">
-        {editing && (
-          <DeliverableForm
-            deliverable={editing}
-            clients={clients}
-            onSuccess={loadData}
-            onClose={() => setEditing(null)}
+      )}
+      <Modal
+        isOpen={Boolean(modalRow && ['send-onboarding', 'send-ghl'].includes(modalKind))}
+        onClose={() => {
+          setModal(null)
+          load()
+        }}
+        title={modalKind === 'send-ghl' ? `Send the GHL setup link · ${modalRow?.client.name}` : `Send the onboarding link · ${modalRow?.client.name}`}
+      >
+        {modalRow && (
+          <OnboardingLinkPanel
+            client={modalRow.client}
+            fixedMode={modalKind === 'send-ghl' ? 'ghl' : modalRow.client.ghl_plan && !modalRow.result.steps.find((s) => s.key === 'ghl-form')?.done ? 'both' : 'intake'}
           />
         )}
+      </Modal>
+
+      <Modal isOpen={Boolean(adding)} onClose={() => setAdding(null)} title={adding && adding !== 'any' ? `New task · ${adding.name}` : 'New task'}>
+        {adding && (
+          <DeliverableForm
+            clients={(rows || []).map((r) => r.client)}
+            lockedClientId={adding !== 'any' ? adding.id : undefined}
+            onSuccess={load}
+            onClose={() => setAdding(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit task">
+        {editing && <DeliverableForm deliverable={editing} clients={(rows || []).map((r) => r.client)} onSuccess={load} onClose={() => setEditing(null)} />}
       </Modal>
     </Layout>
   )

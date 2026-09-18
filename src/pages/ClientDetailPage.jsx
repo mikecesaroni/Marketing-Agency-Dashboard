@@ -128,6 +128,21 @@ export default function ClientDetailPage() {
       .then(setNextUp)
       .catch(() => setNextUp(null))
 
+  // /client/:id?open=studio|publish|kpis, from the Deliverables board and the
+  // dashboard: land with the right thing already open, once, after the client
+  // has loaded. The param is then dropped so a refresh does not reopen it.
+  const pageLocation = useLocation()
+  useEffect(() => {
+    if (loading || !client) return
+    const want = new URLSearchParams(pageLocation.search).get('open')
+    if (!want) return
+    if (want === 'studio') openStudio('design')
+    else if (want === 'publish') openStudio('publish')
+    else if (want === 'kpis') setShowKPIsModal(true)
+    navigate({ pathname: pageLocation.pathname, hash: pageLocation.hash }, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, client?.id, pageLocation.search])
+
   useEffect(() => {
     loadClientData()
   }, [clientId])
