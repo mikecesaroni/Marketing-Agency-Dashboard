@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LOGIN_REQUIRED } from '../lib/access'
+import { LOGIN_REQUIRED, isAdmin, needsOwner } from '../lib/access'
 
 // Supabase's own wording is "Invalid login credentials", which reads like a
 // server log. The person typing already knows what they typed.
@@ -17,14 +17,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const { session, loading, signIn } = useAuth()
+  const { session, loading, role, signIn } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from && location.state.from !== '/login' ? location.state.from : '/'
 
-  // Login switched off, or already in: straight through. Nobody should see a
-  // login form they do not need.
-  if (!LOGIN_REQUIRED || (!loading && session)) return <Navigate to={from} replace />
+  // Login switched off: the form exists only for the owner reaching a money
+  // or admin page. Anyone else, or an owner already signed in, goes straight
+  // through. Nobody should see a login form they do not need.
+  if (!LOGIN_REQUIRED && !needsOwner(from)) return <Navigate to={from} replace />
+  if (!loading && session && (LOGIN_REQUIRED || isAdmin(role))) return <Navigate to={from} replace />
+  const ownerGate = !LOGIN_REQUIRED
 
   const submit = async (e) => {
     e.preventDefault()
@@ -50,7 +53,18 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={submit} className="bg-white rounded-xl shadow-lg p-7 space-y-4">
-          <h1 className="text-lg font-semibold text-slate-900">Sign in</h1>
+          <h1 className="text-lg font-semibold text-slate-900">{ownerGate ? 'Owner sign in' : 'Sign in'}</h1>
+          {ownerGate && (
+            <p className="text-xs text-slate-600">
+              Payments and Team are for the account owner. Sign in once in this browser and they stay
+              open. Everything else in the CRM needs no login.
+              {session && !isAdmin(role) && (
+                <span className="mt-1 block text-amber-700">
+                  You are signed in as {session.user.email}, which is not an owner login.
+                </span>
+              )}
+            </p>
+          )}
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="login-email">
               Email

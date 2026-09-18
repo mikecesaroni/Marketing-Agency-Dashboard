@@ -62,13 +62,24 @@ check('nobody logged in sees no nav', visibleNav(NAV, null), [])
 // --- login switched off --------------------------------------------------------
 
 check('the switch is currently off', LOGIN_REQUIRED, false)
-check('without login, payments opens', canOpenWithoutLogin('/payments'), true)
-check('without login, team does not', canOpenWithoutLogin('/team'), false)
-check('without login, a team sub-path does not', canOpenWithoutLogin('/team/x'), false)
+// The team works without signing in and sees everything but the money and
+// admin pages. The owner signs in and gets those too.
+check('without login, clients open for a visitor', canOpenWithoutLogin('/clients'), true)
+check('without login, payments does NOT open for a visitor', canOpenWithoutLogin('/payments'), false)
+check('without login, a payments sub-path does not either', canOpenWithoutLogin('/payments/stripe', 'viewer'), false)
+check('without login, team does not open for a visitor', canOpenWithoutLogin('/team'), false)
+check('the signed-in owner opens payments', canOpenWithoutLogin('/payments', 'admin'), true)
+check('the signed-in owner opens team', canOpenWithoutLogin('/team/x', 'admin'), true)
+check('a signed-in VA still cannot open payments', canOpenWithoutLogin('/payments', 'va'), false)
 check(
-  'without login the nav keeps Money and drops the Admin group',
+  'without login the nav drops Payments and the Admin group, keeps Reports',
   navWithoutLogin(NAV).map((g) => g.items.map((i) => i.to)),
-  [['/', '/clients'], ['/payments', '/reports']]
+  [['/', '/clients'], ['/reports']]
+)
+check(
+  'the owner\'s nav has everything',
+  navWithoutLogin(NAV, 'admin').map((g) => g.items.map((i) => i.to)),
+  [['/', '/clients'], ['/payments', '/reports'], ['/team']]
 )
 
 // --- passwords ---------------------------------------------------------------

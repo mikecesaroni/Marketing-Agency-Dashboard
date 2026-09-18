@@ -18,10 +18,20 @@ export default function RequireAuth({ children }) {
   const { loading, session, profile, profileError, role, signOut } = useAuth()
   const location = useLocation()
 
-  // Login switched off: straight through, minus the Team page.
+  // Login switched off: straight through for everything but the money and
+  // admin pages, which want the owner signed in. Wait for the session to be
+  // known before deciding, or a signed-in owner opening /payments cold would
+  // be bounced to the login form for a moment.
   if (!LOGIN_REQUIRED) {
-    if (!canOpenWithoutLogin(location.pathname)) return <Navigate to="/" replace />
-    return children ?? <Outlet />
+    if (canOpenWithoutLogin(location.pathname, role)) return children ?? <Outlet />
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 text-sm text-slate-400">
+          Loading…
+        </div>
+      )
+    }
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
   }
 
   if (loading) {

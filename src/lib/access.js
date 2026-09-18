@@ -55,18 +55,30 @@ export function visibleNav(groups, role) {
 }
 
 /**
- * What a visitor may open while LOGIN_REQUIRED is false: everything except
- * the Team page, which manages logins that nobody is using, and whose
- * function refuses a caller with no admin session anyway.
+ * Whether this path is money or admin, i.e. needs the owner signed in even
+ * while the rest of the CRM is open.
  */
-export function canOpenWithoutLogin(path) {
+export function needsOwner(path) {
   const p = String(path || '')
-  return !(p === '/team' || p.startsWith('/team/'))
+  return ADMIN_ONLY.some((a) => p === a || p.startsWith(`${a}/`))
 }
 
-export function navWithoutLogin(groups) {
+/**
+ * What a visitor may open while LOGIN_REQUIRED is false.
+ *
+ * Everything, except the money and admin pages (ADMIN_ONLY), which open only
+ * for an admin session. The team works without logging in; the owner signs in
+ * once, in their own browser, to reach Payments and Team. `role` is the
+ * signed-in profile's role, or 'viewer' for nobody.
+ */
+export function canOpenWithoutLogin(path, role = 'viewer') {
+  if (!needsOwner(path)) return true
+  return isAdmin(role)
+}
+
+export function navWithoutLogin(groups, role = 'viewer') {
   return groups
-    .map((g) => ({ ...g, items: g.items.filter((i) => canOpenWithoutLogin(i.to)) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => canOpenWithoutLogin(i.to, role)) }))
     .filter((g) => g.items.length > 0)
 }
 

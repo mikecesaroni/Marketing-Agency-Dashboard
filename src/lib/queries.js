@@ -87,11 +87,14 @@ export async function fetchClientsWithKPIs() {
     clientsQuery,
     supabase.from('weekly_kpis').select('*').eq('week_of', thisMonday),
     supabase.from('onboarding_intake').select('client_id, owner_name, industry_trade, service_area'),
+    // The status-only view, not the payments table: amounts are the owner's
+    // and the table admits only an admin session. The dashboard needs "paid
+    // or not" and "which month", never the dollars.
     supabase
-      .from('payments')
+      .from('client_payment_state')
       .select('client_id, amount, status, due_date')
       .eq('payment_type', 'setup'),
-    supabase.from('payments').select('client_id, status').eq('payment_type', 'monthly'),
+    supabase.from('client_payment_state').select('client_id, status').eq('payment_type', 'monthly'),
     // Only the fields that decide whether a build can start. Selecting the
     // whole setup row would pull EINs and phone numbers into a list that only
     // needs to know "is it complete".
