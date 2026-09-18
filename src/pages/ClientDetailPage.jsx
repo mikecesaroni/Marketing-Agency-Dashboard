@@ -22,6 +22,10 @@ import ClientFilesSection from '../components/ClientFilesSection'
 import PaymentTracker from '../components/PaymentTracker'
 import ClientFormsPanel from '../components/ClientFormsPanel'
 import OnboardingCallPanel from '../components/OnboardingCallPanel'
+import NextUpBar from '../components/NextUpBar'
+import SetupMessageModal from '../components/SetupMessageModal'
+import OnboardingLinkPanel from '../components/OnboardingLinkPanel'
+import { fetchNextStepsFor } from '../lib/nextStepsData'
 import { Button, Card } from '../components/ui'
 import {
   addTask,
@@ -108,11 +112,28 @@ export default function ClientDetailPage() {
 
   useHashScroll(!loading && !!client)
 
+  // The launch pipeline for the Next-up bar. Refreshed with the client, and
+  // again after anything on the page changes state, so a toggle flipped or a
+  // form submitted moves the bar without a reload.
+  const [nextUp, setNextUp] = useState(null)
+  // Which access message is open (meta, lsa, gbp) and which onboarding link
+  // message is being sent (intake, ghl, both), from the Next-up bar.
+  const [setupModal, setSetupModal] = useState(null)
+  const [sendModal, setSendModal] = useState(null)
+  // The tab the Studio opens on: Publish when publishing is the next move.
+  const [studioTab, setStudioTab] = useState('design')
+
+  const loadNextUp = () =>
+    fetchNextStepsFor(clientId)
+      .then(setNextUp)
+      .catch(() => setNextUp(null))
+
   useEffect(() => {
     loadClientData()
   }, [clientId])
 
   const loadClientData = async () => {
+    loadNextUp()
     try {
       const { data: clientData, error: clientError } = await supabase
         .from('clients')
@@ -250,6 +271,7 @@ export default function ClientDetailPage() {
   // The whole point of the handoff: the hook, offer and CTA the chat wrote go
   // straight onto the artboards instead of being re-typed.
   const handleUseCreativeSet = (mapped) => {
+    setStudioTab('design')
     setStudioSeed(mapped)
     setStudioKey((k) => k + 1)
     setStudioFromChat(true)
@@ -274,6 +296,48 @@ export default function ClientDetailPage() {
   const backToChat = () => {
     setChatSeed(null)
     setShowChatModal(true)
+  }
+
+  // One step on the Next-up bar, one thing opened. The kinds are the ones
+  // nextSteps() emits; anything unknown scrolls to the deliverables.
+  const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const openStudio = (tab) => {
+    setStudioTab(tab)
+    setStudioSeed(null)
+    setStudioKey((k) => k + 1)
+    setStudioFromChat(false)
+    setShowStudioModal(true)
+  }
+  const handleNextAction = (step) => {
+    switch (step?.action?.kind) {
+      case 'payments':
+        return navigate('/payments')
+      case 'send-onboarding':
+        return setSendModal(client?.ghl_plan && !nextUp?.result?.steps.find((s) => s.key === 'ghl-form')?.done ? 'both' : 'intake')
+      case 'send-ghl':
+        return setSendModal('ghl')
+      case 'call':
+        return scrollTo('onboarding-call')
+      case 'meta-access':
+        return setSetupModal('meta')
+      case 'lsa-access':
+        return setSetupModal('lsa')
+      case 'gbp':
+        return setSetupModal('gbp')
+      case 'ghl-toggle':
+      case 'meta-toggle':
+        return scrollTo('channels')
+      case 'studio':
+        return openStudio('design')
+      case 'publish':
+        return openStudio('publish')
+      case 'kpis':
+        return setShowKPIsModal(true)
+      case 'report':
+        return navigate('/reports')
+      default:
+        return scrollTo('deliverables')
+    }
   }
 
   // Only ever called with 'kpis', 'worklog' or 'creative'. It used to carry
@@ -327,12 +391,7 @@ export default function ClientDetailPage() {
           a form recede. */}
       <Button
         size="lg"
-        onClick={() => {
-          setStudioSeed(null)
-          setStudioKey((k) => k + 1)
-          setStudioFromChat(false)
-          setShowStudioModal(true)
-        }}
+        onClick={() => openStudio('design')}
         className="w-full md:w-auto"
       >
         Ad Studio
@@ -376,8 +435,21 @@ export default function ClientDetailPage() {
           </div>
         )}
 
+        {/* WHAT IS NEXT. Sticky, first, and the same pipeline the Deliverables
+            board and the dashboard show, so nobody has to scroll a long page
+            to find out where this client stands or whose move it is. */}
+        <NextUpBar
+          result={nextUp?.result}
+          assignedTo={client.assigned_to}
+          onAssign={async (name) => {
+            await supabase.from('clients').update({ assigned_to: name || null }).eq('id', client.id)
+            loadClientData()
+          }}
+          onAction={handleNextAction}
+        />
+
         <div className="mb-6 md:mb-8">
-          <Card className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Card id="channels" className="mb-3 flex flex-col gap-3 scroll-mt-40 sm:flex-row sm:items-center">
             <div className="flex gap-2 flex-wrap">
               <LiveToggle
                 clientId={client.id}
@@ -471,7 +543,9 @@ export default function ClientDetailPage() {
         {/* THE LIVE ONBOARDING CALL. The forms above are what the client sends
             back; this is the Zoom where the agency gets every access done on
             the owner's own screen, worked as a sheet. */}
-        <OnboardingCallPanel client={client} intake={intake} />
+        <div id="onboarding-call" className="scroll-mt-40">
+          <OnboardingCallPanel client={client} intake={intake} />
+        </div>
 
         {/* TASKS */}
         <Card padding="none" className="mb-6 p-4 md:mb-8 md:p-6">
@@ -714,7 +788,7 @@ export default function ClientDetailPage() {
         </Card>
 
         {/* DELIVERABLES */}
-        <div className="mt-6 md:mt-8">
+        <div id="deliverables" className="mt-6 scroll-mt-40 md:mt-8">
           <ClientDeliverablesSection clientId={clientId} />
         </div>
 
@@ -737,6 +811,19 @@ export default function ClientDetailPage() {
         )}
 
         {/* MODALS */}
+        {setupModal && (
+          <SetupMessageModal channel={setupModal} client={client} intake={intake} onClose={() => setSetupModal(null)} />
+        )}
+        <Modal
+          isOpen={Boolean(sendModal)}
+          onClose={() => {
+            setSendModal(null)
+            loadNextUp()
+          }}
+          title={sendModal === 'ghl' ? 'Send the GHL setup link' : 'Send the onboarding link'}
+        >
+          {sendModal && <OnboardingLinkPanel client={client} fixedMode={sendModal} />}
+        </Modal>
         <Modal
           isOpen={showStudioModal}
           onClose={() => {
@@ -748,7 +835,7 @@ export default function ClientDetailPage() {
           title={`Ad Studio — ${client.name}`}
           wide
         >
-          <AdStudioPanel key={studioKey} client={client} intake={intake} seed={studioSeed} />
+          <AdStudioPanel key={studioKey} client={client} intake={intake} seed={studioSeed} initialTab={studioTab} />
         </Modal>
 
         <Modal

@@ -442,7 +442,7 @@ function proofFromIntake(intake) {
   return count ? `\u2605 ${rating} on Google \u00b7 ${count} reviews` : `\u2605 ${rating} on Google`
 }
 
-export default function AdStudioPanel({ client, intake, seed }) {
+export default function AdStudioPanel({ client, intake, seed, initialTab }) {
   const [files, setFiles] = useState([])
   // The HEIC path being converted to JPEG right now, for the picker's label.
   const [converting, setConverting] = useState('')
@@ -516,7 +516,9 @@ export default function AdStudioPanel({ client, intake, seed }) {
   // was already set by a chat recipe or an intake colour: picking a logo IS
   // the instruction. Colours restored from a saved ad or a seed do not set it.
   const logoChosen = useRef(false)
-  const [tab, setTab] = useState('design')
+  // The Next-up bar opens the Studio straight on the Publish tab when the ads
+  // are built and publishing is the move; everyone else lands on Design.
+  const [tab, setTab] = useState(initialTab || 'design')
   // Bumped after a save so the gallery refetches instead of showing a stale list.
   const [savedAt, setSavedAt] = useState(0)
   // The saved set the Publish tab is working on, picked from the gallery.
