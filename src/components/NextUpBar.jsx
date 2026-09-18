@@ -78,8 +78,14 @@ function DoneControl({ step, onDone, onUndo, size = 'sm' }) {
   )
 }
 
-export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDone, onUndo }) {
-  const [open, setOpen] = useState(false)
+export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDone, onUndo, controls }) {
+  // Open by default while there is work on the plan; a fully done plan
+  // arrives closed, since there is nothing to read. Once clicked, the
+  // person's choice sticks for the visit.
+  const [toggled, setToggled] = useState(null)
+  const allDone = Boolean(result) && result.progress.done === result.progress.total
+  const open = toggled ?? !allDone
+  const setOpen = (fn) => setToggled((t) => (typeof fn === 'function' ? fn(t ?? !allDone) : fn))
   const [editingOwner, setEditingOwner] = useState(false)
   const [ownerDraft, setOwnerDraft] = useState(assignedTo || '')
 
@@ -166,6 +172,7 @@ export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDo
 
         {open && (
           <div className="border-t border-slate-200/70 bg-white/80 px-4 py-3">
+            {controls && <div className="mb-2.5 flex flex-wrap items-center gap-2">{controls}</div>}
             <ol className="grid gap-1.5 md:grid-cols-2">
               {result.steps.map((s) => (
                 <li

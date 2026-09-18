@@ -10,7 +10,6 @@ import Modal from '../components/Modal'
 import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
 import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import LiveToggle from '../components/LiveToggle'
-import GbpAgentPromptButton from '../components/GbpAgentPromptButton'
 import AdPerformanceSection from '../components/AdPerformanceSection'
 import AdDoctorPanel from '../components/AdDoctorPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
@@ -343,7 +342,10 @@ export default function ClientDetailPage() {
         return setSetupModal('gbp')
       case 'ghl-toggle':
       case 'meta-toggle':
-        return scrollTo('channels')
+        // The toggle row is gone; the step's own flag is written directly.
+        return markStepDone(client, step, { by: whoAmI() })
+          .then(loadClientData)
+          .catch((err) => setError(err.message))
       case 'studio':
         return openStudio('design')
       case 'publish':
@@ -463,6 +465,25 @@ export default function ClientDetailPage() {
             loadClientData()
           }}
           onAction={handleNextAction}
+          controls={
+            <>
+              {/* GHL is the one service not every client buys, and whether it
+                  is part of the plan is the one switch with no step of its
+                  own. Everything else on the old toggle row is a step above. */}
+              <LiveToggle
+                clientId={client.id}
+                field="ghl_plan"
+                label="GHL build"
+                value={client.ghl_plan}
+                onChange={loadClientData}
+                doneWord="on plan"
+                clearsWhenOff={['ghl_active']}
+              />
+              <Button variant="ghost" size="sm" onClick={handleToggleArchive} className="ml-auto text-slate-400">
+                {client.archived ? '↩ Restore client' : 'Archive client'}
+              </Button>
+            </>
+          }
           onDone={async (step) => {
             try {
               await markStepDone(client, step, { by: whoAmI() })
@@ -481,68 +502,11 @@ export default function ClientDetailPage() {
           }}
         />
 
+        {/* The row of live toggles that used to sit here is gone: Meta, LSA,
+            GBP and GHL-live are steps on the plan above, marked done or
+            undone there. The one switch with no step of its own, whether GHL
+            is part of the plan at all, lives in the plan header with Archive. */}
         <div className="mb-6 md:mb-8">
-          <Card id="channels" className="mb-3 flex flex-col gap-3 scroll-mt-40 sm:flex-row sm:items-center">
-            <div className="flex gap-2 flex-wrap">
-              <LiveToggle
-                clientId={client.id}
-                field="meta_ads_active"
-                label="Meta ads"
-                value={client.meta_ads_active}
-                onChange={loadClientData}
-              />
-              <LiveToggle
-                clientId={client.id}
-                field="lsa_active"
-                label="Google LSA"
-                value={client.lsa_active}
-                onChange={loadClientData}
-                doneWord="optimized"
-              />
-              <LiveToggle
-                clientId={client.id}
-                field="gbp_optimized"
-                label="Google Business Profile"
-                value={client.gbp_optimized}
-                onChange={loadClientData}
-                doneWord="optimized"
-              />
-              <GbpAgentPromptButton client={client} intake={intake} />
-              {/* Two switches, because GHL is the one service here that not
-                  every client buys. The first says whether we are building it
-                  at all; the second only exists once they are on the plan,
-                  since "is it live" is not a question about a client who was
-                  never having one. */}
-              <LiveToggle
-                clientId={client.id}
-                field="ghl_plan"
-                label="GHL build"
-                value={client.ghl_plan}
-                onChange={loadClientData}
-                doneWord="on plan"
-                clearsWhenOff={['ghl_active']}
-              />
-              {client.ghl_plan && (
-                <LiveToggle
-                  clientId={client.id}
-                  field="ghl_active"
-                  label="GHL account"
-                  value={client.ghl_active}
-                  onChange={loadClientData}
-                  doneWord="live"
-                />
-              )}
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleToggleArchive}
-              className="text-slate-400 sm:ml-auto"
-            >
-              {client.archived ? '↩ Restore client' : 'Archive client'}
-            </Button>
-          </Card>
-
           <Card className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             <div>
               <p className="text-xs text-slate-500 uppercase font-medium">Industry</p>

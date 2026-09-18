@@ -9,9 +9,11 @@ export function stepHref(clientId, step) {
   switch (step?.action?.kind) {
     case 'call':
       return `/client/${clientId}#onboarding-call`
+    // The toggles are steps on the plan now: Mark done flips the flag. From
+    // the dashboard, land on the client page where the plan is.
     case 'ghl-toggle':
     case 'meta-toggle':
-      return `/client/${clientId}#channels`
+      return `/client/${clientId}`
     case 'studio':
       return `/client/${clientId}?open=studio`
     case 'publish':
