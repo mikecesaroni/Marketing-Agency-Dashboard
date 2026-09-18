@@ -155,7 +155,7 @@ export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDo
               aria-expanded={open}
               className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
             >
-              {open ? 'Hide the plan' : `Whole plan (${ours.length} ours, ${theirs.length} on the client)`}
+              {open ? 'Close plan' : `Open plan (${ours.length} ours, ${theirs.length} on the client)`}
             </button>
           </div>
 
