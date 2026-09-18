@@ -23,6 +23,7 @@ import PaymentTracker from '../components/PaymentTracker'
 import ClientFormsPanel from '../components/ClientFormsPanel'
 import OnboardingCallPanel from '../components/OnboardingCallPanel'
 import NextUpBar from '../components/NextUpBar'
+import MemoryPanel from '../components/MemoryPanel'
 import SetupMessageModal from '../components/SetupMessageModal'
 import OnboardingLinkPanel from '../components/OnboardingLinkPanel'
 import { fetchNextStepsFor } from '../lib/nextStepsData'
@@ -801,6 +802,10 @@ export default function ClientDetailPage() {
           <h2 className="text-lg md:text-xl font-bold text-slate-900 mb-3">Ad Doctor Agent</h2>
           <AdDoctorPanel client={client} />
         </Card>
+
+        {/* MEMORY — what the agency remembers about this client and the trade,
+            read by the chat and the Ad Studio on every call. */}
+        <MemoryPanel client={client} />
 
         {/* DELIVERABLES */}
         <div id="deliverables" className="mt-6 scroll-mt-40 md:mt-8">

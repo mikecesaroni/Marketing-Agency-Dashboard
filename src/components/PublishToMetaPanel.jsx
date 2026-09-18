@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import ZoomImage from './ui/ZoomImage'
 import LocationPicker from './LocationPicker'
 import LeadFormPicker from './LeadFormPicker'
+import { publishedNote, rememberQuietly } from '../lib/memory'
 import VideoAdPicker from './VideoAdPicker'
 import { fetchSavedAds } from '../lib/savedAds'
 import {
@@ -759,6 +760,17 @@ export default function PublishToMetaPanel({
 
       setResult(data)
       onPublished?.()
+      // Into memory, so the chat knows what went live and when to judge it.
+      rememberQuietly({
+        clientId: client.id,
+        source: 'publish',
+        headline: publishedNote({
+          clientName: client.name,
+          industry: client.industry,
+          hooks: pickedSets.map((s) => s.recipe?.hook || copies[String(s.stamp)]?.ad_name || String(s.stamp)),
+        }),
+        evidence: { stamps: pickedSets.map((s) => s.stamp), ad_ids: [].concat(data?.ad_id || [], (data?.results || []).map((r) => r.ad_id).filter(Boolean)) },
+      })
     } catch (err) {
       setError(err.message)
       setPartial(err.partial || null)

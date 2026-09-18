@@ -5,6 +5,7 @@ import { fetchAllLearnings } from '../lib/adLearningsStore'
 import { digestAdDoctor, digestCounts, digestDetails, digestHeadline, digestNumbers } from '../lib/adDoctorDigest'
 import { VERDICT_META } from '../lib/adDoctorRules'
 import { pauseAd } from '../lib/metaPublish'
+import { pausedNote, rememberQuietly } from '../lib/memory'
 import { Card } from './ui'
 
 /**
@@ -55,6 +56,14 @@ export default function AdDoctorAlerts() {
     try {
       await pauseAd(it.clientId, it.adId)
       setPaused((p) => [...p, it.adId])
+      // The pause goes into memory: the chat and the Studio will not offer
+      // this hook back unchanged.
+      rememberQuietly({
+        clientId: it.clientId,
+        source: 'ad-doctor',
+        headline: pausedNote({ clientName: it.clientName, adName: it.name, reason: it.reason, spend: it.spend, leads: it.leads, cpl: it.cpl }),
+        evidence: { ad_id: it.adId, verdict: 'kill', reasons: it.reasons },
+      })
     } catch (err) {
       setError(`Could not pause "${it.name}": ${err.message}`)
     } finally {

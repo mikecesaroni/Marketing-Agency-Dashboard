@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { VERDICT_META, diagnose, fetchAdDoctorData } from '../lib/adDoctor'
 import { verdictsForPrompt } from '../lib/adDoctorRules'
 import { pauseAd } from '../lib/metaPublish'
+import { pausedNote, rememberQuietly, winnerNote } from '../lib/memory'
 import { fetchLearnings } from '../lib/adLearningsStore'
 import { learningsBlock } from '../lib/adLearnings'
 import { META_KNOWLEDGE } from '../lib/metaKnowledge'
@@ -68,6 +69,35 @@ export default function AdDoctorPanel({ client }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client.id])
 
+  // A Scale verdict worth keeping: one click writes the hook, the numbers and
+  // the trade into memory, where the chat and the Studio read it when the
+  // next ad for this trade is written.
+  const [remembered, setRemembered] = useState([])
+  const doRemember = async (ad) => {
+    setError('')
+    try {
+      await rememberQuietly({
+        clientId: client.id,
+        scope: 'account',
+        source: 'ad-doctor',
+        headline: winnerNote({
+          clientName: client.name,
+          industry: client.industry,
+          adName: ad.name,
+          hook: ad.hook,
+          spend: ad.spend,
+          leads: ad.leads,
+          cpl: ad.cpl,
+          medianCpl: result?.medianCpl || 0,
+        }),
+        evidence: { ad_id: ad.adId, verdict: ad.verdict, client_id: client.id, industry: client.industry },
+      })
+      setRemembered((r) => [...r, ad.adId])
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   const doPause = async (ad) => {
     if (!confirm(`Pause "${ad.name}" in Meta?\n\n${ad.reasons[0] || ''}\n\nReversible any time in Ads Manager.`)) return
     setPausing(ad.adId)
@@ -75,6 +105,12 @@ export default function AdDoctorPanel({ client }) {
     try {
       await pauseAd(client.id, ad.adId)
       setPausedNow((p) => [...p, ad.adId])
+      rememberQuietly({
+        clientId: client.id,
+        source: 'ad-doctor',
+        headline: pausedNote({ clientName: client.name, industry: client.industry, adName: ad.name, reason: ad.reasons[0], spend: ad.spend, leads: ad.leads, cpl: ad.cpl }),
+        evidence: { ad_id: ad.adId, verdict: 'kill', reasons: ad.reasons },
+      })
       await load()
     } catch (err) {
       setError(err.message)
@@ -194,6 +230,8 @@ export default function AdDoctorPanel({ client }) {
               justPaused={pausedNow.includes(ad.adId)}
               pausing={pausing === ad.adId}
               onPause={() => doPause(ad)}
+              remembered={remembered.includes(ad.adId)}
+              onRemember={() => doRemember(ad)}
             />
           ))}
         </div>
@@ -217,7 +255,7 @@ export default function AdDoctorPanel({ client }) {
   )
 }
 
-function VerdictCard({ ad, justPaused, pausing, onPause }) {
+function VerdictCard({ ad, justPaused, pausing, onPause, remembered, onRemember }) {
   const meta = VERDICT_META[ad.verdict]
   return (
     <div className="p-3 bg-white border border-slate-200 rounded-lg">
@@ -272,6 +310,16 @@ function VerdictCard({ ad, justPaused, pausing, onPause }) {
             className="flex-shrink-0 px-3 py-1.5 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition"
           >
             {justPaused ? 'Paused' : pausing ? 'Pausing…' : 'Pause in Meta'}
+          </button>
+        )}
+        {ad.verdict === 'scale' && onRemember && (
+          <button
+            onClick={onRemember}
+            disabled={remembered}
+            title="Write this winner into memory: the chat and the Studio will suggest replicating it for this trade"
+            className="flex-shrink-0 px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:opacity-50 transition"
+          >
+            {remembered ? 'Remembered' : 'Remember this winner'}
           </button>
         )}
       </div>

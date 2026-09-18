@@ -78,6 +78,9 @@ export async function suggestVideoCopy({ client, intake, current, instruction, a
   const i = intake || {}
   return callAdCopy({
     medium: 'video',
+    // The id is what lets the function add this client's own learnings and
+    // memory to the brief, not just the agency-wide rows.
+    client_id: client?.id,
     client_name: client?.name,
     industry: client?.industry || i.industry_trade,
     market: client?.market,
