@@ -27,6 +27,7 @@ import MemoryPanel from '../components/MemoryPanel'
 import SetupMessageModal from '../components/SetupMessageModal'
 import OnboardingLinkPanel from '../components/OnboardingLinkPanel'
 import { fetchNextStepsFor } from '../lib/nextStepsData'
+import { markStepDone, undoStepDone, whoAmI } from '../lib/completeStep'
 import { Button, Card } from '../components/ui'
 import {
   addTask,
@@ -462,6 +463,22 @@ export default function ClientDetailPage() {
             loadClientData()
           }}
           onAction={handleNextAction}
+          onDone={async (step) => {
+            try {
+              await markStepDone(client, step, { by: whoAmI() })
+              loadClientData()
+            } catch (err) {
+              setError(err.message)
+            }
+          }}
+          onUndo={async (step) => {
+            try {
+              await undoStepDone(client, step)
+              loadClientData()
+            } catch (err) {
+              setError(err.message)
+            }
+          }}
         />
 
         <div className="mb-6 md:mb-8">

@@ -56,7 +56,29 @@ export function PipelineStrip({ result, compact = false }) {
   )
 }
 
-export default function NextUpBar({ result, assignedTo, onAssign, onAction }) {
+function DoneControl({ step, onDone, onUndo, size = 'sm' }) {
+  if (step.done) {
+    if (!(step.manual || ['ghl-live', 'go-live', 'gbp-access', 'lsa-access'].includes(step.key)) || !onUndo) return null
+    return (
+      <button type="button" onClick={() => onUndo(step)} title="Take this back" className="flex-shrink-0 text-[11px] text-slate-400 hover:text-slate-700 hover:underline">
+        undo
+      </button>
+    )
+  }
+  if (step.blocked || step.key === 'setup-fee' || !onDone) return null
+  return (
+    <button
+      type="button"
+      onClick={() => onDone(step)}
+      title="Mark this step done"
+      className={`flex-shrink-0 rounded-lg border border-green-300 bg-white text-green-700 hover:bg-green-50 ${size === 'lg' ? 'px-2.5 py-1.5 text-xs font-semibold' : 'px-1.5 py-0.5 text-[11px]'}`}
+    >
+      ✓ Done
+    </button>
+  )
+}
+
+export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDone, onUndo }) {
   const [open, setOpen] = useState(false)
   const [editingOwner, setEditingOwner] = useState(false)
   const [ownerDraft, setOwnerDraft] = useState(assignedTo || '')
@@ -93,13 +115,16 @@ export default function NextUpBar({ result, assignedTo, onAssign, onAction }) {
 
           <div className="flex flex-wrap items-center gap-2">
             {next && (
-              <button
-                type="button"
-                onClick={() => onAction?.(next)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white ${next.owner === OWNER.us ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700'}`}
-              >
-                {next.action.label}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => onAction?.(next)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white ${next.owner === OWNER.us ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700'}`}
+                >
+                  {next.action.label}
+                </button>
+                <DoneControl step={next} onDone={onDone} onUndo={onUndo} size="lg" />
+              </>
             )}
             {editingOwner ? (
               <input
@@ -165,6 +190,7 @@ export default function NextUpBar({ result, assignedTo, onAssign, onAction }) {
                       {s.action.label}
                     </button>
                   )}
+                  <DoneControl step={s} onDone={onDone} onUndo={onUndo} />
                 </li>
               ))}
             </ol>

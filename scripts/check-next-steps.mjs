@@ -137,6 +137,21 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
   check('no GBP step when the intake says no profile', keys(nextSteps(base({ intake: { has_google_business: false } }))).includes('gbp-access'), false)
 }
 
+// --- marked done by hand -------------------------------------------------------------
+{
+  const ctx = base({ client: { meta_ad_account_id: '1', meta_page_id: '2' }, link: { created_at: '2026-09-01', intake_submitted_at: '2026-09-02' }, payments: [{ payment_type: 'setup', status: 'paid' }], callSteps: [{ step_key: 'x' }] })
+  const before = nextSteps(ctx)
+  check('photos open and blocking creatives before the override', [before.steps.find((s) => s.key === 'photos').done, before.steps.find((s) => s.key === 'creatives').blocked], [false, true])
+  const after = nextSteps({ ...ctx, overrides: [{ step_key: 'photos', done_at: '2026-09-18T10:00:00Z', done_by: 'Maria', note: 'Sent by text.' }] })
+  const photos = after.steps.find((s) => s.key === 'photos')
+  check('an override marks the step done and says who and when', [photos.done, photos.manual, photos.detail], [true, true, 'Marked done by Maria on 2026-09-18. Sent by text.'])
+  check('and unblocks the step behind it', after.steps.find((s) => s.key === 'creatives').blocked, false)
+  check('next moves on to creatives', after.next.key, 'creatives')
+  const both = nextSteps({ ...ctx, client: { ...ctx.client, drive_folder_id: 'f' }, overrides: [{ step_key: 'photos', done_at: '2026-09-18', done_by: 'Maria' }] })
+  check('data done plus an override keeps the data detail', both.steps.find((s) => s.key === 'photos').detail, 'Drive folder linked.')
+  check('an override for a step that does not apply is ignored', nextSteps({ ...ctx, overrides: [{ step_key: 'lsa-access', done_at: '2026-09-18' }] }).steps.some((s) => s.key === 'lsa-access'), false)
+}
+
 check('phases are in launch order', PHASES, ['Sign up', 'Access', 'Build', 'Launch', 'Run'])
 check('currentPhase of nothing is Run', currentPhase([]), 'Run')
 check('nextLine names the client wait', nextLine(nextSteps(base())), 'Setup fee paid (waiting on the client)')

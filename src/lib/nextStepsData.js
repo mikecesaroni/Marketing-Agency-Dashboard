@@ -18,7 +18,7 @@ export async function fetchNextStepsForAll() {
   let clientsQuery = supabase.from('clients').select('*').eq('archived', false).order('name')
   if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
 
-  const [clientsRes, intakeRes, linksRes, ghlRes, deliverables, payRes, callsRes, filesRes, savedRes, pubRes, kpiRes, reportRes] =
+  const [clientsRes, intakeRes, linksRes, ghlRes, deliverables, payRes, callsRes, filesRes, savedRes, pubRes, kpiRes, reportRes, overridesRes] =
     await Promise.all([
       clientsQuery,
       supabase.from('onboarding_intake').select('*'),
@@ -42,6 +42,7 @@ export async function fetchNextStepsForAll() {
       supabase.from('published_ads').select('client_id, ad_id'),
       supabase.from('weekly_kpis').select('client_id').eq('week_of', monday),
       supabase.from('report_sends').select('client_id, status').eq('month_key', month),
+      supabase.from('step_overrides').select('client_id, step_key, done_at, done_by, note'),
     ])
 
   if (clientsRes.error) throw clientsRes.error
@@ -67,6 +68,7 @@ export async function fetchNextStepsForAll() {
   const pubBy = by((pubRes.data || []).filter((p) => p.ad_id))
   const kpiBy = by(kpiRes.data)
   const reportBy = by((reportRes.data || []).filter((r) => r.status === 'sent'))
+  const overBy = by(overridesRes.data)
 
   const stamps = (rows) => new Set((rows || []).map((r) => r.stamp)).size
 
@@ -81,6 +83,7 @@ export async function fetchNextStepsForAll() {
       deliverables: dlBy.get(client.id) || [],
       payments: payBy.get(client.id) || [],
       callSteps: callBy.get(client.id) || [],
+      overrides: overBy.get(client.id) || [],
       counts: {
         photos: (filesBy.get(client.id) || []).length,
         savedAds: stamps(savedBy.get(client.id)),

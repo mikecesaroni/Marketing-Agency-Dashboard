@@ -312,6 +312,22 @@ export function nextSteps(ctx) {
   }
 
   const active = steps.filter((s) => s.applies)
+
+  // Marked done by hand (step_overrides). The data did not know, a person
+  // did; the step reads as done with who and when, and can be undone.
+  const overrides = new Map((ctx.overrides || []).map((o) => [o.step_key, o]))
+  for (const s of active) {
+    const o = overrides.get(s.key)
+    if (o && !s.done) {
+      s.done = true
+      s.manual = true
+      s.detail = `Marked done${o.done_by ? ` by ${o.done_by}` : ''}${o.done_at ? ` on ${String(o.done_at).slice(0, 10)}` : ''}.${o.note ? ` ${o.note}` : ''}`
+    } else if (o) {
+      // The data caught up; the override is redundant but harmless.
+      s.manual = true
+    }
+  }
+
   const isBlocked = (s) => Boolean(s.blockedBy) && !active.find((x) => x.key === s.blockedBy)?.done
   for (const s of active) {
     s.blocked = !s.done && isBlocked(s)

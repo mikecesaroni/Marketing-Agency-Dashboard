@@ -15,6 +15,29 @@ import { today } from '../lib/queries'
 import { fetchNextStepsForAll } from '../lib/nextStepsData'
 import { OWNER, urgency } from '../lib/nextSteps'
 import { MODAL_KINDS, stepHref } from '../lib/stepLinks'
+import { NOT_MARKABLE, canUndo, markStepDone, undoStepDone, whoAmI } from '../lib/completeStep'
+
+function DoneButton({ step, onDone, onUndo, size = 'sm' }) {
+  if (step.done) {
+    if (!canUndo(step)) return null
+    return (
+      <button type="button" onClick={() => onUndo(step)} title="Take this back" className="flex-shrink-0 text-[11px] text-slate-400 hover:text-slate-700 hover:underline">
+        undo
+      </button>
+    )
+  }
+  if (step.blocked || NOT_MARKABLE.has(step.key)) return null
+  return (
+    <button
+      type="button"
+      onClick={() => onDone(step)}
+      title="Mark this step done"
+      className={`flex-shrink-0 rounded-lg border border-green-300 bg-white text-green-700 hover:bg-green-50 ${size === 'lg' ? 'px-2.5 py-1.5 text-xs font-semibold' : 'px-1.5 py-0.5 text-[11px]'}`}
+    >
+      ✓ Done
+    </button>
+  )
+}
 import { DELIVERABLE_STATUSES, TYPE_ICONS, isLate } from '../lib/deliverables'
 import { Badge, Button, Card } from '../components/ui'
 
@@ -117,7 +140,7 @@ function ExtraRow({ d, onEdit, onStatus, onAssign }) {
   )
 }
 
-function ClientRow({ row, open, onToggle, onModal, onEdit, onStatus, onAssign, onAssignClient, onAdd }) {
+function ClientRow({ row, open, onToggle, onModal, onEdit, onStatus, onAssign, onAssignClient, onAdd, onDone, onUndo }) {
   const { client, result, deliverables } = row
   const next = result.next
   const extras = deliverables.filter((d) => d.source !== 'auto')
@@ -174,8 +197,9 @@ function ClientRow({ row, open, onToggle, onModal, onEdit, onStatus, onAssign, o
               </p>
             </div>
             {next && (
-              <div className="flex-shrink-0">
+              <div className="flex flex-shrink-0 items-center gap-2">
                 <StepButton clientId={client.id} step={next} onModal={onModal} size="lg" />
+                <DoneButton step={next} onDone={(x) => onDone(client, x)} onUndo={(x) => onUndo(client, x)} size="lg" />
               </div>
             )}
           </div>
@@ -202,6 +226,7 @@ function ClientRow({ row, open, onToggle, onModal, onEdit, onStatus, onAssign, o
                         <span className="block text-slate-600">{s.detail}</span>
                       </span>
                       {!s.done && !s.blocked && <StepButton clientId={client.id} step={s} onModal={onModal} />}
+                      <DoneButton step={s} onDone={(x) => onDone(client, x)} onUndo={(x) => onUndo(client, x)} />
                     </li>
                   ))}
                 </ol>
@@ -311,6 +336,27 @@ export default function DeliverablesPage() {
     load()
   }
 
+  // Mark a pipeline step done, or take it back. Real flags are written where
+  // they live; everything else becomes an override row with a name on it.
+  const markDone = async (client, step) => {
+    setError('')
+    try {
+      await markStepDone(client, step, { by: whoAmI() })
+      await load()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+  const undo = async (client, step) => {
+    setError('')
+    try {
+      await undoStepDone(client, step)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   const openRow = (id, fallback) => toggled[id] ?? fallback
   const toggle = (id, fallback) => setToggled((prev) => ({ ...prev, [id]: !(prev[id] ?? fallback) }))
 
@@ -386,6 +432,8 @@ export default function DeliverablesPage() {
               onAssign={assign}
               onAssignClient={assignClient}
               onAdd={(client) => setAdding(client)}
+              onDone={markDone}
+              onUndo={undo}
             />
           ))}
         </div>
