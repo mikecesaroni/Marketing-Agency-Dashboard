@@ -123,7 +123,7 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
         `Hi ${client.name} team,`,
         '',
         'To get your GHL account and text messaging set up, we need a few details',
-        'off your business registration -- your EIN, business address and who the',
+        'off your business registration: your EIN, business address and who the',
         'authorised contact is.',
         '',
         activeUrl,
@@ -140,7 +140,7 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
       '',
       'Two quick things and we can get your ads moving.',
       '',
-      '1) Your onboarding details:',
+      '1) Fill out your onboarding form:',
       activeUrl,
       'It saves as you go, so you can stop and come back to it.',
     ]
@@ -161,13 +161,13 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
         `    ${serviceEmail}`,
         '',
         'Set it to "Viewer" and send. Google may warn that it is not a regular',
-        'Google account -- that is expected, it is our system, and Viewer means we',
+        'Google account. That is expected, it is our system, and Viewer means we',
         'can only look at the folder, never change or delete anything in it.',
         '',
         'Then reply with the folder link (Share > Copy link) so we can connect it.',
         '',
         'After that, anything you drop into that folder we can use in your ads',
-        'straight away -- no emailing pictures back and forth.'
+        'straight away, with no emailing pictures back and forth.'
       )
     }
 
