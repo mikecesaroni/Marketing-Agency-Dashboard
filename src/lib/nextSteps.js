@@ -306,16 +306,9 @@ export function nextSteps(ctx) {
       action: { kind: 'kpis', label: 'Log KPIs' },
       detail: counts.kpisThisWeek > 0 ? 'Logged.' : 'Meta syncs itself nightly; LSA and anything else is logged by hand.',
     })
-    add({
-      key: 'monthly-report',
-      phase: 'Run',
-      title: 'Monthly report sent',
-      owner: OWNER.us,
-      applies: Number(today.slice(8, 10)) >= 3,
-      done: counts.reportThisMonth > 0,
-      action: { kind: 'report', label: 'Open Reports' },
-      detail: counts.reportThisMonth > 0 ? 'Sent this month.' : 'Not sent yet this month.',
-    })
+    // The monthly report is deliberately not a step: it is going to be sent
+    // automatically, and a manual chore on every launched client's row would
+    // drown the real work until then.
   }
 
   const active = steps.filter((s) => s.applies)

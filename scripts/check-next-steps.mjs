@@ -113,7 +113,8 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
       counts: { savedAds: 5, publishedAds: 6, kpisThisWeek: 0, reportThisMonth: 0 },
     })
   )
-  check('launched: Run steps appear', keys(r).slice(-2), ['weekly-kpis', 'monthly-report'])
+  check('launched: the Run step appears', keys(r).slice(-1), ['weekly-kpis'])
+  check('launched: no monthly report chore (it is automated separately)', keys(r).includes('monthly-report'), false)
   check('launched: next is this week’s KPIs', r.next.key, 'weekly-kpis')
   check('launched: phase is Run', r.phase, 'Run')
   check('launched flag', r.launched, true)
@@ -121,12 +122,6 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
   check('launched and quiet: nothing next', quiet.next, null)
   check('launched and quiet reads as running', nextLine(quiet), 'Running. Nothing outstanding.')
   check('launched and quiet sorts last', urgency(quiet), 0)
-}
-
-// --- monthly report only asked from the 3rd ------------------------------------------
-{
-  const early = nextSteps({ ...base({ client: { meta_ads_active: true } }), today: '2026-09-02' })
-  check('report step not applied on the 2nd', keys(early).includes('monthly-report'), false)
 }
 
 // --- Meta partly in ------------------------------------------------------------------
