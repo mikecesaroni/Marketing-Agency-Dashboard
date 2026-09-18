@@ -293,7 +293,7 @@ export default function DeliverablesPage() {
 
   const sorted = useMemo(() => [...(rows || [])].sort((a, b) => urgency(b.result) - urgency(a.result) || a.client.name.localeCompare(b.client.name)), [rows])
 
-  const shown = useMemo(
+  const matching = useMemo(
     () =>
       sorted.filter((r) => {
         if (who !== 'all' && (r.client.assigned_to || '') !== who) return false
@@ -305,6 +305,27 @@ export default function DeliverablesPage() {
       }),
     [sorted, view, who, query]
   )
+
+  // THE LIST HOLDS STILL WHILE YOU WORK. Marking a step done re-reads the
+  // roster, and the client just worked on is by definition less urgent than
+  // a moment ago, so a live re-sort moved it (or dropped it out of "Needs
+  // us") and the eye landed on someone else. The order and membership are
+  // frozen when the filters are set and kept through every save; they are
+  // recomputed only when a filter changes. A row that no longer matches
+  // stays where it was, showing its new state, until you change the filter.
+  const [frozen, setFrozen] = useState(null)
+  useEffect(() => {
+    setFrozen(null)
+  }, [view, who, query])
+  useEffect(() => {
+    if (frozen === null && rows) setFrozen(matching.map((r) => r.client.id))
+  }, [frozen, rows, matching])
+
+  const shown = useMemo(() => {
+    if (!frozen) return matching
+    const byId = new Map((rows || []).map((r) => [r.client.id, r]))
+    return frozen.map((id) => byId.get(id)).filter(Boolean)
+  }, [frozen, matching, rows])
 
   const counts = useMemo(() => {
     const all = rows || []
