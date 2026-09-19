@@ -153,10 +153,15 @@ function ClientRow({ row, open, onToggle, onModal, onEdit, onStatus, onAssign, o
       <div className="flex">
         <div className={`w-1 flex-shrink-0 ${stripe}`} />
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start gap-x-4 gap-y-2 p-4">
-            <button type="button" onClick={onToggle} aria-expanded={open} className="flex-shrink-0 pt-0.5 text-slate-400 hover:text-slate-700" aria-label={open ? 'Collapse' : 'Expand'}>
-              {open ? '▾' : '▸'}
-            </button>
+          {/* The whole header opens the row. A click that lands on a link, a
+              button or an input is that thing's own click, not a toggle. */}
+          <div
+            className="flex cursor-pointer flex-wrap items-start gap-x-4 gap-y-2 p-4 hover:bg-slate-50/60"
+            onClick={(e) => {
+              if (e.target.closest('a, button, input, select, textarea')) return
+              onToggle()
+            }}
+          >
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <Link to={`/client/${client.id}`} className="text-sm font-semibold text-slate-900 hover:text-blue-700 hover:underline">
@@ -196,12 +201,18 @@ function ClientRow({ row, open, onToggle, onModal, onEdit, onStatus, onAssign, o
                 {lastMoved && ` · last moved ${lastMoved.slice(0, 10)}`}
               </p>
             </div>
-            {next && (
-              <div className="flex flex-shrink-0 items-center gap-2">
-                <StepButton clientId={client.id} step={next} onModal={onModal} size="lg" />
-                <DoneButton step={next} onDone={(x) => onDone(client, x)} onUndo={(x) => onUndo(client, x)} size="lg" />
-              </div>
-            )}
+            <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+              {next && <StepButton clientId={client.id} step={next} onModal={onModal} size="lg" />}
+              {next && <DoneButton step={next} onDone={(x) => onDone(client, x)} onUndo={(x) => onUndo(client, x)} size="lg" />}
+              <button
+                type="button"
+                onClick={onToggle}
+                aria-expanded={open}
+                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                {open ? 'Close plan ▴' : `Open plan ▾`}
+              </button>
+            </div>
           </div>
 
           {open && (
