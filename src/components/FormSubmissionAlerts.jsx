@@ -150,7 +150,7 @@ export default function FormSubmissionAlerts() {
   return (
     <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-blue-200 p-4 md:p-6">
       <h2 className="text-lg font-bold text-slate-900 mb-3">
-        New from clients
+        New form submissions from clients
         <span className="ml-2 text-xs font-semibold bg-blue-600 text-white rounded-full px-2 py-0.5">
           {items.length}
         </span>

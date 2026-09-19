@@ -343,7 +343,7 @@ export const LOOKUPS = [
   },
   {
     need: 'Which clients still need their GHL account built',
-    where: 'The Dashboard → "New from clients", the amber rows',
+    where: 'The Dashboard → "New form submissions from clients", the amber rows',
     how: 'One row per client who has sent their GHL setup form and whose GoHighLevel template setup deliverable is not done yet. There is no Dismiss on those rows on purpose — pressing "GHL is set up" is what clears them, and it marks the deliverable done. Opening the client does not clear it.',
   },
   {

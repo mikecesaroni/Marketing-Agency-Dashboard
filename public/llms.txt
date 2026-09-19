@@ -284,7 +284,7 @@ Which clients are ready for ads but missing Meta access
   The same test, failed only on the Meta side: backend done, ads off, but no ad account or no Facebook Page connected. That is the one thing standing between us and spending their budget, and the action is a request to the client rather than a job for us — which is why it is a separate group.
 
 Which clients still need their GHL account built
-  Go to: The Dashboard → "New from clients", the amber rows
+  Go to: The Dashboard → "New form submissions from clients", the amber rows
   One row per client who has sent their GHL setup form and whose GoHighLevel template setup deliverable is not done yet. There is no Dismiss on those rows on purpose — pressing "GHL is set up" is what clears them, and it marks the deliverable done. Opening the client does not clear it.
 
 A client's photos, logo or documents
