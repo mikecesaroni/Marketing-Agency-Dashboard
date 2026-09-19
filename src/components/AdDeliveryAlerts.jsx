@@ -23,9 +23,7 @@ export default function AdDeliveryAlerts({ clients, delivery, todayDate }) {
     <Card tone={worst === 'critical' ? 'danger' : 'warning'} padding="lg" className="mb-6 md:mb-8">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <p className="text-sm font-semibold text-slate-900">
-          {alerts.length === 1
-            ? 'A client is paying for ads that are not running'
-            : `${alerts.length} clients are paying for ads that are not running`}
+          {alerts.length === 1 ? 'Client ads account paused' : `${alerts.length} client ads accounts paused`}
         </p>
         <p className="text-xs text-slate-600">Checked against Meta on the last sync</p>
       </div>
