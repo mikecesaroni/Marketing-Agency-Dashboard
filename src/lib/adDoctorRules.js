@@ -30,6 +30,11 @@ const BASELINE_DAYS = 7
 
 // Fatigue and retention thresholds. [industry] figures, see metaKnowledge.js.
 export const THRESHOLDS = {
+  // Starved: under this share of a set's 30-day spend, in a set with at least
+  // this many live ads that has spent at least this much. See the signal.
+  starvedShare: 0.1,
+  starvedSetAds: 3,
+  starvedSetSpend: 100,
   ctrDecayWatch: 0.1,
   ctrDecayKill: 0.3,
   ctrDecayFatigue: 0.15, // the earliest tell
@@ -153,7 +158,8 @@ export function diagnoseAds(rows, opts = {}) {
   const byAdset = new Map()
   for (const r of rows) {
     if (!r.adset_id) continue
-    const s = byAdset.get(r.adset_id) || { adsetId: r.adset_id, name: r.adset_name || r.adset_id, leads7: 0, spend7: 0, live: false }
+    const s = byAdset.get(r.adset_id) || { adsetId: r.adset_id, name: r.adset_name || r.adset_id, leads7: 0, spend7: 0, spend30: 0, live: false }
+    s.spend30 += Number(r.spend) || 0
     if (daysAgo(r.date) < 7) {
       s.leads7 += Number(r.leads) || 0
       s.spend7 += Number(r.spend) || 0
@@ -171,6 +177,15 @@ export function diagnoseAds(rows, opts = {}) {
           ? `${s.leads7} lead${s.leads7 === 1 ? '' : 's'} in 7 days against the ~50 Meta needs to leave learning. Learning limited is normal at this budget: judge on 7 to 14 day trend, not day to day, and do not add or remove ads more than once a week.`
           : `${s.leads7} leads in 7 days: out of learning. Numbers are stable enough to act on.`,
     }))
+
+  // How many live ads share each set. Meta splits a set's budget by its own
+  // early guess, so an ad in a crowded set can run for weeks on pennies and
+  // never be judged; the starved signal below needs the crowd size.
+  const liveAdsBySet = new Map()
+  for (const adRows of byAd.values()) {
+    const last = [...adRows].sort((a, b) => a.date.localeCompare(b.date))[adRows.length - 1]
+    if (last.adset_id && isLive(last.effective_status)) liveAdsBySet.set(last.adset_id, (liveAdsBySet.get(last.adset_id) || 0) + 1)
+  }
 
   const verdicts = []
 
@@ -194,6 +209,22 @@ export function diagnoseAds(rows, opts = {}) {
     const cpm = impressions > 0 ? (1000 * spend) / impressions : null
     const frequency = reach > 0 ? impressions / reach : null
     const isVideo = impressions > 0 && plays > 0.05 * impressions
+
+    // STARVED. Meta splits an ad set's budget by its own early guess, not
+    // evenly, so in a set of five one ad can take 90% and the rest never see
+    // enough money to be judged. In September 2026, 22 of 40 live ads across
+    // eight multi-ad sets were in that position. An ad under a tenth of a
+    // crowded, spending set's budget is flagged so nobody mistakes "never
+    // tested" for "lost"; the fix is a trial set of its own, not a pause.
+    const set = latest.adset_id ? byAdset.get(latest.adset_id) : null
+    const liveInSet = latest.adset_id ? liveAdsBySet.get(latest.adset_id) || 0 : 0
+    const spendShare = set && set.spend30 > 0 ? spend / set.spend30 : null
+    const starved =
+      isLive(latest.effective_status) &&
+      spendShare !== null &&
+      liveInSet >= T.starvedSetAds &&
+      set.spend30 >= T.starvedSetSpend &&
+      spendShare < T.starvedShare
     const holdRate = isVideo && hasThru && plays > 0 ? (100 * thru) / plays : null
     const hookRate = isVideo && hasV2s && impressions > 0 ? (100 * v2s) / impressions : null
 
@@ -231,6 +262,11 @@ export function diagnoseAds(rows, opts = {}) {
     }
 
     const signals = []
+    if (starved) {
+      signals.push(
+        `Starved: ${Math.round(spendShare * 100)}% of the ad set's $${set.spend30.toFixed(0)} went to this ad across ${liveInSet} live ads. Meta picked a favourite early; this one was never tested. Not a verdict on the creative: run it alone in a trial ad set before killing it.`
+      )
+    }
     if (holdRate !== null && plays >= T.minPlaysForRetention) {
       if (holdRate < T.holdRateReCut) {
         signals.push(
@@ -267,6 +303,8 @@ export function diagnoseAds(rows, opts = {}) {
       hookRate,
       cause,
       signals,
+      spendShare,
+      starved,
     }
 
     const push = (verdict, reasons) =>

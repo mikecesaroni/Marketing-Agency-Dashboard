@@ -158,5 +158,32 @@ check('fatigue watch at 10%, kill at 30%', [THRESHOLDS.ctrDecayWatch, THRESHOLDS
 check('re-cut under 8% hold, benchmark 18 to 28', [THRESHOLDS.holdRateReCut, ...THRESHOLDS.holdRateBenchmark], [8, 18, 28])
 check('learning bar is 50 a week', THRESHOLDS.learningEventsPerWeek, 50)
 
+// --- starved: never tested is not lost -------------------------------------------
+
+// One set, three live ads: a favourite taking $800, two on pennies.
+const fav = series({ id: 'fav', name: 'Favourite', adset: 'setS' }, 20, () => ({ spend: 40, imp: 1500, clicks: 40, leads: 1 }))
+const crumbs = series({ id: 'crumbs', name: 'Crumbs', adset: 'setS' }, 20, () => ({ spend: 1, imp: 40, clicks: 1, leads: 0 }))
+const crumbs2 = series({ id: 'crumbs2', name: 'Crumbs 2', adset: 'setS' }, 20, () => ({ spend: 1.5, imp: 60, clicks: 1, leads: 0 }))
+const starvedSet = [...fav, ...crumbs, ...crumbs2]
+const c1 = one(starvedSet, 'crumbs')
+check('an ad on 2% of a crowded, spending set is starved', c1.starved, true)
+check('its share is reported', Math.round(c1.spendShare * 100), 2)
+check('and the signal says never tested, not lost', c1.signals.some((s) => s.startsWith('Starved: 2%') && s.includes('never tested')), true)
+check('the starved ad is still "learning", not killed', c1.verdict, 'learning')
+check('the favourite is not starved', one(starvedSet, 'fav').starved, false)
+// Two live ads only: an uneven split between two is a choice, not starvation.
+const pair = [...fav, ...crumbs]
+check('a set of two is never starved', one(pair, 'crumbs').starved, false)
+// A set that has barely spent cannot starve anyone yet.
+const thin = [
+  ...series({ id: 't1', name: 'T1', adset: 'setT' }, 5, () => ({ spend: 8, imp: 300, clicks: 6 })),
+  ...series({ id: 't2', name: 'T2', adset: 'setT' }, 5, () => ({ spend: 1, imp: 30, clicks: 1 })),
+  ...series({ id: 't3', name: 'T3', adset: 'setT' }, 5, () => ({ spend: 1, imp: 30, clicks: 1 })),
+]
+check('under $100 of set spend nobody is starved yet', one(thin, 't2').starved, false)
+// A paused ad on crumbs is just paused.
+const pausedCrumbs = series({ id: 'pc', name: 'PC', adset: 'setS', status: 'PAUSED' }, 20, () => ({ spend: 1, imp: 40, clicks: 1 }))
+check('a paused ad is not starved', one([...starvedSet, ...pausedCrumbs], 'pc').starved, false)
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll ad-doctor checks pass')
 process.exit(failures ? 1 : 0)
