@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const { session, loading, role, signIn } = useAuth()
+  const { session, loading, role, profile, profileError, signIn, signOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from && location.state.from !== '/login' ? location.state.from : '/'
@@ -58,9 +58,27 @@ export default function LoginPage() {
             <p className="text-xs text-slate-600">
               Payments and Team are for the account owner. Sign in once in this browser and they stay
               open. Everything else in the CRM needs no login.
-              {session && !isAdmin(role) && (
+              {/* THE DIAGNOSIS MATTERS. "Not an owner login" was said in three
+                  different situations, two of which are not that: while the
+                  profile row was still loading, and when the row exists but
+                  could not be read. The second is the one that strands the
+                  real owner, so it says so and offers the way out. */}
+              {session && !isAdmin(role) && !loading && (
                 <span className="mt-1 block text-amber-700">
-                  You are signed in as {session.user.email}, which is not an owner login.
+                  {profile ? (
+                    <>
+                      Signed in as {session.user.email}, whose role is {profile.role || 'none'}, not owner.
+                    </>
+                  ) : (
+                    <>
+                      Signed in as {session.user.email}, but the CRM could not read your profile, so it
+                      cannot confirm you are the owner.
+                      {profileError ? ` The database said: ${profileError}` : ' Check the read policy on the profiles table.'}
+                    </>
+                  )}
+                  <button type="button" onClick={() => signOut()} className="mt-1 block underline">
+                    Sign out and try another login
+                  </button>
                 </span>
               )}
             </p>
