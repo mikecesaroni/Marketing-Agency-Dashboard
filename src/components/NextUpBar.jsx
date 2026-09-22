@@ -5,11 +5,16 @@ import { OWNER, PHASES } from '../lib/nextSteps'
  * The top of every client page: where they are, what is next, whose it is,
  * and the one button that does it.
  *
- * Sticky under the page header, so the answer to "what do I do for this
- * client" is on screen wherever you have scrolled to. The whole pipeline
- * opens underneath on a click, every step with its status, its owner and
- * its action, so a teammate can see the entire launch at once and pick any
- * step without knowing where in the long page its panel lives.
+ * It sits at the top of the page and scrolls away with it. It used to stick
+ * under the header, which meant it covered the panel you had just scrolled to
+ * -- and the one it covered was usually the panel its own button had sent you
+ * to.
+ *
+ * It arrives closed. The headline, the next step and the button that does it
+ * are all in the bar itself, so the full pipeline is what you open when you
+ * want the whole picture: every step with its status, its owner and its
+ * action, so a teammate can pick any step without knowing where in the long
+ * page its panel lives.
  *
  * Nothing here computes anything: it renders nextSteps() and reports clicks
  * back through onAction(step), and the page decides which panel to open.
@@ -79,13 +84,10 @@ function DoneControl({ step, onDone, onUndo, size = 'sm' }) {
 }
 
 export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDone, onUndo, controls }) {
-  // Open by default while there is work on the plan; a fully done plan
-  // arrives closed, since there is nothing to read. Once clicked, the
-  // person's choice sticks for the visit.
-  const [toggled, setToggled] = useState(null)
-  const allDone = Boolean(result) && result.progress.done === result.progress.total
-  const open = toggled ?? !allDone
-  const setOpen = (fn) => setToggled((t) => (typeof fn === 'function' ? fn(t ?? !allDone) : fn))
+  // Closed on arrival, every time. The headline, the next step and its button
+  // are all in the bar itself, so the full plan is the thing you open when you
+  // want it rather than the thing you scroll past to reach the page.
+  const [open, setOpen] = useState(false)
   const [editingOwner, setEditingOwner] = useState(false)
   const [ownerDraft, setOwnerDraft] = useState(assignedTo || '')
 
@@ -98,8 +100,8 @@ export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDo
   }
 
   return (
-    <div className="sticky top-[68px] z-20 mb-6 md:top-[76px] md:mb-8">
-      <div className={`rounded-xl border shadow-sm ${next ? (next.owner === OWNER.us ? 'border-blue-200 bg-blue-50/95' : 'border-amber-200 bg-amber-50/95') : 'border-green-200 bg-green-50/95'} backdrop-blur`}>
+    <div className="mb-6 md:mb-8">
+      <div className={`rounded-xl border shadow-sm ${next ? (next.owner === OWNER.us ? 'border-blue-200 bg-blue-50' : 'border-amber-200 bg-amber-50') : 'border-green-200 bg-green-50'}`}>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
@@ -159,8 +161,10 @@ export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDo
               type="button"
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
-              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+              title="Every step in this client's launch, with its owner and its action"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-400 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
             >
+              <span className={`text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
               {open ? 'Close plan' : `Open plan (${ours.length} ours, ${theirs.length} on the client)`}
             </button>
           </div>
