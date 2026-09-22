@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { copyText } from '../lib/intakeSummary'
 import DriveThumbImage from './DriveThumb'
 import { publicUrl } from '../lib/savedAds'
 import { isHeic } from '../lib/imageUpload'
+import { fileKindLabel, fileKindTitle, imagesOnly, isImageFile } from '../lib/driveFileKind'
 import {
   drivePath,
   driveFileId,
@@ -44,15 +45,17 @@ function DriveThumb({ client, file, selected, onPick }) {
           ✓
         </span>
       )}
-      {file.converted && (
-        // iPhone photos are HEIC, which no browser can decode. Drive converts
-        // them on the way through, so these work like any other photo -- the
-        // tag is only here so a 5MB .HEIC appearing in an ad is not a surprise.
+      {/* iPhone photos are HEIC, which no browser can decode; Drive converts
+          them on the way through, so they work like any other photo and the
+          tag is only here so a 5MB .HEIC in an ad is not a surprise. The word
+          used to be hardcoded, so every format Drive had to render was
+          labelled HEIC, videos included. */}
+      {fileKindLabel(file) && (
         <span
-          title="Converted from HEIC by Google Drive"
+          title={fileKindTitle(file)}
           className="absolute bottom-0 left-0 right-0 bg-black/55 text-white text-[9px] leading-4 text-center"
         >
-          HEIC
+          {fileKindLabel(file)}
         </span>
       )}
     </button>
@@ -177,16 +180,23 @@ export default function AdImagePicker({
     if (file) onUpload(file)
   }
 
+  // ONE LISTING, THREE PICKERS. The Drive call returns images, videos and
+  // PDFs because the video picker and the files list read the same response.
+  // This is the photo picker, so it shows the photos; a video offered here is
+  // how Active Air's logo came to be an mp4.
+  const drivePhotos = useMemo(() => (driveFiles ? imagesOnly(driveFiles) : null), [driveFiles])
+
   // What the current pick is called, so the selection is legible without
   // hunting for which thumbnail has a tick on it.
+  const selectedFile = isDrivePath(value) ? driveFiles?.find((f) => f.id === driveFileId(value)) : null
   const selectedName = (() => {
     if (!value) return ''
-    if (isDrivePath(value)) {
-      const id = driveFileId(value)
-      return driveFiles?.find((f) => f.id === id)?.name || 'Drive photo'
-    }
+    if (isDrivePath(value)) return selectedFile?.name || 'Drive photo'
     return files.find((f) => f.storage_path === value)?.file_name || value.split('/').pop()
   })()
+  // A pick made before this picker filtered, or carried in by a saved recipe.
+  // Said plainly, because the only symptom otherwise is a red error on the tab.
+  const badPick = Boolean(selectedFile) && !isImageFile(selectedFile)
 
   return (
     <div
@@ -353,7 +363,7 @@ export default function AdImagePicker({
             <span className="text-[11px] text-slate-500">
               {loadingDrive
                 ? 'Reading the folder...'
-                : `${driveFiles?.length ?? 0} photo${driveFiles?.length === 1 ? '' : 's'}`}
+                : `${drivePhotos?.length ?? 0} photo${drivePhotos?.length === 1 ? '' : 's'}`}
             </span>
             <button
               type="button"
@@ -365,9 +375,9 @@ export default function AdImagePicker({
             </button>
           </div>
 
-          {driveFiles && driveFiles.length > 0 && (
+          {drivePhotos && drivePhotos.length > 0 && (
             <div className="grid grid-cols-4 gap-1.5 max-h-44 overflow-y-auto">
-              {driveFiles.map((f) => (
+              {drivePhotos.map((f) => (
                 <DriveThumb
                   key={f.id}
                   client={client}
@@ -379,15 +389,28 @@ export default function AdImagePicker({
             </div>
           )}
 
-          {driveFiles && driveFiles.length === 0 && !driveError && !loadingDrive && (
+          {drivePhotos && drivePhotos.length === 0 && !driveError && !loadingDrive && (
             <p className="text-[11px] text-slate-500">
-              No images in that folder. Note that subfolders are not searched.
+              {driveFiles.length > 0
+                ? `That folder has ${driveFiles.length} file${driveFiles.length === 1 ? '' : 's'}, none of them photos. Videos go in the video ad.`
+                : 'No images in that folder.'}
             </p>
           )}
         </div>
       )}
 
       {driveError && <p className="text-[11px] text-red-600 mt-1">{driveError}</p>}
+
+      {badPick && (
+        <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+          {selectedName} is a {fileKindLabel(selectedFile) || 'file'}, not a photo, so it cannot be painted onto the
+          artboard.{' '}
+          <button type="button" onClick={() => onChange('')} className="underline">
+            Clear it
+          </button>{' '}
+          and pick a photo, or use it on the video ad.
+        </p>
+      )}
 
       <p className="text-[11px] text-slate-400 mt-1 truncate">
         {selectedName ? `Using: ${selectedName}` : 'Nothing picked · drag an image here to upload'}
