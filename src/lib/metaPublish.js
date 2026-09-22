@@ -651,6 +651,31 @@ export function ageFromIntake(intake) {
  * handed them: the transcript is large, and a caller should not be able to
  * name a client whose conversation they want read out.
  */
+/**
+ * Swap one recommended question for another, with the reason it was rejected.
+ *
+ * The reason is the point. Without it the second try is another roll of the
+ * dice; with it ("the dispatcher already asks that", "he hates budget
+ * questions") the model has the one fact the onboarding form never carried.
+ * `keep` is the rest of the form, so the replacement cannot duplicate it.
+ */
+export async function replaceFormQuestion({ clientId, question, reason, keep = [] }) {
+  const { data, error } = await supabase.functions.invoke('form-questions', {
+    body: { client_id: clientId, replace: question, reason, keep },
+  })
+  if (error) {
+    const detail = await readFunctionError(error)
+    throw new Error(detail.detail || 'Could not reach the question recommender.')
+  }
+  if (data?.error) throw new Error(data.error)
+  // An older deployment ignores `replace` and hands back the whole set. Say so
+  // rather than silently replacing one question with a different one's text.
+  if (!data?.question) {
+    throw new Error('The question recommender has not been updated for replacements yet. Deploy form-questions in Supabase.')
+  }
+  return { question: data.question, note: data.note || '' }
+}
+
 export async function recommendFormQuestions(clientId) {
   const { data, error } = await supabase.functions.invoke('form-questions', {
     body: { client_id: clientId },

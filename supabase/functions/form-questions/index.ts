@@ -16,6 +16,15 @@
 // the browser would be slower, larger and would let a caller claim to be a
 // client they are not.
 //
+// SWAPPING ONE OUT. A recommendation is a starting point, and the person
+// reading it knows things the intake does not: that the client hates being
+// asked about budget, that the dispatcher already asks the unit's age.
+// Unticking a question in the Studio asks for a replacement instead of just
+// deleting it, and carries the reason, so the second try is informed rather
+// than another roll of the dice. That is the `replace` mode: same context,
+// one question in, one question out, and the questions being kept are listed
+// so it cannot hand back something the form already asks.
+//
 // Secrets: ANTHROPIC_API_KEY.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
@@ -53,6 +62,14 @@ const Question = z.object({
   // Every custom question is multiple choice. Always empty for a standard field.
   options: z.array(z.string()),
   why: z.string(),
+})
+
+// One question, for the replace mode. The whole set is deliberately not
+// regenerated: the others were already accepted, and churning them would make
+// a small correction feel like starting over.
+const Replacement = z.object({
+  question: Question,
+  note: z.string(),
 })
 
 const Reply = z.object({
@@ -240,13 +257,37 @@ Deno.serve(async (req) => {
       .map(([label, value]) => `${label}: ${value.slice(0, 600)}`)
       .join('\n')
 
+    // REPLACE ONE, or recommend the whole set. Both read the same facts and
+    // the same chat; only the ask at the end differs.
+    const rejected = body.replace && typeof body.replace === 'object' ? body.replace : null
+    const reason = String(body.reason || '').trim().slice(0, 600)
+    const keep = (Array.isArray(body.keep) ? body.keep : [])
+      .map((q: any) => String(q?.label || q?.type || '').trim())
+      .filter(Boolean)
+      .slice(0, 12)
+
+    const ask = rejected
+      ? `The form already asks: ${keep.length ? keep.join('; ') : '(nothing else yet)'}.\n\n` +
+        `They do NOT want this question: "${String(rejected.label || rejected.type || '').slice(0, 300)}".\n` +
+        (reason
+          ? `Their reason, which outranks your own judgement about this one: "${reason}"\n`
+          : 'They did not say why, so assume it is not earning its place and try a different angle.\n') +
+        '\nGive ONE replacement question that does a different job, obeys that reason, and does not repeat anything the form already asks. ' +
+        'A standard prefilled field is a fine answer if that serves them better than another typed question. ' +
+        'In `note`, say in one sentence what the new question gets them that the old one did not.'
+      : 'Recommend the questions for their instant form.'
+
     const anthropic = new Anthropic({ apiKey })
     const response = await anthropic.messages.parse({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       thinking: { type: 'adaptive' },
       system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
-      output_config: { format: zodOutputFormat(Reply, 'form_questions') },
+      output_config: {
+        format: rejected
+          ? zodOutputFormat(Replacement, 'replacement_question')
+          : zodOutputFormat(Reply, 'form_questions'),
+      },
       messages: [
         {
           role: 'user',
@@ -255,7 +296,7 @@ Deno.serve(async (req) => {
             (said
               ? `THE LATEST CONVERSATION about this client's ads, which is where the offer and the angle were worked out:\n"""\n${said}\n"""\n\n`
               : '') +
-            'Recommend the questions for their instant form.',
+            ask,
         },
       ],
     })
@@ -265,20 +306,42 @@ Deno.serve(async (req) => {
       return json({ error: 'Claude replied but not in a readable shape. Try again.' }, 502)
     }
 
+    // The same tidy-up as the full set, for the one question.
+    if (rejected) {
+      const q = (parsed as any).question
+      if (!q || (q.type !== 'CUSTOM' && !(STANDARD as readonly string[]).includes(q.type))) {
+        return json({ error: 'Claude suggested a question Meta would not accept. Try again.' }, 502)
+      }
+      return json({
+        mode: 'replace',
+        note: (parsed as any).note || '',
+        question: {
+          ...q,
+          options:
+            q.type === 'CUSTOM'
+              ? (q.options || []).map((o: unknown) => String(o).trim()).filter(Boolean).slice(0, 8)
+              : [],
+        },
+      })
+    }
+
+    // Cast once: the output format is chosen at runtime, so the parsed shape
+    // is a union and every field below would otherwise need narrowing.
+    const full = parsed as any
     return json({
-      note: parsed.note,
-      form_name: parsed.form_name,
-      thank_you: parsed.thank_you,
+      note: full.note,
+      form_name: full.form_name,
+      thank_you: full.thank_you,
       // Belt and braces on the type even though the schema constrains it: a
       // type meta-publish does not accept would be dropped there and the form
       // would quietly not ask the question.
-      questions: parsed.questions
+      questions: (full.questions as any[])
         .filter((q) => q.type === 'CUSTOM' || (STANDARD as readonly string[]).includes(q.type))
         // Options only mean something on a CUSTOM question; a stray list on a
         // standard field would confuse the Studio's labels.
         .map((q) => ({
           ...q,
-          options: q.type === 'CUSTOM' ? (q.options || []).map((o) => String(o).trim()).filter(Boolean).slice(0, 8) : [],
+          options: q.type === 'CUSTOM' ? (q.options || []).map((o: unknown) => String(o).trim()).filter(Boolean).slice(0, 8) : [],
         })),
       used_chat: Boolean(said),
     })

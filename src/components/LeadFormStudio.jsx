@@ -7,6 +7,7 @@ import {
   createLeadForm,
   listLeadForms,
   recommendFormQuestions,
+  replaceFormQuestion,
 } from '../lib/metaPublish'
 
 /**
@@ -66,12 +67,21 @@ function parseOptions(text) {
  * completions and cannot be mapped to a GoHighLevel field, so that state is
  * shown in amber rather than allowed to pass quietly.
  */
-function CustomRow({ c, onRemove, onOptions }) {
+function CustomRow({ c, onOptions, replacing, reason, onReason, onUntick, onAsk, onDrop, onCancel, busy }) {
   const choice = (c.options || []).length >= 2
   return (
     <div className="rounded-lg border border-orange-300 bg-orange-50 p-2 text-xs">
       <div className="flex items-start gap-2">
-        <input type="checkbox" checked onChange={onRemove} className="mt-0.5 flex-shrink-0" title="Remove" />
+        {/* Unticking asks for a better question rather than just deleting one.
+            The reason is the whole value: it is the thing the onboarding form
+            never captured, and without it a second try is another guess. */}
+        <input
+          type="checkbox"
+          checked={!replacing}
+          onChange={replacing ? onCancel : onUntick}
+          className="mt-0.5 flex-shrink-0"
+          title={replacing ? 'Keep it after all' : 'Do not want this one'}
+        />
         <div className="min-w-0 flex-1">
           <span className="font-medium text-slate-900">{c.label}</span>
           {choice ? (
@@ -97,6 +107,39 @@ function CustomRow({ c, onRemove, onOptions }) {
             placeholder="Options, comma separated — e.g. I own it, I rent"
             className="mt-1.5 w-full rounded border border-slate-300 bg-white px-2 py-1 text-[11px]"
           />
+
+          {replacing && (
+            <div className="mt-2 rounded-lg border border-slate-300 bg-white p-2">
+              <p className="text-[11px] font-medium text-slate-700">What is wrong with it?</p>
+              <input
+                autoFocus
+                value={reason}
+                onChange={(e) => onReason(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !busy && onAsk()}
+                placeholder="e.g. the dispatcher already asks that on the call"
+                className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-[11px]"
+              />
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onAsk}
+                  disabled={busy}
+                  className="rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                >
+                  {busy ? 'Thinking…' : 'Ask for a better one'}
+                </button>
+                <button type="button" onClick={onDrop} disabled={busy} className="text-[11px] text-slate-500 underline hover:text-slate-800">
+                  Just remove it
+                </button>
+                <button type="button" onClick={onCancel} disabled={busy} className="text-[11px] text-slate-400 hover:text-slate-700">
+                  Keep it
+                </button>
+              </div>
+              <p className="mt-1 text-[10px] text-slate-500">
+                It reads the same onboarding answers and chat as before, plus your reason and the questions already on the form.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -306,6 +349,44 @@ export default function LeadFormStudio({ client }) {
   const toggle = (type) =>
     setPicked((cur) => (cur.includes(type) ? cur.filter((t) => t !== type) : [...cur, type]))
 
+  // SWAPPING A RECOMMENDED QUESTION. Unticking one opens a reason box instead
+  // of deleting it, because the reason is the thing the intake never captured
+  // and the only way the second try beats the first.
+  const [swap, setSwap] = useState(null) // { index, reason }
+  const askReplacement = async () => {
+    if (!swap) return
+    const target = customs[swap.index]
+    if (!target) return setSwap(null)
+    setBusy('replace')
+    setError('')
+    try {
+      const keep = [
+        ...picked.map((t) => ({ type: t, label: FORM_QUESTIONS.find((q) => q.type === t)?.label || t })),
+        ...customs.filter((_, i) => i !== swap.index).map((c) => ({ type: 'CUSTOM', label: c.label })),
+      ]
+      const { question, note: why } = await replaceFormQuestion({
+        clientId: client.id,
+        question: { type: 'CUSTOM', label: target.label },
+        reason: swap.reason.trim(),
+        keep,
+      })
+      if (question.type === 'CUSTOM') {
+        setCustoms((cur) => cur.map((c, i) => (i === swap.index ? { label: question.label, why: question.why, options: question.options || [] } : c)))
+      } else {
+        // It answered with a prefilled field instead, which is often the right
+        // call: tick that and drop the custom question entirely.
+        setCustoms((cur) => cur.filter((_, i) => i !== swap.index))
+        setPicked((cur) => (cur.includes(question.type) ? cur : [...cur, question.type]))
+      }
+      setNote(why || `Swapped out "${target.label}".`)
+      setSwap(null)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy('')
+    }
+  }
+
   // Loads an existing form's questions into the builder. Meta forms cannot be
   // edited once they hold leads, so "change the ZIP question" is really "make
   // the same form again with that one difference", and this saves retyping it.
@@ -444,10 +525,20 @@ export default function LeadFormStudio({ client }) {
               <CustomRow
                 key={`${c.label}-${i}`}
                 c={c}
-                onRemove={() => setCustoms((cur) => cur.filter((_, j) => j !== i))}
                 onOptions={(options) =>
                   setCustoms((cur) => cur.map((x, j) => (j === i ? { ...x, options } : x)))
                 }
+                replacing={swap?.index === i}
+                reason={swap?.index === i ? swap.reason : ''}
+                onReason={(reason) => setSwap((s) => ({ ...s, reason }))}
+                onUntick={() => setSwap({ index: i, reason: '' })}
+                onAsk={askReplacement}
+                onDrop={() => {
+                  setCustoms((cur) => cur.filter((_, j) => j !== i))
+                  setSwap(null)
+                }}
+                onCancel={() => setSwap(null)}
+                busy={busy === 'replace'}
               />
             ))}
           </div>
