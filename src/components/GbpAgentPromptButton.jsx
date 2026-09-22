@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { useState } from 'react'
 import { copyText } from '../lib/intakeSummary'
+import { AGENCY_EMAIL } from '../lib/agencyEmail'
 import { buildGbpAgentPrompt, gbpFacts } from '../lib/gbpAgentPrompt'
 
 /**
@@ -11,23 +11,12 @@ import { buildGbpAgentPrompt, gbpFacts } from '../lib/gbpAgentPrompt'
  * a better prompt.
  */
 export default function GbpAgentPromptButton({ client, intake }) {
-  const [email, setEmail] = useState('')
   const [state, setState] = useState(null)
-
-  useEffect(() => {
-    supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'gbp_manager_email')
-      .maybeSingle()
-      .then(({ data }) => setEmail(data?.value || ''))
-      .catch(() => {})
-  }, [])
 
   const { gaps } = gbpFacts(client, intake)
 
   const copy = async () => {
-    const ok = await copyText(buildGbpAgentPrompt({ client, intake, managerEmail: email }))
+    const ok = await copyText(buildGbpAgentPrompt({ client, intake, managerEmail: AGENCY_EMAIL }))
     setState(ok ? 'ok' : 'fail')
     setTimeout(() => setState(null), 2000)
   }

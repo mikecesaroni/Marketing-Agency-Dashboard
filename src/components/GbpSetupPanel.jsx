@@ -1,24 +1,12 @@
-import { useEffect, useState } from 'react'
 import ChannelSetupPanel from './ChannelSetupPanel'
 import CopySetupMessageButton from './CopySetupMessageButton'
-import { supabase } from '../lib/supabaseClient'
-import { MANAGER_EMAIL_PLACEHOLDER, buildGbpSetupMessage } from '../lib/gbpSetupMessage'
+import { buildGbpSetupMessage } from '../lib/gbpSetupMessage'
 
+// The address used to come from app_settings.gbp_manager_email, which meant
+// changing it was a database trip and the row could sit stale behind the code.
+// It is a constant now (src/lib/agencyEmail.js), so there is nothing to load
+// and nothing to be missing.
 export default function GbpSetupPanel() {
-  const [email, setEmail] = useState(null)
-
-  useEffect(() => {
-    supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'gbp_manager_email')
-      .maybeSingle()
-      .then(({ data }) => setEmail(data?.value || ''))
-      .catch(() => setEmail(''))
-  }, [])
-
-  const missing = email !== null && !email
-
   return (
     <ChannelSetupPanel
       field="gbp_optimized"
@@ -28,19 +16,7 @@ export default function GbpSetupPanel() {
       title="Google Business Profile not optimized yet"
       markLabel="Mark GBP optimized"
       allLiveMessage="Every client's Google Business Profile is optimized."
-      action={
-        <div className="flex items-center gap-2">
-          {missing && (
-            <span
-              title={`The message will say ${MANAGER_EMAIL_PLACEHOLDER} until an address is saved in app_settings.gbp_manager_email.`}
-              className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 whitespace-nowrap"
-            >
-              No email set
-            </span>
-          )}
-          <CopySetupMessageButton message={buildGbpSetupMessage(email)} />
-        </div>
-      }
+      action={<CopySetupMessageButton message={buildGbpSetupMessage()} />}
     />
   )
 }

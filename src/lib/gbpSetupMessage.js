@@ -9,9 +9,11 @@
 // So this asks for what works now, and docs/agency-access.md records that these
 // grants will have to move to a location group later.
 
+import { AGENCY_EMAIL } from './agencyEmail'
+
 export const MANAGER_EMAIL_PLACEHOLDER = '[OUR EMAIL]'
 
-export function buildGbpSetupMessage(email) {
+export function buildGbpSetupMessage(email = AGENCY_EMAIL) {
   const address = String(email || '').trim() || MANAGER_EMAIL_PLACEHOLDER
 
   return `Quick setup so we can optimize your Google Business Profile:

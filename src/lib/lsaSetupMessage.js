@@ -12,6 +12,8 @@
 //
 // Both are needed. Neither substitutes for the other.
 
+import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from './agencyEmail'
+
 export const MANAGER_ID_PLACEHOLDER = '[OUR MANAGER ACCOUNT ID]'
 
 export function buildLsaSetupMessage(managerId) {
@@ -38,7 +40,7 @@ Once your account is created (verified is even better), invite us as an Admin so
 1. Sign in to your Google Local Services dashboard: https://ads.google.com/localservices/
 2. Go to Account Access in the menu
 3. Click the blue + button
-4. Enter our email: roundtablemgmtt@gmail.com
+4. Enter our email: ${AGENCY_EMAIL}
 5. Select Admin access
 6. Send the invitation
 
@@ -47,7 +49,7 @@ If you get an error when adding us, Google is blocking outside email domains. Fi
 1. In your Local Services Ads dashboard, click the Settings icon (gear) and choose Security from the dropdown
 2. Click the Security tab
 3. Find the Allowed Domains section
-4. Click Add Domain and enter: gmail.com
+4. Click Add Domain and enter: ${AGENCY_EMAIL_DOMAIN}
 5. Save
 
 STEP 3: Link your Google Ads account to our manager account

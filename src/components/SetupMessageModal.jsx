@@ -33,11 +33,11 @@ const CHANNELS = {
     missing: 'No Google Ads manager ID saved (app_settings.google_ads_manager_id).',
     blurb: 'Send this to the owner. They approve our manager account on their Local Services account.',
   },
+  // No key: the GBP message names our own email, which is a constant in the
+  // code rather than a row anyone has to keep current.
   gbp: {
     title: 'Google Business Profile access request',
-    key: 'gbp_manager_email',
-    build: (v) => buildGbpSetupMessage(v),
-    missing: 'No manager email saved (app_settings.gbp_manager_email).',
+    build: () => buildGbpSetupMessage(),
     blurb: 'Send this to the owner. Once we are a manager on the profile, the agent brief below does the optimisation.',
   },
 }
@@ -48,6 +48,10 @@ export default function SetupMessageModal({ channel, client, intake, onClose }) 
 
   useEffect(() => {
     if (!spec) return
+    if (!spec.key) {
+      setValue('')
+      return
+    }
     let cancelled = false
     supabase
       .from('app_settings')
