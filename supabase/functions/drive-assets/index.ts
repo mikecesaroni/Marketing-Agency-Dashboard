@@ -393,8 +393,31 @@ Deno.serve(async (req) => {
       // has to actually own the file.
       // Against EVERY linked folder, or a file in the second folder would be
       // listed and then refused when something tried to read it.
-      if (!(meta.parents || []).some((p: string) => allFolderIds.includes(p))) {
-        return json({ error: 'That file is not in this client\'s Drive folders.' }, 403)
+      // The message carries the evidence, because the interesting version of
+      // this failure is the one where the picker LISTED the file and then this
+      // refused it -- the two branches disagreeing about the same folder set.
+      // "Not in this client's folders" read like a permission problem and sent
+      // the search towards Drive sharing, which was never it. Now it says what
+      // it compared, so the next report distinguishes a genuinely foreign file
+      // (parents nowhere near this client) from the two branches disagreeing
+      // (parents plainly inside a folder that is in the checked list), and the
+      // orphan case -- no parents at all, which is what a file in the service
+      // account's own My Drive, or a shortcut, looks like from here.
+      const parents: string[] = meta.parents || []
+      if (!parents.some((p) => allFolderIds.includes(p))) {
+        return json(
+          {
+            error:
+              `"${meta.name || fileId}" is not in a Drive folder linked to ${client.name}. ` +
+              (parents.length
+                ? `It sits in ${parents.join(', ')}; this client's folders are ${allFolderIds.join(', ')}.`
+                : 'Drive reports no parent folder for it at all, which is what a shortcut or a file in the service account\'s own Drive looks like.') +
+              ' If the picker listed this file, the listing and this check disagree; send this message on.',
+            file_parents: parents,
+            checked_folders: allFolderIds,
+          },
+          403
+        )
       }
       const kind = String(meta.mimeType || '')
       const allowed =
