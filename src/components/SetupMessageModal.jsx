@@ -26,12 +26,12 @@ const CHANNELS = {
     missing: 'No business portfolio ID saved (app_settings.meta_business_id). The message will carry a placeholder until it is.',
     blurb: 'Send this to the owner. They add our email as a user on their Business Portfolio; we take it from there.',
   },
+  // No key: the message asks only for Admin access on their Local Services
+  // account, at our own email. Nothing in it comes from app_settings.
   lsa: {
     title: 'Google LSA access request',
-    key: 'google_ads_manager_id',
-    build: (v) => buildLsaSetupMessage(v),
-    missing: 'No Google Ads manager ID saved (app_settings.google_ads_manager_id).',
-    blurb: 'Send this to the owner. They approve our manager account on their Local Services account.',
+    build: () => buildLsaSetupMessage(),
+    blurb: 'Send this to the owner. They verify their Local Services account and add us as an Admin.',
   },
   // No key: the GBP message names our own email, which is a constant in the
   // code rather than a row anyone has to keep current.

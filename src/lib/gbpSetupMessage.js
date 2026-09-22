@@ -9,7 +9,7 @@
 // So this asks for what works now, and docs/agency-access.md records that these
 // grants will have to move to a location group later.
 
-import { AGENCY_EMAIL } from './agencyEmail'
+import { AGENCY_EMAIL } from './agencyEmail.js'
 
 export const MANAGER_EMAIL_PLACEHOLDER = '[OUR EMAIL]'
 

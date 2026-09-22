@@ -1,27 +1,22 @@
 // The message sent to a client to kick off their LSA setup.
 //
-// It asks for two separate things that are easy to confuse:
+// It asks for two things: that they stand up and verify their own Local
+// Services account, and that they add us to it as an Admin. Admin access is
+// what lets us manage the profile, budget and lead disputes by hand.
 //
-//   Local Services dashboard access (by email) lets us manage the profile,
-//   budget and lead disputes by hand. The client has usually already done this.
-//
-//   Linking their Google Ads account to our manager account is what lets the
-//   CRM read leads through the API. A developer token can only be issued to a
-//   manager account, so individual email access can never reach the API no
-//   matter how much permission it carries.
-//
-// Both are needed. Neither substitutes for the other.
+// It used to carry a third step asking them to link their Google Ads account
+// to our manager account, which is the only route to the API -- a developer
+// token can only be issued to a manager account, so email access can never
+// reach it. That step is out of the message now and lead data comes in by
+// hand. If automatic LSA reporting is wanted later, the link has to be asked
+// for again; nothing else in the CRM will surface the need.
 
-import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from './agencyEmail'
+import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from './agencyEmail.js'
 
-export const MANAGER_ID_PLACEHOLDER = '[OUR MANAGER ACCOUNT ID]'
-
-export function buildLsaSetupMessage(managerId) {
-  const id = String(managerId || '').trim() || MANAGER_ID_PLACEHOLDER
-
+export function buildLsaSetupMessage() {
   return `Quick setup on your end to get your Google ads started:
 
-Before we can get your Google Local Services Ads up and running, there are three things we need you to handle on your end. Google requires the business owner to do these directly, so we can't do them for you. Once these are done, we take over everything else.
+Before we can get your Google Local Services Ads up and running, there are two things we need you to handle on your end. Google requires the business owner to do these directly, so we can't do them for you. Once these are done, we take over everything else.
 
 STEP 1: Set up and verify your Google Local Services account
 Using your own Google account, start your Local Services Ads profile and complete Google's verification. This is the part that takes the most time, so starting now is the best thing you can do to speed up your launch.
@@ -51,19 +46,6 @@ If you get an error when adding us, Google is blocking outside email domains. Fi
 3. Find the Allowed Domains section
 4. Click Add Domain and enter: ${AGENCY_EMAIL_DOMAIN}
 5. Save
-
-STEP 3: Link your Google Ads account to our manager account
-This is what lets our system pull your lead and cost data automatically, so
-your reporting is live instead of us screenshotting your dashboard.
-
-1. Sign in at ads.google.com with the same Google account
-2. Click the tools icon, then Setup, then Account access
-3. Choose Managers, then click the + button
-4. Enter our manager account ID: ${id}
-5. Send the request, then approve it when the confirmation arrives
-
-If you do not see a Managers tab, send us a screenshot of that page and we will
-walk you through it. It moves around depending on the account.
 
 THAT'S IT
 Once those are done, we handle the rest, full account setup, service areas, job
