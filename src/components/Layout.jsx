@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LOGIN_REQUIRED, ROLE_LABELS, isAdmin, navWithoutLogin, visibleNav } from '../lib/access'
+import { LOGIN_REQUIRED, ROLE_LABELS, navWithoutLogin, visibleNav } from '../lib/access'
 import ChangePasswordModal from './ChangePasswordModal'
 import {
   IconDashboard,
@@ -83,9 +83,7 @@ function UserMenu() {
   const { profile, role, signOut } = useAuth()
   const [open, setOpen] = useState(false)
   const [changing, setChanging] = useState(false)
-  // With login off this is the owner's menu: shown only once they have signed
-  // in to reach Payments, and the way back out again.
-  if (!profile) return null
+  if (!LOGIN_REQUIRED || !profile) return null
   return (
     <div className="relative flex-shrink-0">
       <button
@@ -137,13 +135,12 @@ function UserMenu() {
 }
 
 export default function Layout({ title, subtitle, actions, children }) {
-  const { role, profile } = useAuth()
+  const { role } = useAuth()
   // Only the pages this role may open. A VA gets no Money > Payments row and
   // no Admin group at all, and RequireAuth turns them away from the URL too.
-  // With login switched off everyone sees everything except Payments and
-  // Team, which appear once the owner has signed in.
-  const groups = LOGIN_REQUIRED ? visibleNav(NAV_GROUPS, role) : navWithoutLogin(NAV_GROUPS, role)
-  const ownerSignedIn = Boolean(profile) && isAdmin(role)
+  // With login switched off there is no role: everyone sees everything except
+  // the Team page.
+  const groups = LOGIN_REQUIRED ? visibleNav(NAV_GROUPS, role) : navWithoutLogin(NAV_GROUPS)
   const mobileItems = groups.flatMap((g) => g.items).filter((i) => i.mobile !== false)
   return (
     <div className="min-h-screen bg-slate-50">
@@ -203,19 +200,8 @@ export default function Layout({ title, subtitle, actions, children }) {
           ))}
         </nav>
 
-        <div className="border-t border-white/5 px-5 py-3 flex items-center justify-between gap-2">
+        <div className="border-t border-white/5 px-5 py-3">
           <p className="text-[11px] text-slate-500">The Working Class Marketing</p>
-          {/* The one door to the money pages. Small on purpose: the team never
-              needs it, and the owner uses it once per browser. */}
-          {!LOGIN_REQUIRED && !ownerSignedIn && (
-            <Link
-              to="/login"
-              state={{ from: '/payments' }}
-              className="text-[11px] text-slate-500 hover:text-white underline-offset-2 hover:underline"
-            >
-              Owner sign in
-            </Link>
-          )}
         </div>
       </aside>
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LOGIN_REQUIRED, isAdmin, needsOwner } from '../lib/access'
+import { LOGIN_REQUIRED } from '../lib/access'
 
 // Supabase's own wording is "Invalid login credentials", which reads like a
 // server log. The person typing already knows what they typed.
@@ -17,17 +17,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const { session, loading, role, profile, profileError, signIn, signOut } = useAuth()
+  const { session, loading, signIn } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from && location.state.from !== '/login' ? location.state.from : '/'
 
-  // Login switched off: the form exists only for the owner reaching a money
-  // or admin page. Anyone else, or an owner already signed in, goes straight
-  // through. Nobody should see a login form they do not need.
-  if (!LOGIN_REQUIRED && !needsOwner(from)) return <Navigate to={from} replace />
-  if (!loading && session && (LOGIN_REQUIRED || isAdmin(role))) return <Navigate to={from} replace />
-  const ownerGate = !LOGIN_REQUIRED
+  // Login switched off, or already in: straight through. Nobody should see a
+  // login form they do not need, and with login off nothing asks for one.
+  if (!LOGIN_REQUIRED || (!loading && session)) return <Navigate to={from} replace />
 
   const submit = async (e) => {
     e.preventDefault()
@@ -53,36 +50,7 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={submit} className="bg-white rounded-xl shadow-lg p-7 space-y-4">
-          <h1 className="text-lg font-semibold text-slate-900">{ownerGate ? 'Owner sign in' : 'Sign in'}</h1>
-          {ownerGate && (
-            <p className="text-xs text-slate-600">
-              Payments and Team are for the account owner. Sign in once in this browser and they stay
-              open. Everything else in the CRM needs no login.
-              {/* THE DIAGNOSIS MATTERS. "Not an owner login" was said in three
-                  different situations, two of which are not that: while the
-                  profile row was still loading, and when the row exists but
-                  could not be read. The second is the one that strands the
-                  real owner, so it says so and offers the way out. */}
-              {session && !isAdmin(role) && !loading && (
-                <span className="mt-1 block text-amber-700">
-                  {profile ? (
-                    <>
-                      Signed in as {session.user.email}, whose role is {profile.role || 'none'}, not owner.
-                    </>
-                  ) : (
-                    <>
-                      Signed in as {session.user.email}, but the CRM could not read your profile, so it
-                      cannot confirm you are the owner.
-                      {profileError ? ` The database said: ${profileError}` : ' Check the read policy on the profiles table.'}
-                    </>
-                  )}
-                  <button type="button" onClick={() => signOut()} className="mt-1 block underline">
-                    Sign out and try another login
-                  </button>
-                </span>
-              )}
-            </p>
-          )}
+          <h1 className="text-lg font-semibold text-slate-900">Sign in</h1>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="login-email">
               Email

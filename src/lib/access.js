@@ -55,30 +55,26 @@ export function visibleNav(groups, role) {
 }
 
 /**
- * Whether this path is money or admin, i.e. needs the owner signed in even
- * while the rest of the CRM is open.
- */
-export function needsOwner(path) {
-  const p = String(path || '')
-  return ADMIN_ONLY.some((a) => p === a || p.startsWith(`${a}/`))
-}
-
-/**
  * What a visitor may open while LOGIN_REQUIRED is false.
  *
- * Everything, except the money and admin pages (ADMIN_ONLY), which open only
- * for an admin session. The team works without logging in; the owner signs in
- * once, in their own browser, to reach Payments and Team. `role` is the
- * signed-in profile's role, or 'viewer' for nobody.
+ * Everything except the Team page, which manages logins that nobody is using,
+ * and whose function refuses a caller with no admin session anyway.
+ *
+ * Payments was behind an owner sign-in for a few days in September 2026 and
+ * that is gone: with login off there is no session to check, so gating it
+ * only ever produced a login form nobody could get past. The money is open to
+ * whoever has the link, which is the same bargain the rest of the CRM makes.
+ * Turning LOGIN_REQUIRED on is what brings the roles back, and ADMIN_ONLY
+ * above is still what a VA cannot reach in that mode.
  */
-export function canOpenWithoutLogin(path, role = 'viewer') {
-  if (!needsOwner(path)) return true
-  return isAdmin(role)
+export function canOpenWithoutLogin(path) {
+  const p = String(path || '')
+  return !(p === '/team' || p.startsWith('/team/'))
 }
 
-export function navWithoutLogin(groups, role = 'viewer') {
+export function navWithoutLogin(groups) {
   return groups
-    .map((g) => ({ ...g, items: g.items.filter((i) => canOpenWithoutLogin(i.to, role)) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => canOpenWithoutLogin(i.to)) }))
     .filter((g) => g.items.length > 0)
 }
 

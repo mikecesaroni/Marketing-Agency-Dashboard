@@ -76,11 +76,9 @@ export function AuthProvider({ children }) {
     session: session || null,
     user: session?.user || null,
     profile,
-    // With login switched off most people have no profile and are 'viewer':
-    // everything opens for them except the money and admin pages. The owner
-    // signs in and carries their profile's role, which is what unlocks
-    // Payments, Team and the client page's payment tracker.
-    role: LOGIN_REQUIRED ? profile?.role || null : profile?.role || 'viewer',
+    // With login switched off nobody has a profile, and every page that asks
+    // "is this an admin" (the client page's payment tracker) must say yes.
+    role: LOGIN_REQUIRED ? profile?.role || null : 'admin',
     loading: session === undefined || (Boolean(userId) && !profileLoaded),
     profileError,
     signIn,
