@@ -72,9 +72,13 @@ export function roleList(v) {
  * `separateWarm` mirrors the one judgement call the live accounts did NOT
  * make: there, somebody who both visited the site and engaged sits in both
  * retargeting ad sets, and the two compete for them inside the same campaign
- * budget. Excluding the visitors from the engagers set fixes that but departs
- * from what is running, so it is off by default and offered rather than
- * imposed.
+ * budget. Excluding the visitors from the engagers set would close that.
+ *
+ * ASKED AND ANSWERED, 2026-09-23: keep the overlap. So the default here is
+ * not a placeholder waiting on a decision, it IS the decision, and the option
+ * stays only because the reasoning is worth keeping next to the code. Anyone
+ * tempted to turn it on is changing how the accounts run, not fixing an
+ * oversight, and should ask again rather than assume.
  */
 export function funnelPlan(audiences = {}, { budgetCents = {}, separateWarm = false } = {}) {
   // Each role holds ANY number of audiences, because the real accounts do:
