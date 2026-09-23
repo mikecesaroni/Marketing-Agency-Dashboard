@@ -17,21 +17,66 @@ If a guide mentions a developer token, it is out of date.
 
 ---
 
-## 1. Have a manager account (MCC)
-
-You almost certainly do — it is the account your client accounts sit under.
+## 1. A manager account (MCC)
 
 The manager account is not what grants API access any more, but it is still
 what lets **one** credential read **every** client account. Without it you
-would need a separate OAuth consent per client.
+would need a separate OAuth consent per client, forever.
 
-Write the manager ID down, digits only, no dashes. It goes in a secret later.
+Manager accounts are free and have no billing of their own — the spend stays
+on the sub-accounts.
 
-> Client accounts must be **linked** to this manager for the sync to see them.
-> For accounts you built yourself under the MCC, that is already true. For an
-> account the client owns, they have to accept a link request — that is the
-> step that used to be STEP 3 of the LSA setup message, which we removed. Ask
-> for it directly for now.
+### If you do not have one yet
+
+**Which Google account you create it under matters, and cannot be undone.**
+An email that already *directly manages* a regular Google Ads account cannot
+be used to create a manager account. Use the agency address
+(`marketing@workingclassgroup.com`), not a personal Gmail — the agency's Google
+assets have already drifted across three personal addresses once.
+
+To check whether that address is free: sign in to Google as it, then go
+straight to <https://ads.google.com/home/tools/manager-accounts/>.
+
+> **Do not go to ads.google.com and let it walk you into creating a campaign.**
+> That flow creates a *regular* Ads account on the address and burns it for
+> this purpose. Use the manager-accounts link above.
+
+Click **Create a manager account**, then:
+
+- **Name** — the agency name. Clients see this when you request access.
+- **How will you use it** — *Manage other people's accounts*.
+- **Country, time zone and currency** — **these cannot be changed later.**
+  Pick the agency's own. Sub-accounts keep their own currency regardless, so
+  this only affects the manager's own reporting.
+
+Your manager ID is then top-right, as `123-456-7890`. Digits only when it goes
+in a secret.
+
+### Linking client accounts
+
+Client accounts must be **linked** to the manager for the sync to see them.
+
+From the manager account: **Accounts icon → Sub-account settings → + →
+Link existing account**, paste the client's 10-digit customer ID (one per line
+for several), **Preview**, **Send request**.
+
+The other side has to accept, in the client account: **Admin → Access and
+security → Managers tab → Accept** on the link request. If you already hold
+admin on that account you can accept it yourself.
+
+> **For every client from here on: create their Google Ads account *from* the
+> manager account** (Sub-account settings → + → Create new account). It is
+> linked from birth — no request, no waiting on the client, and nothing to
+> chase.
+
+For an account the client owns and built themselves, the link has to be asked
+for. That was STEP 3 of the LSA setup message, which we removed; ask for it
+directly.
+
+> `app_settings.google_ads_manager_id` in the database is a **dead row** — the
+> last code that read it was removed when STEP 3 came out of the LSA message.
+> The manager ID the sync uses is the `GOOGLE_ADS_LOGIN_CUSTOMER_ID` secret in
+> step 5. Putting it in the database does nothing.
 
 ## 2. Create a Google Cloud project
 
