@@ -14,6 +14,31 @@ import { ROLES, describePlan, funnelPlan, guessRoles, planGaps, roleList } from 
  */
 const usd = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`
 
+/**
+ * A reason string with any URL in it made clickable.
+ *
+ * Meta's "#2663 Terms of service has not been accepted" comes with the exact
+ * link to click, and it is a one-time, one-click human step per ad account.
+ * Buried in an error string it gets copied by hand or missed; as a link it
+ * gets clicked.
+ */
+function Reason({ text }) {
+  const parts = String(text || '').split(/(https?:\/\/[^\s)]+)/g)
+  return (
+    <>
+      {parts.map((p, i) =>
+        /^https?:\/\//.test(p) ? (
+          <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="underline">
+            {p}
+          </a>
+        ) : (
+          <span key={i}>{p}</span>
+        )
+      )}
+    </>
+  )
+}
+
 function RolePicker({ role, spec, audiences, value, onChange }) {
   const picked = roleList(value)
   return (
@@ -186,8 +211,16 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
                 <span className="font-medium">{r.name}</span>
                 {r.status === 'created' && <span className="text-green-700"> — created</span>}
                 {r.status === 'exists' && <span className="text-slate-500"> — already there</span>}
-                {r.status === 'skipped' && <span className="text-amber-800"> — skipped: {r.reason}</span>}
-                {r.status === 'failed' && <span className="text-red-700"> — Meta refused: {r.reason}</span>}
+                {r.status === 'skipped' && (
+                  <span className="text-amber-800">
+                    {' '}— skipped: <Reason text={r.reason} />
+                  </span>
+                )}
+                {r.status === 'failed' && (
+                  <span className="text-red-700">
+                    {' '}— Meta refused: <Reason text={r.reason} />
+                  </span>
+                )}
               </li>
             ))}
           </ul>
