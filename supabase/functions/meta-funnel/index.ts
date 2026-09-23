@@ -10,8 +10,14 @@
 //
 // THE STRUCTURE, and the reason for it:
 //
-//   Top of funnel   one ad set, EXCLUDING leads, form openers and engagers.
-//   Retargeting     one ad set per warm audience, each EXCLUDING leads.
+//   Top of funnel   one campaign with a CAMPAIGN budget, one broad ad set,
+//                   EXCLUDING the site visitors, the engagers and the leads.
+//   Retargeting     one campaign with a CAMPAIGN budget, one ad set per warm
+//                   audience, each EXCLUDING leads.
+//
+// Modelled on Horizon HVAC and Horizon Water Co read off the live API, not on
+// a first guess -- an earlier draft put budget on the ad sets and forced
+// advantage_audience off everywhere, and both live accounts do the opposite.
 //
 // The exclusion on the top-of-funnel side is the entire point. Without it the
 // two campaigns bid against each other in the same auction for the same
@@ -192,6 +198,85 @@ Deno.serve(async (req) => {
     }
 
     // -----------------------------------------------------------------------
+    // INSPECT — what is actually set up on this account right now.
+    //
+    // The overview in meta-manage deliberately does not return `targeting`,
+    // so it cannot answer the only question that matters here: which ad set
+    // includes or excludes whom. Audience ids are resolved to names, because
+    // a list of 15-digit ids is not something anybody can check a funnel
+    // against.
+    // -----------------------------------------------------------------------
+    if (action === 'inspect') {
+      const [campaigns, adsets, auds] = await Promise.all([
+        graphGet(
+          `${account}/campaigns`,
+          {
+            fields:
+              'id,name,objective,status,effective_status,daily_budget,lifetime_budget,bid_strategy,created_time',
+            limit: '100',
+          },
+          token
+        ),
+        graphGet(
+          `${account}/adsets`,
+          {
+            fields:
+              'id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,' +
+              'optimization_goal,billing_event,destination_type,promoted_object,targeting,created_time',
+            limit: '200',
+          },
+          token
+        ),
+        graphGet(`${account}/customaudiences`, { fields: 'id,name', limit: '200' }, token).catch(
+          () => ({ data: [] })
+        ),
+      ])
+
+      const audName: Record<string, string> = {}
+      for (const a of auds.data || []) audName[String(a.id)] = a.name
+
+      const named = (list: any[]) =>
+        (list || []).map((x: any) => ({
+          id: String(x.id),
+          name: audName[String(x.id)] || '(not on this account)',
+        }))
+
+      return json({
+        client: client.name,
+        campaigns: (campaigns.data || []).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          objective: c.objective,
+          status: c.effective_status || c.status,
+          // A campaign budget is the thing that quietly starves prospecting,
+          // so it is reported even though it is usually null.
+          campaign_budget: c.daily_budget || c.lifetime_budget || null,
+          created: c.created_time,
+        })),
+        adsets: (adsets.data || []).map((a: any) => {
+          const t = a.targeting || {}
+          return {
+            id: a.id,
+            name: a.name,
+            campaign_id: a.campaign_id,
+            status: a.effective_status || a.status,
+            daily_budget: a.daily_budget || null,
+            optimization_goal: a.optimization_goal,
+            destination_type: a.destination_type || null,
+            promoted_object: a.promoted_object || null,
+            include: named(t.custom_audiences),
+            exclude: named(t.excluded_custom_audiences),
+            age: [t.age_min ?? null, t.age_max ?? null],
+            geo: Object.keys(t.geo_locations || {}).filter((k) => k !== 'location_types'),
+            // The one setting that silently undoes an included audience.
+            advantage_audience: t.targeting_automation?.advantage_audience ?? null,
+            created: a.created_time,
+          }
+        }),
+      })
+    }
+
+    // -----------------------------------------------------------------------
     // CREATE FUNNEL
     // -----------------------------------------------------------------------
     if (action === 'create_funnel') {
@@ -207,15 +292,40 @@ Deno.serve(async (req) => {
       const ageMax = Number(body.age_max) || 65
       const suffix = String(body.name_suffix || new Date().toISOString().slice(0, 10))
 
-      // A form ad set is promoted against the Page that hosts the form. This
-      // is not optional: an ad set optimising for LEAD_GENERATION without one
-      // accepts no ads at all, and Meta treats a promoted object as immutable
-      // once the ad set exists, so there is no repairing it afterwards.
-      if (!client.meta_page_id) {
+      // WHERE THE LEAD LANDS decides the optimisation goal and, with it, what
+      // the ad set has to promote. Both live accounts run OFFSITE_CONVERSIONS
+      // against the pixel -- these are website-lead campaigns, not instant
+      // forms -- so that is the default whenever a pixel is on file.
+      //
+      // A promoted object is IMMUTABLE once the ad set exists. Getting this
+      // wrong is not repairable later, which is why it is checked here rather
+      // than discovered when a batch of creatives is refused.
+      const goal = String(body.optimization_goal || (client.meta_pixel_id ? 'OFFSITE_CONVERSIONS' : 'LEAD_GENERATION')).toUpperCase()
+      const needsPixel = goal === 'OFFSITE_CONVERSIONS'
+
+      if (needsPixel && !client.meta_pixel_id) {
         return json(
-          { error: `${client.name} has no Facebook Page set in the CRM, and a lead ad set has to name the Page hosting the form. Set the Page on the client first.` },
+          { error: `${client.name} has no Meta pixel set in the CRM, and an ad set optimising for website leads has to name the pixel that reports them. Set the pixel on the client, or pass optimization_goal: "LEAD_GENERATION" to run instant forms instead.` },
           400
         )
+      }
+      if (!needsPixel && !client.meta_page_id) {
+        return json(
+          { error: `${client.name} has no Facebook Page set in the CRM, and an instant-form ad set has to name the Page hosting the form. Set the Page on the client first.` },
+          400
+        )
+      }
+
+      // Budgets are per CAMPAIGN now, so they arrive keyed by stage.
+      const budgets: Record<string, any> = body.budget_cents || {}
+      const stageBudget = (stage: string) => {
+        const cents = Math.round(Number(budgets[stage]) || 0)
+        if (cents < MIN_DAILY_BUDGET_CENTS) {
+          throw new Error(
+            `The ${stage === 'retarget' ? 'retargeting' : 'top of funnel'} campaign has a daily budget of ${cents} cents. Meta's minimum is ${MIN_DAILY_BUDGET_CENTS}; a number this low is usually dollars entered where cents were meant.`
+          )
+        }
+        return cents
       }
 
       // Campaigns first, one per distinct stage in the plan.
@@ -233,12 +343,15 @@ Deno.serve(async (req) => {
             objective: 'OUTCOME_LEADS',
             status: 'PAUSED',
             special_ad_categories: JSON.stringify(body.special_ad_categories || []),
-            // Budget sits on the AD SETS, not here. A campaign budget would
-            // let Meta move money between the warm and cold ad sets, and it
-            // always moves it to the warm one -- which is cheaper per lead and
-            // also the one that runs out of people. Prospecting would quietly
-            // stop, and the account would look like it was working right up
-            // until the retargeting pool dried up.
+            // Budget sits on the CAMPAIGN, as it does on every live campaign
+            // in both accounts. The usual objection -- that Meta will move
+            // money to the warm ad set and starve prospecting -- only applies
+            // when cold and warm share one campaign. They do not: these are
+            // two campaigns with two budgets, so within the retargeting
+            // campaign letting Meta choose between engagers and visitors is
+            // the wanted behaviour.
+            daily_budget: stageBudget(stage),
+            bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
           },
           token,
           `create the ${label.toLowerCase()} campaign`
@@ -266,25 +379,26 @@ Deno.serve(async (req) => {
           )
         }
 
-        const budget = Math.round(Number(spec.budget_cents) || 0)
-        if (budget < MIN_DAILY_BUDGET_CENTS) {
-          return json(
-            { error: `"${spec.name}" has a daily budget of ${budget} cents. Meta's minimum is ${MIN_DAILY_BUDGET_CENTS}; a number this low is usually dollars entered where cents were meant.` },
-            400
-          )
-        }
+        // Per ad set, not global. The live broad ad sets run with it ON and
+        // the live retargeting ad sets run with it OFF, and both are right:
+        // exclusions are honoured either way, so on a broad ad set with no
+        // includes the expansion is free upside -- while on a retargeting ad
+        // set it would let Meta deliver outside the very audience the ad set
+        // exists to reach.
+        const advantage = spec.advantage_audience === 1 ? 1 : 0
 
         const adset = await graphPost(
           `${account}/adsets`,
           {
             name: `${spec.name} — ${suffix}`,
             campaign_id: campaign.id,
-            daily_budget: budget,
             billing_event: 'IMPRESSIONS',
-            optimization_goal: 'LEAD_GENERATION',
-            bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-            destination_type: 'ON_AD',
-            promoted_object: { page_id: String(client.meta_page_id) },
+            optimization_goal: goal,
+            // No bid_strategy here: it belongs to the campaign now that the
+            // campaign holds the budget, and setting both is refused.
+            ...(needsPixel
+              ? { promoted_object: { pixel_id: String(client.meta_pixel_id), custom_event_type: 'LEAD' } }
+              : { destination_type: 'ON_AD', promoted_object: { page_id: String(client.meta_page_id) } }),
             targeting: {
               geo_locations: geo,
               age_min: ageMin,
@@ -293,14 +407,7 @@ Deno.serve(async (req) => {
               ...(exclude.length ? { excluded_custom_audiences: exclude.map((id) => ({ id })) } : {}),
               // NO location_types. Meta retired the field in September 2026 and
               // refuses any ad set carrying it (#1870194).
-              //
-              // advantage_audience stays OFF, and it matters more here than
-              // anywhere else: with it on, Meta treats an included audience as
-              // a suggestion and delivers outside it when it likes, which
-              // turns a retargeting ad set back into a cold one without saying
-              // so -- and quietly undoes the separation this whole structure
-              // exists to create.
-              targeting_automation: { advantage_audience: 0 },
+              targeting_automation: { advantage_audience: advantage },
             },
             status: 'PAUSED',
           },
@@ -317,7 +424,7 @@ Deno.serve(async (req) => {
           campaign_id: campaign.id,
           include,
           exclude,
-          budget_cents: budget,
+          advantage_audience: advantage,
         })
       }
 
