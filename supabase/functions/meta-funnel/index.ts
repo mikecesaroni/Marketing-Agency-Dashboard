@@ -329,11 +329,17 @@ Deno.serve(async (req) => {
           continue
         }
         try {
+          // No `subtype`. Meta v21 refuses it on create -- "The parameter
+          // 'subtype' is not supported in the current API version" -- and
+          // infers it from the rule's event source instead (pixel -> WEBSITE,
+          // page -> ENGAGEMENT, ig_business -> IG_BUSINESS). It is still
+          // reported when an audience is read back, which is why the live
+          // ones show one; it is just not something you send. Found on the
+          // first real create against Comfort Experts.
           const made = await graphPost(
             `${account}/customaudiences`,
             {
               name: w.name,
-              subtype: w.subtype,
               description: w.prefill,
               rule: w.rule(),
               // Prefill backfills the audience with people who already
