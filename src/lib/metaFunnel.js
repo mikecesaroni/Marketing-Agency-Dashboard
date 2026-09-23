@@ -42,6 +42,15 @@ export async function inspectAccount(clientId) {
 }
 
 /**
+ * Creates the four standard audiences the live accounts run on, skipping any
+ * that already exist by name. Each result is one of: created, exists,
+ * skipped (with the reason the client cannot have it), failed (Meta's words).
+ */
+export async function createStandardAudiences(clientId) {
+  return await call({ action: 'create_audiences', client_id: clientId })
+}
+
+/**
  * Builds the campaigns and ad sets. Everything arrives PAUSED.
  *
  * `plan` is what funnelPlan() returned: {campaigns, adsets}. Budgets are keyed

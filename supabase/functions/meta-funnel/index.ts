@@ -30,8 +30,10 @@
 // Everything is created PAUSED. Nothing here starts spending.
 //
 // Actions:
-//   list_audiences {client_id}          -> the saved audiences on the account
-//   create_funnel  {client_id, adsets:[...], ...} -> campaigns + ad sets
+//   list_audiences   {client_id}          -> the saved audiences on the account
+//   create_audiences {client_id}          -> the four standard audiences, if missing
+//   inspect          {client_id}          -> campaigns and ad sets WITH targeting
+//   create_funnel    {client_id, adsets:[...], ...} -> campaigns + ad sets
 //
 // Secrets: META_ACCESS_TOKEN.
 
@@ -194,6 +196,142 @@ Deno.serve(async (req) => {
           retention_days: a.retention_days ?? null,
           rule: a.rule ?? null,
         })),
+      })
+    }
+
+    // -----------------------------------------------------------------------
+    // CREATE AUDIENCES — the four the live accounts run on, built from the
+    // exact rule shapes read off Horizon HVAC, not from documentation.
+    //
+    // Every one of them follows one template, differing only in subtype,
+    // event source and event name:
+    //
+    //   FB_Engagers_365D  ENGAGEMENT   page       page_engaged             365d
+    //   IG_Engagers_365D  IG_BUSINESS  ig_business ig_business_profile_all  365d
+    //   PageView_180D     WEBSITE      pixel      PageView                 180d
+    //   Lead_180D         WEBSITE      pixel      Lead                     180d
+    //
+    // Idempotent by name: one that already exists is reported and left alone,
+    // so this can be run on an account twice and on Horizon without making
+    // duplicates. Each is attempted independently -- a client with a Page but
+    // no pixel gets the two engager audiences and a clear reason for the two
+    // it cannot have, not a failure.
+    //
+    // The Instagram account is not stored on the client. It is discovered from
+    // the Page at creation time, because that is the only place it lives.
+    // -----------------------------------------------------------------------
+    if (action === 'create_audiences') {
+      const YEAR = 365 * 86400
+      const HALF_YEAR = 180 * 86400
+
+      const existing = await graphGet(`${account}/customaudiences`, { fields: 'id,name', limit: '200' }, token)
+      const byName: Record<string, string> = {}
+      for (const a of existing.data || []) byName[String(a.name)] = String(a.id)
+
+      // Instagram business account, from the Page. Absent when the Page has
+      // no Instagram linked, which is common and not an error.
+      let igId = ''
+      if (client.meta_page_id) {
+        try {
+          const page = await graphGet(
+            String(client.meta_page_id),
+            { fields: 'instagram_business_account' },
+            token
+          )
+          igId = String(page?.instagram_business_account?.id || '')
+        } catch {
+          igId = ''
+        }
+      }
+
+      const rule = (type: string, id: string, seconds: number, event: string) =>
+        JSON.stringify({
+          inclusions: {
+            operator: 'or',
+            rules: [
+              {
+                event_sources: [{ type, id: Number(id) }],
+                retention_seconds: seconds,
+                filter: { operator: 'and', filters: [{ field: 'event', operator: 'eq', value: event }] },
+              },
+            ],
+          },
+        })
+
+      const wanted = [
+        {
+          name: 'FB_Engagers_365D',
+          subtype: 'ENGAGEMENT',
+          needs: client.meta_page_id,
+          missing: 'no Facebook Page on the client',
+          rule: () => rule('page', String(client.meta_page_id), YEAR, 'page_engaged'),
+          prefill: 'Anyone who engaged with the Facebook Page in the last year.',
+        },
+        {
+          name: 'IG_Engagers_365D',
+          subtype: 'IG_BUSINESS',
+          needs: igId,
+          missing: client.meta_page_id
+            ? 'the Page has no Instagram business account linked'
+            : 'no Facebook Page on the client',
+          rule: () => rule('ig_business', igId, YEAR, 'ig_business_profile_all'),
+          prefill: 'Anyone who engaged with the Instagram profile in the last year.',
+        },
+        {
+          name: 'PageView_180D',
+          subtype: 'WEBSITE',
+          needs: client.meta_pixel_id,
+          missing: 'no pixel on the client -- this one is built from website visits',
+          rule: () => rule('pixel', String(client.meta_pixel_id), HALF_YEAR, 'PageView'),
+          prefill: 'Anyone the pixel saw on the website in the last 180 days.',
+        },
+        {
+          name: 'Lead_180D',
+          subtype: 'WEBSITE',
+          needs: client.meta_pixel_id,
+          missing: 'no pixel on the client -- this one is built from the Lead event',
+          rule: () => rule('pixel', String(client.meta_pixel_id), HALF_YEAR, 'Lead'),
+          prefill: 'Anyone the pixel recorded a Lead for in the last 180 days.',
+        },
+      ]
+
+      const results: any[] = []
+      for (const w of wanted) {
+        if (byName[w.name]) {
+          results.push({ name: w.name, status: 'exists', id: byName[w.name] })
+          continue
+        }
+        if (!w.needs) {
+          results.push({ name: w.name, status: 'skipped', reason: w.missing })
+          continue
+        }
+        try {
+          const made = await graphPost(
+            `${account}/customaudiences`,
+            {
+              name: w.name,
+              subtype: w.subtype,
+              description: w.prefill,
+              rule: w.rule(),
+              // Prefill backfills the audience with people who already
+              // qualify, instead of starting from zero on the day it is made.
+              prefill: true,
+            },
+            token,
+            `create ${w.name}`
+          )
+          results.push({ name: w.name, status: 'created', id: String(made.id) })
+        } catch (err) {
+          results.push({ name: w.name, status: 'failed', reason: String(err instanceof Error ? err.message : err) })
+        }
+      }
+
+      return json({
+        ok: true,
+        instagram_account: igId || null,
+        results,
+        created: results.filter((r) => r.status === 'created').length,
+        note: 'A new engagement audience takes Meta up to an hour to populate, and shows as "not ready" until it does.',
       })
     }
 

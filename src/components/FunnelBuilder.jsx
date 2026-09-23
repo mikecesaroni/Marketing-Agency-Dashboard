@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createFunnel, listAudiences } from '../lib/metaFunnel'
+import { createFunnel, createStandardAudiences, listAudiences } from '../lib/metaFunnel'
 import { ROLES, describePlan, funnelPlan, guessRoles, planGaps, roleList } from '../lib/funnelPlan'
 
 /**
@@ -59,6 +59,12 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
   const [retargetBudget, setRetargetBudget] = useState('25.00')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // The per-audience report from creating the standard four. Kept on screen
+  // after the list reloads, because "skipped: no pixel" is the thing the
+  // person needs to read, and it would otherwise vanish the moment the two
+  // that did get made appear in the pickers.
+  const [audienceReport, setAudienceReport] = useState(null)
+  const [makingAudiences, setMakingAudiences] = useState(false)
 
   const load = useCallback(async () => {
     setError('')
@@ -79,6 +85,23 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
   }, [load])
 
   const setRole = (role, ids) => setRoles((prev) => ({ ...prev, [role]: ids }))
+
+  // Creates the standard four, then re-reads the account so they land in the
+  // pickers -- and re-guesses the roles, since the names are the convention
+  // the guesser was built on and will match every time.
+  const makeAudiences = async () => {
+    setMakingAudiences(true)
+    setError('')
+    try {
+      const report = await createStandardAudiences(client.id)
+      setAudienceReport(report)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setMakingAudiences(false)
+    }
+  }
 
   const plan = useMemo(() => funnelPlan(roles), [roles])
   const gaps = useMemo(() => planGaps(roles), [roles])
@@ -130,17 +153,52 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
         selected here afterwards so the creatives above go straight into them.
       </p>
 
-      {audiences.length === 0 ? (
+      {audiences.length === 0 && !audienceReport ? (
         <div className="rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
           <p className="font-medium">This account has no saved audiences yet.</p>
           <p className="mt-1 text-[11px]">
             There is nothing to include or exclude, so a funnel here would be two ordinary
-            campaigns. Create the audiences in Ads Manager first (Audiences → Create → Custom
-            Audience), then come back. The live accounts use FB_Engagers_365D, IG_Engagers_365D,
+            campaigns. The four the live accounts run on can be created right here, built from the
+            client&apos;s Page, Instagram and pixel: FB_Engagers_365D, IG_Engagers_365D,
             PageView_180D and Lead_180D.
           </p>
+          <button
+            type="button"
+            onClick={makeAudiences}
+            disabled={makingAudiences}
+            className="mt-2 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
+          >
+            {makingAudiences ? 'Creating in Meta…' : 'Create the standard audiences'}
+          </button>
         </div>
-      ) : (
+      ) : audienceReport ? (
+        /* WHAT HAPPENED, per audience. Skipped is the important row: a client
+           with no pixel cannot have the two website audiences, and the reason
+           has to say so plainly, because the fix (add a pixel) is theirs. */
+        <div className="rounded border border-slate-200 bg-slate-50 p-2.5 text-xs">
+          <p className="font-medium text-slate-900">
+            {audienceReport.created} audience{audienceReport.created === 1 ? '' : 's'} created
+            {audienceReport.instagram_account ? '' : ' · no Instagram account linked to the Page'}
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {audienceReport.results.map((r) => (
+              <li key={r.name} className="text-[11px] text-slate-700">
+                <span className="font-medium">{r.name}</span>
+                {r.status === 'created' && <span className="text-green-700"> — created</span>}
+                {r.status === 'exists' && <span className="text-slate-500"> — already there</span>}
+                {r.status === 'skipped' && <span className="text-amber-800"> — skipped: {r.reason}</span>}
+                {r.status === 'failed' && <span className="text-red-700"> — Meta refused: {r.reason}</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[11px] text-slate-500">
+            New audiences show as &ldquo;not ready&rdquo; for up to an hour while Meta fills them.
+            The pickers below already list them.
+          </p>
+        </div>
+      ) : null}
+
+      {audiences.length > 0 && (
         <>
           <div className="grid gap-3 md:grid-cols-3">
             {Object.entries(ROLES).map(([role, spec]) => (
