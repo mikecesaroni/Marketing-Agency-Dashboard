@@ -287,7 +287,14 @@ export default function ReportsPage() {
   const totals = { spend: now.spend, leads: now.leads }
 
   const channelTotals = useMemo(() => {
-    const t = { Meta: { spend: 0, leads: 0 }, LSA: { spend: 0, leads: 0 } }
+    // Every channel weekly_kpis can hold needs a bucket here, because the
+    // `continue` below silently drops a row whose channel has none -- the
+    // week would be logged, saved, and then just not appear.
+    const t = {
+      Meta: { spend: 0, leads: 0 },
+      LSA: { spend: 0, leads: 0 },
+      'Google Search': { spend: 0, leads: 0 },
+    }
     for (const kpi of clientKpis) {
       const bucket = t[kpi.channel]
       if (!bucket) continue
@@ -396,7 +403,7 @@ export default function ReportsPage() {
           </div>
 
           <h2 className="font-bold text-slate-900 mb-3">Channel breakdown</h2>
-          <div className="grid md:grid-cols-2 gap-3 md:gap-4 mb-6">
+          <div className="grid gap-3 md:grid-cols-3 md:gap-4 mb-6">
             <ChannelCard
               channel="Meta Ads"
               spend={channelTotals.Meta.spend}
@@ -406,6 +413,11 @@ export default function ReportsPage() {
               channel="Google LSA"
               spend={channelTotals.LSA.spend}
               leads={channelTotals.LSA.leads}
+            />
+            <ChannelCard
+              channel="Google Search"
+              spend={channelTotals['Google Search'].spend}
+              leads={channelTotals['Google Search'].leads}
             />
           </div>
 
