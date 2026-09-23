@@ -3,6 +3,7 @@ import ZoomImage from './ui/ZoomImage'
 import LocationPicker from './LocationPicker'
 import LeadFormPicker from './LeadFormPicker'
 import { publishedNote, rememberQuietly } from '../lib/memory'
+import FunnelBuilder from './FunnelBuilder'
 import VideoAdPicker from './VideoAdPicker'
 import { fetchSavedAds } from '../lib/savedAds'
 import {
@@ -582,6 +583,9 @@ export default function PublishToMetaPanel({
   // ad set several times over, each with its own budget, is what stops one ad
   // starving the others inside a shared set (docs/creative-testing-plan.md).
   const [adsetIds, setAdsetIds] = useState([])
+  // The funnel builder, opened from inside the ad set step.
+  const [buildingFunnel, setBuildingFunnel] = useState(false)
+  const [funnelBuilt, setFunnelBuilt] = useState(null)
   // Keyed by ad set id. Empty while nothing has been asked; each value is a
   // {ok} verdict from meta-adset-check.
   const [adsetChecks, setAdsetChecks] = useState({})
@@ -1259,6 +1263,58 @@ export default function PublishToMetaPanel({
               [true, 'Into an existing ad set'],
             ]}
           />
+        )}
+
+        {/* BUILD THE FUNNEL, then publish into it without leaving the page.
+            Offered only in the existing-ad-set mode, because that is what it
+            produces: the ad sets it creates are ticked here the moment it
+            finishes, so the creatives chosen above go straight into them. */}
+        {reuseAdset && !buildingFunnel && (
+          <button
+            type="button"
+            onClick={() => setBuildingFunnel(true)}
+            className="w-full rounded-lg border border-dashed border-orange-300 bg-orange-50/50 px-3 py-2 text-left text-xs text-orange-900 hover:bg-orange-50"
+          >
+            <span className="font-semibold">No funnel on this account yet? Build one →</span>
+            <span className="mt-0.5 block text-[11px] text-orange-800">
+              Creates a cold campaign that excludes everyone already in the funnel, and a
+              retargeting campaign that goes after them. Paused, and selected here when it is done.
+            </span>
+          </button>
+        )}
+
+        {reuseAdset && buildingFunnel && (
+          <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-3">
+            <FunnelBuilder
+              client={client}
+              locations={locations}
+              ageMin={ageMin}
+              ageMax={ageMax}
+              specialCategory={specialCategory}
+              onCancel={() => setBuildingFunnel(false)}
+              onBuilt={(result) => {
+                setBuildingFunnel(false)
+                // Straight into publishing: re-read the account so the new ad
+                // sets are in the list, and tick exactly the ones just made.
+                setAdsets(null)
+                setAdsetIds((result.adsets || []).map((a) => a.id))
+                setFunnelBuilt(result)
+              }}
+            />
+          </div>
+        )}
+
+        {funnelBuilt && (
+          <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+            <p className="font-semibold">
+              Built {funnelBuilt.campaigns?.length || 0} campaigns and {funnelBuilt.adsets?.length || 0} ad
+              sets, all paused.
+            </p>
+            <p className="mt-0.5 text-[11px] text-green-800">
+              They are ticked below. Publish now and the creatives go into them; nothing spends until
+              you switch it on in Ads Manager.
+            </p>
+          </div>
         )}
 
         {reuseAdset ? (

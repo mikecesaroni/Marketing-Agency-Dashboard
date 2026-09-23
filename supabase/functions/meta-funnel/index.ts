@@ -316,20 +316,46 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Budgets are per CAMPAIGN now, so they arrive keyed by stage.
+      // Budgets are per CAMPAIGN, so they arrive keyed by stage.
       const budgets: Record<string, any> = body.budget_cents || {}
-      const stageBudget = (stage: string) => {
+      const stages = [...new Set(plan.map((a) => String(a.stage || 'tof')))]
+
+      // EVERYTHING IS VALIDATED BEFORE ANYTHING IS CREATED.
+      //
+      // This used to check each ad set as it built it, which meant a bad ad
+      // set left the campaign it belonged to already created and empty on the
+      // client's account. Found the hard way: a test with one audience in both
+      // lists was correctly refused and still left a paused, empty campaign on
+      // Horizon Water Co. Campaigns cannot be deleted through this function,
+      // so the only safe order is to refuse the whole plan up front.
+      for (const stage of stages) {
         const cents = Math.round(Number(budgets[stage]) || 0)
         if (cents < MIN_DAILY_BUDGET_CENTS) {
-          throw new Error(
-            `The ${stage === 'retarget' ? 'retargeting' : 'top of funnel'} campaign has a daily budget of ${cents} cents. Meta's minimum is ${MIN_DAILY_BUDGET_CENTS}; a number this low is usually dollars entered where cents were meant.`
+          return json(
+            { error: `The ${stage === 'retarget' ? 'retargeting' : 'top of funnel'} campaign has a daily budget of ${cents} cents. Meta's minimum is ${MIN_DAILY_BUDGET_CENTS}; a number this low is usually dollars entered where cents were meant.` },
+            400
           )
         }
-        return cents
+      }
+      for (const spec of plan) {
+        const inc = (spec.include || []).map((x: any) => String(x)).filter(Boolean)
+        const exc = (spec.exclude || []).map((x: any) => String(x)).filter(Boolean)
+        // An id in both lists is refused rather than sent. Meta resolves that
+        // by excluding, so the ad set would deliver to nobody, report no error
+        // and simply never spend -- which takes days to notice and reads like
+        // a delivery problem rather than a targeting one.
+        const clash = inc.filter((id: string) => exc.includes(id))
+        if (clash.length > 0) {
+          return json(
+            { error: `"${spec.name}" has audience ${clash.join(', ')} in both its include and exclude lists. Meta would resolve that by excluding, so it would deliver to nobody and never say why.` },
+            400
+          )
+        }
       }
 
+      const stageBudget = (stage: string) => Math.round(Number(budgets[stage]) || 0)
+
       // Campaigns first, one per distinct stage in the plan.
-      const stages = [...new Set(plan.map((a) => String(a.stage || 'tof')))]
       const campaigns: Record<string, { id: string; name: string }> = {}
       const created: any[] = []
 
@@ -367,17 +393,8 @@ Deno.serve(async (req) => {
         const include = [...new Set((spec.include || []).map((x: any) => String(x)).filter(Boolean))]
         const exclude = [...new Set((spec.exclude || []).map((x: any) => String(x)).filter(Boolean))]
 
-        // An id in both lists is refused rather than sent. Meta resolves that
-        // by excluding, so the ad set would deliver to nobody, report no error
-        // and simply never spend -- which takes days to notice and reads like
-        // a delivery problem rather than a targeting one.
-        const both = include.filter((id) => exclude.includes(id))
-        if (both.length > 0) {
-          return json(
-            { error: `"${spec.name}" has audience ${both.join(', ')} in both its include and exclude lists. Meta would resolve that by excluding, so it would deliver to nobody and never say why.` },
-            400
-          )
-        }
+        // The include/exclude clash was already refused in the validation
+        // pass above, before any campaign existed.
 
         // Per ad set, not global. The live broad ad sets run with it ON and
         // the live retargeting ad sets run with it OFF, and both are right:
