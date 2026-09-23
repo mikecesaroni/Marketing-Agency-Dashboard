@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ZoomImage from './ui/ZoomImage'
 import LocationPicker from './LocationPicker'
 import LeadFormPicker from './LeadFormPicker'
@@ -100,6 +100,93 @@ function Preflight({ missing }) {
       <p className="text-[11px] text-amber-700 mt-2">
         Set these on the client&rsquo;s Meta card, then come back.
       </p>
+    </div>
+  )
+}
+
+/**
+ * The result of publishing into SEVERAL ad sets.
+ *
+ * One row per ad set, because that is the unit that succeeds or fails: a run
+ * that got ads into four of five ad sets is not a failure and must not read
+ * like one, and the fifth has to be nameable so it can be retried on its own
+ * rather than by running the whole thing again and doubling up the four.
+ */
+function PublishedAcrossAdsets({ runs, onAnother }) {
+  const ok = runs.filter((r) => r.result)
+  const failed = runs.filter((r) => r.error)
+  const adsIn = (r) => {
+    const rows = r.result?.results || (r.result?.ad_id ? [{ ok: true }] : [])
+    return rows.filter((x) => x.ok !== false).length
+  }
+  const totalAds = ok.reduce((n, r) => n + adsIn(r), 0)
+  // Any one of them reaches the right account in Ads Manager.
+  const managerUrl = ok.find((r) => r.result?.ads_manager_url)?.result?.ads_manager_url
+
+  return (
+    <div
+      className={`p-4 rounded-lg space-y-3 border ${
+        failed.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'
+      }`}
+    >
+      <div>
+        <p className="text-sm font-semibold text-green-900">
+          {totalAds} ad{totalAds === 1 ? '' : 's'} created across {ok.length} ad set
+          {ok.length === 1 ? '' : 's'} — all paused
+        </p>
+        <p className="mt-1 text-xs text-green-800">
+          Nothing is spending. Each ad set keeps its own budget, targeting and schedule exactly as it
+          was; this only added ads inside them.
+        </p>
+      </div>
+
+      <ul className="space-y-1">
+        {runs.map((r) => (
+          <li
+            key={r.adset_id}
+            className={`rounded border px-2.5 py-1.5 text-xs ${
+              r.error ? 'border-amber-300 bg-white' : 'border-green-200 bg-white/70'
+            }`}
+          >
+            <span className="font-medium text-slate-900">{r.adset_name}</span>{' '}
+            {r.error ? (
+              <span className="text-amber-800">— {r.error}</span>
+            ) : (
+              <span className="text-green-800">
+                — {adsIn(r)} ad{adsIn(r) === 1 ? '' : 's'}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {failed.length > 0 && (
+        <p className="text-[11px] text-amber-800">
+          The {failed.length === 1 ? 'one above' : `${failed.length} above`} got nothing. Publish
+          again into just {failed.length === 1 ? 'that ad set' : 'those ad sets'} — re-running all of
+          them would put a second copy into the ones that worked.
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {managerUrl && (
+          <a
+            href={managerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-800"
+          >
+            Open in Ads Manager →
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={onAnother}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+        >
+          Publish more
+        </button>
+      </div>
     </div>
   )
 }
@@ -487,9 +574,17 @@ export default function PublishToMetaPanel({
 
   const [reuseAdset, setReuseAdset] = useState(false)
   const [adsets, setAdsets] = useState(null)
-  const [adsetId, setAdsetId] = useState('')
-  // null while it has not been asked, then {ok} from meta-adset-check.
-  const [adsetCheck, setAdsetCheck] = useState(null)
+  // SEVERAL ad sets, across as many campaigns as you like. An ad set belongs to
+  // exactly one campaign, so picking ad sets picks the campaigns too -- there
+  // is no separate campaign multi-select, and there should not be.
+  //
+  // This is the shape the creative-testing plan needs: the same hook in its own
+  // ad set several times over, each with its own budget, is what stops one ad
+  // starving the others inside a shared set (docs/creative-testing-plan.md).
+  const [adsetIds, setAdsetIds] = useState([])
+  // Keyed by ad set id. Empty while nothing has been asked; each value is a
+  // {ok} verdict from meta-adset-check.
+  const [adsetChecks, setAdsetChecks] = useState({})
 
   const [adsetName, setAdsetName] = useState('')
   const [dailyBudget, setDailyBudget] = useState(() => budgetFromIntake(intake, client) || '20')
@@ -574,8 +669,10 @@ export default function PublishToMetaPanel({
 
   // Lazily: this is a live call to Meta, not worth making unless the existing
   // campaigns are actually being looked at.
+  // Also loaded when reusing ad sets, because the ad set list spans every
+  // campaign and needs their names to group by.
   useEffect(() => {
-    if (!reuseCampaign || campaigns !== null) return
+    if ((!reuseCampaign && !reuseAdset) || campaigns !== null) return
     listCampaigns(client.id)
       .then((found) => {
         setCampaigns(found)
@@ -585,7 +682,7 @@ export default function PublishToMetaPanel({
         setError(err.message)
         setCampaigns([])
       })
-  }, [reuseCampaign, campaigns, client.id])
+  }, [reuseCampaign, reuseAdset, campaigns, client.id])
 
   // Candidate locations from the intake. Fetched once, never applied: Meta's
   // geo search matches names worldwide, so "Long Island" comes back as Maine
@@ -603,48 +700,64 @@ export default function PublishToMetaPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intake, reuseAdset])
 
-  // An ad set belongs to exactly one campaign, so the list follows whichever
-  // campaign is picked and is thrown away when that changes.
+  // EVERY ad set on the account, not just the picked campaign's.
+  //
+  // It used to follow the campaign dropdown, which meant publishing the same
+  // video into ad sets in two campaigns was two passes through this whole
+  // panel. list_adsets already answered account-wide when given no campaign,
+  // and every row carries its own campaign_id, so one call covers the lot and
+  // the campaign picker above stops mattering once ad sets are being reused.
   useEffect(() => {
-    setAdsets(null)
-    setAdsetId('')
-  }, [campaignId])
-
-  useEffect(() => {
-    if (!reuseCampaign || !reuseAdset || !campaignId || adsets !== null) return
-    listAdsets(client.id, campaignId)
+    if (!reuseAdset || adsets !== null) return
+    listAdsets(client.id)
       .then((found) => {
         setAdsets(found)
-        if (found.length > 0) setAdsetId(found[0].id)
+        // Nothing is preselected. With one campaign's worth it was a fair
+        // guess; across the account it would be a coin toss, and publishing
+        // into the wrong live ad set costs real money.
       })
       .catch((err) => {
         setError(err.message)
         setAdsets([])
       })
-  }, [reuseCampaign, reuseAdset, campaignId, adsets, client.id])
+  }, [reuseAdset, adsets, client.id])
 
   // Ask Meta whether the picked ad set can take an ad at all, before a single
   // image is uploaded into it. Belk's five ads were all built and all rejected
   // for the same reason, and the ad set could not be fixed afterwards.
+  // Checked per ad set, once each.
+  //
+  // The obvious version of this loops over "ids with no verdict yet", which
+  // re-fires every outstanding check each time one of them lands: tick three
+  // boxes and the third ad set gets asked about three times. The ref records
+  // what has been ASKED, which is the thing that must not repeat -- state
+  // records what has been ANSWERED, which arrives later and is what the rest
+  // of the screen reads.
+  const asked = useRef(new Set())
   useEffect(() => {
-    setAdsetCheck(null)
-    if (!reuseAdset || !adsetId) return
-
-    let cancelled = false
-    checkAdset(client.id, adsetId)
-      .then((verdict) => {
-        if (!cancelled) setAdsetCheck(verdict)
-      })
-      .catch(() => {
-        // Deliberately optimistic. A check that fell over is not evidence
-        // against the ad set, and blocking on it would break publishing.
-        if (!cancelled) setAdsetCheck({ ok: true, unchecked: 'The ad set check did not run.' })
-      })
-
-    return () => {
-      cancelled = true
+    if (!reuseAdset) return
+    for (const id of adsetIds) {
+      if (asked.current.has(id)) continue
+      asked.current.add(id)
+      checkAdset(client.id, id)
+        .then((verdict) => setAdsetChecks((prev) => ({ ...prev, [id]: verdict })))
+        .catch(() => {
+          // Deliberately optimistic. A check that fell over is not evidence
+          // against the ad set, and blocking on it would break publishing.
+          setAdsetChecks((prev) => ({
+            ...prev,
+            [id]: { ok: true, unchecked: 'The ad set check did not run.' },
+          }))
+        })
     }
-  }, [reuseAdset, adsetId, client.id])
+  }, [reuseAdset, adsetIds, client.id])
+
+  // A different client means different ad sets, and an id could repeat across
+  // accounts, so the record of what has been asked cannot carry over.
+  useEffect(() => {
+    asked.current = new Set()
+    setAdsetChecks({})
+  }, [client.id])
 
   // Reusing an ad set only makes sense inside a campaign that already exists.
   useEffect(() => {
@@ -652,7 +765,34 @@ export default function PublishToMetaPanel({
   }, [reuseCampaign])
 
   const chosenCampaign = reuseCampaign ? campaigns?.find((c) => c.id === campaignId) : null
-  const chosenAdset = reuseAdset ? adsets?.find((a) => a.id === adsetId) : null
+  const chosenAdsets = reuseAdset ? (adsets || []).filter((a) => adsetIds.includes(a.id)) : []
+  // Ad sets grouped under their campaign, in the order Meta listed the ad sets
+  // so the newest work stays near the top. A campaign whose name has not
+  // loaded yet still gets a group rather than vanishing from the list.
+  const campaignGroups = []
+  for (const a of adsets || []) {
+    const id = a.campaign_id || ''
+    let group = campaignGroups.find((g) => g.id === id)
+    if (!group) {
+      group = {
+        id,
+        name: campaigns?.find((c) => c.id === id)?.name || 'Campaign',
+        adsets: [],
+      }
+      campaignGroups.push(group)
+    }
+    group.adsets.push(a)
+  }
+  // The first one stands in wherever a single ad set used to be read: the
+  // objective label, the plan sentence. They all share a campaign objective in
+  // practice, and where they do not, the warning below says so.
+  const chosenAdset = chosenAdsets[0] || null
+  const failedChecks = adsetIds.filter((id) => adsetChecks[id]?.ok === false)
+  const pendingChecks = adsetIds.filter((id) => !adsetChecks[id])
+  // Publishing into ad sets whose campaigns disagree about the objective is
+  // allowed -- each ad is built against its own ad set -- but the copy and CTA
+  // on this screen were written for one of them.
+  const mixedObjectives = new Set(chosenAdsets.map((a) => a.objective).filter(Boolean)).size > 1
   const budgetCents = dollarsToCents(dailyBudget)
 
   const pickedSets = sets.filter((s) => picked.includes(String(s.stamp)))
@@ -674,12 +814,18 @@ export default function PublishToMetaPanel({
     blockers.push('a creative has no primary text')
   if (chosenObjective?.needsLink && !linkUrl.trim()) blockers.push('no landing page')
   if (chosenObjective?.needsForm && !leadForm) blockers.push('no instant form picked')
-  if (reuseCampaign && !campaignId) blockers.push('no campaign picked')
-  if (reuseAdset && !adsetId) blockers.push('no ad set picked')
+  if (reuseCampaign && !reuseAdset && !campaignId) blockers.push('no campaign picked')
+  if (reuseAdset && adsetIds.length === 0) blockers.push('no ad set picked')
   // Waiting on the verdict counts as a blocker too, so a fast click cannot
   // start the upload while the answer is still in flight.
-  if (reuseAdset && adsetId && !adsetCheck) blockers.push('still checking the ad set')
-  if (adsetCheck?.ok === false) blockers.push('that ad set cannot take ads')
+  if (reuseAdset && pendingChecks.length > 0)
+    blockers.push(pendingChecks.length === 1 ? 'still checking the ad set' : `still checking ${pendingChecks.length} ad sets`)
+  if (failedChecks.length > 0)
+    blockers.push(failedChecks.length === 1 ? 'that ad set cannot take ads' : `${failedChecks.length} ad sets cannot take ads`)
+  // One ad per ad set is the point of picking several; the same creative into
+  // twenty of them is almost always a misclick on a select-all.
+  if (reuseAdset && adTotal * adsetIds.length > MAX_BATCH_ADS * 4)
+    blockers.push(`that is ${adTotal * adsetIds.length} ads — too many at once`)
   if (chosenCampaign?.campaign_budget && !reuseAdset)
     blockers.push('that campaign sets its own budget')
   // Budget and targeting belong to the ad set. When one is being reused they
@@ -693,10 +839,15 @@ export default function PublishToMetaPanel({
     setPublishing(true)
     setError('')
     setPartial(null)
+    // Replaced per ad set once the loop starts, so a run across several is not
+    // a frozen message for a minute.
+    const targets = reuseAdset ? adsetIds.length : 1
     setProgress(
-      adTotal === 1
+      adTotal === 1 && targets === 1
         ? 'Creating the ad…'
-        : `Creating ${adTotal} ads in one ad set…`
+        : targets === 1
+          ? `Creating ${adTotal} ads in one ad set…`
+          : `Creating ${adTotal * targets} ads across ${targets} ad sets…`
     )
     try {
       const ads = pickedSets.map((s) => {
@@ -741,9 +892,7 @@ export default function PublishToMetaPanel({
         client_id: client.id,
         objective,
         special_ad_categories: specialCategory ? [specialCategory] : [],
-        campaign_id: reuseCampaign ? campaignId : undefined,
         campaign_name: reuseCampaign ? undefined : campaignName.trim(),
-        adset_id: reuseAdset ? adsetId : undefined,
         adset_name: reuseAdset ? undefined : adsetName.trim() || undefined,
         daily_budget_cents: reuseAdset ? undefined : budgetCents,
         locations: reuseAdset ? [] : locations,
@@ -753,10 +902,47 @@ export default function PublishToMetaPanel({
 
       // One creative still goes through the single-ad action, which keeps the
       // long-standing response shape and its error handling intact.
-      const data =
+      const publishInto = (target) =>
         ads.length === 1
-          ? await publishAd({ ...shared, ...ads[0] })
-          : await publishAdBatch({ ads, ...shared })
+          ? publishAd({ ...shared, ...target, ...ads[0] })
+          : publishAdBatch({ ads, ...shared, ...target })
+
+      let data
+      if (!reuseAdset) {
+        data = await publishInto({ campaign_id: reuseCampaign ? campaignId : undefined })
+      } else {
+        // ONE CALL PER AD SET, in sequence rather than at once.
+        //
+        // Sequential because each call uploads images and creates ads against
+        // the same ad account, and Meta rate-limits per account -- firing six
+        // at once is how you turn a slow publish into a failed one. Each ad
+        // set's campaign_id comes off the ad set itself, not the campaign
+        // dropdown, because they may well be in different campaigns.
+        //
+        // A failure is recorded and the run continues. The alternative is
+        // stopping halfway with no way to tell which ad sets already have the
+        // ads, which is worse than finishing and reporting.
+        const runs = []
+        for (const [i, id] of adsetIds.entries()) {
+          const adset = adsets?.find((a) => a.id === id)
+          setProgress(
+            `Ad set ${i + 1} of ${adsetIds.length}${adset?.name ? ` — ${adset.name}` : ''}…`
+          )
+          try {
+            runs.push({
+              adset_id: id,
+              adset_name: adset?.name || id,
+              result: await publishInto({ adset_id: id, campaign_id: adset?.campaign_id }),
+            })
+          } catch (err) {
+            runs.push({ adset_id: id, adset_name: adset?.name || id, error: err.message })
+          }
+        }
+        // A single ad set keeps the exact result shape it has always had, so
+        // the screen below and everything reading it are untouched.
+        data = runs.length === 1 && runs[0].result ? runs[0].result : { runs }
+        if (runs.length === 1 && runs[0].error) throw new Error(runs[0].error)
+      }
 
       setResult(data)
       onPublished?.()
@@ -769,7 +955,15 @@ export default function PublishToMetaPanel({
           industry: client.industry,
           hooks: pickedSets.map((s) => s.recipe?.hook || copies[String(s.stamp)]?.ad_name || String(s.stamp)),
         }),
-        evidence: { stamps: pickedSets.map((s) => s.stamp), ad_ids: [].concat(data?.ad_id || [], (data?.results || []).map((r) => r.ad_id).filter(Boolean)) },
+        // Across every ad set, so memory records the whole publish rather than
+        // whichever one happened to be first.
+        evidence: {
+          stamps: pickedSets.map((s) => s.stamp),
+          ad_ids: (data?.runs ? data.runs.map((r) => r.result).filter(Boolean) : [data]).flatMap(
+            (r) => [].concat(r?.ad_id || [], (r?.results || []).map((x) => x.ad_id).filter(Boolean))
+          ),
+          adset_ids: data?.runs ? data.runs.map((r) => r.adset_id) : undefined,
+        },
       })
     } catch (err) {
       setError(err.message)
@@ -781,23 +975,29 @@ export default function PublishToMetaPanel({
   }
 
   if (result) {
-    return (
-      <Published
-        result={result}
-        onAnother={() => {
-          // Straight back into the same ad set: the point of publishing more is
-          // usually to add to what was just made, not to build a second one.
-          if (result.adset_id) {
-            setReuseCampaign(true)
-            setCampaignId(result.campaign_id || '')
-            setReuseAdset(true)
-            setAdsets(null)
-            setAdsetId(result.adset_id)
-          }
-          setPicked([])
-          setResult(null)
-        }}
-      />
+    const goAgain = () => {
+      // Straight back into the same ad sets: the point of publishing more is
+      // usually to add to what was just made, not to build a second one.
+      if (result.runs) {
+        setReuseCampaign(true)
+        setReuseAdset(true)
+        // Only the ones that worked. Re-offering a failed ad set as a default
+        // would walk straight back into the same failure.
+        setAdsetIds(result.runs.filter((r) => r.result).map((r) => r.adset_id))
+      } else if (result.adset_id) {
+        setReuseCampaign(true)
+        setCampaignId(result.campaign_id || '')
+        setReuseAdset(true)
+        setAdsetIds([result.adset_id])
+      }
+      setPicked([])
+      setResult(null)
+    }
+
+    return result.runs ? (
+      <PublishedAcrossAdsets runs={result.runs} onAnother={goAgain} />
+    ) : (
+      <Published result={result} onAnother={goAgain} />
     )
   }
 
@@ -1070,32 +1270,74 @@ export default function PublishToMetaPanel({
             </p>
           ) : (
             <>
-              <select
-                value={adsetId}
-                onChange={(e) => setAdsetId(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
-              >
-                {adsets.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                    {a.daily_budget ? ` — $${(Number(a.daily_budget) / 100).toFixed(2)}/day` : ''} (
-                    {a.effective_status || a.status})
-                  </option>
+              <div className="max-h-72 space-y-2 overflow-y-auto rounded border border-slate-200 p-2">
+                {campaignGroups.map((group) => (
+                  <div key={group.id}>
+                    <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                      {group.name}
+                    </p>
+                    {group.adsets.map((a) => {
+                      const on = adsetIds.includes(a.id)
+                      const verdict = adsetChecks[a.id]
+                      return (
+                        <label
+                          key={a.id}
+                          className={`flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 text-xs hover:bg-slate-50 ${
+                            verdict?.ok === false ? 'text-red-800' : 'text-slate-800'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() =>
+                              setAdsetIds((prev) =>
+                                prev.includes(a.id) ? prev.filter((x) => x !== a.id) : [...prev, a.id]
+                              )
+                            }
+                            className="mt-0.5"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="font-medium">{a.name}</span>
+                            <span className="text-slate-500">
+                              {a.daily_budget ? ` · $${(Number(a.daily_budget) / 100).toFixed(2)}/day` : ''}
+                              {` · ${a.effective_status || a.status}`}
+                            </span>
+                            {on && verdict?.ok === false && (
+                              <span className="block whitespace-pre-line text-[11px] text-red-700">
+                                {verdict.error}
+                              </span>
+                            )}
+                            {on && !verdict && (
+                              <span className="block text-[11px] text-slate-500">checking…</span>
+                            )}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
                 ))}
-              </select>
+              </div>
               <p className="text-[11px] text-slate-500">
-                Its budget, targeting and schedule stay exactly as they are — this only adds ads
-                inside it.
+                {adsetIds.length === 0
+                  ? 'Tick every ad set these creatives should go into. They can be in different campaigns.'
+                  : `${adTotal || 'The'} creative${adTotal === 1 ? '' : 's'} into ${adsetIds.length} ad set${
+                      adsetIds.length === 1 ? '' : 's'
+                    } — ${adTotal * adsetIds.length} ad${adTotal * adsetIds.length === 1 ? '' : 's'} in total. Each ad set keeps its own budget, targeting and schedule.`}
               </p>
-              {adsetCheck?.ok === false && (
-                <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1 whitespace-pre-line">
-                  {adsetCheck.error}
+              {mixedObjectives && (
+                <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                  These ad sets do not all share an objective. Each ad is built against its own ad
+                  set, so this works — but the copy and button on this screen were written once, and
+                  a lead-form ad set and a traffic ad set usually want different wording.
                 </p>
               )}
-              {chosenAdset?.live && adsetCheck?.ok !== false && (
-                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                  This ad set is delivering right now. The new ads arrive paused, but switching one
-                  on puts it into a live auction immediately.
+              {chosenAdsets.some((a) => a.live) && failedChecks.length === 0 && (
+                <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+                  {chosenAdsets.filter((a) => a.live).length === 1
+                    ? 'One of these ad sets is delivering right now.'
+                    : `${chosenAdsets.filter((a) => a.live).length} of these ad sets are delivering right now.`}{' '}
+                  The new ads arrive paused, but switching one on puts it into a live auction
+                  immediately.
                 </p>
               )}
             </>
@@ -1226,6 +1468,7 @@ export default function PublishToMetaPanel({
             adCount: adTotal,
             sizeCount: maxSizes,
             reuseAdset: chosenAdset,
+            adsetCount: reuseAdset ? adsetIds.length : 1,
           })}
         </p>
         <div className="flex items-center gap-3">

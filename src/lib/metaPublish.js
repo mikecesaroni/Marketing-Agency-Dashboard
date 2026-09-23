@@ -594,6 +594,11 @@ export function summarisePlan({
   // Set when publishing into an ad set that already exists, in which case the
   // budget and targeting below are not ours to state — they are its.
   reuseAdset = null,
+  // Every ad set being published into, when there is more than one. The count
+  // that matters then is adCount TIMES this, because each ad set gets its own
+  // copy of every creative -- stating the per-ad-set figure as the total is
+  // how somebody green-lights twenty ads believing they made five.
+  adsetCount = 1,
 }) {
   const obj = OBJECTIVES.find((o) => o.value === objective)
   const form = obj?.needsForm && formName ? ` Leads go to the "${formName}" form.` : ''
@@ -604,6 +609,10 @@ export function summarisePlan({
   // it was built, so claiming a budget here would be inventing one.
   if (reuseAdset) {
     const live = reuseAdset.live ? ' That ad set is live, so switch each ad on only when you mean it.' : ''
+    if (adsetCount > 1) {
+      const total = adCount * adsetCount
+      return `${total === 1 ? '1 ad' : `${total} ads`}${sizes} — ${count} into each of ${adsetCount} existing ad sets, every one keeping its own budget and targeting. Created paused.${form}${live}`
+    }
     return `${count}${sizes} into the existing ad set "${reuseAdset.name}", which keeps its own budget and targeting. Created paused.${form}${live}`
   }
 
