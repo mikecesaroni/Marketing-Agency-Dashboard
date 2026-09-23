@@ -91,22 +91,38 @@ one you use. Use one project for the agency and do not delete it.
 
 In that project: **APIs & Services → Library → Google Ads API → Enable**.
 
-## 4. Brand verification, then Basic access
+## 4. Explorer access
 
-Still in Cloud Console, on the project's **Google Ads API** page.
+On the project's **Google Ads API** page: **Access levels → Manage → Apply for
+access**.
 
-1. Complete **brand verification**. This is Google confirming the project
-   belongs to a real business — you will give it your company name, website
-   and support contact. Use the agency's real domain.
-2. Then request **Basic access**.
+A new project starts at **Test**, which reaches test accounts only — it would
+return nothing for a real client. **Explorer** is the tier this needs. It
+reaches production accounts and takes no formal application: you click, and
+you have it.
 
-Basic is 15,000 operations a day. The sync uses three per client per night, so
-even at a hundred clients you are nowhere near it.
+**Do not start with Basic.** Basic means brand verification, a privacy policy
+on the agency domain, and a review queue, and it buys nothing this integration
+uses.
 
-Reviews for Basic are automated once brand verification is done and generally
-land within minutes rather than the weeks the old token process took. If you
-had a Basic application queued before 9 September 2026 it was closed in the
-transition — reapply here, it does not carry over.
+| | Test | Explorer | Basic |
+| --- | --- | --- | --- |
+| Production accounts | no | **yes** | yes |
+| Operations/day | 15,000 (test only) | **2,880** | 15,000 |
+| Application | — | **none** | brand verification + review |
+
+The sync makes **three requests per client per night** — the keyword report,
+the search-term report and the campaign totals. Fifteen clients is 45 a night
+against a ceiling of 2,880. Explorer is not a stopgap here; it is roughly
+sixty times the headroom needed.
+
+What Explorer does not allow: creating Google Ads accounts through the API,
+the keyword planning services, user management and billing. None of it is used
+— this integration only ever reads, which is also why the CRM sends you to the
+Google Ads UI to pause a keyword rather than doing it for you.
+
+Move to Basic only if the daily operations ever become a real ceiling, and
+budget for brand verification when you do.
 
 ## 5. OAuth credentials, and the refresh token
 
@@ -190,8 +206,10 @@ The errors are written to be actionable:
   the client account is not linked to the MCC (step 1), or Google has retired
   the API version (set `GOOGLE_ADS_API_VERSION`).
 - **"credentials reached Google but were refused"** — the login works but is
-  not allowed on that account. Check the link, and check Basic access on the
-  Cloud project.
+  not allowed on that account. Check the link to the manager account, and
+  check the Cloud project is on **Explorer** rather than Test. A project still
+  on Test reaches test accounts only, and every real client will be refused
+  this way.
 
 ## What lands where
 
