@@ -228,19 +228,40 @@ Deno.serve(async (req) => {
       const byName: Record<string, string> = {}
       for (const a of existing.data || []) byName[String(a.name)] = String(a.id)
 
-      // Instagram business account, from the Page. Absent when the Page has
-      // no Instagram linked, which is common and not an error.
+      // Read the Page FIRST, and treat not being able to as a finding rather
+      // than swallowing it.
+      //
+      // Found on Reliable: the ad account is shared with the CRM's connection
+      // but the Page is not. Meta still lists the Page (the ads reference it)
+      // but returns it with a blank name, and creating a Page-engagement
+      // audience against it fails with "#2654 Invalid Event Name" -- which
+      // says nothing about permissions and sent the search towards the rule
+      // shape, which was fine. An earlier version of this caught the Page
+      // read error and moved on with igId = '', so the report said "no
+      // Instagram linked" when the truth was "cannot see the Page at all".
+      //
+      // So: a Page that cannot be read means BOTH engager audiences are
+      // skipped, with the one reason that fixes it -- the client has to grant
+      // Page access, the same way they granted the ad account.
       let igId = ''
+      let pageReadable = false
+      let pageProblem = ''
       if (client.meta_page_id) {
         try {
           const page = await graphGet(
             String(client.meta_page_id),
-            { fields: 'instagram_business_account' },
+            { fields: 'id,name,instagram_business_account' },
             token
           )
-          igId = String(page?.instagram_business_account?.id || '')
-        } catch {
-          igId = ''
+          // A Page the token can list but not read comes back with no name.
+          pageReadable = Boolean(page?.name)
+          igId = pageReadable ? String(page?.instagram_business_account?.id || '') : ''
+          if (!pageReadable) {
+            pageProblem =
+              `the CRM's Meta connection can see this Page exists but cannot read it, which means the ad account was shared but the Page was not. Ask ${client.name} to give the agency Business access to the Page (Business Settings > Pages > Assign partner), then run this again.`
+          }
+        } catch (err) {
+          pageProblem = `the CRM's Meta connection cannot read this Page: ${String(err instanceof Error ? err.message : err)}. The ad account is shared but the Page is not -- ask ${client.name} to assign the agency as a partner on the Page, then run this again.`
         }
       }
 
@@ -262,8 +283,8 @@ Deno.serve(async (req) => {
         {
           name: 'FB_Engagers_365D',
           subtype: 'ENGAGEMENT',
-          needs: client.meta_page_id,
-          missing: 'no Facebook Page on the client',
+          needs: client.meta_page_id && pageReadable,
+          missing: !client.meta_page_id ? 'no Facebook Page on the client' : pageProblem,
           rule: () => rule('page', String(client.meta_page_id), YEAR, 'page_engaged'),
           prefill: 'Anyone who engaged with the Facebook Page in the last year.',
         },
@@ -271,9 +292,11 @@ Deno.serve(async (req) => {
           name: 'IG_Engagers_365D',
           subtype: 'IG_BUSINESS',
           needs: igId,
-          missing: client.meta_page_id
-            ? 'the Page has no Instagram business account linked'
-            : 'no Facebook Page on the client',
+          missing: !client.meta_page_id
+            ? 'no Facebook Page on the client'
+            : !pageReadable
+              ? pageProblem
+              : 'the Page has no Instagram business account linked',
           rule: () => rule('ig_business', igId, YEAR, 'ig_business_profile_all'),
           prefill: 'Anyone who engaged with the Instagram profile in the last year.',
         },
@@ -328,6 +351,8 @@ Deno.serve(async (req) => {
 
       return json({
         ok: true,
+        page_readable: pageReadable,
+        page_problem: pageProblem || null,
         instagram_account: igId || null,
         results,
         created: results.filter((r) => r.status === 'created').length,
