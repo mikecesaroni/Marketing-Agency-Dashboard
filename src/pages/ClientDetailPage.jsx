@@ -12,6 +12,7 @@ import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import LiveToggle from '../components/LiveToggle'
 import AdPerformanceSection from '../components/AdPerformanceSection'
 import AdDoctorPanel from '../components/AdDoctorPanel'
+import GoogleSearchPanel from '../components/GoogleSearchPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
 import LogKPIsForm from '../components/LogKPIsForm'
@@ -783,6 +784,13 @@ export default function ClientDetailPage() {
           <h2 className="text-lg md:text-xl font-bold text-slate-900 mb-3">Ad Doctor Agent</h2>
           <AdDoctorPanel client={client} />
         </Card>
+
+        {/* GOOGLE SEARCH — keywords and search terms, from the nightly sync.
+            Below Ad Doctor because it is the same job for the other channel:
+            what is losing money and what to switch off. */}
+        <div id="google-search" className="mt-6 scroll-mt-4 md:mt-8">
+          <GoogleSearchPanel client={client} onUpdate={loadClientData} />
+        </div>
 
         {/* MEMORY — what the agency remembers about this client and the trade,
             read by the chat and the Ad Studio on every call. */}

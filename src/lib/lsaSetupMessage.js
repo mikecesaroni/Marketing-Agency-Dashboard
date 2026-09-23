@@ -5,11 +5,20 @@
 // what lets us manage the profile, budget and lead disputes by hand.
 //
 // It used to carry a third step asking them to link their Google Ads account
-// to our manager account, which is the only route to the API -- a developer
-// token can only be issued to a manager account, so email access can never
-// reach it. That step is out of the message now and lead data comes in by
-// hand. If automatic LSA reporting is wanted later, the link has to be asked
-// for again; nothing else in the CRM will surface the need.
+// to our manager account. That step is out of the message now and LSA lead
+// data comes in by hand.
+//
+// The reason given here for that step was wrong within a week of being
+// written: it said a developer token can only be issued to a manager account,
+// which stopped being true on 2026-09-09 when Google sunset developer tokens
+// and moved API access onto the Cloud project instead. The manager link still
+// matters, for a different reason -- it is what lets ONE credential read every
+// client account, instead of a separate consent per client (see
+// docs/google-ads.md, which the Google Search sync depends on).
+//
+// So for a client who owns their own Google Ads account, that link still has
+// to be asked for. Nothing in the CRM surfaces the need, so it is a deliberate
+// ask, not something that will come up on its own.
 
 import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from './agencyEmail.js'
 
