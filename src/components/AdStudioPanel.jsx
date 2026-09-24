@@ -157,7 +157,7 @@ function Artboard({ size, canvasRef, onZoom, onUnzoom, onPin, draggable, onDragP
         }`}
         style={{ width: size.w / 5, height: size.h / 5 }}
       />
-      <p className="text-[11px] text-slate-500 mt-1">
+      <p className="text-[11px] text-slate-400 mt-1">
         {size.label} {size.w}&times;{size.h}
       </p>
     </div>
@@ -328,32 +328,89 @@ function Field({ label, value, onChange, hint }) {
   )
 }
 
-function Tabs({ tab, setTab }) {
+const TABS = [
+  // First, because looking at what already works is where an ad starts.
+  ['research', 'Research'],
+  ['design', 'Design'],
+  ['saved', 'Saved ads'],
+  // Before Publish on purpose: the form has to exist first in practice,
+  // because a GoHighLevel workflow is wired to its id and that is step
+  // one, not an afterthought once the ad is built.
+  ['form', 'Lead form'],
+  ['publish', 'Publish'],
+]
+
+/**
+ * The Studio takes the whole screen.
+ *
+ * It lived in a 4xl modal, which was fine for a form and wrong for a design
+ * tool: three artboards, a photo picker, a copy assistant and the publish
+ * flow all fighting for 56rem with the client page showing through the
+ * edges. A dark header carries the client, the five tabs and the close;
+ * the body scrolls on its own, so the sticky bits inside (the launch strip,
+ * the artboards) stick to this frame rather than to the page underneath.
+ *
+ * The page's scroll is locked while it is open, and put back on close.
+ */
+function StudioFrame({ client, tab, setTab, onClose, onBack, backLabel = 'Back', children }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
   return (
-    <div className="flex gap-1 border-b border-slate-200 -mt-1">
-      {[
-        // First, because looking at what already works is where an ad starts.
-        ['research', 'Research'],
-        ['design', 'Design'],
-        ['saved', 'Saved ads'],
-        // Before Publish on purpose: the form has to exist first in practice,
-        // because a GoHighLevel workflow is wired to its id and that is step
-        // one, not an afterthought once the ad is built.
-        ['form', 'Lead form'],
-        ['publish', 'Publish'],
-      ].map(([key, label]) => (
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-100">
+      <header className="relative flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-white/10 bg-slate-950 px-4 py-2.5 text-white md:px-6">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(249,115,22,0.35),transparent_55%)]" />
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="relative flex-shrink-0 rounded-lg border border-white/20 px-2.5 py-1 text-xs font-medium text-white/90 transition hover:bg-white/10"
+          >
+            ← {backLabel}
+          </button>
+        )}
+        <div className="relative flex min-w-0 items-center gap-3">
+          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 text-lg shadow-lg shadow-orange-900/40">
+            ✦
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-300">Ad Studio</p>
+            <h2 className="truncate text-base font-bold leading-tight">{client.name}</h2>
+          </div>
+        </div>
+        <nav className="relative order-last w-full md:order-none md:mx-auto md:w-auto" aria-label="Studio tabs">
+          <div className="flex gap-1 overflow-x-auto rounded-xl bg-white/10 p-1 backdrop-blur">
+            {TABS.map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={`whitespace-nowrap rounded-lg px-3.5 py-1.5 text-sm font-medium transition ${
+                  tab === key ? 'bg-white text-slate-900 shadow' : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </nav>
         <button
-          key={key}
-          onClick={() => setTab(key)}
-          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition ${
-            tab === key
-              ? 'border-orange-600 text-orange-700'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
+          type="button"
+          onClick={onClose}
+          title="Close the Studio"
+          className="relative ml-auto grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg text-2xl leading-none text-white/70 transition hover:bg-white/10 hover:text-white"
         >
-          {label}
+          ×
         </button>
-      ))}
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-[1600px] px-4 py-4 md:px-6 md:py-5">{children}</div>
+      </div>
     </div>
   )
 }
@@ -442,7 +499,7 @@ function proofFromIntake(intake) {
   return count ? `\u2605 ${rating} on Google \u00b7 ${count} reviews` : `\u2605 ${rating} on Google`
 }
 
-export default function AdStudioPanel({ client, intake, seed, initialTab }) {
+export default function AdStudioPanel({ client, intake, seed, initialTab, onClose, onBack, backLabel }) {
   const [files, setFiles] = useState([])
   // The HEIC path being converted to JPEG right now, for the picker's label.
   const [converting, setConverting] = useState('')
@@ -519,6 +576,11 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
   // The Next-up bar opens the Studio straight on the Publish tab when the ads
   // are built and publishing is the move; everyone else lands on Design.
   const [tab, setTab] = useState(initialTab || 'design')
+  const frame = (body) => (
+    <StudioFrame client={client} tab={tab} setTab={setTab} onClose={onClose} onBack={onBack} backLabel={backLabel}>
+      {body}
+    </StudioFrame>
+  )
   // Bumped after a save so the gallery refetches instead of showing a stale list.
   const [savedAt, setSavedAt] = useState(0)
   // The saved set the Publish tab is working on, picked from the gallery.
@@ -1009,9 +1071,8 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
   }
 
   if (tab === 'saved') {
-    return (
+    return frame(
       <div className="space-y-4">
-        <Tabs tab={tab} setTab={setTab} />
         <SavedAdsGallery
           client={client}
           key={savedAt}
@@ -1025,27 +1086,24 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
   }
 
   if (tab === 'research') {
-    return (
+    return frame(
       <div className="space-y-3">
-        <Tabs tab={tab} setTab={setTab} />
         <ResearchPanel client={client} intake={intake} />
       </div>
     )
   }
 
   if (tab === 'form') {
-    return (
+    return frame(
       <div className="space-y-3">
-        <Tabs tab={tab} setTab={setTab} />
         <LeadFormStudio client={client} />
       </div>
     )
   }
 
   if (tab === 'publish') {
-    return (
+    return frame(
       <div className="space-y-4">
-        <Tabs tab={tab} setTab={setTab} />
         {publishing ? (
           <>
             <button
@@ -1095,9 +1153,8 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
     )
   }
 
-  return (
+  return frame(
     <div className="space-y-4">
-      <Tabs tab={tab} setTab={setTab} />
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
           {error}
@@ -1124,6 +1181,8 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
         </div>
       )}
 
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,560px)] xl:items-start">
+      <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid md:grid-cols-2 gap-3">
         <AdImagePicker
           label="Background photo"
@@ -1389,7 +1448,18 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
         }}
       />
 
-      <div className="flex gap-4 overflow-x-auto pb-2 pt-1">
+      </div>
+
+      {/* THE CANVAS. Dark, like every design tool, so the artboards read as
+          the thing being made rather than as three more boxes on a form.
+          Sticky on a wide screen: the words are typed on the left and land
+          on the right without scrolling. */}
+      <div className="space-y-3 rounded-2xl bg-slate-900 p-4 shadow-lg ring-1 ring-white/10 xl:sticky xl:top-0">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-300">Artboards</p>
+        <p className="text-[11px] text-slate-400">hover to zoom · click to pin · drag the photo to place it</p>
+      </div>
+      <div className="flex flex-wrap justify-center gap-4 xl:justify-start">
         {SIZES.map((size, i) => (
           <div key={size.key} className="flex-shrink-0">
             <Artboard
@@ -1410,7 +1480,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
             />
             <button
               onClick={() => download(i)}
-              className="mt-1 text-[11px] text-blue-600 hover:text-blue-800 underline"
+              className="mt-1 text-[11px] text-sky-300 hover:text-sky-200 underline"
             >
               Save PNG
             </button>
@@ -1430,7 +1500,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
         />
       )}
 
-      <div className="flex items-center gap-3 pt-2 border-t border-slate-200">
+      <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-3">
         <button
           onClick={editing ? saveOver : saveAll}
           disabled={saving}
@@ -1445,13 +1515,13 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
               onClick={saveAll}
               disabled={saving}
               title="Keeps the original and saves this as a separate ad"
-              className="text-[11px] text-slate-500 underline hover:text-slate-900"
+              className="text-[11px] text-slate-300 underline hover:text-white"
             >
               Save as a new ad instead
             </button>
             <button
               onClick={() => setEditing(null)}
-              className="text-[11px] text-slate-400 hover:text-slate-700"
+              className="text-[11px] text-slate-400 hover:text-white"
               title="Keep what is on the artboards but stop pointing at the saved ad. The next save makes a new ad."
             >
               Stop editing
@@ -1466,10 +1536,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
         >
           {zipping ? 'Zipping…' : 'Download all 3'}
         </button>
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[11px] text-slate-400">
           Saved to the public bucket, which is where Meta pulls the image bytes from. Download
           keeps them off the bucket entirely.
         </p>
+      </div>
+      </div>
       </div>
     </div>
   )

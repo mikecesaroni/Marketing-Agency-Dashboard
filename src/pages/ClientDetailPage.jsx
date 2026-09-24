@@ -842,19 +842,24 @@ export default function ClientDetailPage() {
         >
           {sendModal && <OnboardingLinkPanel client={client} fixedMode={sendModal} />}
         </Modal>
-        <Modal
-          isOpen={showStudioModal}
-          onClose={() => {
-            setShowStudioModal(false)
-            setStudioFromChat(false)
-          }}
-          onBack={studioFromChat ? backToChat : undefined}
-          backLabel="Chat"
-          title={`Ad Studio — ${client.name}`}
-          wide
-        >
-          <AdStudioPanel key={studioKey} client={client} intake={intake} seed={studioSeed} initialTab={studioTab} />
-        </Modal>
+        {/* The Studio is a full-screen frame of its own rather than a modal:
+            three artboards, a photo picker and the publish flow do not fit
+            in a dialog. */}
+        {showStudioModal && (
+          <AdStudioPanel
+            key={studioKey}
+            client={client}
+            intake={intake}
+            seed={studioSeed}
+            initialTab={studioTab}
+            onClose={() => {
+              setShowStudioModal(false)
+              setStudioFromChat(false)
+            }}
+            onBack={studioFromChat ? backToChat : undefined}
+            backLabel="Chat"
+          />
+        )}
 
         <Modal
           isOpen={showChatModal}
