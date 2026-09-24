@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Button from './ui/Button'
 import { registerAdVideo, adVideoStatus } from '../lib/metaPublish'
-import { suggestVideoCopy } from '../lib/adCopy'
+import { suggestVideoCopy, suggestVideoVariations } from '../lib/adCopy'
 import { anglesAvailable, nthPerField } from '../lib/adCopyOptions'
 import {
   MAX_VIDEO_BYTES,
@@ -11,7 +11,7 @@ import {
   validateVideo,
 } from '../lib/adVideos'
 import { driveFileId, isDrivePath } from '../lib/driveLabels'
-import { deleteVideo, fetchClientVideos, saveVideoAbout, uploadVideo } from '../lib/adVideoStore'
+import { deleteVideo, fetchClientVideos, saveVideoAbout, transcribeVideo, uploadVideo } from '../lib/adVideoStore'
 
 /**
  * Upload a video, wait for Meta to transcode it, tick it, publish it.
@@ -56,6 +56,19 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
   // being typed and written back to the row on blur, so the textarea stays
   // responsive and the note survives a reload.
   const [about, setAbout] = useState({})
+  // TRANSCRIPTION AND THE THREE VERSIONS.
+  //
+  // A ticked video with no transcript is sent for one automatically, once.
+  // The result lands on the row (transcribe-video writes it), so a reload
+  // reads it back for free. `versions` holds the three sets the copy
+  // assistant wrote for a clip, until one is picked or they are rewritten.
+  const [transcribing, setTranscribing] = useState({})
+  const [transcriptNote, setTranscriptNote] = useState({})
+  const [showTranscript, setShowTranscript] = useState({})
+  const [versions, setVersions] = useState({})
+  const [writingVersions, setWritingVersions] = useState('')
+  const [chosen, setChosen] = useState({})
+  const attempted = useRef(new Set())
   const fileInput = useRef(null)
 
   const account = client.meta_ad_account_id || ''
@@ -101,6 +114,83 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
       clearTimeout(timer)
     }
   }, [videos, client.id, load])
+
+  const transcribe = useCallback(
+    async (video, force = false) => {
+      const path = video.storage_path
+      setTranscribing((prev) => ({ ...prev, [path]: true }))
+      setTranscriptNote((prev) => ({ ...prev, [path]: '' }))
+      try {
+        const out = await transcribeVideo({ clientId: client.id, storagePath: path, force })
+        if (out.empty) setTranscriptNote((prev) => ({ ...prev, [path]: 'No speech found in the audio.' }))
+        await load()
+      } catch (err) {
+        setTranscriptNote((prev) => ({
+          ...prev,
+          [path]: err.notConfigured
+            ? 'Transcription is not switched on yet: add DEEPGRAM_API_KEY to the Supabase secrets.'
+            : err.message,
+        }))
+      } finally {
+        setTranscribing((prev) => ({ ...prev, [path]: false }))
+      }
+    },
+    [client.id, load]
+  )
+
+  // Once per clip, the first time it is ticked: what is said in it. Only for
+  // clips Meta already has (a registered row is what the function writes to),
+  // and never for one that already failed, so a missing key does not turn
+  // into a request per render.
+  useEffect(() => {
+    for (const v of videos || []) {
+      if (!picked.includes(v.storage_path)) continue
+      if (v.transcript || v.transcript_error || v.status === 'new') continue
+      if (attempted.current.has(v.storage_path)) continue
+      attempted.current.add(v.storage_path)
+      transcribe(v)
+    }
+  }, [videos, picked, transcribe])
+
+  const writeVersions = async (video) => {
+    const path = video.storage_path
+    setWritingVersions(path)
+    setError('')
+    try {
+      const copy = copies[path] || {}
+      const out = await suggestVideoVariations({
+        client,
+        intake,
+        about: about[path] ?? video.about,
+        transcript: video.transcript,
+        current: {
+          primaryText: copy.primary_text || '',
+          headline: copy.headline || '',
+          description: copy.description || '',
+        },
+      })
+      if (out.variations.length === 0) {
+        setError(out.note || 'The copy assistant did not return any versions. Try again.')
+      }
+      setVersions((prev) => ({ ...prev, [path]: out }))
+      setChosen((prev) => ({ ...prev, [path]: null }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setWritingVersions('')
+    }
+  }
+
+  const pickVersion = (path, index) => {
+    const v = versions[path]?.variations?.[index]
+    if (!v) return
+    onCopy(path, {
+      primary_text: v.primaryText || '',
+      headline: v.headline || '',
+      description: v.description || '',
+    })
+    setChosen((prev) => ({ ...prev, [path]: index }))
+  }
 
   const send = async (video) => {
     setBusy(video.storage_path)
@@ -236,6 +326,7 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
         client,
         intake,
         about: about[path] ?? video.about,
+        transcript: video.transcript,
         current: {
           primaryText: copy.primary_text || '',
           headline: copy.headline || '',
@@ -417,6 +508,79 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                       placeholder="What happens in this video? e.g. Dale walks through a furnace tune-up and mentions the $79 special"
                       className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs bg-white"
                     />
+                    {/* WHAT IS SAID IN IT. Made once per clip, kept on the
+                        row, read by the copy assistant with the note above. */}
+                    <div className="rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-slate-700">Transcript</span>
+                        {transcribing[v.storage_path] ? (
+                          <span className="text-slate-500">Listening to the clip…</span>
+                        ) : v.transcript ? (
+                          <>
+                            <span className="text-green-700">{v.transcript.split(/\s+/).length} words</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowTranscript((prev) => ({ ...prev, [v.storage_path]: !prev[v.storage_path] }))}
+                              className="text-blue-700 hover:underline"
+                            >
+                              {showTranscript[v.storage_path] ? 'hide' : 'show'}
+                            </button>
+                            <button type="button" onClick={() => transcribe(v, true)} className="text-slate-500 hover:underline">
+                              redo
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-slate-500">{transcriptNote[v.storage_path] || v.transcript_error || (v.status === 'new' ? 'Send it to Meta first.' : 'Not transcribed yet.')}</span>
+                            {v.status !== 'new' && (
+                              <button type="button" onClick={() => transcribe(v, true)} className="text-blue-700 hover:underline">
+                                {transcriptNote[v.storage_path] || v.transcript_error ? 'try again' : 'transcribe'}
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {v.transcript && showTranscript[v.storage_path] && (
+                        <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-slate-700">{v.transcript}</p>
+                      )}
+                    </div>
+
+                    {/* THREE VERSIONS, side by side. Written as sets from the
+                        transcript and the note; one click fills the fields
+                        below, and they stay editable. */}
+                    {versions[v.storage_path]?.variations?.length > 0 && (
+                      <div className="space-y-1.5">
+                        {versions[v.storage_path].note && (
+                          <p className="text-[11px] text-slate-600">{versions[v.storage_path].note}</p>
+                        )}
+                        <div className="grid gap-2 md:grid-cols-3">
+                          {versions[v.storage_path].variations.map((opt, i) => {
+                            const on = chosen[v.storage_path] === i
+                            return (
+                              <div
+                                key={i}
+                                className={`flex flex-col rounded-lg border bg-white p-2 text-[11px] ${on ? 'border-green-500 ring-2 ring-green-200' : 'border-slate-200'}`}
+                              >
+                                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                  {String.fromCharCode(65 + i)} · {opt.angle}
+                                </p>
+                                <p className="whitespace-pre-wrap text-slate-800">{opt.primaryText}</p>
+                                <p className="mt-1.5 font-semibold text-slate-900">{opt.headline}</p>
+                                <p className="text-slate-600">{opt.description}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => pickVersion(v.storage_path, i)}
+                                  className={`mt-2 rounded px-2 py-1 text-[11px] font-semibold ${on ? 'bg-green-600 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+                                >
+                                  {on ? '✓ Using this one' : 'Use this version'}
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     <textarea
                       value={copy.primary_text || ''}
                       onChange={(e) => onCopy(v.storage_path, { primary_text: e.target.value })}
@@ -451,6 +615,19 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                     />
                     <div className="flex flex-wrap items-center gap-2">
                       <Button
+                        variant="dark"
+                        size="sm"
+                        disabled={writingVersions === v.storage_path || transcribing[v.storage_path]}
+                        onClick={() => writeVersions(v)}
+                        title={v.transcript ? 'Three versions written from the transcript and your note' : 'Three versions written from your note and the client\u2019s facts'}
+                      >
+                        {writingVersions === v.storage_path
+                          ? 'Writing three versions…'
+                          : versions[v.storage_path]
+                            ? '\u2728 Three more versions'
+                            : '\u2728 Write three versions'}
+                      </Button>
+                      <Button
                         variant="outline"
                         size="sm"
                         disabled={writing === v.storage_path}
@@ -459,10 +636,10 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                         {writing === v.storage_path
                           ? 'Writing…'
                           : !copy.primary_text?.trim()
-                            ? '✨ Write the copy'
+                            ? 'Quick draft'
                             : angles[v.storage_path]?.total > 1
-                              ? `✨ Another angle (${angles[v.storage_path].index + 1}/${angles[v.storage_path].total})`
-                              : '✨ Another angle'}
+                              ? `Another angle (${angles[v.storage_path].index + 1}/${angles[v.storage_path].total})`
+                              : 'Another angle'}
                       </Button>
                       {note[v.storage_path] && (
                         <p className="text-[11px] text-slate-600 flex-1 min-w-0">

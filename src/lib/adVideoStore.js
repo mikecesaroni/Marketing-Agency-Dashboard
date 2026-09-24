@@ -93,6 +93,40 @@ export async function uploadVideo({ clientId, file }) {
  * Matches on client id as well as path so it cannot write to another client's
  * registration of a file with a colliding name.
  */
+/**
+ * What is said in the video, as text, from the transcribe-video function.
+ *
+ * Returns {transcript, cached?, empty?}. A clip with no speech comes back
+ * with empty: true, which is an answer, not a failure. The function stores
+ * the result on the video, so the next open reads it without another call.
+ * `notConfigured` on the thrown error means the Deepgram key is not set yet.
+ */
+export async function transcribeVideo({ clientId, storagePath, force = false }) {
+  const { data, error } = await supabase.functions.invoke('transcribe-video', {
+    body: { client_id: clientId, storage_path: storagePath, force },
+  })
+  if (error) {
+    let detail = error.message
+    let notConfigured = false
+    try {
+      const j = await error.context?.json()
+      if (j?.error) detail = j.error
+      notConfigured = Boolean(j?.not_configured)
+    } catch {
+      /* keep the generic message */
+    }
+    const err = new Error(detail || 'Could not transcribe the video.')
+    err.notConfigured = notConfigured
+    throw err
+  }
+  if (data?.error) {
+    const err = new Error(data.error)
+    err.notConfigured = Boolean(data.not_configured)
+    throw err
+  }
+  return data || {}
+}
+
 export async function saveVideoAbout({ clientId, storagePath, about }) {
   const { error } = await supabase
     .from('ad_videos')

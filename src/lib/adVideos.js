@@ -157,6 +157,11 @@ export function mergeVideos(files, registered, account) {
         // the client in general, so without it three clips for one client all
         // get written from the same onboarding answers and read the same.
         about: meta?.about || '',
+        // What is said in the clip, from transcribe-video. Read alongside
+        // `about` when copy is written; a person still types the note.
+        transcript: meta?.transcript || '',
+        transcribed_at: meta?.transcribed_at || null,
+        transcript_error: meta?.transcript_error || '',
         // 'drive' or undefined. Drive is read-only to this app, so a Drive
         // clip must not be offered a Delete button that cannot work.
         source: f.source || 'upload',

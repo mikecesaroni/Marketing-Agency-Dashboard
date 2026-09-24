@@ -18,6 +18,10 @@
 // v9: mode 'apply'. An owner's "needs changes" note from the approval link is
 //     applied to the ad as CHANGES (one value per field that must move), not
 //     options. The Studio re-renders and overwrites the saved ad with them.
+// v10: mode 'variations', for video. Three complete versions of the feed copy
+//     written as sets, from the clip's transcript (transcribe-video) and the
+//     note typed on it. A person picks one. `transcript` is now read in every
+//     mode when present.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
 import { z } from 'npm:zod'
@@ -72,6 +76,22 @@ const Applied = z.object({
   changes: z.array(Change),
 })
 
+// mode 'variations': three whole versions, not a menu of fields. A headline
+// written next to its primary text reads as one ad; one picked off a list of
+// headlines and paired with a primary text picked off another does not.
+const Variation = z.object({
+  // Two or three words naming the angle, shown on the card: "The offer",
+  // "Owner-answered", "The cold night".
+  angle: z.string(),
+  primaryText: z.string(),
+  headline: z.string(),
+  description: z.string(),
+})
+const Variations = z.object({
+  note: z.string(),
+  variations: z.array(Variation),
+})
+
 const APPLY_SYSTEM = `You apply a business owner's change request to a single
 home services ad that has already been built and sent to them for approval.
 You are given every slot's current value and the owner's note, written on
@@ -98,7 +118,7 @@ plain sentence, that this one needs a person in the Studio and why. If the
 note is ambiguous between two readings, take the one an owner most plausibly
 meant and say which you took in the note.`
 
-const SYSTEM = `You rewrite copy for a single home services ad that someone is
+const OPTIONS_INTRO = `You rewrite copy for a single home services ad that someone is
 building right now in an ad studio. You are given every slot's current value
 and an instruction about what to improve.
 
@@ -106,9 +126,25 @@ Return OPTIONS, never a finished ad. Each option is one field and one new value,
 and a human clicks the ones they want. Give three options for a field they asked
 about, so there is a real choice. Only touch other fields when the instruction
 clearly covers them, or when leaving one alone would make the clicked option
-read wrong.
+read wrong.`
 
-There is NO BUTTON painted on the image. Meta renders the real call-to-action
+const VARIATIONS_INTRO = `You write the feed copy for a single home services VIDEO ad
+that someone is about to publish. You are given the business's facts, a note on
+what the clip shows, and usually a transcript of what is said in it.
+
+Return exactly THREE complete versions, each with its own primaryText, headline
+and description written together so they read as one ad. Each version takes a
+different angle, and the angle is named in two or three words:
+  1. the offer, led by the number or the deal the clip states
+  2. trust, led by the owner, the years, the guarantee or the reviews
+  3. the problem the clip shows, and what happens if it is left
+If the facts cannot honestly support one of those angles, take the strongest
+honest alternative and say so in the note. The versions must differ in their
+first line, not only in wording further down: the first line is all that shows
+before "see more". A person picks one and can edit it, so write finished copy,
+not options.`
+
+const RULES = `There is NO BUTTON painted on the image. Meta renders the real call-to-action
 button directly under the creative and it is chosen separately, so never write
 copy that acts like a button or points at one inside the frame: no "click
 here", no "tap this", no arrows aimed at nothing. If a line has to push toward
@@ -157,6 +193,13 @@ years" and must never become "since 2003", because that is a new number you
 worked out and it is usually off by one. The same goes for turning a count into
 a rate, a price into a discount, or a timeframe into a date.
 
+WHEN YOU ARE GIVEN A TRANSCRIPT, it is what a viewer hears: the machine's
+text of the audio, with the odd wrong word. It is the best evidence of what
+the clip is about, of the offer it states and of how this owner talks, so use
+its phrases and its facts. Do not quote it back wholesale or describe the
+footage, and where it disagrees with the offer you were given, keep the offer
+you were given and say so in the note.
+
 WHEN THE AD IS A VIDEO, you are told so explicitly. Then there is no image and
 no artboard: the painted slots do not exist, and the only three that do are
 primaryText, headline and description. Write them for someone who is being
@@ -185,6 +228,9 @@ square brackets, no placeholders. Never invent a number, a rating, a review
 count, a licence or a guarantee that is not already somewhere in what you were
 given. If an instruction needs a fact you do not have, say that in the note and
 suggest what you can honestly write instead.`
+
+const SYSTEM = `${OPTIONS_INTRO}\n\n${RULES}`
+const VARIATIONS_SYSTEM = `${VARIATIONS_INTRO}\n\n${RULES}`
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -249,6 +295,10 @@ Deno.serve(async (req) => {
   // that list is true of the business in general, and this is the only line
   // that is about the ad being built.
   const videoAbout = String(body.about || '').trim().slice(0, 2000)
+  // What is said in the clip. Longer cap than the note: a 60-second ad is
+  // about 150 words, a talking-head minute-and-a-half is more, and the useful
+  // part is all of it.
+  const transcript = String(body.transcript || '').trim().slice(0, 6000)
   const about = facts
     .map(([label, value]) => [label, String(value ?? '').trim()] as const)
     // Capped: a rambling intake answer can be paragraphs long, and the useful
@@ -286,8 +336,38 @@ Deno.serve(async (req) => {
     // The options still make sense without it.
   }
 
+  const videoContext =
+    `${videoAbout ? `WHAT THIS VIDEO SHOWS, from the person building the ad:\n"""\n${videoAbout}\n"""\n\n` : ''}` +
+    `${transcript ? `WHAT IS SAID IN THE VIDEO (machine transcript of the audio):\n"""\n${transcript}\n"""\n\n` : ''}`
+
   try {
     const client = new Anthropic({ apiKey })
+
+    if (body.mode === 'variations') {
+      const written = await client.messages.parse({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        thinking: { type: 'adaptive' },
+        system: [{ type: 'text', text: VARIATIONS_SYSTEM, cache_control: { type: 'ephemeral' } }],
+        output_config: { format: zodOutputFormat(Variations, 'ad_copy_variations') },
+        messages: [
+          {
+            role: 'user',
+            content:
+              `${about ? `${about}\n\n` : ''}` +
+              videoContext +
+              `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
+              `${learnings ? `${learnings}\n\n` : ''}` +
+              `The copy as it stands (may be empty):\n${FEED_FIELDS.map((f) => `${f}: ${String(current[f] ?? '').trim() || '(empty)'}`).join('\n')}\n\nWhat I want: ${instruction}`,
+          },
+        ],
+      })
+      const out = written.parsed_output
+      if (!out) {
+        return json({ error: 'Claude replied but not in a shape the publish screen could read. Try again.' }, 502)
+      }
+      return json({ note: out.note, variations: out.variations.slice(0, 3) })
+    }
 
     if (body.mode === 'apply') {
       const applied = await client.messages.parse({
@@ -329,7 +409,7 @@ Deno.serve(async (req) => {
           role: 'user',
           content:
             `${about ? `${about}\n\n` : ''}` +
-            `${videoAbout ? `WHAT THIS VIDEO SHOWS, from the person building the ad:\n"""\n${videoAbout}\n"""\n\n` : ''}` +
+            videoContext +
             `${isVideo ? 'THIS AD IS A VIDEO. There is no image and no artboard: write only primaryText, headline and description.\n\n' : ''}` +
             `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
             `${learnings ? `${learnings}\n\n` : ''}` +

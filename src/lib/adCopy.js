@@ -74,7 +74,7 @@ export async function applyCopyChange({ client, current, instruction }) {
  * plumber anywhere. The offer, the guarantee, the price range and the reason
  * people choose them are the facts that make the copy this client's.
  */
-export async function suggestVideoCopy({ client, intake, current, instruction, about }) {
+export async function suggestVideoCopy({ client, intake, current, instruction, about, transcript }) {
   const i = intake || {}
   return callAdCopy({
     medium: 'video',
@@ -99,9 +99,53 @@ export async function suggestVideoCopy({ client, intake, current, instruction, a
     // their videos, so this is the only line that makes the copy about the ad
     // in front of them.
     about,
+    // What is said in the clip, when it has been transcribed.
+    transcript,
     current,
     instruction,
   })
+}
+
+/**
+ * Three complete versions of a video ad's feed copy, written as sets so the
+ * headline belongs to its primary text, from the client's facts, the note
+ * typed on the clip, and what is actually said in it (the transcript).
+ *
+ * Returns {note, variations: [{angle, primaryText, headline, description}]}.
+ * A person picks one; nothing is applied until they do.
+ */
+export async function suggestVideoVariations({ client, intake, about, transcript, current }) {
+  const i = intake || {}
+  const { data, error } = await supabase.functions.invoke('ad-copy', {
+    body: {
+      mode: 'variations',
+      medium: 'video',
+      client_id: client?.id,
+      client_name: client?.name,
+      industry: client?.industry || i.industry_trade,
+      market: client?.market,
+      service_area: i.service_area,
+      services: i.service_want_more || i.most_profitable_service || i.services_offered,
+      offer: i.offer_headline || i.current_offers_guarantees,
+      guarantee: i.guarantee,
+      price_range: i.typical_price_range,
+      why_choose: i.why_people_choose,
+      ideal_customer: i.ideal_customer,
+      cta_label: i.cta_offering,
+      words_to_avoid: i.words_to_avoid,
+      about,
+      transcript,
+      current: current || {},
+      instruction: 'Write three complete versions of the primary text, headline and description for this video ad, each from a different angle.',
+    },
+  })
+  if (error) {
+    const { status, detail } = await readFunctionError(error)
+    if (!status) throw new Error('Could not reach the copy assistant. It is probably not deployed yet.')
+    throw new Error(detail || 'Could not write the versions.')
+  }
+  if (data?.error) throw new Error(data.error)
+  return { note: data?.note || '', variations: Array.isArray(data?.variations) ? data.variations : [] }
 }
 
 export { FIELD_LABELS } from './adRevise'
