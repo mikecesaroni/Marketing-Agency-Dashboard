@@ -12,6 +12,7 @@ import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import LiveToggle from '../components/LiveToggle'
 import AdPerformanceSection from '../components/AdPerformanceSection'
 import AdDoctorPanel from '../components/AdDoctorPanel'
+import FunnelPanel from '../components/FunnelPanel'
 import GoogleSearchPanel from '../components/GoogleSearchPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
@@ -784,6 +785,14 @@ export default function ClientDetailPage() {
           <h2 className="text-lg md:text-xl font-bold text-slate-900 mb-3">Ad Doctor Agent</h2>
           <AdDoctorPanel client={client} />
         </Card>
+
+        {/* FUNNEL — the top-of-funnel / retargeting campaign pair, built paused
+            with no creative. Here rather than only inside publish, because the
+            structure is supposed to exist before there is anything to put in
+            it, and publish lives inside the creative tool. */}
+        <div id="funnel" className="mt-6 scroll-mt-4 md:mt-8">
+          <FunnelPanel client={client} intake={intake} />
+        </div>
 
         {/* GOOGLE SEARCH — keywords and search terms, from the nightly sync.
             Below Ad Doctor because it is the same job for the other channel:

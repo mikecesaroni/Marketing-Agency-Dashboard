@@ -3,12 +3,14 @@ import { createFunnel, createStandardAudiences, listAudiences } from '../lib/met
 import { ROLES, describePlan, funnelPlan, guessRoles, planGaps, roleList } from '../lib/funnelPlan'
 
 /**
- * Builds the top-of-funnel and retargeting pair, from inside the publish flow.
+ * Builds the top-of-funnel and retargeting pair.
  *
- * It lives here rather than on its own page because the two halves belong
- * together: the structure is only useful once creative is in it, and the
- * ad sets this creates are handed straight back to the publish panel as the
- * ones to publish into. Build the funnel, publish into it, one pass.
+ * Mounted in two places. Inside the publish flow, where the ad sets it
+ * creates are handed straight back as the ones to publish into (build, then
+ * publish, one pass). And on the client page (FunnelPanel), with no creative
+ * at all, because the structure is usually wanted before there is anything
+ * to put in it. Same component, same result; only what happens to the new
+ * ad sets afterwards differs, and that is the caller's onBuilt.
  *
  * Everything it creates is PAUSED, and it never touches an existing campaign.
  */
@@ -174,8 +176,8 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
     <div className="space-y-3">
       <p className="text-xs text-slate-600">
         Builds two campaigns: a cold one that excludes everyone already in the funnel, and a
-        retargeting one that goes after them. Everything is created paused, and the new ad sets are
-        selected here afterwards so the creatives above go straight into them.
+        retargeting one that goes after them. Everything is created paused, with no ads in it until
+        you publish some.
       </p>
 
       {audiences.length === 0 && !audienceReport ? (
