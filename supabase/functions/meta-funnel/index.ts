@@ -49,6 +49,28 @@ const CORS = {
 // budget typed in dollars where cents were meant.
 const MIN_DAILY_BUDGET_CENTS = 100
 
+// The permissions the token needs for everything this function does, beyond
+// the ads_* it already has. Checked by connection_check and named in the
+// report, so the diagnosis below never has to be re-derived.
+//
+//   pages_read_engagement  read a Page's details and its Instagram account;
+//                          required to build Page and IG engagement audiences
+//   instagram_basic        read the linked Instagram business account
+//   leads_retrieval        the instant-form audiences and lead data
+const RECOMMENDED_SCOPES = ['pages_read_engagement', 'instagram_basic', 'leads_retrieval']
+
+// Why a Page the token can LIST still cannot be READ.
+//
+// This was first blamed on the client -- "the ad account was shared but the
+// Page was not" -- and that was wrong. Business Settings showed the System
+// User assigned to every Page, and /me/accounts confirmed the token lists all
+// of them. What the token lacks is pages_read_engagement: pages_show_list is
+// enough to list a Page, not to read it, and Meta refuses to build a
+// Page-engagement audience against a Page it cannot read. The fix is on the
+// agency side, once, with no client involved.
+const PAGE_SCOPE_PROBLEM =
+  "the CRM's Meta token can list this Page but not read it. The System User is assigned to the Page; what is missing is the pages_read_engagement permission on the token itself. Regenerate the System User token in Business Settings with pages_read_engagement (and instagram_basic, leads_retrieval) ticked, update the META_ACCESS_TOKEN secret, then run this again. No client action is needed."
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -157,10 +179,16 @@ Deno.serve(async (req) => {
         graphGet('me/permissions', {}, token),
         graphGet('me/accounts', { fields: 'id,name', limit: '200' }, token),
       ])
+      const granted = (perms.data || []).filter((p: any) => p.status === 'granted').map((p: any) => p.permission)
+      const missing = RECOMMENDED_SCOPES.filter((s) => !granted.includes(s))
       return json({
-        granted: (perms.data || []).filter((p: any) => p.status === 'granted').map((p: any) => p.permission),
+        granted,
         declined: (perms.data || []).filter((p: any) => p.status !== 'granted').map((p: any) => p.permission),
+        missing_recommended: missing,
         pages_in_token: (pages.data || []).map((p: any) => ({ id: p.id, name: p.name })),
+        verdict: missing.length
+          ? `The token lists ${(pages.data || []).length} Pages but is missing ${missing.join(', ')}. Regenerate the System User token with those ticked and update META_ACCESS_TOKEN; no client action is needed.`
+          : `The token carries every permission this needs and lists ${(pages.data || []).length} Pages.`,
       })
     } catch (err) {
       return json({ error: String(err instanceof Error ? err.message : err) }, 500)
@@ -284,12 +312,9 @@ Deno.serve(async (req) => {
           // A Page the token can list but not read comes back with no name.
           pageReadable = Boolean(page?.name)
           igId = pageReadable ? String(page?.instagram_business_account?.id || '') : ''
-          if (!pageReadable) {
-            pageProblem =
-              `the CRM's Meta connection can see this Page exists but cannot read it, which means the ad account was shared but the Page was not. Ask ${client.name} to give the agency Business access to the Page (Business Settings > Pages > Assign partner), then run this again.`
-          }
+          if (!pageReadable) pageProblem = PAGE_SCOPE_PROBLEM
         } catch (err) {
-          pageProblem = `the CRM's Meta connection cannot read this Page: ${String(err instanceof Error ? err.message : err)}. The ad account is shared but the Page is not -- ask ${client.name} to assign the agency as a partner on the Page, then run this again.`
+          pageProblem = `${PAGE_SCOPE_PROBLEM} (Meta said: ${String(err instanceof Error ? err.message : err)})`
         }
       }
 
