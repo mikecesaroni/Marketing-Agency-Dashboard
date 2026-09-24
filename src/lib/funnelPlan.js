@@ -208,7 +208,8 @@ export function describePlan(adsets, names = {}) {
  * First guess at which saved audience fills which role, by name and subtype.
  *
  * Matched against the convention both live accounts already use:
- * FB_Engagers_365D, IG_Engagers_365D, PageView_180D, Lead_180D.
+ * FB_Engagers_365D, IG_Engagers_365D, PageView_180D, Lead_180D, and the two
+ * instant-form equivalents the CRM builds, FormOpen_90D and FormSubmit_90D.
  *
  * A GUESS, never a decision: it fills the pickers in and a person confirms.
  * Auto-applying it is how a lookalike ends up excluded from prospecting
@@ -240,9 +241,16 @@ export function guessRoles(audiences = []) {
       name.includes('pageview') ||
       name.includes('visitor') ||
       name.includes('not converted') ||
-      (name.includes('form') && name.includes('open'))
+      (name.includes('form') && (name.includes('open') || name.includes('dropped')))
     ) {
       out.warmVisitors.push(a.id)
+    } else if (name.includes('form') && name.includes('submit')) {
+      // FormSubmit_90D, the instant-form lead. Tested BEFORE the engagers
+      // branch because Meta files every lead-form audience under subtype
+      // ENGAGEMENT, the same as Page engagers, and on subtype alone the
+      // people who already sent their number would land in the retargeting
+      // include list instead of the exclude-everywhere one.
+      out.leads.push(a.id)
     } else if (subtype === 'ENGAGEMENT' || subtype === 'IG_BUSINESS' || name.includes('engager')) {
       out.engagers.push(a.id)
     } else if (name.startsWith('lead') || name.includes('_lead') || name.includes('leads')) {

@@ -236,3 +236,23 @@ stacked, in each of the three paths that create things:
 Renaming an existing object through the chat is left alone on purpose. The
 rule is `src/lib/adNaming.js`; the two edge functions carry a copy, and
 `scripts/check-ad-naming.mjs` fails if any of the three drifts.
+
+## The funnel on instant forms
+
+The funnel builder works the same for a client running instant forms as for
+one running a website form. The audiences are the difference:
+
+| Website leads (pixel)      | Instant forms (Page)        | Role in the funnel |
+|----------------------------|-----------------------------|--------------------|
+| PageView_180D              | FormOpen_90D                | warm, retargeted   |
+| Lead_180D                  | FormSubmit_90D              | leads, excluded    |
+| FB_Engagers_365D, IG_Engagers_365D | same                | engagers, retargeted |
+
+"Create the standard audiences" makes all six it can. A client with no pixel
+gets the four Page-based ones and a plain reason for the two it cannot have.
+Meta caps lead-form audiences at 90 days, hence the shorter window.
+
+The builder asks where the lead lands: a website form (ad sets optimise for
+the pixel's Lead event) or an instant form (ad sets promote the Page and the
+form is picked when creatives are published into them). That choice is fixed
+once the ad sets exist. Default is the pixel when the client has one.

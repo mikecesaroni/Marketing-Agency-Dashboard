@@ -36,7 +36,7 @@
 // Actions:
 //   connection_check {}                   -> what the token itself can see
 //   list_audiences   {client_id}          -> the saved audiences on the account
-//   create_audiences {client_id}          -> the four standard audiences, if missing
+//   create_audiences {client_id}          -> the six standard audiences, if missing
 //   inspect          {client_id}          -> campaigns and ad sets WITH targeting
 //   create_funnel    {client_id, adsets:[...], ...} -> campaigns + ad sets
 //
@@ -271,21 +271,31 @@ Deno.serve(async (req) => {
 
     // -----------------------------------------------------------------------
     // CREATE AUDIENCES — the four the live accounts run on, built from the
-    // exact rule shapes read off Horizon HVAC, not from documentation.
+    // exact rule shapes read off Horizon HVAC, not from documentation, plus
+    // the two instant-form equivalents.
     //
     // Every one of them follows one template, differing only in subtype,
     // event source and event name:
     //
-    //   FB_Engagers_365D  ENGAGEMENT   page       page_engaged             365d
-    //   IG_Engagers_365D  IG_BUSINESS  ig_business ig_business_profile_all  365d
-    //   PageView_180D     WEBSITE      pixel      PageView                 180d
-    //   Lead_180D         WEBSITE      pixel      Lead                     180d
+    //   FB_Engagers_365D  ENGAGEMENT   page       page_engaged               365d
+    //   IG_Engagers_365D  IG_BUSINESS  ig_business ig_business_profile_all    365d
+    //   PageView_180D     WEBSITE      pixel      PageView                   180d
+    //   Lead_180D         WEBSITE      pixel      Lead                       180d
+    //   FormOpen_90D      ENGAGEMENT   page       lead_generation_opened      90d
+    //   FormSubmit_90D    ENGAGEMENT   page       lead_generation_submitted   90d
+    //
+    // The last two are what PageView and Lead mean on an account running
+    // instant forms instead of a website: the form is the landing page, so
+    // "opened the form" is the visit and "submitted it" is the lead. They hang
+    // off the Page (the form's host), not a pixel, which is why a client with
+    // no pixel can still have a complete funnel. Meta caps lead-form audiences
+    // at 90 days, hence the shorter window.
     //
     // Idempotent by name: one that already exists is reported and left alone,
     // so this can be run on an account twice and on Horizon without making
     // duplicates. Each is attempted independently -- a client with a Page but
-    // no pixel gets the two engager audiences and a clear reason for the two
-    // it cannot have, not a failure.
+    // no pixel gets the engager and form audiences and a clear reason for the
+    // two it cannot have, not a failure.
     //
     // The Instagram account is not stored on the client. It is discovered from
     // the Page at creation time, because that is the only place it lives.
@@ -293,6 +303,8 @@ Deno.serve(async (req) => {
     if (action === 'create_audiences') {
       const YEAR = 365 * 86400
       const HALF_YEAR = 180 * 86400
+      // Meta's ceiling for lead-form engagement audiences.
+      const QUARTER = 90 * 86400
 
       const existing = await graphGet(`${account}/customaudiences`, { fields: 'id,name', limit: '200' }, token)
       const byName: Record<string, string> = {}
@@ -382,6 +394,22 @@ Deno.serve(async (req) => {
           missing: 'no pixel on the client -- this one is built from the Lead event',
           rule: () => rule('pixel', String(client.meta_pixel_id), HALF_YEAR, 'Lead'),
           prefill: 'Anyone the pixel recorded a Lead for in the last 180 days.',
+        },
+        {
+          name: 'FormOpen_90D',
+          subtype: 'ENGAGEMENT',
+          needs: client.meta_page_id && pageReadable,
+          missing: !client.meta_page_id ? 'no Facebook Page on the client' : pageProblem,
+          rule: () => rule('page', String(client.meta_page_id), QUARTER, 'lead_generation_opened'),
+          prefill: 'Anyone who opened an instant form on this Page in the last 90 days.',
+        },
+        {
+          name: 'FormSubmit_90D',
+          subtype: 'ENGAGEMENT',
+          needs: client.meta_page_id && pageReadable,
+          missing: !client.meta_page_id ? 'no Facebook Page on the client' : pageProblem,
+          rule: () => rule('page', String(client.meta_page_id), QUARTER, 'lead_generation_submitted'),
+          prefill: 'Anyone who submitted an instant form on this Page in the last 90 days.',
         },
       ]
 

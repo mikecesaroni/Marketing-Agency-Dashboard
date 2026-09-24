@@ -148,6 +148,30 @@ const ALL = { leads: ['L'], warmVisitors: ['V'], engagers: ['FB', 'IG'] }
   check('a form-openers audience counts as warm', guessed.warmVisitors, ['9'])
   check('and is not mistaken for leads', guessed.leads, [])
 }
+{
+  // The two the CRM builds for an instant-form client. Meta files BOTH under
+  // subtype ENGAGEMENT, the same as Page engagers, so the name has to decide.
+  const guessed = guessRoles([
+    { id: '10', name: 'FormOpen_90D', subtype: 'ENGAGEMENT' },
+    { id: '11', name: 'FormSubmit_90D', subtype: 'ENGAGEMENT' },
+    { id: '12', name: 'FB_Engagers_365D', subtype: 'ENGAGEMENT' },
+  ])
+  check('FormOpen_90D is warm', guessed.warmVisitors, ['10'])
+  check('FormSubmit_90D is a lead, not an engager', guessed.leads, ['11'])
+  check('the Page engagers are still engagers', guessed.engagers, ['12'])
+}
+{
+  // An account running BOTH: website leads and instant forms. Both lead
+  // audiences are leads, both warm audiences are warm; nothing is dropped.
+  const guessed = guessRoles([
+    { id: 'L', name: 'Lead_180D', subtype: 'WEBSITE' },
+    { id: 'F', name: 'FormSubmit_90D', subtype: 'ENGAGEMENT' },
+    { id: 'P', name: 'PageView_180D', subtype: 'WEBSITE' },
+    { id: 'O', name: 'FormOpen_90D', subtype: 'ENGAGEMENT' },
+  ])
+  check('website and form leads are both leads', [...guessed.leads].sort(), ['F', 'L'])
+  check('page views and form opens are both warm', [...guessed.warmVisitors].sort(), ['O', 'P'])
+}
 
 // ---------------------------------------------------------------- wording
 {

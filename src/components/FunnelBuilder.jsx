@@ -84,6 +84,12 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
   const [roles, setRoles] = useState({ leads: [], warmVisitors: [], engagers: [] })
   const [tofBudget, setTofBudget] = useState('50.00')
   const [retargetBudget, setRetargetBudget] = useState('25.00')
+  // WHERE THE LEAD LANDS. A website form is measured by the pixel and the ad
+  // sets optimise for its Lead event; an instant form lives on Meta and the
+  // ad sets promote the Page that hosts it. This is fixed once the ad sets
+  // exist, so it is asked here. Default: the pixel when there is one, the
+  // Page otherwise -- but a client with a pixel can still be running forms.
+  const [destination, setDestination] = useState(client.meta_pixel_id ? 'website' : 'form')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   // The per-audience report from creating the standard four. Kept on screen
@@ -143,6 +149,8 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
 
   const blockers = []
   if (locations.length === 0) blockers.push('no locations picked')
+  if (destination === 'website' && !client.meta_pixel_id) blockers.push('no pixel on the client for website leads')
+  if (destination === 'form' && !client.meta_page_id) blockers.push('no Facebook Page on the client for instant forms')
   if (budgetCents.tof < 100) blockers.push('top of funnel budget under $1.00')
   if (plan.campaigns.some((c) => c.stage === 'retarget') && budgetCents.retarget < 100)
     blockers.push('retargeting budget under $1.00')
@@ -158,6 +166,7 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
         ageMin: Number(ageMin),
         ageMax: Number(ageMax),
         budgetCents,
+        optimizationGoal: destination === 'form' ? 'LEAD_GENERATION' : 'OFFSITE_CONVERSIONS',
         specialAdCategories: specialCategory ? [specialCategory] : [],
       })
       onBuilt?.(result)
@@ -185,9 +194,11 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
           <p className="font-medium">This account has no saved audiences yet.</p>
           <p className="mt-1 text-[11px]">
             There is nothing to include or exclude, so a funnel here would be two ordinary
-            campaigns. The four the live accounts run on can be created right here, built from the
-            client&apos;s Page, Instagram and pixel: FB_Engagers_365D, IG_Engagers_365D,
-            PageView_180D and Lead_180D.
+            campaigns. The standard set can be created right here from the client&apos;s Page,
+            Instagram and pixel: FB_Engagers_365D and IG_Engagers_365D; PageView_180D and
+            Lead_180D from the pixel for website leads; FormOpen_90D and FormSubmit_90D from
+            the Page for instant forms. A client with no pixel still gets a complete funnel
+            from the form audiences.
           </p>
           <button
             type="button"
@@ -284,6 +295,39 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
       <p className="text-[11px] text-slate-500">
         Budget sits on the campaigns, the way the live accounts run it — not on the ad sets.
       </p>
+
+      <div>
+        <p className="text-xs font-medium text-slate-700">Where the lead lands</p>
+        <div className="mt-1 flex flex-wrap gap-3 text-xs">
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="funnel-destination"
+              checked={destination === 'website'}
+              onChange={() => setDestination('website')}
+            />
+            <span>
+              Website form <span className="text-slate-500">· optimises for the pixel&apos;s Lead event</span>
+            </span>
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="funnel-destination"
+              checked={destination === 'form'}
+              onChange={() => setDestination('form')}
+            />
+            <span>
+              Instant form <span className="text-slate-500">· on Meta, no pixel needed</span>
+            </span>
+          </label>
+        </div>
+        <p className="mt-1 text-[11px] text-slate-500">
+          Cannot be changed once the ad sets exist.
+          {destination === 'form' &&
+            ' The retargeting pair for instant forms is FormOpen_90D as warm and FormSubmit_90D as leads.'}
+        </p>
+      </div>
 
       {/* WHAT IT WILL DO, before it does it. Reading back the plan in words is
           the only check on an audience picked into the wrong role, and that
