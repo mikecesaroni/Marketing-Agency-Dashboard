@@ -84,18 +84,20 @@ What you can do:
 Tasks   /tasks
 --------------
 Sidebar: Tasks
-The team’s own to-do board, shaped like ClickUp: every client is a list, the agency has its own lists, and each task has a status, priority, assignees, dates, tags, subtasks, a checklist and comments.
+The team’s own to-do board, ClickUp underneath: a task has a status, priority, assignees, dates, tags, subtasks, a checklist and comments. Four views instead of a folder tree.
 
 What is on it:
-  - A sidebar: Everything, My tasks, Due today, Overdue, Inbox, then every client with open tasks, then the agency lists.
-  - A List view grouped by status, due date, priority, assignee or client, and a Board view with a column per status.
-  - A quick-add bar that reads "!high @Name #tag due fri" off the end of a title.
+  - Three numbers at the top: overdue, due today, open. Then the view switch: My day, Team, Clients, All.
+  - My day: your tasks in due-date order. Team: one column per team member, drag a card to hand it over. Clients: grouped by client, then the agency lists, then the inbox. All: a list grouped any way, or a board by status.
+  - A quick-add bar that files the task wherever you are looking, reading "!high @Name #tag due fri" off the end of the line.
+  - Avatar chips for each team member and one dropdown for client or list. Both filter what you see AND decide where a new task goes.
 
 What you can do:
-  - Type a task and press Enter. Click a row to open it; every field saves on change.
-  - Tick a row to mark it done; drag a card between Board columns to change its status.
-  - "Set your name" (top right) is used for Me mode, who made a task and who commented.
-  - This is separate from the per-client onboarding checklist on the client page (client_tasks) and from Deliverables, which tracks what was promised to a client.
+  - Type a task and press Enter. Click a row or card to open it; every field saves on change.
+  - Tick a row to mark it done. Drag a card between people (Team) or statuses (All, Board).
+  - "Team" / "Manage team" opens the roster: add a person with a name and what they do, rename (moves their tasks), remove (keeps their tasks).
+  - "You:" at the top right picks your name from the roster; it drives My day and signs tasks and comments.
+  - Separate from the per-client onboarding checklist on the client page (client_tasks) and from Deliverables, which tracks what was promised to a client.
 
 Payments & Revenue   /payments
 ------------------------------

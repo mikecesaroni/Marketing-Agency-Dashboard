@@ -9,14 +9,48 @@ import { supabase } from './supabaseClient'
 import { fetchAllRows } from './pagedQuery'
 
 export async function fetchBoard() {
-  const [tasks, lists, clients] = await Promise.all([
+  const [tasks, lists, clients, members] = await Promise.all([
     fetchAllRows(() => supabase.from('tasks').select('*').order('created_at', { ascending: true }).order('id')),
     supabase.from('task_lists').select('*').is('archived_at', null).order('sort_order').order('name'),
     supabase.from('clients').select('id,name,status').order('name'),
+    supabase.from('team_members').select('*').eq('active', true).order('sort_order').order('name'),
   ])
   if (lists.error) throw lists.error
   if (clients.error) throw clients.error
-  return { tasks, lists: lists.data || [], clients: clients.data || [] }
+  if (members.error) throw members.error
+  return { tasks, lists: lists.data || [], clients: clients.data || [], members: members.data || [] }
+}
+
+// ---------------------------------------------------------------- the team
+
+export async function createMember({ name, title, color }) {
+  const { data, error } = await supabase
+    .from('team_members')
+    .insert({ name: name.trim(), title: title?.trim() || null, color: color || 'slate' })
+    .select()
+    .single()
+  if (error) {
+    if (String(error.code) === '23505') throw new Error(`${name.trim()} is already on the team.`)
+    throw error
+  }
+  return data
+}
+
+export async function updateMember(id, patch) {
+  const { data, error } = await supabase.from('team_members').update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+/** Renames the member AND the name on every task, in one database call. */
+export async function renameMember(id, newName) {
+  const { error } = await supabase.rpc('rename_team_member', { member_id: id, new_name: newName.trim() })
+  if (error) throw error
+}
+
+/** Off the roster, not deleted: their name stays on the tasks they had. */
+export async function removeMember(id) {
+  return updateMember(id, { active: false })
 }
 
 export async function createTask(fields) {

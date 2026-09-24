@@ -11,6 +11,7 @@ import {
   sortTasks,
 } from '../../lib/tasks'
 import { addComment, createTask, deleteComment, deleteTask, fetchComments, updateTask } from '../../lib/tasksData'
+import { MemberBadge, MemberPicker } from './TeamPanel'
 
 /**
  * One task, opened. ClickUp's task view, cut to the fields the board uses:
@@ -62,48 +63,6 @@ export function StatusPills({ value, onChange, size = 'sm' }) {
           </button>
         )
       })}
-    </div>
-  )
-}
-
-/** Names as chips with an input to add one; the datalist gives the known names. */
-function NameChips({ value = [], onChange, known = [], placeholder = 'Add a person' }) {
-  const [draft, setDraft] = useState('')
-  const add = () => {
-    const n = draft.trim()
-    if (!n) return
-    if (!value.some((v) => v.toLowerCase() === n.toLowerCase())) onChange([...value, n])
-    setDraft('')
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-1">
-      {value.map((n) => (
-        <span key={n} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-800">
-          {n}
-          <button type="button" onClick={() => onChange(value.filter((v) => v !== n))} className="text-slate-400 hover:text-slate-700" aria-label={`Remove ${n}`}>
-            ×
-          </button>
-        </span>
-      ))}
-      <input
-        list="task-people"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ',') {
-            e.preventDefault()
-            add()
-          }
-        }}
-        onBlur={add}
-        placeholder={placeholder}
-        className="min-w-[8rem] flex-1 rounded border border-slate-200 px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-      />
-      <datalist id="task-people">
-        {known.map((n) => (
-          <option key={n} value={n} />
-        ))}
-      </datalist>
     </div>
   )
 }
@@ -165,7 +124,7 @@ export default function TaskDrawer({
   allTasks,
   clients,
   lists,
-  knownPeople,
+  members = [],
   knownTagList,
   me,
   onChanged,
@@ -368,7 +327,9 @@ export default function TaskDrawer({
                     <button type="button" onClick={() => onOpenTask?.(s)} className={`flex-1 truncate text-left hover:underline ${s.status === 'done' ? 'line-through text-slate-400' : 'text-slate-800'}`}>
                       {s.title}
                     </button>
-                    {s.assignees?.length > 0 && <span className="text-[11px] text-slate-500">{s.assignees.join(', ')}</span>}
+                    {s.assignees?.map((a) => (
+                      <MemberBadge key={a} name={a} members={members} />
+                    ))}
                     {s.due_date && (
                       <span className={`text-[11px] ${isOverdue(s) ? 'text-red-600' : 'text-slate-500'}`}>{s.due_date.slice(5)}</span>
                     )}
@@ -447,7 +408,7 @@ export default function TaskDrawer({
             </Select>
           </Row>
           <Row label="Assignees">
-            <NameChips value={t.assignees || []} onChange={(assignees) => save({ assignees })} known={knownPeople} />
+            <MemberPicker value={t.assignees || []} onChange={(assignees) => save({ assignees })} members={members} />
           </Row>
           <Row label="Start">
             <Input size="sm" type="date" value={t.start_date || ''} onChange={(e) => save({ start_date: e.target.value || null })} />

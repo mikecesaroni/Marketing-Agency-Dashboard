@@ -14,6 +14,8 @@ import {
   STATUS_KEYS,
   TASK_PRIORITIES,
   addDays,
+  assigneeCounts,
+  initials,
   dueBucket,
   filterTasks,
   groupTasks,
@@ -21,7 +23,9 @@ import {
   knownNames,
   nestSubtasks,
   parseQuickAdd,
+  personColumns,
   progress,
+  reassign,
   sortTasks,
   summarise,
 } from '../src/lib/tasks.js'
@@ -145,6 +149,31 @@ check('an email-like handle keeps its dots', parseQuickAdd('x @j.doe', TODAY).as
   check('inbox', s.inbox, 1)
 }
 check('known names are deduped case-insensitively', knownNames(TASKS), ['Ethan', 'Maria'])
+check(
+  'the roster comes first in roster order, then names seen on tasks',
+  knownNames(TASKS, [{ name: 'Maria' }, { name: 'ethan' }, { name: 'Sam' }]),
+  ['Maria', 'ethan', 'Sam']
+)
+check('roster spelling wins over a task spelling', knownNames([{ assignees: ['ETHAN'] }], [{ name: 'Ethan' }]), ['Ethan'])
+check('per-person counts are open, top-level, case-insensitive', assigneeCounts(TASKS), { ethan: 1, maria: 1 })
+check('initials from two words', initials('Ethan Cesaroni'), 'EC')
+check('initials from one word', initials('maria'), 'M')
+check('initials of nothing is nothing', initials(''), '')
+
+// --------------------------------------------------------------- the Team view
+{
+  const cols = personColumns(filterTasks(TASKS), [{ name: 'Maria' }, { name: 'Ethan' }, { name: 'Sam' }])
+  check('columns follow roster order, then Unassigned', cols.map((c) => c.label), ['Maria', 'Ethan', 'Sam', 'Unassigned'])
+  check('an empty roster column survives', cols[2].tasks.length, 0)
+  check('Ethan\u2019s column matches case-insensitively', ids(cols[1].tasks), ['1'])
+  check('unassigned holds the rest', ids(cols[3].tasks), ['4', '5'])
+  const withExtra = personColumns([{ id: 'z', status: 'todo', assignees: ['Zed'] }], [{ name: 'Maria' }])
+  check('a name not on the roster gets its own column after Unassigned', withExtra.map((c) => c.label), ['Maria', 'Unassigned', 'Zed'])
+}
+check('reassign swaps the person it left for the one it landed on', reassign(['Maria', 'Sam'], 'Maria', 'Ethan'), ['Sam', 'Ethan'])
+check('reassign from Unassigned adds', reassign([], null, 'Ethan'), ['Ethan'])
+check('reassign to Unassigned removes', reassign(['Maria'], 'Maria', null), [])
+check('reassign onto someone already on it does not duplicate', reassign(['Maria', 'Ethan'], 'Maria', 'ethan'), ['Ethan'])
 
 // ---------------------------------------- the JS and the SQL say the same
 {

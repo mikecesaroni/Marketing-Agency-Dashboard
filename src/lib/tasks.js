@@ -296,16 +296,90 @@ function resolveDay(word, today) {
   return addDays(today, ahead)
 }
 
-/** Distinct assignee names seen across tasks, for the pickers. */
-export function knownNames(tasks) {
+/**
+ * Names for the pickers: the team roster first, in roster order, then any
+ * name seen on a task that is not on the roster (typed before the roster
+ * existed, or a contractor). Deduped case-insensitively, roster spelling wins.
+ */
+export function knownNames(tasks, members = []) {
   const seen = new Map()
+  for (const m of members) {
+    const k = String(m?.name || '').trim()
+    if (k && !seen.has(k.toLowerCase())) seen.set(k.toLowerCase(), k)
+  }
+  const extra = new Map()
   for (const t of tasks) {
     for (const a of t.assignees || []) {
       const k = String(a).trim()
-      if (k && !seen.has(k.toLowerCase())) seen.set(k.toLowerCase(), k)
+      if (k && !seen.has(k.toLowerCase()) && !extra.has(k.toLowerCase())) extra.set(k.toLowerCase(), k)
     }
   }
-  return [...seen.values()].sort((a, b) => a.localeCompare(b))
+  return [...seen.values(), ...[...extra.values()].sort((a, b) => a.localeCompare(b))]
+}
+
+/** Open top-level tasks per assignee name (lower-cased key), for the sidebar. */
+export function assigneeCounts(tasks) {
+  const out = {}
+  for (const t of tasks) {
+    if (t.status === 'done' || t.parent_id) continue
+    for (const a of t.assignees || []) {
+      const k = String(a).trim().toLowerCase()
+      if (k) out[k] = (out[k] || 0) + 1
+    }
+  }
+  return out
+}
+
+/** "Ethan Cesaroni" -> "EC", "maria" -> "M". */
+export function initials(name) {
+  return String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('')
+}
+
+/**
+ * The Team view: one column per roster member, in roster order, then
+ * Unassigned, then anyone on a task who is not on the roster. Empty columns
+ * stay, because an empty column is the point of the view (who has room).
+ * A task with two assignees appears in both columns.
+ */
+export function personColumns(tasks, members = []) {
+  const sorted = sortTasks(tasks)
+  const cols = members.map((m) => ({ key: m.name.toLowerCase(), label: m.name, member: m, tasks: [] }))
+  const byKey = new Map(cols.map((c) => [c.key, c]))
+  const unassigned = { key: '', label: 'Unassigned', member: null, tasks: [] }
+  const extras = new Map()
+  for (const t of sorted) {
+    const who = (t.assignees || []).map((a) => String(a).trim()).filter(Boolean)
+    if (who.length === 0) {
+      unassigned.tasks.push(t)
+      continue
+    }
+    for (const a of who) {
+      const k = a.toLowerCase()
+      if (byKey.has(k)) byKey.get(k).tasks.push(t)
+      else {
+        if (!extras.has(k)) extras.set(k, { key: k, label: a, member: null, tasks: [] })
+        extras.get(k).tasks.push(t)
+      }
+    }
+  }
+  return [...cols, unassigned, ...[...extras.values()].sort((a, b) => a.label.localeCompare(b.label))]
+}
+
+/**
+ * Dragging a card from one person's column to another's. The person it left
+ * is replaced by the person it landed on; anyone else on the task stays.
+ * From Unassigned: the target is added. To Unassigned: the source is removed.
+ */
+export function reassign(assignees = [], from, to) {
+  const rest = assignees.filter((a) => !(from && sameName(a, from)))
+  if (!to) return rest
+  return rest.some((a) => sameName(a, to)) ? rest : [...rest, to]
 }
 
 /** Distinct tags seen across tasks. */
