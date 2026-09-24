@@ -113,6 +113,24 @@ export const ROUTES = [
     ],
   },
   {
+    path: '/tasks',
+    name: 'Tasks',
+    nav: 'Tasks',
+    purpose:
+      'The team’s own to-do board, shaped like ClickUp: every client is a list, the agency has its own lists, and each task has a status, priority, assignees, dates, tags, subtasks, a checklist and comments.',
+    contains: [
+      'A sidebar: Everything, My tasks, Due today, Overdue, Inbox, then every client with open tasks, then the agency lists.',
+      'A List view grouped by status, due date, priority, assignee or client, and a Board view with a column per status.',
+      'A quick-add bar that reads "!high @Name #tag due fri" off the end of a title.',
+    ],
+    actions: [
+      'Type a task and press Enter. Click a row to open it; every field saves on change.',
+      'Tick a row to mark it done; drag a card between Board columns to change its status.',
+      '"Set your name" (top right) is used for Me mode, who made a task and who commented.',
+      'This is separate from the per-client onboarding checklist on the client page (client_tasks) and from Deliverables, which tracks what was promised to a client.',
+    ],
+  },
+  {
     path: '/payments',
     name: 'Payments & Revenue',
     nav: 'Payments',

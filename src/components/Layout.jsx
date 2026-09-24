@@ -12,6 +12,7 @@ import {
   IconSops,
   IconAiSearch,
   IconCompass,
+  IconTasks,
 } from './ui'
 
 // Grouped, because seven flat items give no clue which are the daily ones and
@@ -24,6 +25,7 @@ const NAV_GROUPS = [
       { to: '/', label: 'Dashboard', short: 'Home', Icon: IconDashboard, end: true },
       { to: '/clients', label: 'Clients', short: 'Clients', Icon: IconClients },
       { to: '/deliverables', label: 'Deliverables', short: 'Work', Icon: IconDeliverables },
+      { to: '/tasks', label: 'Tasks', short: 'Tasks', Icon: IconTasks },
     ],
   },
   {

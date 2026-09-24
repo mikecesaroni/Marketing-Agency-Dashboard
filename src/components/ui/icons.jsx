@@ -187,3 +187,16 @@ export function IconTrendDown(props) {
     </Icon>
   )
 }
+
+export function IconTasks(props) {
+  return (
+    <Icon {...props}>
+      <path d="m3.5 6.5 1.75 1.75L8.5 5" />
+      <path d="M12 6.5h8.5" />
+      <path d="m3.5 12.5 1.75 1.75L8.5 11" />
+      <path d="M12 12.5h8.5" />
+      <path d="m3.5 18.5 1.75 1.75L8.5 17" />
+      <path d="M12 18.5h8.5" />
+    </Icon>
+  )
+}
