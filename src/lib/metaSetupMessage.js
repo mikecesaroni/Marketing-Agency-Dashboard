@@ -27,10 +27,15 @@
 // never be requested from our end. It has to be granted by the client, and
 // that is the asset most often missed.
 
+import { AGENCY_EMAIL } from './agencyEmail.js'
+
 export const BUSINESS_ID_PLACEHOLDER = '[YOUR BUSINESS PORTFOLIO ID]'
 
 // The Facebook login the client adds. A person, on purpose: see the header.
-export const ACCESS_EMAIL = 'ejretreats1@gmail.com'
+// The agency address since 2026-09-24, one source of truth for every message
+// (src/lib/agencyEmail.js). The Facebook account behind it has to sit on our
+// business portfolio, or the client adds a login that cannot share anything on.
+export const ACCESS_EMAIL = AGENCY_EMAIL
 
 // Shown to whoever sends the message, not to the client. The failure is
 // specific and repeated, so it is worth naming where it will be read.

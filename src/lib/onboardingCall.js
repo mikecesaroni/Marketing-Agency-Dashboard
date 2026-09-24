@@ -20,11 +20,14 @@
 // ctx built from the client row, the intake, the onboarding link, the GHL
 // setup row and the two URLs.
 
+import { AGENCY_EMAIL } from './agencyEmail.js'
+
 export const AGENCY_NAME = 'The Working Class Marketing'
 
 // The address we ask clients to add inside Business Manager when the Partner
-// screen is hidden. Kept in step with src/lib/metaSetupMessage.js.
-export const TEAM_EMAIL = 'ejretreats1@gmail.com'
+// screen is hidden. The same one the Meta access message names, from the one
+// source of truth for the agency address.
+export const TEAM_EMAIL = AGENCY_EMAIL
 
 const yes = (v) => v === true || /^(yes|true|y)$/i.test(String(v || '').trim())
 
