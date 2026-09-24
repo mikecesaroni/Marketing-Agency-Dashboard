@@ -6,21 +6,41 @@ import { anglesAvailable, nthPerField } from '../lib/adCopyOptions'
 import {
   MAX_VIDEO_BYTES,
   isPublishable,
+  isVideoFile,
   megabytes,
   statusLabel,
   validateVideo,
 } from '../lib/adVideos'
+import { clipChecks, clipVerdict, videoAdName } from '../lib/videoLaunch'
 import { driveFileId, isDrivePath } from '../lib/driveLabels'
-import { deleteVideo, fetchClientVideos, saveVideoAbout, transcribeVideo, uploadVideo } from '../lib/adVideoStore'
+import {
+  deleteVideo,
+  fetchClientVideos,
+  saveVideoAbout,
+  saveVideoMeasure,
+  transcribeVideo,
+  uploadVideo,
+} from '../lib/adVideoStore'
 
 /**
- * Upload a video, wait for Meta to transcode it, tick it, publish it.
+ * Drop a clip, tick it, publish it.
  *
  * The waiting is why this owns the whole flow instead of just being a list.
  * Meta transcodes asynchronously and a phone clip can take a minute or more,
  * so the upload is sent to Meta the moment it lands in the bucket — while the
  * user is still writing copy — rather than at publish time, where it would be
  * the slowest and least predictable step of the thing they are watching.
+ *
+ * THE PIPELINE, per clip, with nobody clicking anything after the drop:
+ *
+ *   dropped → in the bucket → sent to Meta (transcoding) → transcribed →
+ *   three versions of the copy written → one picked → named → publishable
+ *
+ * Each arrow used to be a button. The team's week is a clip per client, so
+ * the buttons went: a ticked clip is transcribed on its own, a transcript
+ * with no copy yet gets its three versions on its own, and picking a version
+ * names the ad. What is left to a person is the two judgements a person is
+ * for: which version, and whether the clip is any good.
  */
 
 const POLL_MS = 6000
@@ -41,6 +61,63 @@ function Pill({ video }) {
   )
 }
 
+/**
+ * Where one clip is along the pipeline: three dots that fill in on their own.
+ * The point is that a glance at the list says what is still cooking without
+ * reading four status lines.
+ */
+function Pipeline({ video, transcribing, hasCopy, writing }) {
+  const steps = [
+    {
+      label: 'Meta',
+      state: video.status === 'ready' && video.thumb_url ? 'done' : video.status === 'error' ? 'bad' : video.status === 'new' ? 'todo' : 'busy',
+    },
+    {
+      label: 'Transcript',
+      state: video.transcript ? 'done' : transcribing ? 'busy' : video.transcript_error ? 'skip' : 'todo',
+    },
+    { label: 'Copy', state: hasCopy ? 'done' : writing ? 'busy' : 'todo' },
+  ]
+  const dot = {
+    done: 'bg-green-500',
+    busy: 'bg-amber-400 animate-pulse',
+    bad: 'bg-red-500',
+    skip: 'bg-slate-300',
+    todo: 'bg-slate-200',
+  }
+  return (
+    <span className="inline-flex items-center gap-2" title="Sent to Meta · transcribed · copy written">
+      {steps.map((s) => (
+        <span key={s.label} className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+          <span className={`inline-block h-2 w-2 rounded-full ${dot[s.state]}`} />
+          {s.label}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function Checks({ checks }) {
+  if (checks.length === 0) return null
+  const verdict = clipVerdict(checks)
+  return (
+    <details className="text-[11px]">
+      <summary
+        className={`cursor-pointer select-none ${verdict === 'good' ? 'text-green-700' : 'text-amber-700'}`}
+      >
+        {verdict === 'good' ? '✓ Clip checks out' : `${checks.filter((c) => c.level === 'warn').length} clip note${checks.filter((c) => c.level === 'warn').length === 1 ? '' : 's'}`}
+      </summary>
+      <ul className="mt-1 space-y-0.5 pl-1">
+        {checks.map((c) => (
+          <li key={c.text} className={c.level === 'warn' ? 'text-amber-800' : 'text-slate-600'}>
+            {c.level === 'warn' ? '△' : '✓'} {c.text}
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
 export default function VideoAdPicker({ client, intake, picked, onPicked, copies, onCopy }) {
   // Which video's copy is being written, what the model said it did, and the
   // options it returned so "another angle" can walk them without paying for a
@@ -52,6 +129,7 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
   const [open, setOpen] = useState('')
+  const [dragging, setDragging] = useState(false)
   // What each video is about, keyed by storage path. Held here while it is
   // being typed and written back to the row on blur, so the textarea stays
   // responsive and the note survives a reload.
@@ -68,7 +146,12 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
   const [versions, setVersions] = useState({})
   const [writingVersions, setWritingVersions] = useState('')
   const [chosen, setChosen] = useState({})
+  // Seconds, width and height off the preview element, keyed by path. The
+  // row carries them too once saved; this is for the clip that was dropped a
+  // moment ago and has no row yet.
+  const [measured, setMeasured] = useState({})
   const attempted = useRef(new Set())
+  const autoWrote = useRef(new Set())
   const fileInput = useRef(null)
 
   const account = client.meta_ad_account_id || ''
@@ -181,14 +264,43 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     }
   }
 
+  // THE THREE VERSIONS, UNASKED. A ticked clip whose transcript has landed
+  // and whose copy is still blank gets its three versions written without a
+  // click, once. The transcript is the reason this is safe to do on its own:
+  // before it, the assistant only had the onboarding answers and every clip
+  // read the same. Nothing is applied; the three cards wait to be picked.
+  useEffect(() => {
+    if (writingVersions) return
+    for (const v of videos || []) {
+      const path = v.storage_path
+      if (!picked.includes(path) || !v.transcript) continue
+      if (copies[path]?.primary_text?.trim() || versions[path]) continue
+      if (autoWrote.current.has(path)) continue
+      autoWrote.current.add(path)
+      writeVersions(v)
+      return
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos, picked, copies, versions, writingVersions])
+
+  const nameFor = (video, angle) =>
+    videoAdName({ clientName: client.name, angle, fileName: video?.file_name })
+
   const pickVersion = (path, index) => {
     const v = versions[path]?.variations?.[index]
     if (!v) return
-    onCopy(path, {
+    const video = (videos || []).find((x) => x.storage_path === path)
+    const patch = {
       primary_text: v.primaryText || '',
       headline: v.headline || '',
       description: v.description || '',
-    })
+    }
+    // Named after the angle so two clips on the same day read differently in
+    // Ads Manager. Only when nobody typed a name.
+    if (!copies[path]?.ad_name?.trim() || copies[path]?.ad_name === nameFor(video)) {
+      patch.ad_name = nameFor(video, v.angle)
+    }
+    onCopy(path, patch)
     setChosen((prev) => ({ ...prev, [path]: index }))
   }
 
@@ -209,11 +321,18 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     }
   }
 
-  const add = async (event) => {
-    const files = [...(event.target.files || [])]
-    event.target.value = ''
-    if (files.length === 0) return
-
+  /**
+   * Files in, from the button or a drop. Each one goes to the bucket and
+   * straight on to Meta, so the transcode is running before the copy is.
+   * The list reloads after each file rather than at the end, so a drop of
+   * five shows five rows appearing rather than a long pause and five rows.
+   */
+  const ingest = async (incoming) => {
+    const files = [...(incoming || [])].filter((f) => isVideoFile(f.name))
+    if (files.length === 0) {
+      setError('That was not a video. Drop .mp4 or .mov files.')
+      return
+    }
     const rejected = files.map(validateVideo).filter(Boolean)
     if (rejected.length > 0) {
       setError(rejected[0])
@@ -223,7 +342,8 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     setBusy('upload')
     setError('')
     try {
-      for (const file of files) {
+      for (const [i, file] of files.entries()) {
+        setBusy(files.length > 1 ? `upload ${i + 1}/${files.length}` : 'upload')
         const saved = await uploadVideo({ clientId: client.id, file })
         // Straight to Meta: the transcode should be running before they have
         // finished typing the primary text.
@@ -232,14 +352,26 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
           storagePath: saved.storage_path,
           fileName: saved.file_name,
         })
+        await load()
       }
-      await load()
     } catch (err) {
       setError(err.message)
       await load()
     } finally {
       setBusy('')
     }
+  }
+
+  const add = async (event) => {
+    const files = [...(event.target.files || [])]
+    event.target.value = ''
+    if (files.length > 0) await ingest(files)
+  }
+
+  const onDrop = async (event) => {
+    event.preventDefault()
+    setDragging(false)
+    await ingest(event.dataTransfer?.files)
   }
 
   const remove = async (video) => {
@@ -308,6 +440,30 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     }
   }
 
+  // The preview element knows the clip's shape and length the moment its
+  // metadata loads. Kept here for the checks and written to the row once, so
+  // the next visitor does not wait for a preview to find out.
+  const measure = (video, el) => {
+    if (!el || !el.videoWidth) return
+    const m = { durationSeconds: el.duration || 0, width: el.videoWidth, height: el.videoHeight }
+    setMeasured((prev) => (prev[video.storage_path] ? prev : { ...prev, [video.storage_path]: m }))
+    if (video.status !== 'new' && !(video.width && video.height && video.duration_seconds)) {
+      saveVideoMeasure({ clientId: client.id, storagePath: video.storage_path, ...m }).catch(() => {})
+    }
+  }
+
+  const checksFor = (v) => {
+    const m = measured[v.storage_path] || {}
+    return clipChecks({
+      durationSeconds: m.durationSeconds || v.duration_seconds,
+      width: m.width || v.width,
+      height: m.height || v.height,
+      transcript: v.transcript,
+      transcribedAt: v.transcribed_at,
+      transcriptError: v.transcript_error,
+    })
+  }
+
   const write = async (video) => {
     const path = video.storage_path
     const held = angles[path]
@@ -347,26 +503,54 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     }
   }
 
+  const tick = (video) => {
+    // The parent publishes from the copy record, so the ids it needs travel
+    // with the copy rather than making it hold a second copy of this list.
+    // Re-stamped on every tick because a re-poll can have filled in a
+    // thumbnail since the list was first loaded. The name is filled in here
+    // too, so a clip published without a version picked is still named
+    // WC_client · day · file rather than whatever the function invents.
+    const patch = { meta_video_id: video.meta_video_id, thumb_url: video.thumb_url }
+    if (!copies[video.storage_path]?.ad_name?.trim()) patch.ad_name = nameFor(video)
+    onCopy(video.storage_path, patch)
+  }
+
   const toggle = (video) => {
     const on = picked.includes(video.storage_path)
     onPicked(
       on ? picked.filter((p) => p !== video.storage_path) : [...picked, video.storage_path]
     )
-    // The parent publishes from the copy record, so the ids it needs travel
-    // with the copy rather than making it hold a second copy of this list.
-    // Re-stamped on every tick because a re-poll can have filled in a
-    // thumbnail since the list was first loaded.
-    if (!on) {
-      onCopy(video.storage_path, {
-        meta_video_id: video.meta_video_id,
-        thumb_url: video.thumb_url,
-      })
-    }
+    if (!on) tick(video)
     setOpen(video.storage_path)
   }
 
+  const ready = (videos || []).filter(isPublishable)
+  const pickAllReady = () => {
+    const paths = ready.map((v) => v.storage_path)
+    for (const v of ready) if (!picked.includes(v.storage_path)) tick(v)
+    onPicked([...new Set([...picked, ...paths])])
+  }
+
+  const uploading = busy.startsWith('upload')
+
   return (
-    <div className="space-y-2">
+    <div
+      className={`relative space-y-2 rounded-xl transition ${dragging ? 'ring-2 ring-orange-400 ring-offset-2' : ''}`}
+      onDragOver={(e) => {
+        e.preventDefault()
+        if (!dragging) setDragging(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false)
+      }}
+      onDrop={onDrop}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-orange-50/90">
+          <p className="text-sm font-semibold text-orange-800">Drop the clips to upload and send to Meta</p>
+        </div>
+      )}
+
       {error && (
         <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
           {error}
@@ -379,30 +563,63 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
         </p>
       )}
 
+      {/* THE TOP LINE: what is here, what is ready, and the two ways in. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={fileInput}
+          type="file"
+          accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm"
+          multiple
+          onChange={add}
+          className="hidden"
+        />
+        <Button variant="dark" size="sm" disabled={uploading} onClick={() => fileInput.current?.click()}>
+          {uploading ? `Uploading${busy.includes('/') ? ` ${busy.slice(7)}` : ''}…` : '+ Upload clips'}
+        </Button>
+        <span className="text-[11px] text-slate-500">or drag them anywhere on this list</span>
+        {videos && videos.length > 0 && (
+          <span className="ml-auto flex items-center gap-2 text-[11px] text-slate-500">
+            {videos.length} clip{videos.length === 1 ? '' : 's'} · {ready.length} ready
+            {ready.length > 1 && ready.some((v) => !picked.includes(v.storage_path)) && (
+              <button type="button" onClick={pickAllReady} className="text-blue-700 hover:underline">
+                tick all ready
+              </button>
+            )}
+          </span>
+        )}
+      </div>
+
       {videos === null ? (
         <p className="text-xs text-slate-500">Loading videos…</p>
       ) : videos.length === 0 ? (
-        <p className="text-xs text-slate-500">
-          No videos for {client.name} yet. Upload one below — .mp4 or .mov, up to{' '}
-          {megabytes(MAX_VIDEO_BYTES)}MB — or drop one in their Google Drive folder, where
-          there is no size limit because Meta downloads it from Drive directly.
-        </p>
+        <div className="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+          <p className="text-sm font-medium text-slate-700">No clips for {client.name} yet</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Drag .mp4 or .mov files here (up to {megabytes(MAX_VIDEO_BYTES)}MB each), or drop them in
+            their Google Drive folder, where there is no size limit because Meta downloads from Drive
+            directly.
+          </p>
+        </div>
       ) : (
-        <ul className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+        <ul className="space-y-1.5 max-h-[32rem] overflow-y-auto pr-1">
           {videos.map((v) => {
-            const ready = isPublishable(v)
+            const publishable = isPublishable(v)
             const checked = picked.includes(v.storage_path)
             const copy = copies[v.storage_path] || {}
+            const checks = checksFor(v)
             return (
-              <li key={v.storage_path} className="border border-slate-200 rounded-lg overflow-hidden">
+              <li
+                key={v.storage_path}
+                className={`rounded-lg border overflow-hidden ${checked ? 'border-orange-300 bg-orange-50/30' : 'border-slate-200'}`}
+              >
                 <div className="flex items-start gap-2.5 p-2">
                   <input
                     type="checkbox"
                     checked={checked}
-                    disabled={!ready}
+                    disabled={!publishable}
                     onChange={() => toggle(v)}
                     className="mt-1 flex-shrink-0"
-                    title={ready ? '' : 'Meta has to finish processing this first'}
+                    title={publishable ? '' : 'Meta has to finish processing this first'}
                   />
                   {/* A Drive clip has no bucket object to play from, and
                       streaming tens of megabytes through the edge function
@@ -430,13 +647,15 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                   ) : (
                     /* Muted and preload=metadata: a list of autoplaying,
                        audible clips is unusable, and preloading four full
-                       videos to show four thumbnails is wasteful. */
+                       videos to show four thumbnails is wasteful. Metadata
+                       is enough to measure the clip for the checks. */
                     <video
                       src={v.url}
                       poster={v.thumb_url || undefined}
                       controls
                       muted
                       preload="metadata"
+                      onLoadedMetadata={(e) => measure(v, e.currentTarget)}
                       className="w-28 max-h-24 flex-shrink-0 rounded bg-slate-900 object-contain"
                     />
                   )}
@@ -450,6 +669,14 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                         // publishable at all.
                         <span className="ml-1.5 text-slate-400">· Google Drive</span>
                       )}
+                      <span className="ml-2">
+                        <Pipeline
+                          video={v}
+                          transcribing={transcribing[v.storage_path]}
+                          hasCopy={Boolean(copy.primary_text?.trim())}
+                          writing={writingVersions === v.storage_path || writing === v.storage_path}
+                        />
+                      </span>
                     </p>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <Pill video={v} />
@@ -487,11 +714,14 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                         </Button>
                       )}
                     </div>
+                    <div className="mt-1">
+                      <Checks checks={checks} />
+                    </div>
                   </div>
                 </div>
 
                 {checked && (
-                  <div className="border-t border-slate-100 bg-slate-50 p-2 space-y-1.5">
+                  <div className="border-t border-orange-100 bg-white p-2 space-y-1.5">
                     {/* THE INPUT, above the outputs. Everything the copy
                         assistant otherwise knows comes off the onboarding form
                         and is identical for every one of this client's videos,
@@ -510,7 +740,7 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                     />
                     {/* WHAT IS SAID IN IT. Made once per clip, kept on the
                         row, read by the copy assistant with the note above. */}
-                    <div className="rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px]">
+                    <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px]">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-slate-700">Transcript</span>
                         {transcribing[v.storage_path] ? (
@@ -545,14 +775,21 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                       )}
                     </div>
 
+                    {writingVersions === v.storage_path && !versions[v.storage_path] && (
+                      <p className="text-[11px] text-slate-600">
+                        ✨ Writing three versions from the transcript…
+                      </p>
+                    )}
+
                     {/* THREE VERSIONS, side by side. Written as sets from the
                         transcript and the note; one click fills the fields
                         below, and they stay editable. */}
                     {versions[v.storage_path]?.variations?.length > 0 && (
                       <div className="space-y-1.5">
-                        {versions[v.storage_path].note && (
-                          <p className="text-[11px] text-slate-600">{versions[v.storage_path].note}</p>
-                        )}
+                        <p className="text-[11px] text-slate-600">
+                          {chosen[v.storage_path] == null ? 'Pick the version that fits the clip. ' : ''}
+                          {versions[v.storage_path].note}
+                        </p>
                         <div className="grid gap-2 md:grid-cols-3">
                           {versions[v.storage_path].variations.map((opt, i) => {
                             const on = chosen[v.storage_path] === i
@@ -610,7 +847,8 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                     <input
                       value={copy.ad_name || ''}
                       onChange={(e) => onCopy(v.storage_path, { ad_name: e.target.value })}
-                      placeholder="Ad name — what you will see in Ads Manager (optional)"
+                      placeholder="Ad name — what you will see in Ads Manager"
+                      title="Filled in as WC_client · day · angle; type over it if you like"
                       className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
                     />
                     <div className="flex flex-wrap items-center gap-2">
@@ -619,13 +857,13 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                         size="sm"
                         disabled={writingVersions === v.storage_path || transcribing[v.storage_path]}
                         onClick={() => writeVersions(v)}
-                        title={v.transcript ? 'Three versions written from the transcript and your note' : 'Three versions written from your note and the client\u2019s facts'}
+                        title={v.transcript ? 'Three versions written from the transcript and your note' : 'Three versions written from your note and the client’s facts'}
                       >
                         {writingVersions === v.storage_path
                           ? 'Writing three versions…'
                           : versions[v.storage_path]
-                            ? '\u2728 Three more versions'
-                            : '\u2728 Write three versions'}
+                            ? '✨ Three more versions'
+                            : '✨ Write three versions'}
                       </Button>
                       <Button
                         variant="outline"
@@ -659,23 +897,6 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
           })}
         </ul>
       )}
-
-      <input
-        ref={fileInput}
-        type="file"
-        accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm"
-        multiple
-        onChange={add}
-        className="hidden"
-      />
-      <Button
-        variant="outline"
-        size="md"
-        disabled={busy === 'upload'}
-        onClick={() => fileInput.current?.click()}
-      >
-        {busy === 'upload' ? 'Uploading and sending to Meta…' : '+ Upload video'}
-      </Button>
     </div>
   )
 }

@@ -74,7 +74,8 @@ Sidebar: Content
 The creative side, entered by the job rather than the client: three doors, Ad Studio, Google Drive and Publish, each opening the same client list ordered by recent creative work.
 
 What is on it:
-  - Three large cards with live counts: saved ads, Drive folders linked, clients with creative ready and ads live.
+  - Three large cards with live counts: saved ads, Drive folders linked, clients who need a video this week and ads live.
+  - This week's video drops: one row per client with a Meta account, most behind first (overdue, due, no video yet, done), with when their last video ad went out and how many clips are ready; each row opens Publish on the client page. Shown under the doors and at the top of the Publish door.
   - Ad Studio and Publish: a card per client (saved ads, videos, live ads, last activity) that opens the client page with that tool already open (?open=studio or ?open=publish).
   - Google Drive: every client with an "Open in Drive" button per linked folder, "Browse files" for the read-only browser (click a file to open it in Drive to view or download), and "Link a folder" to paste a folder link.
 

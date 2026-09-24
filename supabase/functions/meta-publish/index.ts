@@ -1830,6 +1830,9 @@ Deno.serve(async (req) => {
             locations: existingAdset ? null : locations,
             lead_form_id: a.lead_form_id || null,
             lead_form_name: a.lead_form_name || null,
+            // Null for an image ad. This is how the weekly video board tells
+            // a video launch from a static one.
+            video_id: a.video_id || null,
             status: 'PAUSED',
             published_by: publishedBy || null,
           }),

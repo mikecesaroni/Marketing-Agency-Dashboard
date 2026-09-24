@@ -29,3 +29,17 @@ Manager to add it.
 
 `src/lib/contentHub.js` decides who shows, the order and the numbers;
 `scripts/check-content-hub.mjs` pins it.
+
+## This week's video drops
+
+Under the three doors, and again at the top of the Publish door: one row per
+client with a Meta ad account, most behind first. A video ad published in the
+last seven days is **done**; none for more than a week is **due**; more than
+two weeks is **overdue**; a client who has never had one is **no video yet**.
+Each row says when the last video ad went out, its name, and how many clips
+are already sent to Meta and ready, and opens Publish on that client's page.
+The Publish door counts how many clients need one this week.
+
+The rules are in `src/lib/videoLaunch.js` (`videoDrops`, `dropState`) and
+pinned by `scripts/check-video-launch.mjs`. See `docs/video-machine.md` for
+the publish screen itself.

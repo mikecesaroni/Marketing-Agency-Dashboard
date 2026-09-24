@@ -1078,8 +1078,8 @@ export default function AdStudioPanel({ client, intake, seed, initialTab }) {
             {/* Without this there is no route to the publish flow for a client
                 who has no saved artboards, and videos were unreachable for
                 three clients that had them uploaded. */}
-            <Button variant="outline" size="md" onClick={() => setPublishing('blank')}>
-              🎬 Publish a video
+            <Button variant="dark" size="lg" onClick={() => setPublishing('blank')}>
+              🎬 Publish this week&rsquo;s video
             </Button>
             <SavedAdsGallery
               client={client}

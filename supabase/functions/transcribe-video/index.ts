@@ -144,11 +144,22 @@ Deno.serve(async (req) => {
       // Not an error to retry: a clip with music and no speech is a real
       // outcome, and the screen should say "nothing said" rather than keep
       // trying.
-      await patch({ transcript: null, transcribed_at: new Date().toISOString(), transcript_error: 'No speech was found in the audio.' })
+      await patch({
+        transcript: null,
+        transcribed_at: new Date().toISOString(),
+        transcript_error: 'No speech was found in the audio.',
+        ...(duration > 0 ? { duration_seconds: Math.round(duration * 10) / 10 } : {}),
+      })
       return json({ transcript: '', duration, empty: true })
     }
 
-    await patch({ transcript, transcribed_at: new Date().toISOString(), transcript_error: null })
+    await patch({
+      transcript,
+      transcribed_at: new Date().toISOString(),
+      transcript_error: null,
+      // Deepgram reports the clip length for free; the clip checks read it.
+      ...(duration > 0 ? { duration_seconds: Math.round(duration * 10) / 10 } : {}),
+    })
     return json({ transcript, duration, language: out?.results?.channels?.[0]?.detected_language || null })
   } catch (err) {
     const message = String(err instanceof Error ? err.message : err)

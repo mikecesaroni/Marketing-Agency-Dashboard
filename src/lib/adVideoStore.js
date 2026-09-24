@@ -127,6 +127,23 @@ export async function transcribeVideo({ clientId, storagePath, force = false }) 
   return data || {}
 }
 
+/**
+ * What the browser measured off the clip: seconds, width, height.
+ *
+ * Written once, the first time the preview loads its metadata, onto the
+ * registered row (a clip not yet sent to Meta has no row, and gets measured
+ * again once it does). Best effort: the checks already ran in the browser
+ * from the same numbers; this only saves the next visitor the wait.
+ */
+export async function saveVideoMeasure({ clientId, storagePath, durationSeconds, width, height }) {
+  const patch = {}
+  if (durationSeconds > 0) patch.duration_seconds = Math.round(durationSeconds * 10) / 10
+  if (width > 0) patch.width = Math.round(width)
+  if (height > 0) patch.height = Math.round(height)
+  if (Object.keys(patch).length === 0) return
+  await supabase.from('ad_videos').update(patch).eq('client_id', clientId).eq('storage_path', storagePath)
+}
+
 export async function saveVideoAbout({ clientId, storagePath, about }) {
   const { error } = await supabase
     .from('ad_videos')

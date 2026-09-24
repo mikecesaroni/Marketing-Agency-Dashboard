@@ -162,6 +162,11 @@ export function mergeVideos(files, registered, account) {
         transcript: meta?.transcript || '',
         transcribed_at: meta?.transcribed_at || null,
         transcript_error: meta?.transcript_error || '',
+        // Measured off the clip itself (the browser's <video> element, or
+        // Deepgram for the duration). Zero until something has looked.
+        duration_seconds: Number(meta?.duration_seconds) || 0,
+        width: Number(meta?.width) || 0,
+        height: Number(meta?.height) || 0,
         // 'drive' or undefined. Drive is read-only to this app, so a Drive
         // clip must not be offered a Delete button that cannot work.
         source: f.source || 'upload',

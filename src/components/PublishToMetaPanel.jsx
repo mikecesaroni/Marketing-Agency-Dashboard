@@ -7,6 +7,14 @@ import FunnelBuilder from './FunnelBuilder'
 import VideoAdPicker from './VideoAdPicker'
 import { fetchSavedAds } from '../lib/savedAds'
 import { wcName } from '../lib/adNaming'
+import { ago } from '../lib/contentHub'
+import {
+  describeLaunch,
+  launchSnapshot,
+  launchSteps,
+  readLaunchMemory,
+  writeLaunchMemory,
+} from '../lib/videoLaunch'
 import {
   CTA_OPTIONS,
   MAX_BATCH_ADS,
@@ -26,9 +34,9 @@ import {
   summarisePlan,
 } from '../lib/metaPublish'
 
-function Section({ step, title, hint, children }) {
+function Section({ step, id, title, hint, children }) {
   return (
-    <section className="space-y-2">
+    <section id={id} className="space-y-2 scroll-mt-24">
       <div>
         <h4 className="text-sm font-semibold text-slate-800">
           <span className="text-slate-400 font-normal mr-1.5">{step}</span>
@@ -38,6 +46,75 @@ function Section({ step, title, hint, children }) {
       </div>
       {children}
     </section>
+  )
+}
+
+/**
+ * The four steps of a launch, pinned to the top of the screen, each saying
+ * where it stands. Videos · Words · Where · Publish. A click scrolls to the
+ * section. This is the map for a teammate who has never been in here: the
+ * seven numbered sections below are the detail, this is the shape.
+ */
+function LaunchStrip({ steps, onJump }) {
+  return (
+    <div className="sticky top-0 z-20 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
+      <ol className="grid grid-cols-4 gap-2">
+        {steps.map((s, i) => (
+          <li key={s.key} className="min-w-0">
+            <button
+              type="button"
+              onClick={() => onJump(s.key)}
+              className="group flex w-full items-center gap-2 text-left"
+              title={`Go to ${s.label}`}
+            >
+              <span
+                className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                  s.done ? 'bg-green-600 text-white' : s.key === 'go' && s.detail === 'ready' ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600 group-hover:bg-slate-300'
+                }`}
+              >
+                {s.done ? '✓' : i + 1}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-semibold text-slate-800">{s.label}</span>
+                <span className="block truncate text-[11px] text-slate-500">{s.detail}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+/**
+ * Last week's destination, offered back as one click.
+ *
+ * The clips and the words are new every week; the objective, the form, the
+ * button and the ad sets almost never are. Recorded on every publish that
+ * goes out, per client, in this browser. Nothing is applied until the
+ * button is pressed, and every field it fills stays editable below.
+ */
+function SameAsLastTime({ memory, onUse, onDismiss }) {
+  if (!memory) return null
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold text-emerald-900">Same place as last time?</p>
+        <p className="truncate text-[11px] text-emerald-800" title={describeLaunch(memory, OBJECTIVES)}>
+          Last launch {memory.at ? ago(memory.at) : ''}: {describeLaunch(memory, OBJECTIVES)}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onUse}
+        className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800"
+      >
+        Use the same setup
+      </button>
+      <button type="button" onClick={onDismiss} className="text-[11px] text-emerald-700 hover:underline">
+        start fresh
+      </button>
+    </div>
   )
 }
 
@@ -613,6 +690,26 @@ export default function PublishToMetaPanel({
 
   const chosenObjective = OBJECTIVES.find((o) => o.value === objective)
 
+  // Where the last launch for this client went, from this browser. Offered,
+  // never applied on its own: publishing into the wrong live ad set costs
+  // real money, so it takes a click.
+  const [memory, setMemory] = useState(() => readLaunchMemory(client.id))
+  const applyMemory = () => {
+    if (!memory) return
+    setObjective(memory.objective || 'LEADS_FORM')
+    setCta(memory.cta || 'LEARN_MORE')
+    if (memory.linkUrl) setLinkUrl(memory.linkUrl)
+    setSpecialCategory(memory.specialCategory || '')
+    if (memory.leadForm?.id) setLeadForm({ id: memory.leadForm.id, name: memory.leadForm.name })
+    if (memory.adsets?.length > 0) {
+      setReuseCampaign(true)
+      setReuseAdset(true)
+      if (memory.campaignId) setCampaignId(memory.campaignId)
+      setAdsetIds(memory.adsets.map((a) => a.id))
+    }
+    setMemory(null)
+  }
+
   // The rest of the client's saved ads. Best effort — the set that opened the
   // panel is already here, so a failure costs the extra choices, not the page.
   useEffect(() => {
@@ -684,7 +781,9 @@ export default function PublishToMetaPanel({
     listCampaigns(client.id)
       .then((found) => {
         setCampaigns(found)
-        if (found.length > 0) setCampaignId(found[0].id)
+        // Only when nothing chose one already: "same as last time" sets the
+        // campaign before this list has loaded.
+        if (found.length > 0) setCampaignId((cur) => cur || found[0].id)
       })
       .catch((err) => {
         setError(err.message)
@@ -959,6 +1058,26 @@ export default function PublishToMetaPanel({
 
       setResult(data)
       onPublished?.()
+      // Next week's "same place as last time": only the ad sets that took
+      // the ads, and the destination settings that went with them.
+      const landed = data?.runs
+        ? data.runs.filter((r) => r.result).map((r) => ({ id: r.adset_id, name: r.adset_name }))
+        : data?.adset_id
+          ? [{ id: data.adset_id, name: chosenAdset?.name || adsetName || '' }]
+          : []
+      writeLaunchMemory(
+        client.id,
+        launchSnapshot({
+          objective,
+          cta,
+          linkUrl,
+          leadForm,
+          specialCategory,
+          adsets: landed,
+          campaignId: data?.campaign_id || campaignId,
+          reuseCampaign: true,
+        })
+      )
       // Into memory, so the chat knows what went live and when to judge it.
       rememberQuietly({
         clientId: client.id,
@@ -1016,8 +1135,35 @@ export default function PublishToMetaPanel({
 
   const step = (n) => (chosenObjective?.needsForm ? n : n - 1)
 
+  // The strip at the top: derived from the same state the sections edit.
+  const withCopy =
+    pickedVideos.filter((p) => videoCopies[p]?.primary_text?.trim()).length +
+    pickedSets.filter((s) => copies[String(s.stamp)]?.primary_text?.trim()).length
+  const destination = reuseAdset
+    ? adsetIds.length === 0
+      ? ''
+      : chosenAdsets.length > 0
+        ? chosenAdsets.map((a) => a.name).join(', ')
+        : `${adsetIds.length} ad set${adsetIds.length === 1 ? '' : 's'}`
+    : reuseCampaign
+      ? chosenCampaign
+        ? `new ad set in ${chosenCampaign.name}`
+        : ''
+      : campaignName.trim()
+        ? `new campaign ${wcName(campaignName.trim())}`
+        : ''
+  const steps = launchSteps({ picked: adTotal, withCopy, destination, blockers })
+  const jump = (key) => {
+    const id = key === 'videos' || key === 'words' ? 'launch-videos' : key === 'where' ? 'launch-where' : 'launch-go'
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <div className="space-y-5">
+      <LaunchStrip steps={steps} onJump={jump} />
+
+      <SameAsLastTime memory={memory} onUse={applyMemory} onDismiss={() => setMemory(null)} />
+
       <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
         <p className="text-xs text-slate-700">
           <span className="font-medium">Everything below is created paused.</span> This builds the
@@ -1038,13 +1184,31 @@ export default function PublishToMetaPanel({
 
       <Section
         step="1"
-        title="Which creatives"
-        hint="Tick everything going into this launch. They all land in one ad set, which is the only way testing them against each other means anything."
+        id="launch-videos"
+        title="Videos"
+        hint="Drop the week's clips. Each one goes to Meta straight away, gets transcribed, and gets three versions of its copy written. Tick a clip, pick a version, done."
+      >
+        <VideoAdPicker
+          client={client}
+          intake={intake}
+          picked={pickedVideos}
+          onPicked={setPickedVideos}
+          copies={videoCopies}
+          onCopy={(path, patch) =>
+            setVideoCopies((prev) => ({ ...prev, [path]: { ...prev[path], ...patch } }))
+          }
+        />
+      </Section>
+
+      <Section
+        step="2"
+        title="Image ads"
+        hint="Optional. Tick any saved statics going out with the clips. Everything ticked lands in the same ad set, which is the only way testing them against each other means anything."
       >
         {sets.length === 0 && (
           <p className="text-xs text-slate-500">
-            No saved image ads for {client.name}. Design one on the Design tab, or publish a video
-            below — a launch can be video only.
+            No saved image ads for {client.name}. A launch can be video only; design a static on the
+            Design tab if one is wanted.
           </p>
         )}
         <ul className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
@@ -1082,24 +1246,7 @@ export default function PublishToMetaPanel({
         )}
       </Section>
 
-      <Section
-        step="1b"
-        title="Videos"
-        hint="Uploaded here and sent to Meta straight away, because Meta has to finish transcoding before an ad can use one. Ticked videos publish into the same ad set as the creatives above."
-      >
-        <VideoAdPicker
-          client={client}
-          intake={intake}
-          picked={pickedVideos}
-          onPicked={setPickedVideos}
-          copies={videoCopies}
-          onCopy={(path, patch) =>
-            setVideoCopies((prev) => ({ ...prev, [path]: { ...prev[path], ...patch } }))
-          }
-        />
-      </Section>
-
-      <Section step="2" title="Button and destination" hint="Shared by every ad in this publish.">
+      <Section step="3" title="Button and destination" hint="Shared by every ad in this publish.">
         <div className="grid md:grid-cols-2 gap-2">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Button</label>
@@ -1138,7 +1285,7 @@ export default function PublishToMetaPanel({
         </div>
       </Section>
 
-      <Section step="3" title="Objective">
+      <Section step="4" title="Objective">
         {reuseAdset && chosenAdset ? (
           <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded px-3 py-2">
             Set by the ad set you picked, not here — objectives belong to the campaign. Meta reads it
@@ -1191,7 +1338,7 @@ export default function PublishToMetaPanel({
 
       {chosenObjective?.needsForm && (
         <Section
-          step="4"
+          step="5"
           title="The instant form"
           hint="Where the leads actually land. Reuse one where you can — a form owns its leads."
         >
@@ -1200,7 +1347,8 @@ export default function PublishToMetaPanel({
       )}
 
       <Section
-        step={String(step(5))}
+        step={String(step(6))}
+        id="launch-where"
         title="Campaign"
         hint="Reusing a campaign keeps its learning; a new one starts cold."
       >
@@ -1319,7 +1467,7 @@ export default function PublishToMetaPanel({
       </Section>
 
       <Section
-        step={String(step(6))}
+        step={String(step(7))}
         title="Ad set"
         hint={
           reuseCampaign
@@ -1534,7 +1682,10 @@ export default function PublishToMetaPanel({
         )}
       </Section>
 
-      <div className="pt-3 border-t border-slate-200 space-y-2">
+      <div
+        id="launch-go"
+        className="sticky bottom-0 -mx-1 space-y-2 rounded-t-xl border-t border-slate-200 bg-white/95 px-1 pt-3 pb-2 backdrop-blur scroll-mt-24"
+      >
         <p className="text-xs text-slate-600">
           {summarisePlan({
             objective,

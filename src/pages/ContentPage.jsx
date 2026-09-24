@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout'
 import DriveFolderFiles from '../components/DriveFolderFiles'
+import VideoDropBoard from '../components/VideoDropBoard'
 import { Card, Input } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { fetchAllRows } from '../lib/pagedQuery'
 import { saveDriveFolder } from '../lib/driveAssets'
 import { ago, folderUrl, hubStats, rollupClients, searchClients, sortForContent } from '../lib/contentHub'
+import { dropStats, videoDrops } from '../lib/videoLaunch'
 
 /**
  * Content: the creative side of the CRM behind three doors.
@@ -58,8 +60,8 @@ const DOORS = [
   {
     key: 'publish',
     title: 'Publish',
-    blurb: 'Take saved ads and videos live on Meta. Into new campaigns or straight into the funnel.',
-    cta: 'See who has creative ready',
+    blurb: 'A fresh video ad per client per week. Drop the clip, pick the words, send it into the funnel.',
+    cta: 'See who needs a video this week',
     tone: 'from-emerald-600 to-teal-400',
     ring: 'group-hover:ring-emerald-300',
     icon: (
@@ -68,7 +70,10 @@ const DOORS = [
         <path d="M11.5 13.5 20 4.5" />
       </svg>
     ),
-    stat: (s) => [`${s.readyToPublish} clients with creative ready`, `${s.live} ads live`],
+    stat: (s) => [
+      s.drops ? `${s.drops.due} need a video this week` : `${s.readyToPublish} clients with creative ready`,
+      s.drops ? `${s.drops.done} done · ${s.live} ads live` : `${s.live} ads live`,
+    ],
   },
 ]
 
@@ -253,7 +258,7 @@ const SECTION_META = {
   },
   publish: {
     title: 'Publish',
-    hint: 'Pick a client. Publish opens on their page with their saved ads and videos ready to send to Meta.',
+    hint: 'Who needs a video this week, then every client. Publish opens on their page with the clips ready to send to Meta.',
   },
 }
 
@@ -261,20 +266,22 @@ export default function ContentPage() {
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') || ''
   const [data, setData] = useState(null)
+  const [drops, setDrops] = useState(null)
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
 
   const load = async () => {
     try {
       const [clients, saved, published, videos] = await Promise.all([
-        supabase.from('clients').select('id,name,industry,archived,is_internal,drive_folder_id,extra_drive_folder_ids').order('name'),
+        supabase.from('clients').select('id,name,industry,archived,is_internal,drive_folder_id,extra_drive_folder_ids,meta_ad_account_id').order('name'),
         fetchAllRows(() => supabase.from('saved_ads').select('client_id,created_at').order('created_at').order('id')),
-        fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status').order('created_at').order('id')),
-        supabase.from('ad_videos').select('client_id,created_at'),
+        fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name').order('created_at').order('id')),
+        supabase.from('ad_videos').select('client_id,created_at,status,meta_video_id,thumb_url'),
       ])
       if (clients.error) throw clients.error
       if (videos.error) throw videos.error
       setData(sortForContent(rollupClients(clients.data || [], saved, published, videos.data || [])))
+      setDrops(videoDrops(clients.data || [], published, videos.data || []))
       setError('')
     } catch (err) {
       setError(err.message)
@@ -286,7 +293,7 @@ export default function ContentPage() {
     load()
   }, [])
 
-  const stats = useMemo(() => (data ? hubStats(data) : null), [data])
+  const stats = useMemo(() => (data ? { ...hubStats(data), drops: drops ? dropStats(drops) : null } : null), [data, drops])
   const rows = useMemo(() => (data ? searchClients(data, q) : []), [data, q])
   const openTab = (key) => setParams(key ? { tab: key } : {})
   const meta = SECTION_META[tab]
@@ -310,11 +317,15 @@ export default function ContentPage() {
       )}
 
       {!meta ? (
-        /* THE HUB: three doors. */
-        <div className="grid gap-4 md:grid-cols-3">
-          {DOORS.map((d) => (
-            <Door key={d.key} door={d} stats={stats} onOpen={() => openTab(d.key)} />
-          ))}
+        /* THE HUB: three doors, and under them the week's video board,
+           because the week's job is the video board. */
+        <div className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-3">
+            {DOORS.map((d) => (
+              <Door key={d.key} door={d} stats={stats} onOpen={() => openTab(d.key)} />
+            ))}
+          </div>
+          <VideoDropBoard rows={drops} compact />
         </div>
       ) : (
         <div className="space-y-4">
@@ -336,6 +347,8 @@ export default function ContentPage() {
               <Input size="sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a client" />
             </div>
           </div>
+
+          {tab === 'publish' && !q && <VideoDropBoard rows={drops} />}
 
           {data === null ? (
             <p className="text-sm text-slate-500">Loading…</p>
