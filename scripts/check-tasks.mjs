@@ -21,6 +21,7 @@ import {
   groupTasks,
   isOverdue,
   knownNames,
+  matchPlace,
   nestSubtasks,
   parseQuickAdd,
   personColumns,
@@ -132,12 +133,30 @@ check('a plain line is just a title', parseQuickAdd('Call Comfort Experts about 
   assignees: [],
   tags: [],
   due_date: null,
+  place: null,
 })
 check('"urgent" as a word is not a flag', parseQuickAdd('urgent call back', TODAY).priority, 'normal')
 check('due fri on a Thursday is tomorrow', parseQuickAdd('x due fri', TODAY).due_date, '2026-09-25')
 check('due thu on a Thursday is NEXT Thursday', parseQuickAdd('x due thu', TODAY).due_date, '2026-10-01')
 check('an explicit date passes through', parseQuickAdd('x due 2026-12-01', TODAY).due_date, '2026-12-01')
 check('an email-like handle keeps its dots', parseQuickAdd('x @j.doe', TODAY).assignees, ['j.doe'])
+{
+  const PLACES = [
+    { key: 'c:1', name: 'Reliable Heating and Cooling' },
+    { key: 'c:2', name: 'Horizon HVAC' },
+    { key: 'c:3', name: 'Horizon Water Co' },
+    { key: 'l:1', name: 'Agency' },
+  ]
+  check('>reli files under Reliable', parseQuickAdd('Fix form >reli', TODAY, [], PLACES).place, 'c:1')
+  check('and the word is gone from the title', parseQuickAdd('Fix form >reli', TODAY, [], PLACES).title, 'Fix form')
+  check('>agency files under the list', parseQuickAdd('Write SOP >agency', TODAY, [], PLACES).place, 'l:1')
+  check('a word matching two clients matches neither', parseQuickAdd('x >horizon', TODAY, [], PLACES).place, null)
+  check('and stays in the title so it is not lost', parseQuickAdd('x >horizon', TODAY, [], PLACES).title, 'x >horizon')
+  check('>water is enough to pick Horizon Water Co', parseQuickAdd('x >water', TODAY, [], PLACES).place, 'c:3')
+  check('matchPlace is case-insensitive', matchPlace('HVAC', PLACES)?.key, 'c:2')
+  check('matchPlace with nothing is null', matchPlace('', PLACES), null)
+  check('a plain line has no place', parseQuickAdd('x', TODAY, [], PLACES).place, null)
+}
 
 // ---------------------------------------------------------------- summary
 {

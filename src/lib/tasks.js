@@ -246,14 +246,26 @@ export function progress(task) {
  *   !urgent !high !low     priority (default normal)
  *   @Name                  an assignee (several allowed; single word)
  *   #tag                   a tag (several allowed)
+ *   >reliable              where it goes: a client or list, matched on the
+ *                          start of a word in its name; one match wins,
+ *                          several matches or none leave it where you are
  *   due today|tomorrow|YYYY-MM-DD|mon..sun   a due date
  *
  * Whatever is left is the title. Nothing is guessed from plain words: "urgent"
  * in a sentence is a word, "!urgent" is a flag.
+ *
+ * `places` is [{key, name}] for the > shorthand: every client and list.
  */
-export function parseQuickAdd(line, today = isoDay(), known = []) {
-  const out = { title: '', priority: 'normal', assignees: [], tags: [], due_date: null }
+export function parseQuickAdd(line, today = isoDay(), known = [], places = []) {
+  const out = { title: '', priority: 'normal', assignees: [], tags: [], due_date: null, place: null }
   let rest = String(line || '')
+
+  rest = rest.replace(/(^|\s)>([\w&'.-]+)/g, (_, sp, word) => {
+    const hit = matchPlace(word, places)
+    if (hit) out.place = hit.key
+    // An unmatched >word is left in the title so it is not silently lost.
+    return hit ? sp : `${sp}>${word}`
+  })
 
   rest = rest.replace(/(^|\s)!(urgent|high|normal|low)\b/gi, (_, sp, p) => {
     out.priority = p.toLowerCase()
@@ -279,6 +291,27 @@ export function parseQuickAdd(line, today = isoDay(), known = []) {
 
   out.title = rest.replace(/\s+/g, ' ').trim()
   return out
+}
+
+/**
+ * The one place a word names, or null. A word matches a place when some word
+ * of the place's name starts with it ("reli" -> Reliable Heating). Exactly
+ * one match is required: "h" hitting Horizon HVAC and Horizon Water Co is
+ * nothing, not the first.
+ */
+export function matchPlace(word, places = []) {
+  const w = String(word || '').toLowerCase()
+  if (!w) return null
+  const hits = places.filter((p) =>
+    String(p.name || '')
+      .toLowerCase()
+      .split(/[^a-z0-9&']+/)
+      .some((part) => part.startsWith(w))
+  )
+  if (hits.length === 1) return hits[0]
+  // A whole-name match beats a crowd of prefix matches.
+  const exact = hits.find((p) => String(p.name || '').toLowerCase() === w)
+  return exact || null
 }
 
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']

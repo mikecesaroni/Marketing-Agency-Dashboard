@@ -293,11 +293,24 @@ export default function TasksPage() {
   const [filters, setFilters] = useState({ priority: '', tag: '', showDone: false, search: '' })
   const [selectedId, setSelectedId] = useState(null)
   const [quick, setQuick] = useState('')
+  // The add bar's own "for whom" and "where". They follow the filters above
+  // (pick Reliable up there and the bar files under Reliable) but can be
+  // changed right in the bar without changing what you are looking at.
+  const [addWhere, setAddWhere] = useState('')
+  const [addPerson, setAddPerson] = useState('')
   const [teamOpen, setTeamOpen] = useState(false)
   const [addingList, setAddingList] = useState(false)
   const [listDraft, setListDraft] = useState('')
   // {id, from}: the card being dragged and the person column it left.
   const [dragging, setDragging] = useState(null)
+
+  useEffect(() => {
+    setAddWhere(where === 'inbox' ? '' : where)
+  }, [where])
+  useEffect(() => {
+    if (view === 'day') setAddPerson(me || '')
+    else if (view !== 'team') setAddPerson(person)
+  }, [person, view, me])
 
   const load = useCallback(async () => {
     try {
@@ -381,18 +394,22 @@ export default function TasksPage() {
   }
   const toggle = (task) => patch(task, { status: task.status === 'done' ? 'todo' : 'done' })
 
+  const places = useMemo(
+    () => [...clients.map((c) => ({ key: `c:${c.id}`, name: c.name })), ...lists.map((l) => ({ key: `l:${l.id}`, name: l.name }))],
+    [clients, lists]
+  )
+
   const quickAdd = async () => {
-    const parsed = parseQuickAdd(quick, undefined, people)
+    const parsed = parseQuickAdd(quick, undefined, people, places)
     if (!parsed.title) return
     setQuick('')
+    // Where: ">reli" in the line wins, then the bar's own picker.
+    const target = parsed.place || addWhere
     const home = {}
-    if (scope.kind === 'client') home.client_id = scope.id
-    if (scope.kind === 'list') home.list_id = scope.id
-    // Files under whoever you are looking at: the person chip, or you in My day.
-    if (parsed.assignees.length === 0) {
-      if (view === 'day' && me) parsed.assignees = [me]
-      else if (view !== 'team' && person) parsed.assignees = [person]
-    }
+    if (target.startsWith('c:')) home.client_id = target.slice(2)
+    if (target.startsWith('l:')) home.list_id = target.slice(2)
+    // Who: "@name" in the line wins, then the bar's own picker.
+    if (parsed.assignees.length === 0 && addPerson) parsed.assignees = [addPerson]
     if (view === 'day' && !parsed.due_date) parsed.due_date = isoDay()
     try {
       absorb(await createTask({ ...parsed, ...home, created_by: me || null }))
@@ -520,25 +537,64 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {/* QUICK ADD: one line, files wherever you are looking. */}
+      {/* QUICK ADD: one line, plus who it is for and where it goes, right
+          here. The two pickers follow the filters above but are the bar's
+          own, so "add one for Reliable" never means changing what you see. */}
       <div className="mb-3 rounded-2xl border border-orange-200 bg-gradient-to-r from-orange-50 to-white p-3 shadow-sm">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-lg leading-none text-orange-500">+</span>
           <input
             value={quick}
             onChange={(e) => setQuick(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && quickAdd()}
-            placeholder={`Add a task${target ? ` for ${target}` : ''}…`}
-            className="flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+            placeholder="Add a task…"
+            className="min-w-[12rem] flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
           />
+          <select
+            value={addWhere}
+            onChange={(e) => setAddWhere(e.target.value)}
+            title="Which client or list this task is for"
+            className={`max-w-[12rem] rounded-lg border px-2 py-1.5 text-xs ${addWhere ? 'border-blue-300 bg-blue-50 text-blue-900' : 'border-slate-300 bg-white text-slate-600'}`}
+          >
+            <option value="">Where: inbox</option>
+            <optgroup label="Clients">
+              {clients.map((c) => (
+                <option key={c.id} value={`c:${c.id}`}>
+                  {c.name}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Lists">
+              {lists.map((l) => (
+                <option key={l.id} value={`l:${l.id}`}>
+                  {l.name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+          {members.length > 0 && (
+            <select
+              value={members.some((m) => m.name === addPerson) ? addPerson : ''}
+              onChange={(e) => setAddPerson(e.target.value)}
+              title="Who this task is for"
+              className={`max-w-[10rem] rounded-lg border px-2 py-1.5 text-xs ${addPerson ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-600'}`}
+            >
+              <option value="">For: anyone</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.name}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          )}
           <button type="button" onClick={quickAdd} disabled={!quick.trim()} className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-30">
             Add
           </button>
         </div>
         <p className="mt-1 pl-6 text-[11px] text-slate-500">
-          <span className="font-mono">!urgent !high !low</span> · <span className="font-mono">@name</span> · <span className="font-mono">#tag</span> ·{' '}
-          <span className="font-mono">due tomorrow / fri / 2026-10-01</span>
-          {view === 'day' && me && ' · here a task is yours and due today unless you say otherwise'}
+          Or type it: <span className="font-mono">&gt;reliable</span> client or list · <span className="font-mono">@name</span> · <span className="font-mono">!urgent !high !low</span> ·{' '}
+          <span className="font-mono">#tag</span> · <span className="font-mono">due tomorrow / fri / 2026-10-01</span>
+          {view === 'day' && me && ' · in My day a task is due today unless you say otherwise'}
         </p>
       </div>
 

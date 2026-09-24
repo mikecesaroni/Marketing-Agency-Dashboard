@@ -56,10 +56,16 @@ you say otherwise. The page always opens on Team.
 
 ## Using it
 
-- **Add a task.** Type in the bar and press Enter. Shorthand on the end:
-  `!urgent` `!high` `!low` set priority, `@Ethan` assigns, `#meta` tags,
-  `due today`, `due tomorrow`, `due fri`, `due 2026-10-01` set the date.
-  Plain words are never read as flags.
+- **Add a task.** Type in the bar, pick the client (or list) and the person
+  in the two pickers beside it, press Enter. The pickers follow whatever is
+  selected in the filters above, so on Reliable's tab a new task is already
+  Reliable's, but they can be changed right in the bar without changing what
+  you are looking at. Shorthand on the end of the line works too and wins
+  over the pickers: `>reli` files it under Reliable (the start of any word in
+  a client or list name; if two match, nothing is picked and the word stays
+  in the title), `@Ethan` assigns, `!urgent` `!high` `!low` set priority,
+  `#meta` tags, `due today`, `due tomorrow`, `due fri`, `due 2026-10-01` set
+  the date. Plain words are never read as flags.
 - **Open a task** by clicking it. Every field saves as you change it.
   Assignees are one chip per team member, click to toggle, with a box for
   someone not on the team. Subtasks and checklist items are added with Enter.
