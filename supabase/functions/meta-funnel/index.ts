@@ -139,6 +139,34 @@ Deno.serve(async (req) => {
     return json({ error: 'Expected a JSON body.' }, 400)
   }
 
+  // -------------------------------------------------------------------------
+  // CONNECTION CHECK — what the token itself can see. No client involved.
+  //
+  // Nine of twelve client Pages came back unreadable while Business Settings
+  // showed the System User assigned to every one of them. The two facts only
+  // agree if the TOKEN is the limit, not the assignment: a System User
+  // token's Page access is fixed when the token is generated, and Pages
+  // assigned afterwards need a new token. /me/accounts is the list of Pages
+  // this token was minted with. If it names three Pages and the survey named
+  // three readable Pages, that is the whole story, and the fix is one new
+  // token rather than nine client conversations.
+  // -------------------------------------------------------------------------
+  if (String(body.action || '') === 'connection_check') {
+    try {
+      const [perms, pages] = await Promise.all([
+        graphGet('me/permissions', {}, token),
+        graphGet('me/accounts', { fields: 'id,name', limit: '200' }, token),
+      ])
+      return json({
+        granted: (perms.data || []).filter((p: any) => p.status === 'granted').map((p: any) => p.permission),
+        declined: (perms.data || []).filter((p: any) => p.status !== 'granted').map((p: any) => p.permission),
+        pages_in_token: (pages.data || []).map((p: any) => ({ id: p.id, name: p.name })),
+      })
+    } catch (err) {
+      return json({ error: String(err instanceof Error ? err.message : err) }, 500)
+    }
+  }
+
   const clientId = String(body.client_id || '').trim()
   if (!clientId) return json({ error: 'client_id is required.' }, 400)
 
