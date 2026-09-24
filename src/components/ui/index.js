@@ -25,6 +25,7 @@ export {
   IconTrendUp,
   IconTrendDown,
   IconTasks,
+  IconContent,
 } from './icons'
 export { Table, THead, TBody, Tr, Th, Td } from './Table'
 export { default as Delta } from './Delta'

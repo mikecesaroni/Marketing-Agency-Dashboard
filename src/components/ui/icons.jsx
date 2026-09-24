@@ -200,3 +200,13 @@ export function IconTasks(props) {
     </Icon>
   )
 }
+
+export function IconContent(props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3.5l1.6 4.1 4.1 1.6-4.1 1.6L12 14.9l-1.6-4.1-4.1-1.6 4.1-1.6L12 3.5Z" />
+      <path d="M18.5 15l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z" />
+      <path d="M5.5 15.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6.6-1.4Z" />
+    </Icon>
+  )
+}

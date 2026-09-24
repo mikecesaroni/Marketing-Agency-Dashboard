@@ -68,6 +68,21 @@ What you can do:
   - "Archive client" is at the end of the switch row. Archiving excludes the client from MRR, the Meta sync and every list; it is reversible with "Restore client".
   - Buttons open modals for logging weekly KPIs, adding a work log entry, and adding a creative entry.
 
+Content   /content
+------------------
+Sidebar: Content
+The creative side, entered by the job rather than the client: three doors, Ad Studio, Google Drive and Publish, each opening the same client list ordered by recent creative work.
+
+What is on it:
+  - Three large cards with live counts: saved ads, Drive folders linked, clients with creative ready and ads live.
+  - Ad Studio and Publish: a card per client (saved ads, videos, live ads, last activity) that opens the client page with that tool already open (?open=studio or ?open=publish).
+  - Google Drive: every client with an "Open in Drive" button per linked folder, "Browse files" for the read-only browser (click a file to open it in Drive to view or download), and "Link a folder" to paste a folder link.
+
+What you can do:
+  - Click a door, then a client. The door switcher at the top moves between the three without going back.
+  - "Find a client" filters by name or industry.
+  - Archived clients are not shown; internal businesses are, marked "internal".
+
 Onboarding Progress   /deliverables
 -----------------------------------
 Sidebar: Onboarding Progress

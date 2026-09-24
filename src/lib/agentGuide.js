@@ -101,6 +101,23 @@ export const ROUTES = [
     ],
   },
   {
+    path: '/content',
+    name: 'Content',
+    nav: 'Content',
+    purpose:
+      'The creative side, entered by the job rather than the client: three doors, Ad Studio, Google Drive and Publish, each opening the same client list ordered by recent creative work.',
+    contains: [
+      'Three large cards with live counts: saved ads, Drive folders linked, clients with creative ready and ads live.',
+      'Ad Studio and Publish: a card per client (saved ads, videos, live ads, last activity) that opens the client page with that tool already open (?open=studio or ?open=publish).',
+      'Google Drive: every client with an "Open in Drive" button per linked folder, "Browse files" for the read-only browser (click a file to open it in Drive to view or download), and "Link a folder" to paste a folder link.',
+    ],
+    actions: [
+      'Click a door, then a client. The door switcher at the top moves between the three without going back.',
+      '"Find a client" filters by name or industry.',
+      'Archived clients are not shown; internal businesses are, marked "internal".',
+    ],
+  },
+  {
     path: '/deliverables',
     name: 'Onboarding Progress',
     nav: 'Onboarding Progress',
