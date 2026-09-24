@@ -141,6 +141,11 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
       // Copy the fields the rest of the app reads off the client record, so
       // the dashboard and reports match what was captured on the call.
       const clientUpdate = {}
+      // The business name on the form is the client's name. The database
+      // does this too (supabase/business-name-sync.sql), so the public form
+      // and anything else that writes an intake keep the two in step; this
+      // copy is so the page shows the new name the moment Save is clicked.
+      if (cleanData.business_name) clientUpdate.name = String(cleanData.business_name).trim()
       if (cleanData.meta_ad_budget_per_day) clientUpdate.meta_budget_per_day = cleanData.meta_ad_budget_per_day
       if (cleanData.lsa_ad_budget_per_day) clientUpdate.lsa_budget_per_day = cleanData.lsa_ad_budget_per_day
       if (cleanData.industry_trade) clientUpdate.industry = cleanData.industry_trade
