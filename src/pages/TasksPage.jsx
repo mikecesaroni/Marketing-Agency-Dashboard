@@ -591,11 +591,6 @@ export default function TasksPage() {
             Add
           </button>
         </div>
-        <p className="mt-1 pl-6 text-[11px] text-slate-500">
-          Or type it: <span className="font-mono">&gt;reliable</span> client or list · <span className="font-mono">@name</span> · <span className="font-mono">!urgent !high !low</span> ·{' '}
-          <span className="font-mono">#tag</span> · <span className="font-mono">due tomorrow / fri / 2026-10-01</span>
-          {view === 'day' && me && ' · in My day a task is due today unless you say otherwise'}
-        </p>
       </div>
 
       {/* PEOPLE + WHERE: filters that are also the target. */}
