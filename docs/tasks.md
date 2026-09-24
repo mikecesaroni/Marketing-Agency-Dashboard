@@ -52,7 +52,7 @@ bar. Below them: an avatar chip per team member and a dropdown of clients and
 lists. The chip and the dropdown are filters, and they are also **where a new
 task goes**: on Maria's chip with Reliable selected, "Fix the form" is
 Maria's task for Reliable. In My day a new task is yours and due today unless
-you say otherwise. The last view you used is remembered.
+you say otherwise. The page always opens on Team.
 
 ## Using it
 

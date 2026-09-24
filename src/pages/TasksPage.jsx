@@ -281,13 +281,10 @@ export default function TasksPage() {
   const [error, setError] = useState('')
   const [me, setMe] = useState(readMe)
 
-  const [view, setView] = useState(() => {
-    try {
-      return localStorage.getItem('crm.tasks.view') || 'day'
-    } catch {
-      return 'day'
-    }
-  })
+  // Always opens on Team: who has what is the first question every time,
+  // and a remembered view meant the page opened somewhere different for
+  // each person. Asked for on 2026-09-24.
+  const [view, setView] = useState('team')
   const [allMode, setAllMode] = useState('list')
   const [groupBy, setGroupBy] = useState('status')
   // The two filters that are also where a new task goes.
@@ -301,14 +298,6 @@ export default function TasksPage() {
   const [listDraft, setListDraft] = useState('')
   // {id, from}: the card being dragged and the person column it left.
   const [dragging, setDragging] = useState(null)
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('crm.tasks.view', view)
-    } catch {
-      /* fine */
-    }
-  }, [view])
 
   const load = useCallback(async () => {
     try {
