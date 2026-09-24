@@ -6,6 +6,7 @@ import AdDeliveryAlerts from '../components/AdDeliveryAlerts'
 import AdDoctorAlerts from '../components/AdDoctorAlerts'
 import LaunchReadyAlerts from '../components/LaunchReadyAlerts'
 import NextUpDigest from '../components/NextUpDigest'
+import QuickCopyPanel from '../components/QuickCopyPanel'
 import { adsReady } from '../lib/adsReady'
 import {
   Badge,
@@ -330,6 +331,11 @@ export default function HomePage() {
           sub={missingKPIs.length > 0 ? `${missingKPIs.length} still to log` : 'all in for this week'}
         />
       </div>
+
+      {/* The IDs, emails and access messages the team pastes into other
+          people's screens all day. One click each; same sources as the
+          channel panels, so nothing here can say something different. */}
+      <QuickCopyPanel />
 
       {/* Channel coverage. Every one of these has a matching list further down
           naming exactly who is missing, so the number is a summary of work that
