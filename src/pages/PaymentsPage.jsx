@@ -79,6 +79,7 @@ function ByClient({ groups, expanded, toggle, renderRow }) {
 }
 
 export default function PaymentsPage() {
+  const [showSplit, setShowSplit] = useState(false)
   const [payments, setPayments] = useState([])
   const [expenses, setExpenses] = useState([])
   const [payouts, setPayouts] = useState([])
@@ -413,16 +414,30 @@ export default function PaymentsPage() {
           because "what do I owe Ethan" is the question asked of this page far
           more often than "what did Belk pay in July" — the ledger below is the
           evidence, this is the answer. */}
-      <h2 className="mb-3 mt-8 text-lg font-semibold tracking-tight text-slate-900">
-        Profit split
-      </h2>
-      <PartnerSplitPanel
-        payments={payments}
-        expenses={expenses}
-        payouts={payouts}
-        onChanged={loadData}
-      />
-      <ExpensesPanel expenses={expenses} clients={clients} onChanged={loadData} />
+      {/* Collapsed by default (asked for 2026-09-24): the split is looked at
+          once a month, the ledger below every day, and the split's numbers
+          are not something every person on the page needs in front of them. */}
+      <button
+        type="button"
+        onClick={() => setShowSplit((v) => !v)}
+        aria-expanded={showSplit}
+        className="mb-3 mt-8 flex w-full items-center gap-2 text-left"
+      >
+        <span className="text-slate-400">{showSplit ? '▾' : '▸'}</span>
+        <h2 className="text-lg font-semibold tracking-tight text-slate-900">Profit split</h2>
+        <span className="text-xs text-slate-500">{showSplit ? 'hide' : 'show'}</span>
+      </button>
+      {showSplit && (
+        <>
+          <PartnerSplitPanel
+            payments={payments}
+            expenses={expenses}
+            payouts={payouts}
+            onChanged={loadData}
+          />
+          <ExpensesPanel expenses={expenses} clients={clients} onChanged={loadData} />
+        </>
+      )}
 
       <h2 className="mb-3 mt-8 text-lg font-semibold tracking-tight text-slate-900">
         Every payment from Stripe
