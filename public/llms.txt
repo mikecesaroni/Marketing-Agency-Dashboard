@@ -68,9 +68,9 @@ What you can do:
   - "Archive client" is at the end of the switch row. Archiving excludes the client from MRR, the Meta sync and every list; it is reversible with "Restore client".
   - Buttons open modals for logging weekly KPIs, adding a work log entry, and adding a creative entry.
 
-Deliverables   /deliverables
-----------------------------
-Sidebar: Deliverables
+Onboarding Progress   /deliverables
+-----------------------------------
+Sidebar: Onboarding Progress
 The book of work across every client — what is promised and what is late.
 
 What is on it:
@@ -97,7 +97,7 @@ What you can do:
   - Tick a row to mark it done. Drag a card between people (Team) or statuses (All, Board).
   - "Team" / "Manage team" opens the roster: add a person with a name and what they do, rename (moves their tasks), remove (keeps their tasks).
   - "You:" at the top right picks your name from the roster; it drives My day and signs tasks and comments.
-  - Separate from the per-client onboarding checklist on the client page (client_tasks) and from Deliverables, which tracks what was promised to a client.
+  - Separate from the per-client onboarding checklist on the client page (client_tasks) and from Onboarding Progress (the /deliverables page), which tracks each client’s launch pipeline.
 
 Payments & Revenue   /payments
 ------------------------------

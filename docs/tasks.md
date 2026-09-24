@@ -81,7 +81,7 @@ you say otherwise. The page always opens on Team.
   takes them off the pickers and leaves the tasks they had alone. The roster
   is `team_members`, separate from CRM logins.
 - **Your name.** "You:" at the top right, picked from the roster. Kept in this
-  browser only (login is off), the same name the Deliverables board uses. It
+  browser only (login is off), the same name the Onboarding Progress board uses. It
   drives My day and signs tasks and comments.
 - **Lists.** "+ list" next to the dropdown. Archiving a list keeps its tasks
   attached; there is no delete.
@@ -90,8 +90,8 @@ you say otherwise. The page always opens on Team.
 
 - Not the per-client onboarding checklist on the client page. That is
   `client_tasks`, fed by the chat's task extraction, and stays as it is.
-- Not Deliverables, which tracks what was promised to a client and where the
-  launch pipeline stands.
+- Not Onboarding Progress (the old Deliverables tab), which tracks each
+  client’s launch pipeline.
 
 ## Rules and checks
 

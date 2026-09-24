@@ -397,7 +397,7 @@ export default function DeliverablesPage() {
 
   return (
     <Layout
-      title="Deliverables"
+      title="Onboarding Progress"
       subtitle={rows ? `${counts.us} need us · ${counts.client} waiting on a client · ${counts.launched} launched` : 'Loading…'}
       actions={
         <Button variant="dark" size="lg" onClick={() => setAdding('any')} className="w-full md:w-auto">

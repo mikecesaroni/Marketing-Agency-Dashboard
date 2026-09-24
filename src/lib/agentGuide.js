@@ -102,8 +102,8 @@ export const ROUTES = [
   },
   {
     path: '/deliverables',
-    name: 'Deliverables',
-    nav: 'Deliverables',
+    name: 'Onboarding Progress',
+    nav: 'Onboarding Progress',
     purpose: 'The book of work across every client — what is promised and what is late.',
     contains: ['One row per deliverable, with its client, status and due date.'],
     actions: [
@@ -129,7 +129,7 @@ export const ROUTES = [
       'Tick a row to mark it done. Drag a card between people (Team) or statuses (All, Board).',
       '"Team" / "Manage team" opens the roster: add a person with a name and what they do, rename (moves their tasks), remove (keeps their tasks).',
       '"You:" at the top right picks your name from the roster; it drives My day and signs tasks and comments.',
-      'Separate from the per-client onboarding checklist on the client page (client_tasks) and from Deliverables, which tracks what was promised to a client.',
+      'Separate from the per-client onboarding checklist on the client page (client_tasks) and from Onboarding Progress (the /deliverables page), which tracks each client\u2019s launch pipeline.',
     ],
   },
   {

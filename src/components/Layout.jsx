@@ -24,7 +24,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/', label: 'Dashboard', short: 'Home', Icon: IconDashboard, end: true },
       { to: '/clients', label: 'Clients', short: 'Clients', Icon: IconClients },
-      { to: '/deliverables', label: 'Deliverables', short: 'Work', Icon: IconDeliverables },
+      { to: '/deliverables', label: 'Onboarding Progress', short: 'Onboarding', Icon: IconDeliverables },
       { to: '/tasks', label: 'Tasks', short: 'Tasks', Icon: IconTasks },
     ],
   },
