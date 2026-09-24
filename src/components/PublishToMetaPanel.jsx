@@ -6,6 +6,7 @@ import { publishedNote, rememberQuietly } from '../lib/memory'
 import FunnelBuilder from './FunnelBuilder'
 import VideoAdPicker from './VideoAdPicker'
 import { fetchSavedAds } from '../lib/savedAds'
+import { wcName } from '../lib/adNaming'
 import {
   CTA_OPTIONS,
   MAX_BATCH_ADS,
@@ -571,7 +572,10 @@ export default function PublishToMetaPanel({
   const [reuseCampaign, setReuseCampaign] = useState(false)
   const [campaigns, setCampaigns] = useState(null)
   const [campaignId, setCampaignId] = useState('')
-  const [campaignName, setCampaignName] = useState(`${client.name} — ${new Date().getFullYear()}`)
+  // Every name starts WC_ (src/lib/adNaming.js). The default carries it so it
+  // is visible in the field; the send below applies it again in case it was
+  // typed over, and it is never stacked.
+  const [campaignName, setCampaignName] = useState(wcName(`${client.name} — ${new Date().getFullYear()}`))
 
   const [reuseAdset, setReuseAdset] = useState(false)
   const [adsets, setAdsets] = useState(null)
@@ -632,7 +636,7 @@ export default function PublishToMetaPanel({
           primary_text: r.primary_text || '',
           headline: r.headline || r.hook || '',
           description: r.description || '',
-          ad_name: `${client.name} — ${r.hook || 'ad'}`.slice(0, 100),
+          ad_name: wcName(`${client.name} — ${r.hook || 'ad'}`).slice(0, 100),
         }
       }
       return next
@@ -854,6 +858,7 @@ export default function PublishToMetaPanel({
           : `Creating ${adTotal * targets} ads across ${targets} ad sets…`
     )
     try {
+      const today = new Date().toISOString().slice(0, 10)
       const ads = pickedSets.map((s) => {
         const c = copies[String(s.stamp)] || {}
         return {
@@ -864,7 +869,9 @@ export default function PublishToMetaPanel({
           primary_text: c.primary_text?.trim(),
           headline: c.headline?.trim() || undefined,
           description: c.description?.trim() || undefined,
-          ad_name: c.ad_name?.trim() || undefined,
+          // Always sent, always prefixed. Left blank, the function would name
+          // the ad itself, without the prefix.
+          ad_name: wcName(c.ad_name?.trim() || `${client.name} — ${today}`),
           cta,
           link_url: linkUrl.trim() || undefined,
           lead_form_id: leadForm?.id,
@@ -883,7 +890,7 @@ export default function PublishToMetaPanel({
           primary_text: c.primary_text?.trim(),
           headline: c.headline?.trim() || undefined,
           description: c.description?.trim() || undefined,
-          ad_name: c.ad_name?.trim() || undefined,
+          ad_name: wcName(c.ad_name?.trim() || `${client.name} — ${today}`),
           cta,
           link_url: linkUrl.trim() || undefined,
           lead_form_id: leadForm?.id,
@@ -896,8 +903,10 @@ export default function PublishToMetaPanel({
         client_id: client.id,
         objective,
         special_ad_categories: specialCategory ? [specialCategory] : [],
-        campaign_name: reuseCampaign ? undefined : campaignName.trim(),
-        adset_name: reuseAdset ? undefined : adsetName.trim() || undefined,
+        // Both named here rather than left to the function's defaults, so the
+        // WC_ rule holds whether or not a name was typed.
+        campaign_name: reuseCampaign ? undefined : wcName(campaignName.trim()),
+        adset_name: reuseAdset ? undefined : wcName(adsetName.trim() || `${client.name} — ${today}`),
         daily_budget_cents: reuseAdset ? undefined : budgetCents,
         locations: reuseAdset ? [] : locations,
         age_min: Number(ageMin),
@@ -1300,7 +1309,12 @@ export default function PublishToMetaPanel({
             </>
           )
         ) : (
-          <Text label="Campaign name" value={campaignName} onChange={setCampaignName} />
+          <Text
+            label="Campaign name"
+            value={campaignName}
+            onChange={setCampaignName}
+            hint="starts WC_ — added if left off"
+          />
         )}
       </Section>
 
@@ -1413,8 +1427,8 @@ export default function PublishToMetaPanel({
                 label="Ad set name"
                 value={adsetName}
                 onChange={setAdsetName}
-                placeholder={`${client.name} — ${new Date().toISOString().slice(0, 10)}`}
-                hint="optional"
+                placeholder={wcName(`${client.name} — ${new Date().toISOString().slice(0, 10)}`)}
+                hint="optional · starts WC_"
               />
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">

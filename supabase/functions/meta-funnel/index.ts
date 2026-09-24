@@ -29,7 +29,12 @@
 //
 // Everything is created PAUSED. Nothing here starts spending.
 //
+// Every campaign and ad set it names starts WC_, the agency's mark inside a
+// client's account (src/lib/adNaming.js is the rule; this carries a copy
+// because a function cannot import from the app).
+//
 // Actions:
+//   connection_check {}                   -> what the token itself can see
 //   list_audiences   {client_id}          -> the saved audiences on the account
 //   create_audiences {client_id}          -> the four standard audiences, if missing
 //   inspect          {client_id}          -> campaigns and ad sets WITH targeting
@@ -48,6 +53,15 @@ const CORS = {
 // Meta refuses an ad set below this, and well under it is nearly always a
 // budget typed in dollars where cents were meant.
 const MIN_DAILY_BUDGET_CENTS = 100
+
+// The agency prefix on every campaign and ad set name. Same rule as
+// src/lib/adNaming.js and meta-manage; applied once, never stacked.
+const WC_PREFIX = 'WC_'
+function wcName(name: string): string {
+  const clean = String(name ?? '').trim()
+  if (!clean || clean.toUpperCase().startsWith(WC_PREFIX)) return clean
+  return `${WC_PREFIX}${clean}`
+}
 
 // The permissions the token needs for everything this function does, beyond
 // the ads_* it already has. Checked by connection_check and named in the
@@ -583,7 +597,7 @@ Deno.serve(async (req) => {
 
       for (const stage of stages) {
         const label = stage === 'retarget' ? 'Retargeting' : 'Top of funnel'
-        const name = `${client.name} — ${label} — ${suffix}`
+        const name = wcName(`${client.name} — ${label} — ${suffix}`)
         const campaign = await graphPost(
           `${account}/campaigns`,
           {
@@ -625,11 +639,12 @@ Deno.serve(async (req) => {
         // set it would let Meta deliver outside the very audience the ad set
         // exists to reach.
         const advantage = spec.advantage_audience === 1 ? 1 : 0
+        const adsetName = wcName(`${spec.name} — ${suffix}`)
 
         const adset = await graphPost(
           `${account}/adsets`,
           {
-            name: `${spec.name} — ${suffix}`,
+            name: adsetName,
             campaign_id: campaign.id,
             billing_event: 'IMPRESSIONS',
             optimization_goal: goal,
@@ -659,7 +674,7 @@ Deno.serve(async (req) => {
           stage,
           key: spec.key || null,
           id: String(adset.id),
-          name: `${spec.name} — ${suffix}`,
+          name: adsetName,
           campaign_id: campaign.id,
           include,
           exclude,

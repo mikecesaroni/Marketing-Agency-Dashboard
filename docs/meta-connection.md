@@ -216,3 +216,23 @@ on the next attempt.
 - **Editing what already exists.** This creates; it never modifies. Changing an
   existing ad set's locations or budget is a separate, and more dangerous,
   feature — it can alter something that is live and spending.
+
+## Naming: everything we create starts WC_
+
+Every campaign, ad set and ad the CRM creates in a client's account is named
+`WC_...`. Inside an account that also holds what the client or a previous
+agency built, the prefix is what makes "ours" a filter in Ads Manager.
+
+It is applied at the last moment before the name goes to Meta, once, and never
+stacked, in each of the three paths that create things:
+
+- Publish (Ad Studio): campaign, ad set and every ad. The fields show the
+  prefix; typing over it is fine, it comes back on send.
+- Funnel builder (client page and inside publish): both campaigns and every
+  ad set.
+- Chat (meta-manage): create campaign, create ad set, duplicate ad. The model
+  picks the rest of the name; the function puts the prefix on.
+
+Renaming an existing object through the chat is left alone on purpose. The
+rule is `src/lib/adNaming.js`; the two edge functions carry a copy, and
+`scripts/check-ad-naming.mjs` fails if any of the three drifts.

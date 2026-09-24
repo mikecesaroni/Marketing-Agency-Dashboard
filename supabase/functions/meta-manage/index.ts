@@ -61,6 +61,19 @@ const EDITABLE: Record<string, Set<string>> = {
 
 const STATUSES = new Set(['ACTIVE', 'PAUSED'])
 
+// Every campaign, ad set and ad created here starts WC_, the agency's mark
+// inside a client's account. The chat picks the rest of the name; this puts
+// the prefix on whatever it picked, once, so the rule does not depend on the
+// model remembering it. Same rule as src/lib/adNaming.js and meta-funnel.
+// Renames through `update` are left alone: that is somebody changing a name
+// on purpose.
+const WC_PREFIX = 'WC_'
+function wcName(name: string): string {
+  const clean = String(name ?? '').trim()
+  if (!clean || clean.toUpperCase().startsWith(WC_PREFIX)) return clean
+  return `${WC_PREFIX}${clean}`
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -432,7 +445,7 @@ Deno.serve(async (req) => {
     // CREATE CAMPAIGN
     // -----------------------------------------------------------------------
     if (action === 'create_campaign') {
-      const name = String(body.name || '').trim()
+      const name = wcName(String(body.name || ''))
       if (!name) return json({ error: 'name is required.' }, 400)
 
       const status = String(body.status || 'PAUSED').toUpperCase()
@@ -467,14 +480,14 @@ Deno.serve(async (req) => {
         'create campaign'
       )
 
-      return json({ ok: true, campaign_id: campaign.id, status })
+      return json({ ok: true, campaign_id: campaign.id, name, status })
     }
 
     // -----------------------------------------------------------------------
     // CREATE AD SET
     // -----------------------------------------------------------------------
     if (action === 'create_adset') {
-      const name = String(body.name || '').trim()
+      const name = wcName(String(body.name || ''))
       const campaignId = String(body.campaign_id || '').trim()
       if (!name) return json({ error: 'name is required.' }, 400)
       if (!campaignId) return json({ error: 'campaign_id is required.' }, 400)
@@ -585,6 +598,7 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         adset_id: adset.id,
+        name,
         status,
         optimization_goal: goal,
         promoted_object: promotedObject ?? null,
@@ -619,10 +633,11 @@ Deno.serve(async (req) => {
       const status = String(body.status || 'PAUSED').toUpperCase()
       if (!STATUSES.has(status)) return json({ error: 'status must be ACTIVE or PAUSED.' }, 400)
 
+      const name = wcName(String(body.name || `${source.name} (copy)`))
       const ad = await graphPost(
         `${account}/ads`,
         {
-          name: String(body.name || `${source.name} (copy)`),
+          name,
           adset_id: adsetId,
           creative: { creative_id: creativeId },
           status,
@@ -631,7 +646,7 @@ Deno.serve(async (req) => {
         'duplicate ad'
       )
 
-      return json({ ok: true, ad_id: ad.id, from_ad_id: adId, status })
+      return json({ ok: true, ad_id: ad.id, name, from_ad_id: adId, status })
     }
 
     return json({ error: `Unknown action "${action}".` }, 400)
