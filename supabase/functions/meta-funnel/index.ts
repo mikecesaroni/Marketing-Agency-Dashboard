@@ -85,6 +85,39 @@ const RECOMMENDED_SCOPES = ['pages_read_engagement', 'instagram_basic', 'leads_r
 const PAGE_SCOPE_PROBLEM =
   "the CRM's Meta token can list this Page but not read it. The System User is assigned to the Page; what is missing is the pages_read_engagement permission on the token itself. Regenerate the System User token in Business Settings with pages_read_engagement (and instagram_basic, leads_retrieval) ticked, update the META_ACCESS_TOKEN secret, then run this again. No client action is needed."
 
+// The other reason a Page cannot be read: the System User was never given it.
+// A System User token only covers Pages assigned to that user when the token
+// was generated, so this is two steps, and both are agency-side unless the
+// Page is the client's own and has not been shared with the business yet.
+const PAGE_NOT_ASSIGNED =
+  'the System User cannot see this Page. In Business Settings > Users > System users, open the CRM system user, Add assets > Pages, and add it; then generate a new token (a System User token only covers Pages assigned when it was made) and update META_ACCESS_TOKEN. If the Page is the client’s own and does not appear in that list, they have to share it with the business first.'
+
+// Meta's #2654 on an Instagram audience: the IG account is not an asset the
+// System User can build audiences from, even though the Page that links it is.
+const IG_NOT_ASSIGNED =
+  'The Instagram account is not assigned to the CRM system user. In Business Settings > Accounts > Instagram accounts, add it (or have the client share it), assign the system user, then run this again.'
+
+/**
+ * Which of the two Page problems this is, from the token itself: does it
+ * carry pages_read_engagement, and does /me/accounts list the Page?
+ */
+async function explainUnreadablePage(pageId: string, metaSaid: string, token: string): Promise<string> {
+  let hasScope = true
+  let listed = true
+  try {
+    const perms = await graphGet('me/permissions', {}, token)
+    hasScope = (perms.data || []).some((p: any) => p.permission === 'pages_read_engagement' && p.status === 'granted')
+    const pages = await graphGet('me/accounts', { fields: 'id', limit: '200' }, token)
+    listed = (pages.data || []).some((p: any) => String(p.id) === pageId)
+  } catch {
+    // Cannot tell; fall through to the permission wording with Meta's words.
+  }
+  const said = metaSaid ? ` (Meta said: ${metaSaid})` : ''
+  if (!hasScope) return `${PAGE_SCOPE_PROBLEM}${said}`
+  if (!listed) return `${PAGE_NOT_ASSIGNED}${said}`
+  return `the Page could not be read even though the token has pages_read_engagement and lists it.${said}`
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -329,6 +362,7 @@ Deno.serve(async (req) => {
       let pageReadable = false
       let pageProblem = ''
       if (client.meta_page_id) {
+        let metaSaid = ''
         try {
           const page = await graphGet(
             String(client.meta_page_id),
@@ -338,9 +372,17 @@ Deno.serve(async (req) => {
           // A Page the token can list but not read comes back with no name.
           pageReadable = Boolean(page?.name)
           igId = pageReadable ? String(page?.instagram_business_account?.id || '') : ''
-          if (!pageReadable) pageProblem = PAGE_SCOPE_PROBLEM
         } catch (err) {
-          pageProblem = `${PAGE_SCOPE_PROBLEM} (Meta said: ${String(err instanceof Error ? err.message : err)})`
+          metaSaid = String(err instanceof Error ? err.message : err)
+        }
+        // WHY it cannot be read, decided from evidence rather than assumed.
+        // 2026-09-24: with pages_read_engagement finally on the token, eleven
+        // Pages read fine and Comfort Experts still did not -- because its
+        // Page is not assigned to the System User at all. The old message
+        // blamed the permission, which would have sent somebody to regenerate
+        // a token that was already right.
+        if (!pageReadable) {
+          pageProblem = await explainUnreadablePage(String(client.meta_page_id), metaSaid, token)
         }
       }
 
@@ -446,7 +488,15 @@ Deno.serve(async (req) => {
           )
           results.push({ name: w.name, status: 'created', id: String(made.id) })
         } catch (err) {
-          results.push({ name: w.name, status: 'failed', reason: String(err instanceof Error ? err.message : err) })
+          let reason = String(err instanceof Error ? err.message : err)
+          // Seen on Reliable and Perfect Breeze: the Page reads fine, its
+          // Instagram account is found, and the IG audience is refused with
+          // "#2654 No permission on event source". The account is linked to
+          // the Page but not assigned to the system user.
+          if (w.name === 'IG_Engagers_365D' && /2654|permission on event source/i.test(reason)) {
+            reason = `${IG_NOT_ASSIGNED} (Meta said: ${reason})`
+          }
+          results.push({ name: w.name, status: 'failed', reason })
         }
       }
 
