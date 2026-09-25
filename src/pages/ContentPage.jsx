@@ -410,7 +410,7 @@ export default function ContentPage() {
                 <span className="text-3xl">🔻</span>
                 <h3 className="mt-3 text-2xl font-bold tracking-tight">Build a funnel</h3>
                 <p className="mt-1 max-w-xs text-sm text-white/85">
-                  Two campaigns built in Meta for you: one finds new people, one follows up with people who showed interest. Paused, no ads needed yet.
+                  Top of funnel and Retargeting, built in Meta for you: one finds new people, one follows up with people who showed interest. Paused, no ads needed yet.
                 </p>
                 <span className="mt-auto pt-4 text-xs font-medium text-white/80">Pick a client →</span>
               </button>

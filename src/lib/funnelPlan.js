@@ -51,12 +51,12 @@ export const ROLES = {
   },
   warmVisitors: {
     label: 'Looked, did not send a lead',
-    hint: 'Visited the website or opened the form and stopped. The follow-up campaign goes after these.',
+    hint: 'Visited the website or opened the form and stopped. The retargeting campaign goes after these.',
     required: false,
   },
   engagers: {
     label: 'Liked, watched or followed',
-    hint: 'Interacted with the Facebook Page or Instagram. Warm, so the follow-up campaign reaches them too.',
+    hint: 'Interacted with the Facebook Page or Instagram. Warm, so the retargeting campaign reaches them too.',
     required: false,
   },
 }
@@ -181,14 +181,14 @@ export function planGaps(raw = {}) {
     gaps.push({
       role: 'engagers',
       severity: 'high',
-      text: 'Nobody to follow up with. Pick at least one warm audience, or there is no follow-up campaign to build.',
+      text: 'Nobody to retarget. Pick at least one warm audience, or there is no retargeting campaign to build.',
     })
   }
   if (!visitors.length && engagers.length) {
     gaps.push({
       role: 'warmVisitors',
       severity: 'low',
-      text: 'No "looked, did not send a lead" audience. Follow-up will reach people who liked or watched only; the best accounts run both.',
+      text: 'No "looked, did not send a lead" audience. Retargeting will reach people who liked or watched only; the best accounts run both.',
     })
   }
   return gaps

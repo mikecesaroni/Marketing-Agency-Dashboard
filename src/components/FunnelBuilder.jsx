@@ -151,9 +151,9 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
   if (locations.length === 0) blockers.push('pick where the ads run')
   if (destination === 'website' && !client.meta_pixel_id) blockers.push('the client has no pixel, so choose Instant form')
   if (destination === 'form' && !client.meta_page_id) blockers.push('the client has no Facebook Page connected')
-  if (budgetCents.tof < 100) blockers.push('finding new people budget under $1.00')
+  if (budgetCents.tof < 100) blockers.push('top of funnel budget under $1.00')
   if (plan.campaigns.some((c) => c.stage === 'retarget') && budgetCents.retarget < 100)
-    blockers.push('following up budget under $1.00')
+    blockers.push('retargeting budget under $1.00')
 
   const build = async () => {
     setBusy(true)
@@ -186,8 +186,8 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
       <div className="rounded-lg border border-orange-200 bg-orange-50/60 p-2.5 text-xs text-slate-700">
         <p className="font-semibold text-slate-900">How it works</p>
         <ul className="mt-1 space-y-0.5 text-[11px]">
-          <li><strong>Finding new people</strong> shows ads to people in the area who have never dealt with the client.</li>
-          <li><strong>Following up</strong> shows ads only to people who already looked, liked or watched.</li>
+          <li><strong>Top of funnel</strong> shows ads to people in the area who have never dealt with the client.</li>
+          <li><strong>Retargeting</strong> shows ads only to people who already looked, liked or watched.</li>
           <li>Anyone who already sent a lead is left out of both.</li>
           <li>Everything is created <strong>paused</strong>. Nothing spends until it is switched on in Ads Manager.</li>
         </ul>
@@ -251,7 +251,8 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
           <div>
             <p className="text-xs font-semibold text-slate-900">2 · Who it reaches</p>
             <p className="text-[11px] text-slate-500">
-              Picked for you from the client&apos;s audiences. Usually nothing to change.
+              Picked for you from the client&apos;s audiences. Usually nothing to change. Retargeting goes
+              after the two warm groups; everyone who is already a lead is left out.
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
@@ -285,7 +286,7 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
       <p className="text-xs font-semibold text-slate-900">3 · Spend per day</p>
       <div className="grid gap-2 md:grid-cols-2">
         <label className="text-xs">
-          <span className="block font-medium text-slate-700">Finding new people, $/day</span>
+          <span className="block font-medium text-slate-700">Top of funnel, $/day <span className="font-normal text-slate-400">(finding new people)</span></span>
           <input
             value={tofBudget}
             onChange={(e) => setTofBudget(e.target.value)}
@@ -293,7 +294,7 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
           />
         </label>
         <label className="text-xs">
-          <span className="block font-medium text-slate-700">Following up, $/day</span>
+          <span className="block font-medium text-slate-700">Retargeting, $/day <span className="font-normal text-slate-400">(following up)</span></span>
           <input
             value={retargetBudget}
             onChange={(e) => setRetargetBudget(e.target.value)}
@@ -302,7 +303,7 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
         </label>
       </div>
       <p className="text-[11px] text-slate-500">
-        Each campaign gets its own daily budget. Most clients: more on finding new people, less on following up.
+        Each campaign gets its own daily budget. Most clients: more on top of funnel, less on retargeting.
       </p>
 
       <div>
@@ -344,9 +345,9 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
         <ul className="space-y-0.5">
           {plan.campaigns.map((c) => (
             <li key={c.stage} className="text-[11px] text-slate-700">
-              <span className="font-medium">{c.stage === 'tof' ? 'Finding new people' : 'Following up'}</span>{' '}
+              <span className="font-medium">{c.stage === 'tof' ? 'Top of funnel' : 'Retargeting'}</span>{' '}
               — {usd(budgetCents[c.stage])}/day
-              <span className="text-slate-500"> · in Meta: {c.name}</span>
+              <span className="text-slate-500"> · {c.name}</span>
             </li>
           ))}
           {lines.map((line, i) => (

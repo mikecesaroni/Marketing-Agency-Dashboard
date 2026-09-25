@@ -67,9 +67,9 @@ export default function FunnelPanel({ client, intake, initialOpen = false }) {
         <div>
           <h3 className="font-semibold text-slate-900">Build a funnel</h3>
           <p className="mt-0.5 text-sm text-slate-600">
-            Two campaigns, built in Meta for you and left paused: one that <strong>finds new people</strong>,
-            one that <strong>follows up</strong> with people who already showed interest. No ads yet;
-            you publish those into it afterwards.
+            Two campaigns, built in Meta for you and left paused: <strong>Top of funnel</strong>, which
+            finds new people, and <strong>Retargeting</strong>, which follows up with people who already
+            showed interest. No ads yet; you publish those into it afterwards.
           </p>
         </div>
         {!open && !built && (
