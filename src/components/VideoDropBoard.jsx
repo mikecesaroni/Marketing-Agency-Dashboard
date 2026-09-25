@@ -59,8 +59,9 @@ function Row({ row, onDismiss }) {
   const last = row.lastAdAt
     ? `last ad ${row.daysSince === 0 ? 'today' : row.daysSince === 1 ? 'yesterday' : `${row.daysSince} days ago`}`
     : 'no ad yet'
+  // Every new clip by name, so a two-clip drop reads as two clips.
   const line = clip
-    ? `${clip.name} · dropped ${ago(clip.at)}${clip.by ? ` by ${clip.by}` : ''}${row.waiting.length > 1 ? ` · ${row.waiting.length - 1} more waiting` : ''}`
+    ? `${row.waiting.length > 1 ? `${row.waiting.length} new clips: ` : ''}${row.waiting.map((w) => w.name).join(', ')} · dropped ${ago(clip.at)}${clip.by ? ` by ${clip.by}` : ''}`
     : `${last}${row.lastAdName ? ` · ${row.lastAdName}` : ''}${row.thisWeek > 1 ? ` · ${row.thisWeek} this week` : ''}`
   return (
     <li>
@@ -77,7 +78,7 @@ function Row({ row, onDismiss }) {
             {row.name}
             {row.internal && <span className="ml-1.5 text-[11px] font-normal text-slate-400">internal</span>}
           </span>
-          <span className="block truncate text-[11px] text-slate-500" title={clip ? clip.name : row.lastAdName}>
+          <span className="block truncate text-[11px] text-slate-500" title={clip ? row.waiting.map((w) => w.name).join(', ') : row.lastAdName}>
             {line}
           </span>
         </span>
