@@ -70,6 +70,7 @@ export async function createTask(fields) {
       due_date: fields.due_date || null,
       checklist: fields.checklist || [],
       created_by: fields.created_by || null,
+      repeat: fields.repeat || null,
     })
     .select()
     .single()

@@ -20,6 +20,50 @@ export const TASK_STATUSES = [
 export const STATUS_KEYS = TASK_STATUSES.map((s) => s.key)
 
 // ClickUp's flags, in ClickUp's order. Urgent sorts first.
+/**
+ * How often a task comes back. Marking a repeating task done makes the next
+ * one (supabase/task-repeats.sql), due one period on, always in the future.
+ */
+export const TASK_REPEATS = [
+  { key: '', label: 'Does not repeat' },
+  { key: 'daily', label: 'Every day' },
+  { key: 'weekly', label: 'Every week' },
+  { key: 'biweekly', label: 'Every 2 weeks' },
+  { key: 'monthly', label: 'Every month' },
+]
+
+export function repeatLabel(key) {
+  return TASK_REPEATS.find((r) => r.key === (key || ''))?.label || ''
+}
+
+/**
+ * The due date the next copy gets: one period after the current due date
+ * (today when there is none), pushed forward until it is after today. The
+ * same rule the database applies; here so the drawer can say "next one lands
+ * on the 3rd" before anyone ticks it off.
+ */
+export function nextDue(due, repeat, today = isoDay()) {
+  if (!repeat) return null
+  const base = due || today
+  const step = (iso) => {
+    if (repeat === 'monthly') {
+      // Same as Postgres: the day is clamped to the next month's length and
+      // stays clamped (Jan 31 -> Feb 28 -> Mar 28).
+      const [y, m, d] = iso.split('-').map(Number)
+      const last = new Date(y, m + 1, 0).getDate()
+      return isoDay(new Date(y, m, Math.min(d, last)))
+    }
+    return addDays(iso, repeat === 'daily' ? 1 : repeat === 'biweekly' ? 14 : 7)
+  }
+  let next = step(base)
+  let guard = 0
+  while (next <= today && guard < 400) {
+    next = step(next)
+    guard++
+  }
+  return next
+}
+
 export const TASK_PRIORITIES = [
   { key: 'urgent', label: 'Urgent', color: 'red' },
   { key: 'high', label: 'High', color: 'amber' },
@@ -257,8 +301,28 @@ export function progress(task) {
  * `places` is [{key, name}] for the > shorthand: every client and list.
  */
 export function parseQuickAdd(line, today = isoDay(), known = [], places = []) {
-  const out = { title: '', priority: 'normal', assignees: [], tags: [], due_date: null, place: null }
+  const out = { title: '', priority: 'normal', assignees: [], tags: [], due_date: null, place: null, repeat: null }
   let rest = String(line || '')
+
+  // "every week", "every 2 weeks", "every month", "every day", "weekly",
+  // or "every fri": weekly, and due next Friday when no other due is given.
+  // "every ..." anywhere; a bare "weekly" only at the end of the line, so
+  // "Post the weekly video" keeps its title.
+  rest = rest.replace(
+    /\bevery\s+(day|week|2\s*weeks|other\s+week|month|mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\s(daily|weekly|biweekly|monthly)\s*$/i,
+    (_, every, word) => {
+      const w = (every || word).toLowerCase().replace(/\s+/g, ' ')
+      if (w === 'day' || w === 'daily') out.repeat = 'daily'
+      else if (w === 'week' || w === 'weekly') out.repeat = 'weekly'
+      else if (w === '2 weeks' || w === 'other week' || w === 'biweekly') out.repeat = 'biweekly'
+      else if (w === 'month' || w === 'monthly') out.repeat = 'monthly'
+      else {
+        out.repeat = 'weekly'
+        out.due_date = resolveDay(w, today)
+      }
+      return ' '
+    }
+  )
 
   rest = rest.replace(/(^|\s)>([\w&'.-]+)/g, (_, sp, word) => {
     const hit = matchPlace(word, places)
@@ -288,6 +352,8 @@ export function parseQuickAdd(line, today = isoDay(), known = [], places = []) {
       return ' '
     }
   )
+  // A repeating task with no day named is due today, so the chain starts now.
+  if (out.repeat && !out.due_date) out.due_date = today
 
   out.title = rest.replace(/\s+/g, ' ').trim()
   return out

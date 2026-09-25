@@ -167,7 +167,8 @@ export const ROUTES = [
     contains: [
       'Three numbers at the top: overdue, due today, open. Then the view switch: My day, Team, Clients, All.',
       'My day: your tasks in due-date order. Team: one column per team member, drag a card to hand it over. Clients: grouped by client, then the agency lists, then the inbox. All: a list grouped any way, or a board by status.',
-      'A quick-add bar that files the task wherever you are looking, reading "!high @Name #tag due fri" off the end of the line.',
+      'A quick-add bar that files the task wherever you are looking, reading "!high @Name #tag due fri every week" off the end of the line.',
+      'Repeating tasks: a Repeats setting in the task drawer (every day, week, 2 weeks, month), or "every week" / "every fri" in the quick-add. When a repeating task is marked done, the database makes the next one for the same people, due one period on. Cards show ↻.',
       'Avatar chips for each team member and one dropdown for client or list. Both filter what you see AND decide where a new task goes.',
     ],
     actions: [

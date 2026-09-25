@@ -29,6 +29,7 @@ import {
   reassign,
   sortTasks,
   summarise,
+  nextDue,
 } from '../src/lib/tasks.js'
 
 let failures = 0
@@ -127,6 +128,15 @@ check(
   check('the due date', p.due_date, '2026-09-25')
   check('and leaves the title clean', p.title, 'Fix the Reliable form')
 }
+{
+  const r = parseQuickAdd('Post the weekly video for Belk every week @kyle', TODAY, ['Kyle'])
+  check('quick add: every week repeats weekly, due today, title clean', [r.repeat, r.due_date, r.assignees, r.title], ['weekly', TODAY, ['Kyle'], 'Post the weekly video for Belk'])
+  check('quick add: every fri is weekly, due next Friday', [parseQuickAdd('Send reports every fri', TODAY).repeat, parseQuickAdd('Send reports every fri', TODAY).due_date], ['weekly', '2026-09-25'])
+  check('quick add: every 2 weeks and every month', [parseQuickAdd('x every 2 weeks', TODAY).repeat, parseQuickAdd('x every month', TODAY).repeat, parseQuickAdd('x daily', TODAY).repeat], ['biweekly', 'monthly', 'daily'])
+  check('quick add: an explicit due wins over the repeat default', parseQuickAdd('x every week due 2026-10-10', TODAY).due_date, '2026-10-10')
+}
+check('next due: a week on, always in the future', [nextDue('2026-09-20', 'weekly', TODAY), nextDue('2026-09-01', 'weekly', TODAY), nextDue(null, 'daily', TODAY), nextDue('2026-01-31', 'monthly', TODAY)], ['2026-09-27', '2026-09-29', '2026-09-25', '2026-09-28'])
+check('next due: nothing without a repeat', nextDue('2026-09-20', '', TODAY), null)
 check('a plain line is just a title', parseQuickAdd('Call Comfort Experts about TOS', TODAY), {
   title: 'Call Comfort Experts about TOS',
   priority: 'normal',
@@ -134,6 +144,7 @@ check('a plain line is just a title', parseQuickAdd('Call Comfort Experts about 
   tags: [],
   due_date: null,
   place: null,
+  repeat: null,
 })
 check('"urgent" as a word is not a flag', parseQuickAdd('urgent call back', TODAY).priority, 'normal')
 check('due fri on a Thursday is tomorrow', parseQuickAdd('x due fri', TODAY).due_date, '2026-09-25')

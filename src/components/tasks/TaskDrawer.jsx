@@ -9,6 +9,9 @@ import {
   priorityLabel,
   progress,
   sortTasks,
+  TASK_REPEATS,
+  isoDay,
+  nextDue,
 } from '../../lib/tasks'
 import { addComment, createTask, deleteComment, deleteTask, fetchComments, updateTask } from '../../lib/tasksData'
 import { MemberBadge, MemberPicker } from './TeamPanel'
@@ -415,6 +418,20 @@ export default function TaskDrawer({
           </Row>
           <Row label="Due">
             <Input size="sm" type="date" value={t.due_date || ''} onChange={(e) => save({ due_date: e.target.value || null })} invalid={isOverdue(t)} />
+          </Row>
+          <Row label="Repeats">
+            <Select size="sm" value={t.repeat || ''} onChange={(e) => save({ repeat: e.target.value || null, ...(e.target.value && !t.due_date ? { due_date: isoDay() } : {}) })}>
+              {TASK_REPEATS.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {r.label}
+                </option>
+              ))}
+            </Select>
+            {t.repeat && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                When this is marked done, the next one is made for {(t.assignees || []).join(', ') || 'whoever'}, due {nextDue(t.due_date, t.repeat)}.
+              </p>
+            )}
           </Row>
           <Row label="Where">
             <Select size="sm" value={homeValue} onChange={(e) => setHome(e.target.value)}>

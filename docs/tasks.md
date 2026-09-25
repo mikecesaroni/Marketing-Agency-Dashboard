@@ -29,7 +29,8 @@ Mapped onto the CRM:
 | Comments             | `task_comments`                                             |
 | List view, Board view| both, on the Tasks page                                     |
 | Me mode              | "My tasks", keyed on the name set at the top right          |
-| Quick add shorthand  | `!high @Name #tag due fri` on the end of a title            |
+| Quick add shorthand  | `!high @Name #tag due fri every week` on the end of a title |
+| Repeats              | every day, week, 2 weeks or month; the next one is made when this one is done |
 
 Left out on purpose: per-list statuses (the thing every ClickUp workspace
 regrets), custom fields, time tracking, dependencies, recurring tasks, Gantt,
@@ -106,3 +107,17 @@ Sources for the ClickUp model: the
 [Intro to tasks](https://help.clickup.com/hc/en-us/articles/10552031987735-Intro-to-tasks),
 [task priorities](https://clickup.com/features/task-priorities) and
 [the agency hierarchy guide from ZenPilot](https://www.zenpilot.com/blog/the-best-clickup-hierarchy-for-agencies/).
+
+## Repeating tasks
+
+Open a task and set **Repeats** (every day, week, 2 weeks, month), or type it
+into the quick-add: "Post the weekly video for Belk every week @Kyle", or
+"Send reports every fri" (weekly, due next Friday). A repeating task with no
+day named is due today so the chain starts now.
+
+When a repeating task is marked done, by any route (the drawer, a drag to
+Done), the database makes the next one (`supabase/task-repeats.sql`): same
+title, notes, people, client, list, priority and tags, checklist unticked,
+due one period on and always in the future, so a weekly task finished three
+weeks late lands next week. The done one stays done with its date. Cards
+show ↻ on a repeating task, and the drawer says when the next one lands.

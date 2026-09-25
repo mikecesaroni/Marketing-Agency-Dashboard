@@ -159,6 +159,11 @@ function TaskRow({ task, clients, lists, members, onOpen, onToggle, sub = false,
           <Tags task={task} />
           <Progress task={task} />
         </span>
+        {task.repeat && (
+          <span className="text-[11px] text-slate-400" title={`Repeats ${task.repeat}`}>
+            ↻
+          </span>
+        )}
         {!hideWho && <Avatars task={task} members={members} />}
         <DuePill task={task} />
       </span>
@@ -189,6 +194,11 @@ function TaskCard({ task, clients, lists, members, onOpen, onDragStart, hideWher
         <Tags task={task} />
         <Progress task={task} />
         <span className="ml-auto inline-flex items-center gap-1.5">
+          {task.repeat && (
+            <span className="text-[11px] text-slate-400" title={`Repeats ${task.repeat}`}>
+              ↻
+            </span>
+          )}
           {!hideWho && <Avatars task={task} members={members} />}
           <DuePill task={task} />
         </span>
