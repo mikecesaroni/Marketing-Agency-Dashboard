@@ -33,7 +33,9 @@ export default function PublishVideoPage() {
   const [published, setPublished] = useState([])
   const [others, setOthers] = useState([])
   const [error, setError] = useState('')
-  const initialVideo = params.get('video') || ''
+  // One or several clips to land with ticked (comma separated, each
+  // URL-encoded), from the board's "click to publish".
+  const initialVideo = (params.get('video') || '').split(',').map((s) => s.trim()).filter(Boolean)
   // The Layout header is sticky; the launch strip inside the panel has to
   // stick just below it, and the header's height depends on the viewport.
   const [headerHeight, setHeaderHeight] = useState(0)
@@ -135,7 +137,7 @@ export default function PublishVideoPage() {
 
           <Card padding="lg">
             <PublishToMetaPanel
-              key={`${client.id}:${initialVideo}`}
+              key={`${client.id}:${initialVideo.join('|')}`}
               client={client}
               intake={intake}
               initialVideo={initialVideo}

@@ -51,7 +51,10 @@ Publish on the client page with the clip already ticked (`?open=publish&video=`)
 so the transcript and the three versions of copy start on their own. A clip
 counts as waiting until a published ad carries its Meta video id, for 30
 days, or until somebody clicks "not new ×" on the row (for a clip published
-by hand in Ads Manager, a duplicate, a test). The name comes from the "You:"
+by hand in Ads Manager, a duplicate, a test). Only clips uploaded into the
+CRM count; a video a client adds to their Google Drive folder is raw footage,
+not a drop, and never flags. "Click to publish" ticks every new clip on the
+row and nothing else. The name comes from the "You:"
 the CRM keeps for tasks. "clear
 new-clip flags" under the board starts fresh: everything already in the CRM
 stops counting as new (`app_settings.video_drops_reset_at`).

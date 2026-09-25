@@ -60,6 +60,7 @@ export function syncedAdRows(rows = []) {
  * The drop status for one client, from when their last ad of any kind was
  * published through the CRM (lastAdAt) and whether a Meta account exists.
  *
+ *   paused    the client is on pause; nothing is expected of them
  *   stale     ten or more days since a new ad
  *   never     a Meta account and no ad ever
  *   done      an ad in the last ten days
@@ -68,13 +69,14 @@ export function syncedAdRows(rows = []) {
  * "Any kind" on purpose: the ask was "clients who have gone 10+ days since a
  * new ad", and a static counts as a new ad.
  */
-export function dropState({ hasMeta, lastAdAt, now }) {
+export function dropState({ hasMeta, lastAdAt, now, paused = false }) {
+  if (paused) return 'paused'
   if (!hasMeta) return 'no-meta'
   if (!lastAdAt) return 'never'
   return now - new Date(lastAdAt) >= STALE_MS ? 'stale' : 'done'
 }
 
-const STATE_ORDER = { ready: 0, stale: 1, never: 2, done: 3, 'no-meta': 4 }
+const STATE_ORDER = { ready: 0, stale: 1, never: 2, done: 3, 'no-meta': 4, paused: 5 }
 
 export const DROP_STATES = {
   ready: { label: 'New clip dropped in', tone: 'purple' },
@@ -82,17 +84,24 @@ export const DROP_STATES = {
   never: { label: 'No ad yet', tone: 'blue' },
   done: { label: 'Ad in the last 10 days', tone: 'green' },
   'no-meta': { label: 'No Meta account', tone: 'slate' },
+  paused: { label: 'Paused', tone: 'slate' },
 }
 
 /**
  * The clips an editor dropped in that nobody has published yet.
  *
- * A clip is waiting when it is newer than the client's last video ad from
- * before video ids were recorded (older clips have an unknown history, and
- * the last legacy video ad is the honest cut-off), it is inside the window,
- * and no published ad carries its Meta video id. Uploads not yet registered
- * with Meta count too: an editor drops a file, and that is the moment the
- * board should say so.
+ * A clip is waiting when it was UPLOADED TO THE CRM (a client_files row: the
+ * editor's drop zone or the publish screen's upload), it is newer than the
+ * client's last video ad from before video ids were recorded (older clips
+ * have an unknown history, and the last legacy video ad is the honest
+ * cut-off), it is inside the window, and no published ad carries its Meta
+ * video id. Uploads not yet registered with Meta count too: an editor drops
+ * a file, and that is the moment the board should say so.
+ *
+ * A video that only exists in the client's Google Drive folder is NOT a
+ * drop, however new: clients put raw phone footage in there all week, and
+ * the board is for edited, ready-to-run clips. A Drive clip becomes one by
+ * being published, not by being flagged.
  *
  * registered: ad_videos rows (storage_path, meta_video_id, created_at, file_name)
  * files: client_files video rows (storage_path, file_name, date_uploaded, uploaded_by)
@@ -116,8 +125,11 @@ export function waitingClips({ registered = [], files = [], ads = [], now = new 
     seen.add(r.storage_path)
     if (r.meta_video_id && published.has(r.meta_video_id)) continue
     const f = byPath.get(r.storage_path)
+    // No upload row means it was never dropped into the CRM: a Drive clip
+    // registered from the publish screen. Not a drop.
+    if (!f) continue
     // Waved off by hand: not new, whatever else is true of it.
-    if (r.drop_dismissed_at || f?.drop_dismissed_at) continue
+    if (r.drop_dismissed_at || f.drop_dismissed_at) continue
     const at = f?.date_uploaded || r.created_at
     if (!fresh(at)) continue
     out.push({ path: r.storage_path, name: r.file_name || f?.file_name || r.storage_path, at, by: f?.uploaded_by || '', ready: r.status === 'ready' && Boolean(r.thumb_url) })
@@ -179,8 +191,9 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
       const own = clips.get(c.id) || []
       const ready = own.filter((v) => v.status === 'ready' && v.meta_video_id && v.thumb_url).length
       const hasMeta = Boolean(c.meta_ad_account_id)
+      const paused = Boolean(c.paused_at)
       const waiting = waitingClips({ registered: own, files: uploads.get(c.id) || [], ads: mine, now, resetAt })
-      const state = dropState({ hasMeta, lastAdAt, now })
+      const state = dropState({ hasMeta, lastAdAt, now, paused })
       return {
         id: c.id,
         name: c.name,
@@ -195,12 +208,14 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
         lastAdWasVideo: every.some((r) => r.created_at === lastAdAt && isVideoAd(r)),
         // Behind on the promise, whatever else the row shows: a dropped clip
         // for a client who is also stale is still a stale client.
-        behind: hasMeta && (!lastAdAt || now - new Date(lastAdAt) >= STALE_MS),
+        paused,
+        behind: hasMeta && !paused && (!lastAdAt || now - new Date(lastAdAt) >= STALE_MS),
         readyClips: ready,
         clips: own.length,
         waiting,
         // A dropped clip is the loudest state: it is somebody's finished
         // work sitting there, and the point of the board is to get it out.
+        // A dropped clip still shows for a paused client: somebody made it.
         state: waiting.length > 0 && hasMeta ? 'ready' : state,
       }
     })
@@ -226,11 +241,12 @@ export function dropStats(rows) {
     // Fresh and behind count every client with a Meta account exactly once,
     // whatever the row shows: a dropped clip for a stale client is still a
     // stale client.
-    done: rows.filter((r) => r.hasMeta && !r.behind).length,
+    done: rows.filter((r) => r.hasMeta && !r.paused && !r.behind).length,
     due: rows.filter((r) => r.behind).length,
     stale: rows.filter((r) => r.hasMeta && r.behind && r.lastAdAt).length,
-    never: rows.filter((r) => r.hasMeta && !r.lastAdAt).length,
+    never: rows.filter((r) => r.hasMeta && !r.paused && !r.lastAdAt).length,
     thisWeek: rows.reduce((s, r) => s + r.thisWeek, 0),
+    paused: rows.filter((r) => r.paused).length,
     withMeta: rows.filter((r) => r.hasMeta).length,
   }
 }

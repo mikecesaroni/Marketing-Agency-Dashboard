@@ -89,6 +89,7 @@ What you can do:
   - "Ad Studio" in the header opens the ad builder in a modal (see below).
   - "Ask about <client>" opens a chat about this client that can read their data.
   - Each status switch saves immediately on click. There is no separate save.
+  - "Pause client" next to it puts a client on pause: still a client everywhere (lists, MRR, sync), but the dashboard's ads-stopped alert and the Content board's "10+ days without a new ad" flag leave them alone until "Resume client". An amber banner at the top of the page says they are paused.
   - "Archive client" is at the end of the switch row. Archiving excludes the client from MRR, the Meta sync and every list; it is reversible with "Restore client".
   - Buttons open modals for logging weekly KPIs, adding a work log entry, and adding a creative entry.
 

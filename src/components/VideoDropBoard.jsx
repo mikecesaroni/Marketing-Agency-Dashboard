@@ -47,7 +47,12 @@ function StatePill({ state }) {
   )
 }
 
-const publishHref = (row, clip) => `/publish/${row.id}${clip ? `?video=${encodeURIComponent(clip.path)}` : ''}`
+// Every waiting clip, so "click to publish" lands with the new clips ticked
+// and nothing else: the old videos in the list stay unticked.
+const publishHref = (row, clips) => {
+  const list = [].concat(clips || []).filter(Boolean)
+  return `/publish/${row.id}${list.length ? `?video=${list.map((c) => encodeURIComponent(c.path)).join(',')}` : ''}`
+}
 
 function Row({ row, onDismiss }) {
   const clip = row.state === 'ready' ? row.waiting[0] : null
@@ -60,7 +65,7 @@ function Row({ row, onDismiss }) {
   return (
     <li>
       <Link
-        to={publishHref(row, clip)}
+        to={publishHref(row, clip ? row.waiting : null)}
         data-drop={row.state}
         className={`group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl px-3 py-2 transition ${
           clip ? 'bg-violet-50/70 ring-1 ring-violet-100 hover:bg-violet-50' : 'hover:bg-slate-50'
@@ -253,7 +258,7 @@ function DropIn({ clients, onDropped }) {
           </span>
           {done.client.meta_ad_account_id ? (
             <Link
-              to={publishHref({ id: done.client.id }, { path: done.clips[0].storage_path })}
+              to={publishHref({ id: done.client.id }, done.clips.map((c) => ({ path: c.storage_path })))}
               className="font-semibold text-violet-800 underline hover:text-violet-950"
             >
               Publish it now →
@@ -284,8 +289,9 @@ export default function VideoDropBoard({ rows, clients, onDropped, onReset, comp
   }
   if (!rows) return null
   const stats = dropStats(rows)
-  const withMeta = rows.filter((r) => r.state !== 'no-meta')
+  const withMeta = rows.filter((r) => r.state !== 'no-meta' && r.state !== 'paused')
   const noMeta = rows.filter((r) => r.state === 'no-meta')
+  const pausedRows = rows.filter((r) => r.state === 'paused')
   const shown = compact && !showAll ? withMeta.filter((r) => r.state !== 'done').slice(0, 6) : withMeta
   const hidden = withMeta.length - shown.length
 
@@ -347,6 +353,11 @@ export default function VideoDropBoard({ rows, clients, onDropped, onReset, comp
         {noMeta.length > 0 && (
           <span title={noMeta.map((r) => r.name).join(', ')}>
             {noMeta.length} client{noMeta.length === 1 ? ' has' : 's have'} no Meta ad account connected
+          </span>
+        )}
+        {pausedRows.length > 0 && (
+          <span title={pausedRows.map((r) => r.name).join(', ')}>
+            {pausedRows.length} on pause: {pausedRows.map((r) => r.name).join(', ')}
           </span>
         )}
         {stats.ready > 0 && onReset && (

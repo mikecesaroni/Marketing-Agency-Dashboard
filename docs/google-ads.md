@@ -129,16 +129,26 @@ budget for brand verification when you do.
 This is the fiddly part. You are creating a login that the server can use
 without a human present.
 
-**a. Consent screen.** APIs & Services → OAuth consent screen. External. Fill
-in the app name and support email.
+**a. Consent screen.** APIs & Services → OAuth consent screen. Fill in the
+app name and support email.
 
-> **Publish it.** Do not leave it in **Testing**. A refresh token issued by an
-> app in Testing mode **expires after 7 days**, and the sync will die a week
-> after you set it up, at night, silently. This is the single most common way
-> this integration breaks.
+Pick **Internal** if the agency address is on Google Workspace (it is:
+workingclassgroup.com). Internal has no Testing mode, so the token never
+expires for that reason, and only accounts on the agency domain can sign in,
+which is exactly who should. This is what the live setup uses.
+
+If Internal is not offered, pick External and then **publish it**. Do not
+leave it in **Testing**: a refresh token issued by an app in Testing mode
+**expires after 7 days**, and the sync will die a week after you set it up, at
+night, silently. Publishing may want a home page and privacy policy link on
+the Branding page first.
 
 **b. Credentials.** APIs & Services → Credentials → Create credentials → OAuth
-client ID → **Desktop app**. You get a client ID and a client secret.
+client ID → **Web application**, and add
+`https://developers.google.com/oauthplayground` under authorised redirect
+URIs (a Desktop client has no redirect field, and the playground in step c
+needs one). You get a client ID and a client secret. **Copy the secret from
+the dialog that appears; Google shows it once.**
 
 **c. Refresh token.** Go to <https://developers.google.com/oauthplayground/>.
 
@@ -184,7 +194,22 @@ That is the whole per-client step. The next nightly run picks them up.
 
 ## Checking it worked
 
-Call the function by hand rather than waiting for the cron:
+**Before any client has a customer ID**, prove the login itself:
+
+```
+POST /functions/v1/google-daily-sync
+{ "check": true }
+```
+
+It exchanges the refresh token, lists the Google Ads accounts that login can
+see, and lists the accounts linked under the manager. `token: ok` plus
+`manager_visible: true` means steps 1 to 5 are right; an empty
+`linked_accounts` just means step 6 has not happened yet. A failure names the
+step: `refresh token` (step 5) or `list accessible customers` (step 4, the
+project is still on Test).
+
+Then, once a client has an ID, call the sync by hand rather than waiting for
+the cron:
 
 ```
 POST /functions/v1/google-daily-sync

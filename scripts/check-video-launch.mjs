@@ -47,6 +47,9 @@ check('state: fresh (3 days ago)', dropState({ hasMeta: true, lastAdAt: '2026-09
 check('state: fresh at 9 days', dropState({ hasMeta: true, lastAdAt: '2026-09-15T12:00:00Z', now: NOW }), 'done')
 check('state: stale at exactly 10 days', dropState({ hasMeta: true, lastAdAt: '2026-09-14T12:00:00Z', now: NOW }), 'stale')
 check('state: stale (3 weeks)', dropState({ hasMeta: true, lastAdAt: '2026-09-03T00:00:00Z', now: NOW }), 'stale')
+check('state: paused wins over everything', dropState({ hasMeta: true, lastAdAt: '2026-08-01T00:00:00Z', now: NOW, paused: true }), 'paused')
+const pausedRows = videoDrops([{ id: 'P', name: 'Resting', meta_ad_account_id: 'act_p', paused_at: '2026-09-20T00:00:00Z' }], [], [], NOW)
+check('paused client: not behind, not fresh, sorted last', [pausedRows[0].state, pausedRows[0].behind, dropStats(pausedRows)], ['paused', false, { ready: 0, done: 0, due: 0, stale: 0, never: 0, thisWeek: 0, paused: 1, withMeta: 1 }])
 
 const CLIENTS = [
   { id: 'A', name: 'Belk', meta_ad_account_id: 'act_1' },
@@ -85,7 +88,7 @@ check('last video ad name carried', byId.A.lastAdName, 'WC_Belk · tune-up')
 check('ready clips need a thumbnail', byId.B.readyClips, 1)
 check('clip count is every registered clip', byId.B.clips, 3)
 check('internal flag carried', byId.F.internal, true)
-check('stats', dropStats(rows), { ready: 0, done: 1, due: 3, stale: 2, never: 1, thisWeek: 2, withMeta: 4 })
+check('stats', dropStats(rows), { ready: 0, done: 1, due: 3, stale: 2, never: 1, thisWeek: 2, paused: 0, withMeta: 4 })
 
 // Clips an editor dropped in and nobody has published.
 const NOW_ISO = NOW.toISOString()
@@ -95,16 +98,21 @@ const FILES = [
   { client_id: 'B', storage_path: 'B/v/photo.jpg', file_name: 'photo.jpg', date_uploaded: '2026-09-24T09:00:00Z' },
   { client_id: 'A', storage_path: 'A/v/done.mp4', file_name: 'done.mp4', date_uploaded: '2026-09-21T09:00:00Z' },
   { client_id: 'A', storage_path: 'A/v/before.mp4', file_name: 'before.mp4', date_uploaded: '2026-09-20T09:00:00Z' },
+  { client_id: 'A', storage_path: 'A/v/drive.mp4', file_name: 'drive.mp4', date_uploaded: '2026-09-23T09:00:00Z' },
   { client_id: 'E', storage_path: 'E/v/x.mp4', file_name: 'x.mp4', date_uploaded: '2026-09-24T09:00:00Z' },
 ]
 const REGISTERED = [
   { client_id: 'A', storage_path: 'A/v/done.mp4', file_name: 'done.mp4', meta_video_id: 'v1', status: 'ready', thumb_url: 't', created_at: '2026-09-21T10:00:00Z' },
   { client_id: 'A', storage_path: 'A/v/drive.mp4', file_name: 'drive.mp4', meta_video_id: 'v7', status: 'processing', thumb_url: '', created_at: '2026-09-23T10:00:00Z' },
+  // Registered from the publish screen straight out of the client's Drive
+  // folder: no upload row, so never a "drop".
+  { client_id: 'A', storage_path: 'drive:abc123', file_name: 'raw-phone-footage.mov', meta_video_id: 'v8', status: 'ready', thumb_url: 't', created_at: '2026-09-24T10:00:00Z' },
 ]
 const wait = waitingClips({ registered: REGISTERED.filter((r) => r.client_id === 'A'), files: FILES.filter((f) => f.client_id === 'A'), ads: ADS.filter((a) => a.client_id === 'A'), now: NOW })
 check('waiting: a published clip is not waiting', wait.some((w) => w.path === 'A/v/done.mp4'), false)
 check('waiting: a clip older than the last legacy video ad is not waiting', wait.some((w) => w.path === 'A/v/before.mp4'), false)
-check('waiting: a registered, unpublished, fresh clip is', wait.map((w) => [w.path, w.ready]), [['A/v/drive.mp4', false]])
+check('waiting: a registered, unpublished, fresh upload is', wait.map((w) => [w.path, w.ready]), [['A/v/drive.mp4', false]])
+check('waiting: a clip that only lives in the client\'s Drive is not a drop', wait.some((w) => w.path === 'drive:abc123'), false)
 const waitB = waitingClips({ files: FILES.filter((f) => f.client_id === 'B'), ads: ADS.filter((a) => a.client_id === 'B'), now: NOW })
 check('waiting: an unregistered upload counts, with who dropped it', waitB.map((w) => [w.name, w.by]), [['new.mp4', 'Sam']])
 check('waiting: an image is not a clip, and 30 days is the window', waitB.length, 1)
@@ -121,7 +129,7 @@ check('ready: a client with a waiting clip is ready, and first', [rows2[0].id, r
 check('ready: newest drop first among ready rows', rows2.slice(0, 2).map((r) => r.id), ['B', 'A'])
 check('ready: the row carries the waiting clips', by2.B.waiting.map((w) => w.name), ['new.mp4'])
 check('ready: no Meta account is never ready', by2.E.state, 'no-meta')
-check('stats: ready counted, fresh and behind still add up', dropStats(rows2), { ready: 2, done: 1, due: 3, stale: 2, never: 1, thisWeek: 2, withMeta: 4 })
+check('stats: ready counted, fresh and behind still add up', dropStats(rows2), { ready: 2, done: 1, due: 3, stale: 2, never: 1, thisWeek: 2, paused: 0, withMeta: 4 })
 check('a ready row for a stale client is still behind', by2.B.behind, true)
 void NOW_ISO
 

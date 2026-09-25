@@ -58,3 +58,10 @@ grant select on client_newest_ad to anon, authenticated;
 --   the start and an ad_videos row only once Meta has it.
 alter table client_files add column if not exists drop_dismissed_at timestamptz;
 alter table ad_videos add column if not exists drop_dismissed_at timestamptz;
+
+-- clients.paused_at
+--   A client on pause: still a client (lists, MRR, the Meta sync), but not
+--   expected to be running ads right now, so the dashboard's "ads account
+--   paused" alert and the video board's "10+ days without a new ad" leave
+--   them alone. Null means active. Set and cleared from the client page.
+alter table clients add column if not exists paused_at timestamptz;

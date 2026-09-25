@@ -91,6 +91,8 @@ export function adDeliveryAlerts(clients, delivery, todayDate) {
 
   for (const client of clients || []) {
     if (client.archived || client.is_internal) continue
+    // On pause: not expected to be spending, so a quiet account is not news.
+    if (client.paused_at) continue
     if (!client.meta_ads_active) continue
 
     const seen = delivery?.[client.id]

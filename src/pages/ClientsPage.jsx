@@ -31,6 +31,7 @@ const FILTERS = [
   // outstanding".
   { key: 'ghl-plan', label: 'On GHL plan' },
   { key: 'ghl-todo', label: 'GHL to build' },
+  { key: 'paused', label: 'Paused' },
   { key: 'archived', label: 'Archived' },
 ]
 
@@ -82,6 +83,11 @@ function ChannelBadges({ client }) {
       <LiveBadge live={client.meta_ads_active} label="Meta" />
       <LiveBadge live={client.lsa_active} label="LSA" />
       <LiveBadge live={client.gbp_optimized} label="GBP" />
+      {client.paused_at && (
+        <Badge tone="warning" className="whitespace-nowrap" title="On pause: no ads alerts, no 10+ days flag">
+          ⏸ Paused
+        </Badge>
+      )}
       {/* Only for clients on the plan. Meta and LSA are sold to everyone, so a
           dim badge there reads as "not yet"; a dim GHL badge on a client who
           was never buying it would read as work outstanding. */}
@@ -127,6 +133,7 @@ export default function ClientsPage() {
         if (!c.archived) return false
       } else {
         if (c.archived) return false
+        if (statusFilter === 'paused' && !c.paused_at) return false
         if (statusFilter === 'meta-live' && !c.meta_ads_active) return false
         if (statusFilter === 'meta-not' && c.meta_ads_active) return false
         if (statusFilter === 'lsa-live' && !c.lsa_active) return false

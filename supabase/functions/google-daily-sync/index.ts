@@ -185,7 +185,7 @@ async function gaql(customerId: string, query: string, token: string): Promise<a
       }
       if (res.status === 401 || res.status === 403) {
         throw new Error(
-          `${detail} — the credentials reached Google but were refused for customer ${customerId}. Check that the account is linked to manager ${loginCustomerId || '(not set)'} and that the Cloud project has Basic access.`
+          `${detail} — the credentials reached Google but were refused for customer ${customerId}. Check that the account is linked to manager ${loginCustomerId || '(not set)'} and that the Cloud project is on Explorer access or higher, not Test.`
         )
       }
       throw new Error(detail)
@@ -242,6 +242,65 @@ Deno.serve(async (req) => {
     body = await req.json()
   } catch {
     // A cron POST with no body is normal.
+  }
+
+  // CONNECTION CHECK: {check: true}. Proves the four secrets work before any
+  // client has a customer id, which is the state the setup sits in for a
+  // while: the token exchange, then the accounts this login can see, then
+  // the accounts linked under the manager. Each failure names its step.
+  if (body.check) {
+    try {
+      const version = Deno.env.get('GOOGLE_ADS_API_VERSION') || DEFAULT_API_VERSION
+      const manager = bareId(Deno.env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID'))
+      const token = await accessToken()
+      const acc = await fetch(`https://googleads.googleapis.com/${version}/customers:listAccessibleCustomers`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const accBody = await acc.json().catch(() => null)
+      if (!acc.ok) {
+        const detail = accBody?.error?.message || accBody?.[0]?.error?.message || `Google Ads API returned ${acc.status}`
+        return json(
+          {
+            ok: false,
+            step: 'list accessible customers',
+            error: `${detail}. The login works but the Google Ads API refused it: the Cloud project is probably still on Test access (needs Explorer), or the API is not enabled on the project that issued the OAuth client.`,
+            api_version: version,
+          },
+          502
+        )
+      }
+      const accessible = (accBody?.resourceNames || []).map((r: string) => r.replace('customers/', ''))
+      let linked: { id: string; name: string; manager: boolean }[] = []
+      let linkedError = ''
+      if (manager) {
+        try {
+          const rows = await gaql(
+            manager,
+            'SELECT customer_client.id, customer_client.descriptive_name, customer_client.manager, customer_client.level FROM customer_client WHERE customer_client.level <= 1',
+            token
+          )
+          linked = rows
+            .map((r: any) => r.customerClient)
+            .filter((c: any) => c && String(c.id) !== manager)
+            .map((c: any) => ({ id: String(c.id), name: c.descriptiveName || '', manager: Boolean(c.manager) }))
+        } catch (err) {
+          linkedError = String(err instanceof Error ? err.message : err)
+        }
+      }
+      return json({
+        ok: true,
+        token: 'ok',
+        api_version: version,
+        manager: manager || null,
+        manager_visible: manager ? accessible.includes(manager) : null,
+        accessible_customers: accessible,
+        linked_accounts: linked,
+        ...(linkedError ? { linked_error: linkedError } : {}),
+        ...(!manager ? { note: 'GOOGLE_ADS_LOGIN_CUSTOMER_ID is not set; the sync needs it to reach client accounts through the manager.' } : {}),
+      })
+    } catch (err) {
+      return json({ ok: false, step: 'refresh token', error: String(err instanceof Error ? err.message : err) }, 502)
+    }
   }
 
   const days = Math.max(1, Math.min(90, num(body.days) || LOOKBACK_DAYS))

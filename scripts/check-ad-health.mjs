@@ -98,6 +98,8 @@ const check = (name, got, want) => {
   check('a live client who has never spent is not an outage',
     adDeliveryAlerts([client({ name: 'brandnew' })], {}, TODAY).length, 0)
 
+  check('paused clients are ignored',
+    adDeliveryAlerts([client({ name: 'resting', paused_at: '2026-09-25T00:00:00Z', meta_account_status: 2 })], {}, TODAY).length, 0)
   check('archived clients are ignored',
     adDeliveryAlerts([client({ name: 'gone', archived: true, meta_account_status: 2 })],
       { gone: spend('2026-01-01') }, TODAY).length, 0)

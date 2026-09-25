@@ -645,7 +645,7 @@ export default function PublishToMetaPanel({
   // one ad set is a real test; in two ad sets it is two budgets.
   // A clip the board sent us to publish starts ticked; the picker fills in
   // its Meta ids and name once it has loaded the list.
-  const [pickedVideos, setPickedVideos] = useState(initialVideo ? [initialVideo] : [])
+  const [pickedVideos, setPickedVideos] = useState(() => [].concat(initialVideo || []).filter(Boolean))
   const [videoCopies, setVideoCopies] = useState({})
 
   const [cta, setCta] = useState('LEARN_MORE')
