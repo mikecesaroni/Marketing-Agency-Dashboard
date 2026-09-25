@@ -344,7 +344,9 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
         <ul className="space-y-0.5">
           {plan.campaigns.map((c) => (
             <li key={c.stage} className="text-[11px] text-slate-700">
-              <span className="font-medium">{c.name}</span> — {usd(budgetCents[c.stage])}/day
+              <span className="font-medium">{c.stage === 'tof' ? 'Finding new people' : 'Following up'}</span>{' '}
+              — {usd(budgetCents[c.stage])}/day
+              <span className="text-slate-500"> · in Meta: {c.name}</span>
             </li>
           ))}
           {lines.map((line, i) => (
