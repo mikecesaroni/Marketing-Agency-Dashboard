@@ -221,7 +221,7 @@ export const CALL_SECTIONS = [
       {
         key: 'photos',
         title: 'Photos folder linked and being filled',
-        how: 'Job-site photos, trucks, the owner and team, shot in daylight. Everything the Ad Studio builds comes from this folder, so an empty folder means stock-looking ads.',
+        how: 'Job-site photos, trucks, the owner and team, shot in daylight. Everything the Ad Studio builds comes from this folder, so an empty folder means stock-looking ads. Check the folder is set to "Anyone with the link" (Viewer) as well as shared with the CRM address, or the editor cannot open it.',
         auto: (ctx) => Boolean(ctx.client?.drive_folder_id),
       },
       {
@@ -300,9 +300,13 @@ export function preCallEmail(ctx) {
   // (the client keeps them; we read them). Once a folder is linked the ask is
   // "keep adding"; before that it is "make one, share it, paste the link in
   // the form", and the address is the one thing they could not guess.
+  // "Anyone with the link" as well as the CRM address: the editor and the
+  // rest of the team open the folder from their own Google accounts, and a
+  // Restricted folder locks every one of them out until the client shares
+  // it again by hand (which is exactly what happened).
   const share = ctx.crmDriveEmail
-    ? `share it with ${ctx.crmDriveEmail} (Viewer is fine)`
-    : 'share it with the Drive address in the form'
+    ? `share it with ${ctx.crmDriveEmail} (Viewer is fine) and set General access to "Anyone with the link" so our whole team can open it`
+    : 'share it with the Drive address in the form and set General access to "Anyone with the link" so our whole team can open it'
   const photosLines = ctx.driveUrl
     ? `2. Photos. Keep adding to the folder you shared with us: real jobs, your trucks, you and your team. Phone photos are perfect.\n   ${ctx.driveUrl}`
     : `2. Photos. In Google Drive, make a folder called "${business} Photos", drop in anything you have of real jobs, your trucks, you and your team (phone photos are perfect), ${share}, and paste the folder link into the form where it asks for it.`

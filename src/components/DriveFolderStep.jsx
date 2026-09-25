@@ -107,6 +107,14 @@ export default function DriveFolderStep({ token, connected: initialConnected }) 
               </span>
             </li>
             <li>
+              In the same Share window, under <strong>General access</strong>, change{' '}
+              <strong>Restricted</strong> to <strong>Anyone with the link</strong> (Viewer).
+              <span className="block text-xs text-slate-500 mt-1">
+                This lets our video editor and the rest of our team open the folder without each
+                of them asking you for access. Nobody can change or delete anything.
+              </span>
+            </li>
+            <li>
               Then copy the folder&apos;s link (<strong>Share → Copy link</strong>) and paste it
               below.
             </li>

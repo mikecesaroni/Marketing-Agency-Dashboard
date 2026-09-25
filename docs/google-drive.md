@@ -53,8 +53,12 @@ Do it by hand only when the client has already shared a folder some other way:
    warn that this address is not a Google account; that is expected. The Drive
    tab in the Studio displays the address and copies it when clicked, so it does
    not have to be typed from memory.
-3. Copy the folder link (`Share → Copy link`).
-4. In the CRM, open the client → Ad Studio → the **Drive** tab on either image
+3. In the same Share window, set **General access** to **Anyone with the
+   link** (Viewer). The CRM does not need this, the team does: the editor and
+   everyone else open the folder from their own Google accounts, and a
+   Restricted folder locks them out one by one.
+4. Copy the folder link (`Share → Copy link`).
+5. In the CRM, open the client → Ad Studio → the **Drive** tab on either image
    picker → paste the link → **Link**.
 
 The app parses the folder ID out of the link, so any of Drive's URL shapes work.

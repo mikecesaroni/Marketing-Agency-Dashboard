@@ -285,7 +285,7 @@ export default function AdImagePicker({
       ) : !driveFolderId ? (
         <div className="space-y-1.5">
           <p className="text-[11px] text-slate-500 leading-snug">
-            In Drive, share this client&apos;s folder as <strong>Viewer</strong> with{' '}
+            In Drive, set this client&apos;s folder to <strong>Anyone with the link</strong> (Viewer) and share it as <strong>Viewer</strong> with{' '}
             {serviceEmail ? (
               <button
                 type="button"
