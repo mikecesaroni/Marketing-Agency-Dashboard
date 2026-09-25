@@ -89,7 +89,7 @@ What you can do:
   - "Ad Studio" in the header opens the ad builder in a modal (see below).
   - "Ask about <client>" opens a chat about this client that can read their data.
   - Each status switch saves immediately on click. There is no separate save.
-  - "Pause client" next to it puts a client on pause: still a client everywhere (lists, MRR, sync), but the dashboard's ads-stopped alert and the Content board's "10+ days without a new ad" flag leave them alone until "Resume client". An amber banner at the top of the page says they are paused.
+  - "Pause client" next to it puts a client on pause: still a client everywhere (lists, sync), but out of MRR from the day they paused, the scheduled months inside the pause are not owed (shown "on pause", never overdue), and the dashboard's ads-stopped alert and the Content board's "10+ days without a new ad" flag leave them alone until "Resume client". Resuming clears the paused months already behind us from the schedule, since Stripe never billed them; the months ahead carry on. An amber banner at the top of the page says they are paused.
   - "Archive client" is at the end of the switch row. Archiving excludes the client from MRR, the Meta sync and every list; it is reversible with "Restore client".
   - Buttons open modals for logging weekly KPIs, adding a work log entry, and adding a creative entry.
 
@@ -158,7 +158,8 @@ What is on it:
 What you can do:
   - Filters: paid, overdue, upcoming, all. Views: By client or By date. A client dropdown.
   - On a payment row: "Mark Payment Paid" and "Edit Payment".
-  - MRR counts a client only when they have a scheduled monthly payment, and never counts archived clients. A client with a monthly fee typed in but no schedule contributes nothing — that is the usual explanation for MRR looking low.
+  - MRR counts a client only when they have a scheduled monthly payment, and never counts archived or paused clients. A client with a monthly fee typed in but no schedule contributes nothing — that is the usual explanation for MRR looking low.
+  - A paused client's scheduled months from the pause day on show "on pause": not owed, not overdue, not upcoming, not outstanding. Months due before the pause are still owed, and a setup fee still owed is still listed.
 
 Performance Reports   /reports
 ------------------------------
@@ -295,7 +296,7 @@ Total monthly revenue
 
 Which clients make up the MRR figure
   Go to: Payments → click the MRR card
-  It opens with every client in the figure and their monthly fee, biggest first, adding up to the total — plus a "Not counted" list naming everyone left out and why (archived, one of ours rather than a client, or no monthly schedule yet). That second list is the half that settles "but I thought we had more clients than that".
+  It opens with every client in the figure and their monthly fee, biggest first, adding up to the total — plus a "Not counted" list naming everyone left out and why (archived, one of ours rather than a client, on pause, or no monthly schedule yet). That second list is the half that settles "but I thought we had more clients than that".
 
 A Stripe payment that does not appear anywhere
   Go to: Payments → Stripe → the unmatched queue
@@ -303,7 +304,7 @@ A Stripe payment that does not appear anywhere
 
 Why MRR looks wrong
   Go to: Payments → the Stripe reconciliation panel
-  It names each client where Stripe collected a different amount to the CRM's figure. Stripe is right; correct the CRM. Also check the client is not archived and does have a scheduled monthly payment.
+  It names each client where Stripe collected a different amount to the CRM's figure. Stripe is right; correct the CRM. Also check the client is not archived or on pause and does have a scheduled monthly payment.
 
 Whether a client's ads are actually running
   Go to: Dashboard → the alerts at the top, then the client page → Meta ad account

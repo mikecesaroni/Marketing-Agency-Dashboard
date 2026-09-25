@@ -60,8 +60,12 @@ alter table client_files add column if not exists drop_dismissed_at timestamptz;
 alter table ad_videos add column if not exists drop_dismissed_at timestamptz;
 
 -- clients.paused_at
---   A client on pause: still a client (lists, MRR, the Meta sync), but not
---   expected to be running ads right now, so the dashboard's "ads account
---   paused" alert and the video board's "10+ days without a new ad" leave
---   them alone. Null means active. Set and cleared from the client page.
+--   A client on pause: still a client (lists, the Meta sync), but not
+--   expected to be running ads or paying right now, so the dashboard's "ads
+--   account paused" alert and the video board's "10+ days without a new ad"
+--   leave them alone, they are out of MRR from this day, and the scheduled
+--   monthly rows due on or after it are not owed (src/lib/billing.js). On
+--   resume the client page deletes the paused months already behind us, since
+--   Stripe never invoiced them. Null means active. Set and cleared from the
+--   client page.
 alter table clients add column if not exists paused_at timestamptz;

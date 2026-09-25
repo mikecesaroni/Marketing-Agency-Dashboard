@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useLocation, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { fetchAdDaily, summariseAds } from '../lib/queries'
+import { fetchAdDaily, summariseAds, today } from '../lib/queries'
+import { pauseCleanup } from '../lib/billing'
 import Layout from '../components/Layout'
 import { useAuth } from '../context/AuthContext'
 import { isAdmin } from '../lib/access'
@@ -216,12 +217,35 @@ export default function ClientDetailPage() {
     }
   }
 
-  // Pause: still a client, just not expected to be running ads right now.
-  // The dashboard's "ads account paused" alert and the video board's 10+ days
-  // flag leave a paused client alone; everything else carries on.
+  // Pause: still a client, just not expected to be running ads or paying
+  // right now. The dashboard's "ads account paused" alert and the video
+  // board's 10+ days flag leave a paused client alone; they drop out of MRR
+  // and the months inside the pause are not owed (src/lib/billing.js).
+  //
+  // Resuming tidies the schedule: the paused months already behind us were
+  // never invoiced by Stripe, so they are removed rather than left to turn
+  // overdue all at once. Months still ahead stay and carry on as before.
   const handleTogglePause = async () => {
     const next = client.paused_at ? null : new Date().toISOString()
-    if (next && !confirm(`Pause ${client.name}? They stay a client, but the ads-stopped alert and the video board stop expecting ads from them until you resume.`)) return
+    if (next && !confirm(`Pause ${client.name}? They stay a client, but from today they are out of MRR, their scheduled months are not owed, and the ads-stopped alert and the video board stop expecting ads from them until you resume.`)) return
+    let stale = []
+    if (!next) {
+      const { data: rows, error: payErr } = await supabase
+        .from('payments')
+        .select('id, payment_type, status, due_date, amount')
+        .eq('client_id', client.id)
+      if (payErr) return setError(payErr.message)
+      stale = pauseCleanup(client, rows || [], today())
+      const list = stale.map((p) => p.due_date).join(', ')
+      const note = stale.length
+        ? ` ${stale.length} paused ${stale.length === 1 ? 'month' : 'months'} (${list}) will be cleared from the schedule; Stripe never billed them.`
+        : ''
+      if (!confirm(`Resume ${client.name}? They come back into MRR and the alerts from today.${note}`)) return
+    }
+    if (stale.length) {
+      const { error: delErr } = await supabase.from('payments').delete().in('id', stale.map((p) => p.id))
+      if (delErr) return setError(delErr.message)
+    }
     const { error: err } = await supabase.from('clients').update({ paused_at: next }).eq('id', client.id)
     if (err) setError(err.message)
     else loadClientData()
@@ -466,9 +490,9 @@ export default function ClientDetailPage() {
           <div className="mb-3 flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 sm:flex-row sm:items-center">
             <p className="text-sm text-amber-900">
               <span className="font-semibold">On pause</span> since{' '}
-              {new Date(client.paused_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}. No
-              ads-stopped alert and no &ldquo;10+ days without an ad&rdquo; flag until they are resumed.
-              Everything else is unchanged.
+              {new Date(client.paused_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}. Out
+              of MRR, scheduled months from then are not owed, and no ads-stopped alert or
+              &ldquo;10+ days without an ad&rdquo; flag until they are resumed. Everything else is unchanged.
             </p>
             <Button variant="outline" size="sm" onClick={handleTogglePause} className="sm:ml-auto sm:flex-shrink-0">
               ▶ Resume client
@@ -517,7 +541,7 @@ export default function ClientDetailPage() {
                 clearsWhenOff={['ghl_active']}
               />
               {!client.archived && (
-                <Button variant="ghost" size="sm" onClick={handleTogglePause} className="ml-auto text-slate-400" title="Still a client; the ads alerts and the video board stop expecting ads">
+                <Button variant="ghost" size="sm" onClick={handleTogglePause} className="ml-auto text-slate-400" title="Still a client; out of MRR and the ads alerts, paused months not owed, until resumed">
                   {client.paused_at ? '▶ Resume client' : '⏸ Pause client'}
                 </Button>
               )}

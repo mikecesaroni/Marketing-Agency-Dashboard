@@ -17,7 +17,13 @@
 // was billed.
 
 import { handleEvent } from '../supabase/functions/stripe-webhook/index.ts'
-import { calcMRR, mrrExclusions } from '../src/lib/billing.js'
+import {
+  calcMRR,
+  isPausedPayment,
+  mrrExclusions,
+  pauseCleanup,
+  pausedPaymentIds,
+} from '../src/lib/billing.js'
 import { readFileSync } from 'node:fs'
 
 let failures = 0
@@ -647,6 +653,51 @@ check('so are the businesses we run ourselves',
 // A setup fee is not recurring revenue.
 check('a setup-fee-only client is not counted as billing',
   totals([c({ id: 's' })], [{ client_id: 's', payment_type: 'setup' }]), { mrr: 0, count: 0 })
+
+// --- a client on pause ---------------------------------------------------
+// Still a client, not paying right now. Out of MRR from the day they paused,
+// and the scheduled months inside the pause are not owed.
+const PAUSED = c({ id: 'p', name: 'Winter Break', paused_at: '2026-09-10T15:00:00Z' })
+
+check('a paused client is out of MRR',
+  totals([PAUSED, c({ id: 'a' })], [m('p'), m('a')]), { mrr: 998, count: 1 })
+check('and named as on pause',
+  mrrExclusions([PAUSED], [m('p')]).map((x) => x.reason), ['on pause'])
+check('on pause outranks having no schedule',
+  mrrExclusions([PAUSED], []).map((x) => x.reason), ['on pause'])
+check('archived outranks paused',
+  mrrExclusions([c({ id: 'z', archived: true, paused_at: '2026-09-10T15:00:00Z' })], []).map((x) => x.reason),
+  ['archived'])
+
+const due = (date, over = {}) => ({ id: date, client_id: 'p', payment_type: 'monthly', status: 'pending', due_date: date, ...over })
+
+check('a month due after the pause day is on pause', isPausedPayment(due('2026-10-01'), PAUSED), true)
+check('a month due on the pause day is on pause', isPausedPayment(due('2026-09-10'), PAUSED), true)
+check('a month due before the pause is still owed', isPausedPayment(due('2026-09-01'), PAUSED), false)
+check('a paid month is paid, whatever the dates say',
+  isPausedPayment(due('2026-10-01', { status: 'paid' }), PAUSED), false)
+check('a setup fee stays owed through a pause',
+  isPausedPayment(due('2026-10-01', { payment_type: 'setup' }), PAUSED), false)
+check('an active client has nothing on pause', isPausedPayment(due('2026-10-01'), c({ id: 'p' })), false)
+check('nor does an archived one, whatever paused_at says',
+  isPausedPayment(due('2026-10-01'), c({ id: 'p', archived: true, paused_at: '2026-09-10T15:00:00Z' })), false)
+
+check('the ledger-wide set picks out only the paused months',
+  [...pausedPaymentIds(
+    [PAUSED, c({ id: 'a' })],
+    [due('2026-09-01'), due('2026-10-01'), due('2026-11-01'), { ...due('2026-10-01'), id: 'a-oct', client_id: 'a' }]
+  )],
+  ['2026-10-01', '2026-11-01'])
+
+// Resume: the paused months already behind us go; the ones ahead stay.
+check('resume clears the paused months up to today and keeps the rest',
+  pauseCleanup(PAUSED, [due('2026-09-01'), due('2026-10-01'), due('2026-11-01'), due('2026-12-01')], '2026-11-15')
+    .map((p) => p.due_date),
+  ['2026-10-01', '2026-11-01'])
+check('resume never touches a month that got paid during the pause',
+  pauseCleanup(PAUSED, [due('2026-10-01', { status: 'paid' })], '2026-11-15').length, 0)
+check('resume on the pause day clears nothing',
+  pauseCleanup(PAUSED, [due('2026-10-01')], '2026-09-10').length, 0)
 
 // --- who is behind the figure, and who is not ----------------------------
 // The card said "12 clients billing" against a belief that 15 pay monthly, and

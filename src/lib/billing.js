@@ -18,7 +18,62 @@
  * projection is what stops that happening again.
  */
 export const CLIENT_BILLING_COLUMNS =
-  'id, name, status, setup_fee, monthly_fee, stripe_customer_id, ghl_plan, archived'
+  'id, name, status, setup_fee, monthly_fee, stripe_customer_id, ghl_plan, archived, paused_at'
+
+/**
+ * A client on pause: still a client, not billing right now.
+ *
+ * Pausing is what happens when a client stops for the winter, or while a
+ * dispute is sorted out, and expects to come back. Their Stripe subscription
+ * is paused too, so no money arrives, and the CRM has to agree with that:
+ * they drop out of MRR from the day they paused, and the scheduled months
+ * that fall inside the pause are not owed. An archived client is gone, not
+ * paused, whatever else the row says.
+ */
+export const isPaused = (client) => Boolean(client?.paused_at) && !client?.archived
+
+// The day the pause started, as a YYYY-MM-DD to compare with due dates.
+export const pauseDay = (client) => String(client?.paused_at || '').slice(0, 10)
+
+/**
+ * A scheduled monthly payment that fell inside a pause.
+ *
+ * Unpaid, monthly, and due on or after the day the client paused. Not owed,
+ * so it is never overdue, never "next due", and never counted as outstanding.
+ * Anything due before the pause is still money owed from when they were
+ * live, and a paid row is a paid row whatever the dates say (Stripe wins).
+ * A setup fee is one-off and stays owed: the work it paid for was done.
+ */
+export function isPausedPayment(payment, client) {
+  if (!client || !isPaused(client)) return false
+  if (payment.status === 'paid' || payment.payment_type !== 'monthly') return false
+  return String(payment.due_date || '') >= pauseDay(client)
+}
+
+/** The ids of every payment across the ledger that a pause covers. */
+export function pausedPaymentIds(clients, payments) {
+  const byId = new Map((clients || []).map((c) => [c.id, c]))
+  const out = new Set()
+  for (const p of payments || []) {
+    if (isPausedPayment(p, byId.get(p.client_id))) out.add(p.id)
+  }
+  return out
+}
+
+/**
+ * The scheduled rows to remove when a client is resumed.
+ *
+ * While paused, the months that came due sat in the ledger as "on pause".
+ * Resuming would turn every one of them overdue at once, for money Stripe
+ * never invoiced. So on resume the paused months already behind us go; the
+ * months still ahead stay, and carry on as the schedule. A row that got
+ * paid during the pause is not touched: Stripe took it, so it was real.
+ */
+export function pauseCleanup(client, payments, todayDate) {
+  return (payments || []).filter(
+    (p) => isPausedPayment(p, client) && String(p.due_date) <= String(todayDate)
+  )
+}
 
 // Dev-only backstop for any caller that builds its own projection anyway.
 // Silent wrong money is worse than a noisy console.
@@ -52,7 +107,7 @@ export function calcMRR(clients, payments) {
     payments.filter((p) => p.payment_type === 'monthly').map((p) => p.client_id)
   )
   const billing = clients.filter(
-    (c) => scheduled.has(c.id) && !c.archived && !c.is_internal
+    (c) => scheduled.has(c.id) && !c.archived && !c.is_internal && !isPaused(c)
   )
   return {
     mrr: billing.reduce((sum, c) => sum + (Number(c.monthly_fee) || 0), 0),
@@ -86,6 +141,9 @@ export function mrrExclusions(clients, payments) {
     // else is true of them.
     if (c.archived) return 'archived'
     if (c.is_internal) return 'one of ours, not a client'
+    // Before the schedule check: a paused client may well have one, and
+    // "on pause" is the fact that explains why they are not in the figure.
+    if (isPaused(c)) return 'on pause'
     if (!scheduled.has(c.id)) return 'no monthly schedule yet'
     return null
   }
@@ -112,6 +170,9 @@ const isPaid = (p) => p.status === 'paid'
  * that no view was asking about.
  *
  * Archived and internal clients are left out: neither is someone to chase.
+ * A paused client is not chased to subscribe either, since nobody expects
+ * them to be paying right now; a setup fee they still owe stays listed,
+ * because the work it paid for was done before they paused.
  */
 export function onboardingGaps(clients, payments, todayDate) {
   const byClient = {}
@@ -154,7 +215,7 @@ export function onboardingGaps(clients, payments, todayDate) {
     }
 
     const recurring = rows.filter((p) => RECURRING.has(p.payment_type))
-    if (!recurring.some(isPaid)) {
+    if (!recurring.some(isPaid) && !isPaused(client)) {
       notSubscribed.push({
         client,
         // A schedule with nothing collected means the plan is set up and the

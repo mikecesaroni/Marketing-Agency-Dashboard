@@ -20,7 +20,7 @@ import {
 } from '../lib/queries'
 import { fetchExpenses, fetchPayouts } from '../lib/partnerData'
 import { failureState } from '../lib/paymentFailures'
-import { mrrExclusions } from '../lib/billing'
+import { mrrExclusions, pausedPaymentIds } from '../lib/billing'
 import { Badge, Button, Card, Input, Select, StatCard, Textarea } from '../components/ui'
 
 const FILTERS = ['paid', 'overdue', 'upcoming', 'all']
@@ -55,10 +55,14 @@ function ByClient({ groups, expanded, toggle, renderRow }) {
                   {g.overdue > 0 && (
                     <Badge tone="danger">{g.overdue} overdue</Badge>
                   )}
+                  {g.paused > 0 && (
+                    <Badge tone="warning">⏸ on pause</Badge>
+                  )}
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {money(g.collected)} collected · {money(g.outstanding)} outstanding
                   {g.nextDue && ` · next ${g.nextDue}`}
+                  {g.paused > 0 && ` · ${g.paused} ${g.paused === 1 ? 'month' : 'months'} on pause`}
                 </p>
               </div>
               <span className="text-xs text-slate-400 flex-shrink-0">
@@ -201,12 +205,18 @@ export default function PaymentsPage() {
   const { mrr, count: billingCount, clients: billingClients } = calcMRR(clients, payments)
   const notBilling = mrrExclusions(clients, payments)
 
+  // Months that fell inside a client's pause. Scheduled twelve months ahead,
+  // so they are in the ledger, but Stripe never invoiced them and they are
+  // not owed: not overdue, not next due, not outstanding.
+  const pausedIds = useMemo(() => pausedPaymentIds(clients, payments), [clients, payments])
+  const isLate = (p) => isOverdue(p) && !pausedIds.has(p.id)
+
   // Deliberately all-time. Scoping this to the current calendar month meant it
   // reset to $0 every 1st, hiding money collected days earlier.
   const paidPayments = payments.filter((p) => p.status === 'paid')
   const totalCollected = paidPayments.reduce((sum, p) => sum + p.amount, 0)
 
-  const overdue = payments.filter(isOverdue)
+  const overdue = payments.filter(isLate)
 
   // Sorted here rather than leaning on the query's order clause, so every view
   // — the paid ledger especially — is chronological no matter what comes back.
@@ -221,7 +231,8 @@ export default function PaymentsPage() {
     if (filter === 'upcoming') {
       const nextByClient = new Map()
       for (const p of inScope) {
-        if (p.status === 'paid' || isOverdue(p)) continue
+        // A paused client has nothing coming: their months are on hold.
+        if (p.status === 'paid' || isOverdue(p) || pausedIds.has(p.id)) continue
         const current = nextByClient.get(p.client_id)
         if (!current || p.due_date < current.due_date) nextByClient.set(p.client_id, p)
       }
@@ -231,15 +242,16 @@ export default function PaymentsPage() {
     const list = inScope.filter((p) => {
       if (filter === 'all') return true
       if (filter === 'paid') return p.status === 'paid'
-      return isOverdue(p)
+      return isOverdue(p) && !pausedIds.has(p.id)
     })
     return list.sort((a, b) => a.due_date.localeCompare(b.due_date))
-  }, [payments, filter, clientFilter])
+  }, [payments, filter, clientFilter, pausedIds])
 
   // One renderer for both views, so a payment looks and behaves the same
   // whichever way the page is sorted.
   const renderPayment = (p) => {
-    const late = isOverdue(p)
+    const paused = pausedIds.has(p.id)
+    const late = isLate(p)
     const failure = failureState(p)
     return (
       <div
@@ -249,7 +261,9 @@ export default function PaymentsPage() {
             ? 'bg-red-50 border-red-200'
             : p.status === 'paid'
               ? 'bg-green-50/50 border-green-200'
-              : 'bg-white border-slate-200'
+              : paused
+                ? 'bg-amber-50/40 border-amber-200 border-dashed'
+                : 'bg-white border-slate-200'
         }`}
       >
         <div className="flex-1 min-w-0">
@@ -263,12 +277,18 @@ export default function PaymentsPage() {
             <Badge tone="neutral" className="uppercase">
               {p.payment_type}
             </Badge>
+            {paused && (
+              <Badge tone="warning" title="This month fell inside the client's pause. Not owed, not overdue; it is tidied away when they are resumed.">
+                ⏸ on pause
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
             <span className={late ? 'text-red-600 font-semibold' : ''}>
               Due {p.due_date}
             </span>
             {p.status === 'paid' && ` · Paid ${p.paid_date} (${p.payment_method || '—'})`}
+            {paused && ' · not owed while paused'}
           </p>
           {/* The failure history, from its own columns rather than from a
               sentence in the notes. A payment that failed and was then retried
@@ -349,10 +369,12 @@ export default function PaymentsPage() {
         collected: 0,
         outstanding: 0,
         overdue: 0,
+        paused: 0,
         nextDue: null,
       }
       g.rows.push(p)
       if (p.status === 'paid') g.collected += p.amount
+      else if (pausedIds.has(p.id)) g.paused += 1
       else {
         g.outstanding += p.amount
         if (isOverdue(p)) g.overdue += 1
@@ -364,7 +386,7 @@ export default function PaymentsPage() {
     return [...byClient.values()]
       .map((g) => ({ ...g, stripeLinked: linked.get(g.id) || null }))
       .sort((a, b) => b.overdue - a.overdue || b.outstanding - a.outstanding || a.name.localeCompare(b.name))
-  }, [filtered, clients])
+  }, [filtered, clients, pausedIds])
 
   return (
     <Layout title="Payments & Revenue" subtitle={`${payments.length} payments tracked`}>
@@ -570,9 +592,9 @@ export default function PaymentsPage() {
                 ))}
               </div>
               <p className="mt-2 text-[11px] text-slate-500">
-                MRR counts a client once they have a monthly schedule and have not churned. The
-                fee itself is whatever the CRM has — the Stripe check below the cards names anyone
-                being charged something different.
+                MRR counts a client once they have a monthly schedule, are not on pause and have
+                not churned. The fee itself is whatever the CRM has — the Stripe check below the
+                cards names anyone being charged something different.
               </p>
             </div>
           )}

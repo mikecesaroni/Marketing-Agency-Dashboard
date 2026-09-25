@@ -59,6 +59,18 @@ const check = (name, got, want) => {
     [...setupUnpaid, ...notSubscribed].some((r) => r.client.name === 'gone'), false)
 }
 
+// --- a client on pause --------------------------------------------------------
+// Nobody expects them to be paying right now, so they are not chased to
+// subscribe. A setup fee they still owe is a different matter: the work it
+// paid for was done before they paused.
+{
+  const clients = [client({ name: 'resting', paused_at: '2026-08-15T00:00:00Z' })]
+  const payments = [pay('resting', 'setup', 'pending'), pay('resting', 'monthly', 'pending')]
+  const { setupUnpaid, notSubscribed } = onboardingGaps(clients, payments, TODAY)
+  check('a paused client is not chased to subscribe', notSubscribed.length, 0)
+  check('but a setup fee they owe is still listed', setupUnpaid.map((r) => r.client.name), ['resting'])
+}
+
 // --- a paying client is never "not subscribed" ----------------------------
 // Any recurring charge counts, including one that is only part of a client's
 // monthly total.

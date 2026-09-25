@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import Modal from './Modal'
 import { StripeLinkButtons } from './StripePanel'
 import { formatDate, isOverdue, money, today } from '../lib/queries'
+import { isPaused, isPausedPayment } from '../lib/billing'
 
 const METHODS = ['card', 'ach', 'check', 'paypal', 'other']
 
@@ -258,10 +259,13 @@ export default function PaymentTracker({ client, onClientUpdate }) {
   // Falls back to the schedule itself for clients billed before monthly_fee
   // was recorded on the client row.
   const monthlyAmount = client.monthly_fee || monthlyPayments[0]?.amount || 0
-  const nextDue = payments.find((p) => p.status !== 'paid')
+  // A month inside a pause is not owed, so it is never the next one due.
+  const paused = isPaused(client)
+  const nextDue = payments.find((p) => p.status !== 'paid' && !isPausedPayment(p, client))
 
   const PaymentRow = ({ payment, label }) => {
-    const late = isOverdue(payment)
+    const onPause = isPausedPayment(payment, client)
+    const late = isOverdue(payment) && !onPause
     return (
       <div
         className={`rounded-lg border p-3 flex flex-col sm:flex-row sm:items-center gap-3 ${
@@ -269,17 +273,27 @@ export default function PaymentTracker({ client, onClientUpdate }) {
             ? 'bg-red-50 border-red-200'
             : payment.status === 'paid'
               ? 'bg-green-50/60 border-green-200'
-              : 'bg-slate-50 border-slate-200'
+              : onPause
+                ? 'bg-amber-50/40 border-amber-200 border-dashed'
+                : 'bg-slate-50 border-slate-200'
         }`}
       >
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-slate-900">{label}</p>
+          <p className="font-medium text-slate-900">
+            {label}
+            {onPause && (
+              <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                ⏸ on pause
+              </span>
+            )}
+          </p>
           <p className="text-xs text-slate-500">
             <span className={late ? 'text-red-600 font-semibold' : ''}>
               Due {payment.due_date}
             </span>
             {payment.status === 'paid' &&
               ` · Paid ${payment.paid_date} (${payment.payment_method || '—'})`}
+            {onPause && ' · not owed while paused'}
           </p>
           {payment.notes && <p className="text-xs text-slate-600 mt-1">{payment.notes}</p>}
         </div>
@@ -348,6 +362,16 @@ export default function PaymentTracker({ client, onClientUpdate }) {
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm mb-4">
           {error}
+        </div>
+      )}
+
+      {paused && payments.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <span className="font-semibold">On pause.</span> Out of MRR from{' '}
+          {new Date(client.paused_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })},
+          and the months from then on are not owed, so they never read as overdue. Anything due
+          before the pause is still owed. Resume the client at the top of the page and the paused
+          months already behind us are cleared from the schedule.
         </div>
       )}
 
