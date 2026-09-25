@@ -94,9 +94,9 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
   // links already sent carry no parameter and have to keep behaving the way
   // their recipient was told they would.
   const MODES = {
-    both: { param: '', label: 'Onboarding + GHL setup' },
-    intake: { param: '?form=intake', label: 'Onboarding only' },
-    ghl: { param: '?form=ghl', label: 'GHL setup only' },
+    both: { param: '', label: 'The onboarding form' },
+    intake: { param: '?form=intake', label: 'Without the account step' },
+    ghl: { param: '?form=ghl', label: 'Account step only' },
   }
   const activeUrl = url ? `${url}${MODES[mode].param}` : ''
 
@@ -122,7 +122,7 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
       return [
         `Hi ${client.name} team,`,
         '',
-        'To get your GHL account and text messaging set up, we need a few details',
+        'To get your account and text messaging set up, we need a few details',
         'off your business registration: your EIN, business address and who the',
         'authorised contact is.',
         '',
@@ -140,7 +140,7 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
       '',
       'Two quick things and we can get your ads moving.',
       '',
-      '1) Fill out your onboarding form:',
+      '1) Fill out your onboarding form (about ten minutes):',
       activeUrl,
       'It saves as you go, so you can stop and come back to it.',
     ]
@@ -149,7 +149,7 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
     // end of the onboarding, and promising a second part that never arrives is
     // its own small broken promise.
     if (mode === 'both') {
-      lines.push('There is a short GHL account setup section after it.')
+      lines.push('The last step asks for your EIN and business address, so have those handy.')
     }
 
     if (serviceEmail) {
@@ -226,10 +226,10 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
           )}
           <p className="text-[11px] text-slate-500">
             {mode === 'both'
-              ? 'Both forms, the onboarding first. This is what the plain link has always done.'
+              ? 'One form in seven short steps: business, area, services, why them, leads, photos, then the account details (EIN, address). This is the link to send every new client.'
               : mode === 'intake'
-                ? 'The onboarding on its own, finishing at the end of it. For clients not doing the account setup side with us.'
-                : 'Opens straight on the account setup. Send when the onboarding is already done.'}
+                ? 'Everything except the account step. Only for a client not on GHL.'
+                : 'Opens straight on the account step. Send when the rest is already in.'}
           </p>
 
           <div className="flex gap-2">

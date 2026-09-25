@@ -292,10 +292,11 @@ export const ROUTES = [
     purpose:
       'NOT part of the CRM. This is the form a client fills in, opened with a private token in the link, and it deliberately shows none of the agency navigation. Do not treat it as an admin page and do not fill it in on a client\'s behalf unless asked to.',
     contains: [
-      'The onboarding questions about their business, and the GoHighLevel account setup questions.',
-      'A ?form=intake or ?form=ghl query narrows it to one half.',
+      'One form in seven steps: Your business, Where you work (home base and a mile radius, which is exactly where the ads run), What you sell, Why you (what makes them better than competitors, offers, reviews, licences), Your leads, Photos and videos (the shared Drive folder), then Your account (the GoHighLevel and text-messaging registration details: legal name, EIN, address, time zone). The account step is pre-filled from the earlier answers.',
+      'Each Continue saves that step; required questions are marked and block Continue; the last step sends everything in. A ?form=intake or ?form=ghl query on an older link shows one half only.',
+      'The question set is src/lib/clientForm.js; questions that fewer than a quarter of clients ever answered were dropped in September 2026.',
     ],
-    actions: ['It saves as the client types. There is no submit-and-lose-everything step.'],
+    actions: ['It saves as the client goes. There is no submit-and-lose-everything step.'],
   },
 ]
 

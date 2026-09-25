@@ -1,3 +1,5 @@
+import { INTAKE_FORM_KEYS } from './clientForm.js'
+
 // Field order and labels for the plain-text copy of an intake form. Kept
 // alongside the form's own sections so a pasted summary reads the same way the
 // call went.
@@ -172,7 +174,10 @@ export const CLIENT_INTAKE_SECTIONS = INTAKE_SECTIONS
   .filter((s) => s.title !== 'ACCESS & PLATFORM STATUS' && s.title !== 'CALL NOTES')
   .map((s) => ({ ...s, fields: s.fields.filter(([key]) => !AGENCY_ONLY.has(key)) }))
 
-export const CLIENT_INTAKE_KEYS = CLIENT_INTAKE_SECTIONS.flatMap((s) => s.fields.map(([k]) => k))
+// What the client's own form asks (src/lib/clientForm.js), which is what the
+// client page counts as "filled in". The sections above are the staff form
+// for the call, which asks more.
+export const CLIENT_INTAKE_KEYS = INTAKE_FORM_KEYS
 
 function displayValue(value) {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
