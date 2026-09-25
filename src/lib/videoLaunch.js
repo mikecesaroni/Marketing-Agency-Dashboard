@@ -116,6 +116,8 @@ export function waitingClips({ registered = [], files = [], ads = [], now = new 
     seen.add(r.storage_path)
     if (r.meta_video_id && published.has(r.meta_video_id)) continue
     const f = byPath.get(r.storage_path)
+    // Waved off by hand: not new, whatever else is true of it.
+    if (r.drop_dismissed_at || f?.drop_dismissed_at) continue
     const at = f?.date_uploaded || r.created_at
     if (!fresh(at)) continue
     out.push({ path: r.storage_path, name: r.file_name || f?.file_name || r.storage_path, at, by: f?.uploaded_by || '', ready: r.status === 'ready' && Boolean(r.thumb_url) })
@@ -124,6 +126,7 @@ export function waitingClips({ registered = [], files = [], ads = [], now = new 
     if (!f?.storage_path || seen.has(f.storage_path)) continue
     if (!VIDEO_EXT.test(f.file_name || '') && !VIDEO_EXT.test(f.storage_path)) continue
     seen.add(f.storage_path)
+    if (f.drop_dismissed_at) continue
     if (!fresh(f.date_uploaded)) continue
     out.push({ path: f.storage_path, name: f.file_name || f.storage_path, at: f.date_uploaded, by: f.uploaded_by || '', ready: false })
   }

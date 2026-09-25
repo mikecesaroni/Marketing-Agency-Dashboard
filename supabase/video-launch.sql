@@ -49,3 +49,12 @@ from (
 ) a
 order by client_id, first_seen desc, ad_id desc;
 grant select on client_newest_ad to anon, authenticated;
+
+-- client_files.drop_dismissed_at / ad_videos.drop_dismissed_at
+--   "Not new": a clip somebody waved off the board without publishing it
+--   through the CRM (published in Ads Manager by hand, a duplicate, a test).
+--   Set by the row's "not new" button; the clip stays, it just stops being
+--   flagged. On both tables because an upload has a client_files row from
+--   the start and an ad_videos row only once Meta has it.
+alter table client_files add column if not exists drop_dismissed_at timestamptz;
+alter table ad_videos add column if not exists drop_dismissed_at timestamptz;

@@ -50,7 +50,9 @@ tuneup.mp4 · dropped 2h ago by Sam · Click to publish". That click opens
 Publish on the client page with the clip already ticked (`?open=publish&video=`),
 so the transcript and the three versions of copy start on their own. A clip
 counts as waiting until a published ad carries its Meta video id, for 30
-days. The name comes from the "You:" the CRM keeps for tasks. "clear
+days, or until somebody clicks "not new ×" on the row (for a clip published
+by hand in Ads Manager, a duplicate, a test). The name comes from the "You:"
+the CRM keeps for tasks. "clear
 new-clip flags" under the board starts fresh: everything already in the CRM
 stops counting as new (`app_settings.video_drops_reset_at`).
 

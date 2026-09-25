@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ago } from '../lib/contentHub'
 import { DROP_STATES, dropStats } from '../lib/videoLaunch'
 import { isVideoFile, validateVideo } from '../lib/adVideos'
-import { uploadVideo } from '../lib/adVideoStore'
+import { dismissClips, uploadVideo } from '../lib/adVideoStore'
 import { registerAdVideo } from '../lib/metaPublish'
 import { readMe, saveMe } from '../lib/tasksData'
 
@@ -49,7 +49,7 @@ function StatePill({ state }) {
 
 const publishHref = (row, clip) => `/publish/${row.id}${clip ? `?video=${encodeURIComponent(clip.path)}` : ''}`
 
-function Row({ row }) {
+function Row({ row, onDismiss }) {
   const clip = row.state === 'ready' ? row.waiting[0] : null
   const last = row.lastAdAt
     ? `last ad ${row.daysSince === 0 ? 'today' : row.daysSince === 1 ? 'yesterday' : `${row.daysSince} days ago`}`
@@ -83,9 +83,25 @@ function Row({ row }) {
             </span>
           )}
           {clip ? (
-            <span className="rounded-lg bg-violet-700 px-2.5 py-1 font-semibold text-white shadow-sm transition group-hover:bg-violet-800">
-              Click to publish →
-            </span>
+            <>
+              {onDismiss && (
+                <button
+                  type="button"
+                  title="Not new: take this clip off the board without publishing it"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onDismiss(row)
+                  }}
+                  className="rounded-md px-1.5 py-0.5 text-slate-400 hover:bg-white hover:text-slate-700"
+                >
+                  not new ×
+                </button>
+              )}
+              <span className="rounded-lg bg-violet-700 px-2.5 py-1 font-semibold text-white shadow-sm transition group-hover:bg-violet-800">
+                Click to publish →
+              </span>
+            </>
           ) : (
             <span className="font-medium text-blue-700 opacity-0 transition group-hover:opacity-100">
               {row.state === 'done' ? 'Publish another →' : 'Publish a video →'}
@@ -253,6 +269,19 @@ function DropIn({ clients, onDropped }) {
 
 export default function VideoDropBoard({ rows, clients, onDropped, onReset, compact = false }) {
   const [showAll, setShowAll] = useState(false)
+  const [dismissError, setDismissError] = useState('')
+  // Every waiting clip on the row, not just the one shown: "not new" means
+  // this client has nothing new, and the next clip down would only take
+  // the flag's place.
+  const dismiss = async (row) => {
+    setDismissError('')
+    try {
+      await dismissClips({ clientId: row.id, storagePaths: row.waiting.map((w) => w.path) })
+      onDropped?.()
+    } catch (err) {
+      setDismissError(err.message)
+    }
+  }
   if (!rows) return null
   const stats = dropStats(rows)
   const withMeta = rows.filter((r) => r.state !== 'no-meta')
@@ -298,11 +327,12 @@ export default function VideoDropBoard({ rows, clients, onDropped, onReset, comp
       ) : (
         <ul className="mt-3 divide-y divide-slate-100">
           {shown.map((r) => (
-            <Row key={r.id} row={r} />
+            <Row key={r.id} row={r} onDismiss={dismiss} />
           ))}
         </ul>
       )}
 
+      {dismissError && <p className="mt-2 text-xs text-red-700">{dismissError}</p>}
       <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
         {hidden > 0 && (
           <button type="button" onClick={() => setShowAll(true)} className="text-blue-700 hover:underline">

@@ -111,6 +111,8 @@ check('waiting: an image is not a clip, and 30 days is the window', waitB.length
 check('waiting: start fresh hides everything before the reset', waitingClips({ files: FILES.filter((f) => f.client_id === 'B'), ads: [], now: NOW, resetAt: '2026-09-24T10:00:00Z' }).length, 0)
 check('waiting: a drop after the reset still shows', waitingClips({ files: FILES.filter((f) => f.client_id === 'B'), ads: [], now: NOW, resetAt: '2026-09-24T08:00:00Z' }).length, 1)
 check('drops: reset threads through', videoDrops(CLIENTS, ADS, [...CLIPS, ...REGISTERED], NOW, FILES, NOW.toISOString()).filter((r) => r.state === 'ready').length, 0)
+check('waiting: a dismissed upload is not new', waitingClips({ files: [{ storage_path: 'x.mp4', file_name: 'x.mp4', date_uploaded: '2026-09-24T09:00:00Z', drop_dismissed_at: '2026-09-24T10:00:00Z' }], now: NOW }).length, 0)
+check('waiting: a dismissed registered clip is not new', waitingClips({ registered: [{ storage_path: 'y.mp4', file_name: 'y.mp4', meta_video_id: 'v', status: 'ready', thumb_url: 't', created_at: '2026-09-24T09:00:00Z', drop_dismissed_at: '2026-09-24T10:00:00Z' }], now: NOW }).length, 0)
 check('waiting: a legacy video ad newer than the upload hides it', waitingClips({ files: [{ storage_path: 'x.mp4', file_name: 'x.mp4', date_uploaded: '2026-09-10T00:00:00Z' }], ads: [{ created_at: '2026-09-12T00:00:00Z', size_key: null }], now: NOW }).length, 0)
 
 const rows2 = videoDrops(CLIENTS, ADS, [...CLIPS, ...REGISTERED], NOW, FILES)

@@ -147,6 +147,23 @@ export async function saveVideoMeasure({ clientId, storagePath, durationSeconds,
   await supabase.from('ad_videos').update(patch).eq('client_id', clientId).eq('storage_path', storagePath)
 }
 
+/**
+ * "Not new": takes clips off the board's new-clip flag without publishing
+ * them. Both rows, because an upload has a client_files row from the start
+ * and an ad_videos row only once Meta has it.
+ */
+export async function dismissClips({ clientId, storagePaths }) {
+  const paths = (storagePaths || []).filter(Boolean)
+  if (paths.length === 0) return
+  const at = new Date().toISOString()
+  const [a, b] = await Promise.all([
+    supabase.from('client_files').update({ drop_dismissed_at: at }).eq('client_id', clientId).in('storage_path', paths),
+    supabase.from('ad_videos').update({ drop_dismissed_at: at }).eq('client_id', clientId).in('storage_path', paths),
+  ])
+  if (a.error) throw a.error
+  if (b.error) throw b.error
+}
+
 export async function saveVideoAbout({ clientId, storagePath, about }) {
   const { error } = await supabase
     .from('ad_videos')
