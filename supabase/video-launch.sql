@@ -20,3 +20,9 @@ alter table ad_videos add column if not exists width integer;
 alter table ad_videos add column if not exists height integer;
 
 create index if not exists published_ads_client_created_idx on published_ads (client_id, created_at desc);
+
+-- client_files.uploaded_by
+--   Who dropped the clip in, from the "You:" name the CRM already keeps for
+--   tasks. The board says "tuneup.mp4 dropped 2h ago by Sam" so the person
+--   publishing knows who to ask what it is.
+alter table client_files add column if not exists uploaded_by text;

@@ -19,7 +19,7 @@ export async function fetchClientVideos(clientId, account) {
   const [files, registered, drive] = await Promise.all([
     supabase
       .from('client_files')
-      .select('id, file_name, storage_path, file_size, date_uploaded')
+      .select('id, file_name, storage_path, file_size, date_uploaded, uploaded_by')
       .eq('client_id', clientId),
     supabase.from('ad_videos').select('*').eq('client_id', clientId),
     // Videos sitting in the client's Drive folder, which are publishable
@@ -54,7 +54,7 @@ export async function fetchClientVideos(clientId, account) {
  * row is invisible clutter — and the row insert is the step far less likely to
  * fail.
  */
-export async function uploadVideo({ clientId, file }) {
+export async function uploadVideo({ clientId, file, uploadedBy = '' }) {
   const problem = validateVideo(file)
   if (problem) throw new Error(problem)
 
@@ -71,6 +71,9 @@ export async function uploadVideo({ clientId, file }) {
     file_size: file.size,
     storage_path: path,
     description: 'Ad video',
+    // Who dropped it in, so the board can say. Blank when nobody has told
+    // the CRM who they are.
+    uploaded_by: String(uploadedBy || '').trim() || null,
   })
   if (error) {
     // Roll the bytes back rather than leave an orphan nobody can see or remove.

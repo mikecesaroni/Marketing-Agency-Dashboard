@@ -55,9 +55,12 @@ function Section({ step, id, title, hint, children }) {
  * section. This is the map for a teammate who has never been in here: the
  * seven numbered sections below are the detail, this is the shape.
  */
-function LaunchStrip({ steps, onJump }) {
+function LaunchStrip({ steps, onJump, stickyTop = 0 }) {
   return (
-    <div className="sticky top-0 z-20 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
+    <div
+      className="sticky z-20 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur"
+      style={{ top: stickyTop }}
+    >
       <ol className="grid grid-cols-4 gap-2">
         {steps.map((s, i) => (
           <li key={s.key} className="min-w-0">
@@ -618,6 +621,12 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
 export default function PublishToMetaPanel({
   client,
   set = null,
+  initialVideo = '',
+  // The publish-a-video page: no image ads section, and the steps renumber.
+  videoOnly = false,
+  // Pixels of sticky header above this panel (the page's Layout header), so
+  // the launch strip sticks below it rather than under it.
+  stickyTop = 0,
   intake,
   alreadyPublished = [],
   onPublished,
@@ -634,7 +643,9 @@ export default function PublishToMetaPanel({
   // sets and have no stamp. They publish as ads in the SAME ad set as the
   // image creatives, which is the point — a video and a static competing in
   // one ad set is a real test; in two ad sets it is two budgets.
-  const [pickedVideos, setPickedVideos] = useState([])
+  // A clip the board sent us to publish starts ticked; the picker fills in
+  // its Meta ids and name once it has loaded the list.
+  const [pickedVideos, setPickedVideos] = useState(initialVideo ? [initialVideo] : [])
   const [videoCopies, setVideoCopies] = useState({})
 
   const [cta, setCta] = useState('LEARN_MORE')
@@ -713,12 +724,13 @@ export default function PublishToMetaPanel({
   // The rest of the client's saved ads. Best effort — the set that opened the
   // panel is already here, so a failure costs the extra choices, not the page.
   useEffect(() => {
+    if (videoOnly) return
     fetchSavedAds(client.id)
       .then((all) => {
         if (all.length > 0) setSets(all)
       })
       .catch(() => {})
-  }, [client.id])
+  }, [client.id, videoOnly])
 
   // Seed each creative's copy from its own saved recipe. Only for stamps not
   // already edited, so re-running this never overwrites typing.
@@ -1134,6 +1146,9 @@ export default function PublishToMetaPanel({
   }
 
   const step = (n) => (chosenObjective?.needsForm ? n : n - 1)
+  // Section numbers: the image ads section is 2 and goes away in video-only
+  // mode, so everything after it moves up one.
+  const num = (n) => String(videoOnly && n > 2 ? n - 1 : n)
 
   // The strip at the top: derived from the same state the sections edit.
   const withCopy =
@@ -1160,7 +1175,7 @@ export default function PublishToMetaPanel({
 
   return (
     <div className="space-y-5">
-      <LaunchStrip steps={steps} onJump={jump} />
+      <LaunchStrip steps={steps} onJump={jump} stickyTop={stickyTop} />
 
       <SameAsLastTime memory={memory} onUse={applyMemory} onDismiss={() => setMemory(null)} />
 
@@ -1200,6 +1215,7 @@ export default function PublishToMetaPanel({
         />
       </Section>
 
+      {!videoOnly && (
       <Section
         step="2"
         title="Image ads"
@@ -1245,8 +1261,9 @@ export default function PublishToMetaPanel({
           </p>
         )}
       </Section>
+      )}
 
-      <Section step="3" title="Button and destination" hint="Shared by every ad in this publish.">
+      <Section step={num(3)} title="Button and destination" hint="Shared by every ad in this publish.">
         <div className="grid md:grid-cols-2 gap-2">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Button</label>
@@ -1285,7 +1302,7 @@ export default function PublishToMetaPanel({
         </div>
       </Section>
 
-      <Section step="4" title="Objective">
+      <Section step={num(4)} title="Objective">
         {reuseAdset && chosenAdset ? (
           <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded px-3 py-2">
             Set by the ad set you picked, not here — objectives belong to the campaign. Meta reads it
@@ -1338,7 +1355,7 @@ export default function PublishToMetaPanel({
 
       {chosenObjective?.needsForm && (
         <Section
-          step="5"
+          step={num(5)}
           title="The instant form"
           hint="Where the leads actually land. Reuse one where you can — a form owns its leads."
         >
@@ -1347,7 +1364,7 @@ export default function PublishToMetaPanel({
       )}
 
       <Section
-        step={String(step(6))}
+        step={num(step(6))}
         id="launch-where"
         title="Campaign"
         hint="Reusing a campaign keeps its learning; a new one starts cold."
@@ -1467,7 +1484,7 @@ export default function PublishToMetaPanel({
       </Section>
 
       <Section
-        step={String(step(7))}
+        step={num(step(7))}
         title="Ad set"
         hint={
           reuseCampaign

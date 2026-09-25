@@ -14,6 +14,11 @@
 import { wcName } from './adNaming.js'
 
 export const WEEK_MS = 7 * 86400000
+// A clip older than this that was never published is not "waiting", it is
+// forgotten; the board would otherwise fill with last quarter's B-roll.
+export const WAITING_WINDOW_MS = 30 * 86400000
+
+const VIDEO_EXT = /\.(mp4|mov|m4v|webm)$/i
 
 /**
  * A published ad that carried a video rather than artboards.
@@ -46,9 +51,10 @@ export function dropState({ hasMeta, lastVideoAt, now }) {
   return 'due'
 }
 
-const STATE_ORDER = { overdue: 0, due: 1, never: 2, done: 3, 'no-meta': 4 }
+const STATE_ORDER = { ready: 0, overdue: 1, due: 2, never: 3, done: 4, 'no-meta': 5 }
 
 export const DROP_STATES = {
+  ready: { label: 'New clip dropped in', tone: 'purple' },
   overdue: { label: 'Overdue', tone: 'red' },
   due: { label: 'Due this week', tone: 'amber' },
   never: { label: 'No video yet', tone: 'blue' },
@@ -57,13 +63,57 @@ export const DROP_STATES = {
 }
 
 /**
+ * The clips an editor dropped in that nobody has published yet.
+ *
+ * A clip is waiting when it is newer than the client's last video ad from
+ * before video ids were recorded (older clips have an unknown history, and
+ * the last legacy video ad is the honest cut-off), it is inside the window,
+ * and no published ad carries its Meta video id. Uploads not yet registered
+ * with Meta count too: an editor drops a file, and that is the moment the
+ * board should say so.
+ *
+ * registered: ad_videos rows (storage_path, meta_video_id, created_at, file_name)
+ * files: client_files video rows (storage_path, file_name, date_uploaded, uploaded_by)
+ * ads: this client's video ads
+ */
+export function waitingClips({ registered = [], files = [], ads = [], now = new Date() }) {
+  const published = new Set(ads.map((a) => a.video_id).filter(Boolean))
+  const legacyCutoff = ads
+    .filter((a) => !a.video_id)
+    .reduce((best, a) => (a.created_at > (best || '') ? a.created_at : best), '')
+  const since = new Date(now - WAITING_WINDOW_MS).toISOString()
+  const fresh = (at) => at && at > since && at > legacyCutoff
+  const byPath = new Map(files.map((f) => [f.storage_path, f]))
+  const out = []
+  const seen = new Set()
+  for (const r of registered) {
+    if (!r?.storage_path || seen.has(r.storage_path)) continue
+    seen.add(r.storage_path)
+    if (r.meta_video_id && published.has(r.meta_video_id)) continue
+    const f = byPath.get(r.storage_path)
+    const at = f?.date_uploaded || r.created_at
+    if (!fresh(at)) continue
+    out.push({ path: r.storage_path, name: r.file_name || f?.file_name || r.storage_path, at, by: f?.uploaded_by || '', ready: r.status === 'ready' && Boolean(r.thumb_url) })
+  }
+  for (const f of files) {
+    if (!f?.storage_path || seen.has(f.storage_path)) continue
+    if (!VIDEO_EXT.test(f.file_name || '') && !VIDEO_EXT.test(f.storage_path)) continue
+    seen.add(f.storage_path)
+    if (!fresh(f.date_uploaded)) continue
+    out.push({ path: f.storage_path, name: f.file_name || f.storage_path, at: f.date_uploaded, by: f.uploaded_by || '', ready: false })
+  }
+  return out.sort((a, b) => (a.at < b.at ? 1 : -1))
+}
+
+/**
  * One row per active client, most urgent first.
  *
  * clients: id, name, archived, is_internal, meta_ad_account_id
  * publishedAds: client_id, created_at, size_key, video_id, ad_name
- * videos (ad_videos): client_id, status, meta_video_id, thumb_url, created_at
+ * videos (ad_videos): client_id, status, meta_video_id, thumb_url, created_at, storage_path, file_name
+ * files (client_files): client_id, storage_path, file_name, date_uploaded, uploaded_by
  */
-export function videoDrops(clients = [], publishedAds = [], videos = [], now = new Date()) {
+export function videoDrops(clients = [], publishedAds = [], videos = [], now = new Date(), files = []) {
   const ads = new Map()
   for (const r of publishedAds) {
     if (!r?.client_id || !isVideoAd(r)) continue
@@ -76,6 +126,12 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
     if (!clips.has(v.client_id)) clips.set(v.client_id, [])
     clips.get(v.client_id).push(v)
   }
+  const uploads = new Map()
+  for (const f of files) {
+    if (!f?.client_id) continue
+    if (!uploads.has(f.client_id)) uploads.set(f.client_id, [])
+    uploads.get(f.client_id).push(f)
+  }
 
   return clients
     .filter((c) => c && !c.archived)
@@ -86,6 +142,8 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
       const own = clips.get(c.id) || []
       const ready = own.filter((v) => v.status === 'ready' && v.meta_video_id && v.thumb_url).length
       const hasMeta = Boolean(c.meta_ad_account_id)
+      const waiting = waitingClips({ registered: own, files: uploads.get(c.id) || [], ads: mine, now })
+      const state = dropState({ hasMeta, lastVideoAt, now })
       return {
         id: c.id,
         name: c.name,
@@ -97,11 +155,16 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
         lastAdName: mine.find((r) => r.created_at === lastVideoAt)?.ad_name || '',
         readyClips: ready,
         clips: own.length,
-        state: dropState({ hasMeta, lastVideoAt, now }),
+        waiting,
+        // A dropped clip is the loudest state: it is somebody's finished
+        // work sitting there, and the point of the board is to get it out.
+        state: waiting.length > 0 && hasMeta ? 'ready' : state,
       }
     })
     .sort((a, b) => {
       if (STATE_ORDER[a.state] !== STATE_ORDER[b.state]) return STATE_ORDER[a.state] - STATE_ORDER[b.state]
+      // Newest drop first among the ready ones.
+      if (a.state === 'ready') return a.waiting[0].at < b.waiting[0].at ? 1 : -1
       // Within a state, the one waiting longest first; never-published by name.
       if (a.lastVideoAt !== b.lastVideoAt) {
         if (!a.lastVideoAt) return 1
@@ -115,9 +178,12 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
 /** The numbers over the board. */
 export function dropStats(rows) {
   const n = (state) => rows.filter((r) => r.state === state).length
+  // A client with a clip waiting still needs this week's video counted once.
+  const behind = (r) => r.state === 'ready' && r.thisWeek === 0
   return {
-    done: n('done'),
-    due: n('due') + n('overdue') + n('never'),
+    ready: n('ready'),
+    done: n('done') + rows.filter((r) => r.state === 'ready' && r.thisWeek > 0).length,
+    due: n('due') + n('overdue') + n('never') + rows.filter(behind).length,
     overdue: n('overdue'),
     thisWeek: rows.reduce((s, r) => s + r.thisWeek, 0),
     withMeta: rows.filter((r) => r.hasMeta).length,

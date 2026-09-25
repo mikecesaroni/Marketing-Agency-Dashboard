@@ -6,7 +6,7 @@ The creative side of the CRM, in the sidebar as **Content**. Three doors:
 |--------------|--------------------------------------------------------------------------------|
 | Ad Studio    | a client list; pick one and the Studio opens on their page (`?open=studio`)     |
 | Google Drive | every client's linked folders: open in Drive, browse, download, link a folder   |
-| Publish      | a client list; pick one and Publish opens on their page (`?open=publish`)       |
+| Publish      | Video or Image first. Video: pick a client and land on `/publish/:id`, a page of its own with only the video flow. Image: the client's Studio opens on its Publish tab (`?open=publish`) |
 
 The Studio and Publish already live on each client's page. This tab is the
 way in that starts from the job rather than the client: "I am publishing this
@@ -40,6 +40,15 @@ Each row says when the last video ad went out, its name, and how many clips
 are already sent to Meta and ready, and opens Publish on that client's page.
 The Publish door counts how many clients need one this week.
 
-The rules are in `src/lib/videoLaunch.js` (`videoDrops`, `dropState`) and
+**The editor's drop zone** sits at the top of the board: pick the client,
+drop the finished .mp4 or .mov. It goes to the bucket and on to Meta to
+transcode, and the client's row turns purple: "New clip dropped in ·
+tuneup.mp4 · dropped 2h ago by Sam · Click to publish". That click opens
+Publish on the client page with the clip already ticked (`?open=publish&video=`),
+so the transcript and the three versions of copy start on their own. A clip
+counts as waiting until a published ad carries its Meta video id, for 30
+days. The name comes from the "You:" the CRM keeps for tasks.
+
+The rules are in `src/lib/videoLaunch.js` (`videoDrops`, `dropState`, `waitingClips`) and
 pinned by `scripts/check-video-launch.mjs`. See `docs/video-machine.md` for
 the publish screen itself.

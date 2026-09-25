@@ -125,6 +125,8 @@ export default function ClientDetailPage() {
   const [sendModal, setSendModal] = useState(null)
   // The tab the Studio opens on: Publish when publishing is the next move.
   const [studioTab, setStudioTab] = useState('design')
+  // A clip to open Publish on, from the Content board's "click to publish".
+  const [studioVideo, setStudioVideo] = useState('')
 
   const loadNextUp = () =>
     fetchNextStepsFor(clientId)
@@ -140,7 +142,7 @@ export default function ClientDetailPage() {
     const want = new URLSearchParams(pageLocation.search).get('open')
     if (!want) return
     if (want === 'studio') openStudio('design')
-    else if (want === 'publish') openStudio('publish')
+    else if (want === 'publish') openStudio('publish', new URLSearchParams(pageLocation.search).get('video') || '')
     else if (want === 'kpis') setShowKPIsModal(true)
     navigate({ pathname: pageLocation.pathname, hash: pageLocation.hash }, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -319,8 +321,9 @@ export default function ClientDetailPage() {
   // One step on the Next-up bar, one thing opened. The kinds are the ones
   // nextSteps() emits; anything unknown scrolls to the deliverables.
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  const openStudio = (tab) => {
+  const openStudio = (tab, video = '') => {
     setStudioTab(tab)
+    setStudioVideo(video)
     setStudioSeed(null)
     setStudioKey((k) => k + 1)
     setStudioFromChat(false)
@@ -852,6 +855,7 @@ export default function ClientDetailPage() {
             intake={intake}
             seed={studioSeed}
             initialTab={studioTab}
+            initialVideo={studioVideo}
             onClose={() => {
               setShowStudioModal(false)
               setStudioFromChat(false)

@@ -146,6 +146,7 @@ export function mergeVideos(files, registered, account) {
         storage_path: f.storage_path,
         file_size: f.file_size,
         uploaded_at: f.date_uploaded,
+        uploaded_by: f.uploaded_by || '',
         meta_video_id: meta?.meta_video_id || '',
         thumb_url: meta?.thumb_url || '',
         // 'new' is the absence of a registration, which is different from

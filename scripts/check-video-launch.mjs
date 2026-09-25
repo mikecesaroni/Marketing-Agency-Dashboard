@@ -15,6 +15,7 @@ import {
   launchSteps,
   videoAdName,
   videoDrops,
+  waitingClips,
 } from '../src/lib/videoLaunch.js'
 
 // The labels metaPublish.js gives these; that module needs a Supabase client
@@ -80,7 +81,39 @@ check('last video ad name carried', byId.A.lastAdName, 'WC_Belk · tune-up')
 check('ready clips need a thumbnail', byId.B.readyClips, 1)
 check('clip count is every registered clip', byId.B.clips, 3)
 check('internal flag carried', byId.F.internal, true)
-check('stats', dropStats(rows), { done: 1, due: 3, overdue: 1, thisWeek: 2, withMeta: 4 })
+check('stats', dropStats(rows), { ready: 0, done: 1, due: 3, overdue: 1, thisWeek: 2, withMeta: 4 })
+
+// Clips an editor dropped in and nobody has published.
+const NOW_ISO = NOW.toISOString()
+const FILES = [
+  { client_id: 'B', storage_path: 'B/v/new.mp4', file_name: 'new.mp4', date_uploaded: '2026-09-24T09:00:00Z', uploaded_by: 'Sam' },
+  { client_id: 'B', storage_path: 'B/v/old.mp4', file_name: 'old.mp4', date_uploaded: '2026-08-01T09:00:00Z' },
+  { client_id: 'B', storage_path: 'B/v/photo.jpg', file_name: 'photo.jpg', date_uploaded: '2026-09-24T09:00:00Z' },
+  { client_id: 'A', storage_path: 'A/v/done.mp4', file_name: 'done.mp4', date_uploaded: '2026-09-21T09:00:00Z' },
+  { client_id: 'A', storage_path: 'A/v/before.mp4', file_name: 'before.mp4', date_uploaded: '2026-09-20T09:00:00Z' },
+  { client_id: 'E', storage_path: 'E/v/x.mp4', file_name: 'x.mp4', date_uploaded: '2026-09-24T09:00:00Z' },
+]
+const REGISTERED = [
+  { client_id: 'A', storage_path: 'A/v/done.mp4', file_name: 'done.mp4', meta_video_id: 'v1', status: 'ready', thumb_url: 't', created_at: '2026-09-21T10:00:00Z' },
+  { client_id: 'A', storage_path: 'A/v/drive.mp4', file_name: 'drive.mp4', meta_video_id: 'v7', status: 'processing', thumb_url: '', created_at: '2026-09-23T10:00:00Z' },
+]
+const wait = waitingClips({ registered: REGISTERED.filter((r) => r.client_id === 'A'), files: FILES.filter((f) => f.client_id === 'A'), ads: ADS.filter((a) => a.client_id === 'A'), now: NOW })
+check('waiting: a published clip is not waiting', wait.some((w) => w.path === 'A/v/done.mp4'), false)
+check('waiting: a clip older than the last legacy video ad is not waiting', wait.some((w) => w.path === 'A/v/before.mp4'), false)
+check('waiting: a registered, unpublished, fresh clip is', wait.map((w) => [w.path, w.ready]), [['A/v/drive.mp4', false]])
+const waitB = waitingClips({ files: FILES.filter((f) => f.client_id === 'B'), ads: ADS.filter((a) => a.client_id === 'B'), now: NOW })
+check('waiting: an unregistered upload counts, with who dropped it', waitB.map((w) => [w.name, w.by]), [['new.mp4', 'Sam']])
+check('waiting: an image is not a clip, and 30 days is the window', waitB.length, 1)
+check('waiting: a legacy video ad newer than the upload hides it', waitingClips({ files: [{ storage_path: 'x.mp4', file_name: 'x.mp4', date_uploaded: '2026-09-10T00:00:00Z' }], ads: [{ created_at: '2026-09-12T00:00:00Z', size_key: null }], now: NOW }).length, 0)
+
+const rows2 = videoDrops(CLIENTS, ADS, [...CLIPS, ...REGISTERED], NOW, FILES)
+const by2 = Object.fromEntries(rows2.map((r) => [r.id, r]))
+check('ready: a client with a waiting clip is ready, and first', [rows2[0].id, rows2[0].state], ['B', 'ready'])
+check('ready: newest drop first among ready rows', rows2.slice(0, 2).map((r) => r.id), ['B', 'A'])
+check('ready: the row carries the waiting clips', by2.B.waiting.map((w) => w.name), ['new.mp4'])
+check('ready: no Meta account is never ready', by2.E.state, 'no-meta')
+check('stats: ready counted, done and due still add up', dropStats(rows2), { ready: 2, done: 1, due: 3, overdue: 1, thisWeek: 2, withMeta: 4 })
+void NOW_ISO
 
 // Clip checks.
 const good = clipChecks({ durationSeconds: 18, width: 1080, height: 1920, transcript: 'Hi, Dale here' })

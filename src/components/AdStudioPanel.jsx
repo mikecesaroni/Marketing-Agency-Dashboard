@@ -499,7 +499,7 @@ function proofFromIntake(intake) {
   return count ? `\u2605 ${rating} on Google \u00b7 ${count} reviews` : `\u2605 ${rating} on Google`
 }
 
-export default function AdStudioPanel({ client, intake, seed, initialTab, onClose, onBack, backLabel }) {
+export default function AdStudioPanel({ client, intake, seed, initialTab, initialVideo, onClose, onBack, backLabel }) {
   const [files, setFiles] = useState([])
   // The HEIC path being converted to JPEG right now, for the picker's label.
   const [converting, setConverting] = useState('')
@@ -584,7 +584,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, onClos
   // Bumped after a save so the gallery refetches instead of showing a stale list.
   const [savedAt, setSavedAt] = useState(0)
   // The saved set the Publish tab is working on, picked from the gallery.
-  const [publishing, setPublishing] = useState(null)
+  // Opened straight onto a clip (the board's "click to publish"): the
+  // publish flow starts with it ticked rather than at the gallery.
+  const [publishing, setPublishing] = useState(initialVideo ? 'blank' : null)
   const [published, setPublished] = useState([])
 
   // Which artboard is showing full size, and whether it was clicked open
@@ -1117,6 +1119,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, onClos
               // 'blank' means the publish flow was opened without a saved
               // image creative, which is how a video-only launch starts.
               set={publishing === 'blank' ? null : publishing}
+              initialVideo={initialVideo}
               intake={intake}
               alreadyPublished={published}
               onPublished={() =>

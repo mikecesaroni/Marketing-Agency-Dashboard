@@ -7,9 +7,15 @@ versions) and `docs/content.md` (the Content tab).
 
 ## The week, end to end
 
+0. **The editor drops the clip.** On the Content tab, "Drop a finished
+   clip": pick the client, drop the file. It uploads, goes to Meta, and the
+   client's row on the board turns purple: new clip dropped in, click to
+   publish.
 1. **Content tab.** The board under the three doors says who needs a video
-   this week, most behind first. Click the client.
-2. **Publish opens** on their page with the launch strip across the top:
+   this week, most behind first, with dropped clips at the very top. Click
+   the client (or the purple "Click to publish", which lands with the clip
+   ticked).
+2. **The publish page opens** (`/publish/:client`, also reachable as Content → Publish → Video → client) with the launch strip across the top:
    Videos, Words, Where, Publish. Each says where it stands and jumps to its
    section.
 3. **Drop the clips** onto the list (or Upload clips). Each one goes to the
@@ -30,7 +36,8 @@ versions) and `docs/content.md` (the Content tab).
 
 | Moment                         | What happens without a click                                   |
 |--------------------------------|----------------------------------------------------------------|
-| clip dropped                   | uploaded, registered with Meta, transcode started               |
+| clip dropped (board or publish)| uploaded, registered with Meta, transcode started, board row turns purple |
+| "click to publish"             | Publish opens with the clip ticked, ids and name filled in      |
 | clip previewed                 | length and shape measured and saved for the clip checks         |
 | clip ticked                    | transcribed (Deepgram, once, cached on the row)                 |
 | transcript lands, copy blank   | three versions written (Claude, `ad-copy` mode `variations`)    |

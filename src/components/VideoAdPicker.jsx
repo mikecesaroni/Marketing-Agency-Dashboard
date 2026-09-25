@@ -283,6 +283,24 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videos, picked, copies, versions, writingVersions])
 
+  // A clip ticked from outside (the board's "click to publish") was picked
+  // before this list existed, so its copy record has no Meta ids and no
+  // name. Stamped here the moment the clip is publishable, once. Also
+  // covers a clip that finished transcoding after it was ticked.
+  useEffect(() => {
+    for (const v of videos || []) {
+      if (!picked.includes(v.storage_path) || !isPublishable(v)) continue
+      const c = copies[v.storage_path]
+      if (c?.meta_video_id === v.meta_video_id && c?.thumb_url === v.thumb_url) continue
+      onCopy(v.storage_path, {
+        meta_video_id: v.meta_video_id,
+        thumb_url: v.thumb_url,
+        ...(c?.ad_name?.trim() ? {} : { ad_name: videoAdName({ clientName: client.name, fileName: v.file_name }) }),
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos, picked])
+
   const nameFor = (video, angle) =>
     videoAdName({ clientName: client.name, angle, fileName: video?.file_name })
 

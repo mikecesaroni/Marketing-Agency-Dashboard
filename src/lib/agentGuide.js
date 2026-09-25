@@ -75,6 +75,19 @@ export const ROUTES = [
     ],
   },
   {
+    path: '/publish/:clientId',
+    name: 'Publish a video',
+    nav: null,
+    purpose:
+      'The publish-a-video page for one client: Content → Publish → Video → client. Only the video flow, nothing else on the screen. ?video=<storage path> lands with that clip ticked (the board\'s "click to publish").',
+    contains: [
+      'A banner with the client, when their last video ad went out, and a "Switch client" select that jumps to another client\'s page.',
+      'The launch strip (Videos, Words, Where, Publish) and the numbered sections: drop clips, pick a copy version, button and destination, objective, instant form, campaign, ad set. Image ads are not offered here; they publish from the Ad Studio.',
+      '"Same place as last time?" restores the previous launch\'s destination in one click.',
+    ],
+    actions: ['"Publish N paused to Meta" creates everything paused; switching on is done in Ads Manager.'],
+  },
+  {
     path: '/client/:clientId',
     name: 'Client detail',
     nav: null,
@@ -108,7 +121,7 @@ export const ROUTES = [
       'The creative side, entered by the job rather than the client: three doors, Ad Studio, Google Drive and Publish, each opening the same client list ordered by recent creative work.',
     contains: [
       'Three large cards with live counts: saved ads, Drive folders linked, clients who need a video this week and ads live.',
-      'This week\'s video drops: one row per client with a Meta account, most behind first (overdue, due, no video yet, done), with when their last video ad went out and how many clips are ready; each row opens Publish on the client page. Shown under the doors and at the top of the Publish door.',
+      'This week\'s video drops: one row per client with a Meta account, most behind first (overdue, due, no video yet, done), with when their last video ad went out and how many clips are ready; each row opens Publish on the client page. Shown under the doors and at the top of the Publish door. "Drop a finished clip" on the board is where an editor drops a finished .mp4/.mov against a client; the row then reads "New clip dropped in" with a "Click to publish" button that opens Publish with that clip already ticked (?open=publish&video=<path>).',
       'Ad Studio and Publish: a card per client (saved ads, videos, live ads, last activity) that opens the client page with that tool already open (?open=studio or ?open=publish).',
       'Google Drive: every client with an "Open in Drive" button per linked folder, "Browse files" for the read-only browser (click a file to open it in Drive to view or download), and "Link a folder" to paste a folder link.',
     ],

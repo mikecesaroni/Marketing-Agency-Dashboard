@@ -258,30 +258,39 @@ const SECTION_META = {
   },
   publish: {
     title: 'Publish',
-    hint: 'Who needs a video this week, then every client. Publish opens on their page with the clips ready to send to Meta.',
+    hint: 'Video or image, then the client. A video gets its own publish page; image ads publish from the Studio.',
   },
 }
 
 export default function ContentPage() {
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') || ''
+  // Behind the Publish door: video or image first, then the client. Video
+  // is its own page (/publish/:id); image ads publish from the Studio.
+  const kind = tab === 'publish' ? params.get('kind') || '' : ''
   const [data, setData] = useState(null)
   const [drops, setDrops] = useState(null)
+  // The raw client rows, for the drop zone: it needs the Meta account id,
+  // which the rollup rows do not carry.
+  const [clientRows, setClientRows] = useState([])
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
 
   const load = async () => {
     try {
-      const [clients, saved, published, videos] = await Promise.all([
+      const [clients, saved, published, videos, files] = await Promise.all([
         supabase.from('clients').select('id,name,industry,archived,is_internal,drive_folder_id,extra_drive_folder_ids,meta_ad_account_id').order('name'),
         fetchAllRows(() => supabase.from('saved_ads').select('client_id,created_at').order('created_at').order('id')),
         fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name').order('created_at').order('id')),
-        supabase.from('ad_videos').select('client_id,created_at,status,meta_video_id,thumb_url'),
+        supabase.from('ad_videos').select('client_id,created_at,status,meta_video_id,thumb_url,storage_path,file_name'),
+        // Only the clips: the table also holds every photo ever uploaded.
+        supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by').ilike('file_type', 'video/%'),
       ])
       if (clients.error) throw clients.error
       if (videos.error) throw videos.error
       setData(sortForContent(rollupClients(clients.data || [], saved, published, videos.data || [])))
-      setDrops(videoDrops(clients.data || [], published, videos.data || []))
+      setDrops(videoDrops(clients.data || [], published, videos.data || [], new Date(), files.data || []))
+      setClientRows(clients.data || [])
       setError('')
     } catch (err) {
       setError(err.message)
@@ -295,7 +304,7 @@ export default function ContentPage() {
 
   const stats = useMemo(() => (data ? { ...hubStats(data), drops: drops ? dropStats(drops) : null } : null), [data, drops])
   const rows = useMemo(() => (data ? searchClients(data, q) : []), [data, q])
-  const openTab = (key) => setParams(key ? { tab: key } : {})
+  const openTab = (key, k = '') => setParams(key ? (k ? { tab: key, kind: k } : { tab: key }) : {})
   const meta = SECTION_META[tab]
 
   return (
@@ -325,7 +334,7 @@ export default function ContentPage() {
               <Door key={d.key} door={d} stats={stats} onOpen={() => openTab(d.key)} />
             ))}
           </div>
-          <VideoDropBoard rows={drops} compact />
+          <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} compact />
         </div>
       ) : (
         <div className="space-y-4">
@@ -348,9 +357,48 @@ export default function ContentPage() {
             </div>
           </div>
 
-          {tab === 'publish' && !q && <VideoDropBoard rows={drops} />}
+          {tab === 'publish' && !kind && (
+            /* VIDEO OR IMAGE. Two big choices, then the client list. */
+            <div className="grid gap-4 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => openTab('publish', 'video')}
+                className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-400 p-6 text-left text-white shadow-lg ring-4 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl group-hover:ring-emerald-300"
+              >
+                <span className="text-3xl">🎬</span>
+                <h3 className="mt-3 text-2xl font-bold tracking-tight">Video</h3>
+                <p className="mt-1 max-w-xs text-sm text-white/85">
+                  This week&rsquo;s clip. Pick the client and land on their publish page with the video flow and nothing else.
+                </p>
+                <span className="mt-auto pt-4 text-xs font-medium text-white/80">Pick a client →</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openTab('publish', 'image')}
+                className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-slate-800 to-slate-600 p-6 text-left text-white shadow-lg ring-4 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl"
+              >
+                <span className="text-3xl">🖼️</span>
+                <h3 className="mt-3 text-2xl font-bold tracking-tight">Image ads</h3>
+                <p className="mt-1 max-w-xs text-sm text-white/85">
+                  Statics saved in the Ad Studio. Opens the client&rsquo;s Studio on the Publish tab.
+                </p>
+                <span className="mt-auto pt-4 text-xs font-medium text-white/80">Pick a client →</span>
+              </button>
+            </div>
+          )}
 
-          {data === null ? (
+          {tab === 'publish' && !kind && !q && <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} />}
+
+          {tab === 'publish' && kind && (
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <button type="button" onClick={() => openTab('publish')} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 hover:bg-slate-50">
+                ← Video or image
+              </button>
+              <span className="font-medium text-slate-700">{kind === 'video' ? 'Video ad: pick the client' : 'Image ads: pick the client'}</span>
+            </div>
+          )}
+
+          {tab === 'publish' && !kind && !q ? null : data === null ? (
             <p className="text-sm text-slate-500">Loading…</p>
           ) : rows.length === 0 ? (
             <Card padding="lg" className="text-center text-sm text-slate-500">
@@ -368,8 +416,8 @@ export default function ContentPage() {
                 <ClientCard
                   key={r.id}
                   row={r}
-                  href={`/client/${r.id}?open=${tab === 'studio' ? 'studio' : 'publish'}`}
-                  primary={tab === 'studio' ? 'Open the Ad Studio →' : 'Open Publish →'}
+                  href={tab === 'studio' ? `/client/${r.id}?open=studio` : kind === 'video' ? `/publish/${r.id}` : `/client/${r.id}?open=publish`}
+                  primary={tab === 'studio' ? 'Open the Ad Studio →' : kind === 'video' ? 'Publish a video →' : 'Open Publish →'}
                   lines={
                     tab === 'studio' ? (
                       <>
