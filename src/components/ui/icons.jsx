@@ -210,3 +210,14 @@ export function IconContent(props) {
     </Icon>
   )
 }
+
+export function IconTeam({ className = 'h-5 w-5' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M15.5 14.2a4.5 4.5 0 0 1 5 4.3" />
+    </svg>
+  )
+}

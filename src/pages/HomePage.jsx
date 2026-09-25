@@ -7,6 +7,7 @@ import AdDoctorAlerts from '../components/AdDoctorAlerts'
 import LaunchReadyAlerts from '../components/LaunchReadyAlerts'
 import NextUpDigest from '../components/NextUpDigest'
 import QuickCopyPanel from '../components/QuickCopyPanel'
+import HomeTiles from '../components/HomeTiles'
 import { adsReady } from '../lib/adsReady'
 import {
   Badge,
@@ -273,9 +274,19 @@ export default function HomePage() {
         day: 'numeric',
       })}
     >
-      {/* First, above everything: a client whose ads have stopped is losing
-          money right now, and it is the one thing here nobody would otherwise
-          notice. Renders nothing when all is well. */}
+      {/* THE HOME SCREEN. Every part of the CRM as a tile, first, so the
+          phone has somewhere to go that is not a strip of six icons, and a
+          new teammate sees the whole app at a glance. */}
+      <HomeTiles
+        counts={{
+          '/clients': `${live.length} live`,
+          '/deliverables': openDeliverables.length > 0 ? `${openDeliverables.length} open` : 'all done',
+        }}
+      />
+
+      {/* A client whose ads have stopped is losing money right now, and it
+          is the one thing here nobody would otherwise notice. Renders nothing
+          when all is well. */}
       <AdDeliveryAlerts clients={clients} delivery={delivery} todayDate={now} />
 
       {/* Then a client waiting on us, which is more urgent than a number that

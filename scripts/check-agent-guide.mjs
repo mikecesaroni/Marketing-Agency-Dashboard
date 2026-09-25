@@ -33,12 +33,12 @@ const app = read('src/App.jsx')
 const routerPaths = [...app.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1])
 check(routerPaths.length > 5, `only found ${routerPaths.length} routes in App.jsx — did the parse break?`)
 
-const layout = read('src/components/Layout.jsx')
+const layout = read('src/lib/nav.js')
 const navItems = [...layout.matchAll(/\{\s*to:\s*'([^']+)',\s*label:\s*'([^']+)'/g)].map((m) => ({
   to: m[1],
   label: m[2],
 }))
-check(navItems.length > 5, `only found ${navItems.length} nav items in Layout.jsx — did the parse break?`)
+check(navItems.length > 5, `only found ${navItems.length} nav items in src/lib/nav.js — did the parse break?`)
 
 // --- what the guide claims ------------------------------------------------
 const guidePaths = ROUTES.flatMap((r) => [r.path, ...(r.aliases || [])])
@@ -73,7 +73,7 @@ for (const item of navItems) {
 for (const route of ROUTES.filter((r) => r.nav)) {
   check(
     navItems.some((i) => i.to === route.path),
-    `the guide says ${route.path} is in the sidebar as "${route.nav}", but Layout.jsx has no such item.`
+    `the guide says ${route.path} is in the sidebar as "${route.nav}", but src/lib/nav.js has no such item.`
   )
 }
 

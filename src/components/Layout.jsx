@@ -3,74 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { LOGIN_REQUIRED, ROLE_LABELS, navWithoutLogin, visibleNav } from '../lib/access'
 import ChangePasswordModal from './ChangePasswordModal'
-import {
-  IconDashboard,
-  IconClients,
-  IconDeliverables,
-  IconPayments,
-  IconReports,
-  IconSops,
-  IconAiSearch,
-  IconCompass,
-  IconTasks,
-  IconContent,
-} from './ui'
-
-// Grouped, because seven flat items give no clue which are the daily ones and
-// which are looked at once a week. The daily work is the client roster; money
-// and reporting are their own trip; the reference material is the tail.
-const NAV_GROUPS = [
-  {
-    label: null,
-    items: [
-      { to: '/', label: 'Dashboard', short: 'Home', Icon: IconDashboard, end: true },
-      { to: '/clients', label: 'Clients', short: 'Clients', Icon: IconClients },
-      { to: '/content', label: 'Content', short: 'Content', Icon: IconContent },
-      { to: '/deliverables', label: 'Onboarding Progress', short: 'Onboarding', Icon: IconDeliverables },
-      { to: '/tasks', label: 'Tasks', short: 'Tasks', Icon: IconTasks },
-    ],
-  },
-  {
-    label: 'Money',
-    items: [
-      { to: '/payments', label: 'Payments', short: 'Money', Icon: IconPayments },
-      { to: '/reports', label: 'Reports', short: 'Reports', Icon: IconReports },
-    ],
-  },
-  {
-    label: 'Reference',
-    items: [
-      { to: '/sops', label: 'SOPs', short: 'SOPs', Icon: IconSops },
-      { to: '/ai-search', label: 'AI Search', short: 'AI', Icon: IconAiSearch },
-      // Last, and in the nav rather than tucked away, because something
-      // arriving here for the first time -- a new hire, or a browsing agent --
-      // reads the sidebar before it reads anything else. A guide nobody can
-      // find is a file, not a guide.
-      { to: '/guide', label: 'Guide', short: 'Guide', Icon: IconCompass },
-    ],
-  },
-  {
-    label: 'Admin',
-    items: [
-      // Admin-only, and filtered out of a VA's sidebar by visibleNav below.
-      // Kept off the phone tabs: nine tabs do not fit, and adding a login is
-      // a desk job.
-      { to: '/team', label: 'Team', short: 'Team', Icon: IconTeam, mobile: false },
-    ],
-  },
-]
-
-function IconTeam({ className = 'h-5 w-5' }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="9" cy="8" r="3.2" />
-      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
-      <circle cx="17" cy="9" r="2.5" />
-      <path d="M15.5 14.2a4.5 4.5 0 0 1 5 4.3" />
-    </svg>
-  )
-}
-
+import { NAV_GROUPS } from '../lib/nav'
 function initials(profile) {
   const src = profile?.name || profile?.email || '?'
   return src

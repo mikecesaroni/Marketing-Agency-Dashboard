@@ -49,6 +49,7 @@ export const ROUTES = [
     purpose:
       'The operations hub, and the right place to start. Answers "where does every client stand and what needs doing today". Carries no billing figures at all by design — money is on Payments.',
     contains: [
+      'The home screen: a tile for every part of the CRM (Clients, Content, Publish a video, Onboarding Progress, Tasks, Payments, Reports, SOPs, AI Search, Guide, and Team for admins), each with a one-line description and a live count where there is one. On a phone the bottom bar keeps only Home, Clients, Content and Tasks; everything else is reached from these tiles.',
       'Ad delivery alerts, at the very top, and only when something is wrong: a client whose ad account is disabled or unsettled, or whose ads have gone quiet. This is the most important thing on the page and it is invisible on a good day.',
       'Client form submissions, same rule — shown only when there are some. The onboarding form clears when it is opened or dismissed. A GHL setup form does not: it stays until somebody presses "GHL is set up" on it, which marks that client\'s GoHighLevel template setup deliverable done. It is a job to do, not a message to read.',
       'Three counts: Clients, Open work, KPIs logged (as "n of m" for this week).',
