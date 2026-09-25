@@ -258,7 +258,7 @@ const SECTION_META = {
   },
   publish: {
     title: 'Publish',
-    hint: 'Video or image, then the client. A video gets its own publish page; image ads publish from the Studio.',
+    hint: 'Video, image or the funnel, then the client. A video gets its own publish page; image ads publish from the Studio; the funnel builder opens on the client page.',
   },
 }
 
@@ -376,8 +376,8 @@ export default function ContentPage() {
           </div>
 
           {tab === 'publish' && !kind && (
-            /* VIDEO OR IMAGE. Two big choices, then the client list. */
-            <div className="grid gap-4 md:grid-cols-2">
+            /* VIDEO, IMAGE OR THE FUNNEL. Three big choices, then the client list. */
+            <div className="grid gap-4 md:grid-cols-3">
               <button
                 type="button"
                 onClick={() => openTab('publish', 'video')}
@@ -402,6 +402,18 @@ export default function ContentPage() {
                 </p>
                 <span className="mt-auto pt-4 text-xs font-medium text-white/80">Pick a client →</span>
               </button>
+              <button
+                type="button"
+                onClick={() => openTab('publish', 'funnel')}
+                className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-orange-600 to-rose-500 p-6 text-left text-white shadow-lg ring-4 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl"
+              >
+                <span className="text-3xl">🔻</span>
+                <h3 className="mt-3 text-2xl font-bold tracking-tight">Build a funnel</h3>
+                <p className="mt-1 max-w-xs text-sm text-white/85">
+                  The top of funnel and retargeting pair for a client, created paused, with the six audiences. No creative needed.
+                </p>
+                <span className="mt-auto pt-4 text-xs font-medium text-white/80">Pick a client →</span>
+              </button>
             </div>
           )}
 
@@ -412,7 +424,9 @@ export default function ContentPage() {
               <button type="button" onClick={() => openTab('publish')} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 hover:bg-slate-50">
                 ← Video or image
               </button>
-              <span className="font-medium text-slate-700">{kind === 'video' ? 'Video ad: pick the client' : 'Image ads: pick the client'}</span>
+              <span className="font-medium text-slate-700">
+                {kind === 'video' ? 'Video ad: pick the client' : kind === 'funnel' ? 'Build a funnel: pick the client' : 'Image ads: pick the client'}
+              </span>
             </div>
           )}
 
@@ -434,8 +448,16 @@ export default function ContentPage() {
                 <ClientCard
                   key={r.id}
                   row={r}
-                  href={tab === 'studio' ? `/client/${r.id}?open=studio` : kind === 'video' ? `/publish/${r.id}` : `/client/${r.id}?open=publish`}
-                  primary={tab === 'studio' ? 'Open the Ad Studio →' : kind === 'video' ? 'Publish a video →' : 'Open Publish →'}
+                  href={
+                    tab === 'studio'
+                      ? `/client/${r.id}?open=studio`
+                      : kind === 'video'
+                        ? `/publish/${r.id}`
+                        : kind === 'funnel'
+                          ? `/client/${r.id}?open=funnel`
+                          : `/client/${r.id}?open=publish`
+                  }
+                  primary={tab === 'studio' ? 'Open the Ad Studio →' : kind === 'video' ? 'Publish a video →' : kind === 'funnel' ? 'Build the funnel →' : 'Open Publish →'}
                   lines={
                     tab === 'studio' ? (
                       <>

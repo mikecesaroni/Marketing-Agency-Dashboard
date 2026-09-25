@@ -6,7 +6,7 @@ The creative side of the CRM, in the sidebar as **Content**. Three doors:
 |--------------|--------------------------------------------------------------------------------|
 | Ad Studio    | a client list; pick one and the Studio opens on their page (`?open=studio`)     |
 | Google Drive | every client's linked folders: open in Drive, browse, download, link a folder   |
-| Publish      | Video or Image first. Video: pick a client and land on `/publish/:id`, a page of its own with only the video flow. Image: the client's Studio opens on its Publish tab (`?open=publish`) |
+| Publish      | Video, Image or Build a funnel first. Video: pick a client and land on `/publish/:id`, a page of its own with only the video flow. Image: the client's Studio opens on its Publish tab (`?open=publish`). Funnel: the client page opens with the funnel builder open (`?open=funnel`) |
 
 The Studio and Publish already live on each client's page. This tab is the
 way in that starts from the job rather than the client: "I am publishing this

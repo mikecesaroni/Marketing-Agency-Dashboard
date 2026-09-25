@@ -20,8 +20,9 @@ import { SPECIAL_AD_CATEGORIES, ageFromIntake, locationsFromIntake } from '../li
  * before New York; the publish panel learnt that the hard way and this keeps
  * the same rule.
  */
-export default function FunnelPanel({ client, intake }) {
-  const [open, setOpen] = useState(false)
+export default function FunnelPanel({ client, intake, initialOpen = false }) {
+  // Opened straight away when Content → Publish → Build a funnel sent us.
+  const [open, setOpen] = useState(initialOpen)
   const [locations, setLocations] = useState([])
   const [prefill, setPrefill] = useState(null)
   const [ageMin, setAgeMin] = useState(() => ageFromIntake(intake).min)

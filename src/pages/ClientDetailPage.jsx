@@ -127,6 +127,8 @@ export default function ClientDetailPage() {
   const [studioTab, setStudioTab] = useState('design')
   // A clip to open Publish on, from the Content board's "click to publish".
   const [studioVideo, setStudioVideo] = useState('')
+  // Content → Publish → Build a funnel: land with the funnel card open.
+  const [funnelOpen, setFunnelOpen] = useState(false)
 
   const loadNextUp = () =>
     fetchNextStepsFor(clientId)
@@ -144,6 +146,11 @@ export default function ClientDetailPage() {
     if (want === 'studio') openStudio('design')
     else if (want === 'publish') openStudio('publish', new URLSearchParams(pageLocation.search).get('video') || '')
     else if (want === 'kpis') setShowKPIsModal(true)
+    else if (want === 'funnel') {
+      setFunnelOpen(true)
+      // After the card has rendered open, so the scroll lands on the builder.
+      setTimeout(() => scrollTo('funnel'), 150)
+    }
     navigate({ pathname: pageLocation.pathname, hash: pageLocation.hash }, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, client?.id, pageLocation.search])
@@ -794,7 +801,7 @@ export default function ClientDetailPage() {
             structure is supposed to exist before there is anything to put in
             it, and publish lives inside the creative tool. */}
         <div id="funnel" className="mt-6 scroll-mt-4 md:mt-8">
-          <FunnelPanel client={client} intake={intake} />
+          <FunnelPanel key={funnelOpen ? 'open' : 'closed'} client={client} intake={intake} initialOpen={funnelOpen} />
         </div>
 
         {/* GOOGLE SEARCH — keywords and search terms, from the nightly sync.
