@@ -148,12 +148,12 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
   const budgetCents = { tof: cents(tofBudget), retarget: cents(retargetBudget) }
 
   const blockers = []
-  if (locations.length === 0) blockers.push('no locations picked')
-  if (destination === 'website' && !client.meta_pixel_id) blockers.push('no pixel on the client for website leads')
-  if (destination === 'form' && !client.meta_page_id) blockers.push('no Facebook Page on the client for instant forms')
-  if (budgetCents.tof < 100) blockers.push('top of funnel budget under $1.00')
+  if (locations.length === 0) blockers.push('pick where the ads run')
+  if (destination === 'website' && !client.meta_pixel_id) blockers.push('the client has no pixel, so choose Instant form')
+  if (destination === 'form' && !client.meta_page_id) blockers.push('the client has no Facebook Page connected')
+  if (budgetCents.tof < 100) blockers.push('finding new people budget under $1.00')
   if (plan.campaigns.some((c) => c.stage === 'retarget') && budgetCents.retarget < 100)
-    blockers.push('retargeting budget under $1.00')
+    blockers.push('following up budget under $1.00')
 
   const build = async () => {
     setBusy(true)
@@ -183,22 +183,24 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-600">
-        Builds two campaigns: a cold one that excludes everyone already in the funnel, and a
-        retargeting one that goes after them. Everything is created paused, with no ads in it until
-        you publish some.
-      </p>
+      <div className="rounded-lg border border-orange-200 bg-orange-50/60 p-2.5 text-xs text-slate-700">
+        <p className="font-semibold text-slate-900">How it works</p>
+        <ul className="mt-1 space-y-0.5 text-[11px]">
+          <li><strong>Finding new people</strong> shows ads to people in the area who have never dealt with the client.</li>
+          <li><strong>Following up</strong> shows ads only to people who already looked, liked or watched.</li>
+          <li>Anyone who already sent a lead is left out of both.</li>
+          <li>Everything is created <strong>paused</strong>. Nothing spends until it is switched on in Ads Manager.</li>
+        </ul>
+      </div>
 
       {audiences.length === 0 && !audienceReport ? (
         <div className="rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
-          <p className="font-medium">This account has no saved audiences yet.</p>
+          <p className="font-medium">One thing first: this account has no audiences yet.</p>
           <p className="mt-1 text-[11px]">
-            There is nothing to include or exclude, so a funnel here would be two ordinary
-            campaigns. The standard set can be created right here from the client&apos;s Page,
-            Instagram and pixel: FB_Engagers_365D and IG_Engagers_365D; PageView_180D and
-            Lead_180D from the pixel for website leads; FormOpen_90D and FormSubmit_90D from
-            the Page for instant forms. A client with no pixel still gets a complete funnel
-            from the form audiences.
+            An audience is a list Meta keeps of people who already interacted with the client
+            (liked the Page, watched a video, visited the site, opened or sent a form). The funnel
+            needs them to know who is new and who to follow up with. One click creates the
+            standard six from the client&apos;s Page, Instagram and pixel.
           </p>
           <button
             type="button"
@@ -206,7 +208,7 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
             disabled={makingAudiences}
             className="mt-2 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
           >
-            {makingAudiences ? 'Creating in Meta…' : 'Create the standard audiences'}
+            {makingAudiences ? 'Creating in Meta…' : 'Create the audiences'}
           </button>
         </div>
       ) : audienceReport ? (
@@ -238,14 +240,20 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
             ))}
           </ul>
           <p className="mt-1.5 text-[11px] text-slate-500">
-            New audiences show as &ldquo;not ready&rdquo; for up to an hour while Meta fills them.
-            The pickers below already list them.
+            New audiences say &ldquo;not ready&rdquo; for up to an hour while Meta fills them. They are
+            already picked below.
           </p>
         </div>
       ) : null}
 
       {audiences.length > 0 && (
         <>
+          <div>
+            <p className="text-xs font-semibold text-slate-900">2 · Who it reaches</p>
+            <p className="text-[11px] text-slate-500">
+              Picked for you from the client&apos;s audiences. Usually nothing to change.
+            </p>
+          </div>
           <div className="grid gap-3 md:grid-cols-3">
             {Object.entries(ROLES).map(([role, spec]) => (
               <RolePicker
@@ -274,9 +282,10 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
         </>
       )}
 
+      <p className="text-xs font-semibold text-slate-900">3 · Spend per day</p>
       <div className="grid gap-2 md:grid-cols-2">
         <label className="text-xs">
-          <span className="block font-medium text-slate-700">Top of funnel, $/day</span>
+          <span className="block font-medium text-slate-700">Finding new people, $/day</span>
           <input
             value={tofBudget}
             onChange={(e) => setTofBudget(e.target.value)}
@@ -284,7 +293,7 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
           />
         </label>
         <label className="text-xs">
-          <span className="block font-medium text-slate-700">Retargeting, $/day</span>
+          <span className="block font-medium text-slate-700">Following up, $/day</span>
           <input
             value={retargetBudget}
             onChange={(e) => setRetargetBudget(e.target.value)}
@@ -293,11 +302,11 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
         </label>
       </div>
       <p className="text-[11px] text-slate-500">
-        Budget sits on the campaigns, the way the live accounts run it — not on the ad sets.
+        Each campaign gets its own daily budget. Most clients: more on finding new people, less on following up.
       </p>
 
       <div>
-        <p className="text-xs font-medium text-slate-700">Where the lead lands</p>
+        <p className="text-xs font-semibold text-slate-900">4 · Where a lead lands</p>
         <div className="mt-1 flex flex-wrap gap-3 text-xs">
           <label className="flex items-center gap-1.5">
             <input
@@ -307,7 +316,7 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
               onChange={() => setDestination('website')}
             />
             <span>
-              Website form <span className="text-slate-500">· optimises for the pixel&apos;s Lead event</span>
+              Website form <span className="text-slate-500">· the client&apos;s own page, needs their pixel</span>
             </span>
           </label>
           <label className="flex items-center gap-1.5">
@@ -318,14 +327,12 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
               onChange={() => setDestination('form')}
             />
             <span>
-              Instant form <span className="text-slate-500">· on Meta, no pixel needed</span>
+              Instant form <span className="text-slate-500">· opens inside Facebook, no website needed</span>
             </span>
           </label>
         </div>
         <p className="mt-1 text-[11px] text-slate-500">
-          Cannot be changed once the ad sets exist.
-          {destination === 'form' &&
-            ' The retargeting pair for instant forms is FormOpen_90D as warm and FormSubmit_90D as leads.'}
+          Fixed once built. Instant form is right for most clients.
         </p>
       </div>
 
@@ -333,9 +340,7 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
           the only check on an audience picked into the wrong role, and that
           mistake is invisible once it is live. */}
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-          What this creates
-        </p>
+        <p className="mb-1 text-xs font-semibold text-slate-900">5 · What you get</p>
         <ul className="space-y-0.5">
           {plan.campaigns.map((c) => (
             <li key={c.stage} className="text-[11px] text-slate-700">
@@ -359,10 +364,10 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
           type="button"
           onClick={build}
           disabled={busy || blockers.length > 0}
-          title={blockers.length ? `Waiting on: ${blockers.join(', ')}` : undefined}
+          title={blockers.length ? `Still needed: ${blockers.join(', ')}` : undefined}
           className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
         >
-          {busy ? 'Building in Meta…' : 'Build funnel, paused'}
+          {busy ? 'Building in Meta…' : 'Build it in Meta (paused)'}
         </button>
         {onCancel && (
           <button
@@ -374,7 +379,7 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
           </button>
         )}
         {blockers.length > 0 && (
-          <span className="text-[11px] text-slate-500">Waiting on: {blockers.join(', ')}</span>
+          <span className="text-[11px] text-slate-500">Still needed: {blockers.join(', ')}</span>
         )}
       </div>
     </div>

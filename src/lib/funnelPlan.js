@@ -45,18 +45,18 @@ export const STAGES = {
 // part: people who showed interest and did not convert.
 export const ROLES = {
   leads: {
-    label: 'Leads',
-    hint: 'Already converted. Excluded from every ad set — they should be getting a call, not another ad.',
+    label: 'Already a lead',
+    hint: 'People who already sent their details. Left out of every ad, so the client is not paying to reach someone who should be getting a call.',
     required: true,
   },
   warmVisitors: {
-    label: 'Site visitors / form openers',
-    hint: 'Looked and did not convert. PageView_180D on the accounts running website leads; the form-openers audience on the ones running instant forms.',
+    label: 'Looked, did not send a lead',
+    hint: 'Visited the website or opened the form and stopped. The follow-up campaign goes after these.',
     required: false,
   },
   engagers: {
-    label: 'Facebook / Instagram engagers',
-    hint: 'Engaged with the Page or the Instagram account. Both audiences go into one ad set, as they do on the live accounts.',
+    label: 'Liked, watched or followed',
+    hint: 'Interacted with the Facebook Page or Instagram. Warm, so the follow-up campaign reaches them too.',
     required: false,
   },
 }
@@ -174,21 +174,21 @@ export function planGaps(raw = {}) {
     gaps.push({
       role: 'leads',
       severity: 'high',
-      text: 'No leads audience. Without it every ad set keeps paying to reach people who already gave you their number.',
+      text: 'No "already a lead" audience picked. Without it the ads keep paying to reach people who already sent their details.',
     })
   }
   if (!visitors.length && !engagers.length) {
     gaps.push({
       role: 'engagers',
       severity: 'high',
-      text: 'Nothing to retarget. Pick the engagers or the site-visitors audience, or there is no retargeting campaign to build.',
+      text: 'Nobody to follow up with. Pick at least one warm audience, or there is no follow-up campaign to build.',
     })
   }
   if (!visitors.length && engagers.length) {
     gaps.push({
       role: 'warmVisitors',
       severity: 'low',
-      text: 'No site-visitors audience. Retargeting will run on engagers alone — the live accounts run both.',
+      text: 'No "looked, did not send a lead" audience. Follow-up will reach people who liked or watched only; the best accounts run both.',
     })
   }
   return gaps

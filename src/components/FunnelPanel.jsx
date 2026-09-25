@@ -53,9 +53,9 @@ export default function FunnelPanel({ client, intake, initialOpen = false }) {
   if (!client?.meta_ad_account_id) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h3 className="font-semibold text-slate-900">Funnel</h3>
+        <h3 className="font-semibold text-slate-900">Build a funnel</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Connect this client&apos;s Meta ad account first. The funnel is built inside it.
+          Connect this client&apos;s Meta ad account first. The funnel gets built inside it.
         </p>
       </div>
     )
@@ -65,11 +65,11 @@ export default function FunnelPanel({ client, intake, initialOpen = false }) {
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="font-semibold text-slate-900">Funnel</h3>
+          <h3 className="font-semibold text-slate-900">Build a funnel</h3>
           <p className="mt-0.5 text-sm text-slate-600">
-            A cold campaign that excludes everyone already in the funnel, and a retargeting
-            campaign that goes after them. Built paused, with no creative &mdash; publish ads
-            into the ad sets from the Studio when they are ready.
+            Two campaigns, built in Meta for you and left paused: one that <strong>finds new people</strong>,
+            one that <strong>follows up</strong> with people who already showed interest. No ads yet;
+            you publish those into it afterwards.
           </p>
         </div>
         {!open && !built && (
@@ -78,7 +78,7 @@ export default function FunnelPanel({ client, intake, initialOpen = false }) {
             onClick={() => setOpen(true)}
             className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700"
           >
-            Build a funnel &rarr;
+            Set it up &rarr;
           </button>
         )}
       </div>
@@ -86,7 +86,7 @@ export default function FunnelPanel({ client, intake, initialOpen = false }) {
       {built && (
         <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
           <p className="font-semibold">
-            Built {built.campaigns?.length || 0} campaigns and {built.adsets?.length || 0} ad sets, all paused.
+            Done. {built.campaigns?.length || 0} campaigns and {built.adsets?.length || 0} ad sets are in Meta, paused, so nothing is spending.
           </p>
           <ul className="mt-1 space-y-0.5 text-[11px] text-green-800">
             {(built.adsets || []).map((a) => (
@@ -104,8 +104,14 @@ export default function FunnelPanel({ client, intake, initialOpen = false }) {
                 Open in Ads Manager &rarr;
               </a>
             )}
+            <a
+              href={`/publish/${client.id}`}
+              className="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-900 hover:bg-green-100"
+            >
+              Next: publish a video into it &rarr;
+            </a>
             <span className="text-[11px] text-green-800">
-              Next: Ad Studio &rarr; Publish &rarr; &ldquo;Into an existing ad set&rdquo; and tick these.
+              On the publish page, choose &ldquo;Add to an existing one&rdquo; and tick these ad sets.
             </span>
           </div>
         </div>
@@ -117,10 +123,13 @@ export default function FunnelPanel({ client, intake, initialOpen = false }) {
               because the ad sets need them and there is no creative step here
               to have collected them already. */}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Where it runs</p>
+            <p className="text-xs font-semibold text-slate-900">1 · Where the ads run</p>
+            <p className="text-[11px] text-slate-500">
+              The client&apos;s service area. Add a city or a radius; nothing is added for you.
+            </p>
             {prefill && (
               <div className="text-[11px] text-slate-600">
-                <p className="mb-1">From the onboarding form &mdash; click to add, nothing is added for you:</p>
+                <p className="mb-1">From their onboarding form, click to add:</p>
                 <ul className="space-y-1">
                   {prefill.entries.map((entry, i) => (
                     <li key={i}>
@@ -175,7 +184,7 @@ export default function FunnelPanel({ client, intake, initialOpen = false }) {
                 />
               </label>
               <label className="text-xs">
-                <span className="block font-medium text-slate-700">Special ad category</span>
+                <span className="block font-medium text-slate-700">Special ad category <span className="font-normal text-slate-400">(home services: None)</span></span>
                 <select
                   value={specialCategory}
                   onChange={(e) => setSpecialCategory(e.target.value)}
