@@ -39,6 +39,9 @@ first; one who has never had an ad is **no ad yet**; one with an ad in the
 last 10 days is **fresh**. Each row says how many days since the last ad,
 its name, and how many clips are already sent to Meta and ready, and opens
 the publish page. The Publish door counts how many clients are at 10+ days.
+"Last ad" means the newest of what the CRM published and what the nightly
+Meta sync reports (`client_newest_ad`), so an account run from Ads Manager
+counts too.
 
 **The editor's drop zone** sits at the top of the board: pick the client,
 drop the finished .mp4 or .mov. It goes to the bucket and on to Meta to

@@ -14,6 +14,7 @@ import {
   launchSnapshot,
   launchSteps,
   videoAdName,
+  syncedAdRows,
   videoDrops,
   waitingClips,
 } from '../src/lib/videoLaunch.js'
@@ -121,6 +122,19 @@ check('ready: no Meta account is never ready', by2.E.state, 'no-meta')
 check('stats: ready counted, fresh and behind still add up', dropStats(rows2), { ready: 2, done: 1, due: 3, stale: 2, never: 1, thisWeek: 2, withMeta: 4 })
 check('a ready row for a stale client is still behind', by2.B.behind, true)
 void NOW_ISO
+
+// Ads Meta reports that the CRM never made.
+const SYNCED = syncedAdRows([
+  { client_id: 'F', ad_id: '9', ad_name: '9/14/26 Video Ad 2', first_seen: '2026-09-14', is_video: true },
+  { client_id: 'E', ad_id: '8', ad_name: 'x', first_seen: '2026-09-23', is_video: false },
+  { client_id: 'X', ad_id: null, ad_name: 'no day', first_seen: null },
+])
+check('synced: shaped like published rows, video marked, blanks dropped', SYNCED.map((r) => [r.client_id, r.created_at, r.video_id, r.size_key]), [['F', '2026-09-14T00:00:00.000Z', 'meta:9', 'synced'], ['E', '2026-09-23T00:00:00.000Z', null, 'synced']])
+check('synced: a synced image ad is not a legacy video ad', isVideoAd(SYNCED[1]), false)
+const rows3 = videoDrops(CLIENTS, [...ADS, ...SYNCED], CLIPS, NOW)
+const by3 = Object.fromEntries(rows3.map((r) => [r.id, r]))
+check('synced: a client run from Ads Manager is stale, not "no ad yet"', [by3.F.state, by3.F.daysSince, by3.F.lastAdName], ['stale', 10, '9/14/26 Video Ad 2'])
+check('synced: its video ad counts as the last video', by3.F.lastVideoAt, '2026-09-14T00:00:00.000Z')
 
 // Clip checks.
 const good = clipChecks({ durationSeconds: 18, width: 1080, height: 1920, transcript: 'Hi, Dale here' })

@@ -34,3 +34,18 @@ alter table client_files add column if not exists uploaded_by text;
 --   clips already in the CRM did not all light up on day one.
 insert into app_settings (key, value, updated_at) values ('video_drops_reset_at', now()::text, now())
 on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at;
+
+-- client_newest_ad
+--   The newest ad Meta has for each client, from the nightly sync, so a
+--   client whose ads were built straight in Ads Manager (Comfort Experts:
+--   eight ads, none through the CRM) does not read "no ad yet" on the
+--   board. first_seen is the first day the ad reported; is_video is whether
+--   it ever reported a video play.
+create or replace view client_newest_ad as
+select distinct on (client_id) client_id, ad_id, ad_name, first_seen, video_plays > 0 as is_video
+from (
+  select client_id, ad_id, max(ad_name) as ad_name, min(date) as first_seen, coalesce(sum(video_plays), 0) as video_plays
+  from ad_daily group by client_id, ad_id
+) a
+order by client_id, first_seen desc, ad_id desc;
+grant select on client_newest_ad to anon, authenticated;

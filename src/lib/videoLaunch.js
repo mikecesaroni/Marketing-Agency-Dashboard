@@ -36,6 +36,27 @@ export function isVideoAd(row) {
 }
 
 /**
+ * Ads the nightly Meta sync knows about, shaped like published_ads rows so
+ * the board counts them. A client run from Ads Manager has ads the CRM
+ * never made; without this they read "no ad yet". The first day an ad
+ * reported stands in for when it was made. size_key 'synced' keeps
+ * isVideoAd from reading it as a legacy video row; is_video sets a marker
+ * id instead, which can never match a clip's Meta video id.
+ */
+export function syncedAdRows(rows = []) {
+  return rows
+    .filter((r) => r?.client_id && r.first_seen)
+    .map((r) => ({
+      client_id: r.client_id,
+      created_at: new Date(r.first_seen).toISOString(),
+      ad_name: r.ad_name || '',
+      size_key: 'synced',
+      video_id: r.is_video ? `meta:${r.ad_id}` : null,
+      synced: true,
+    }))
+}
+
+/**
  * The drop status for one client, from when their last ad of any kind was
  * published through the CRM (lastAdAt) and whether a Meta account exists.
  *

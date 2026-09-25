@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabaseClient'
 import { fetchAllRows } from '../lib/pagedQuery'
 import { saveDriveFolder } from '../lib/driveAssets'
 import { ago, folderUrl, hubStats, rollupClients, searchClients, sortForContent } from '../lib/contentHub'
-import { DROPS_RESET_KEY, dropStats, videoDrops } from '../lib/videoLaunch'
+import { DROPS_RESET_KEY, dropStats, syncedAdRows, videoDrops } from '../lib/videoLaunch'
 
 /**
  * Content: the creative side of the CRM behind three doors.
@@ -278,7 +278,7 @@ export default function ContentPage() {
 
   const load = async () => {
     try {
-      const [clients, saved, published, videos, files, reset] = await Promise.all([
+      const [clients, saved, published, videos, files, reset, synced] = await Promise.all([
         supabase.from('clients').select('id,name,industry,archived,is_internal,drive_folder_id,extra_drive_folder_ids,meta_ad_account_id').order('name'),
         fetchAllRows(() => supabase.from('saved_ads').select('client_id,created_at').order('created_at').order('id')),
         fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name').order('created_at').order('id')),
@@ -287,11 +287,14 @@ export default function ContentPage() {
         supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by').ilike('file_type', 'video/%'),
         // "Start fresh": clips from before this moment are not new.
         supabase.from('app_settings').select('value').eq('key', DROPS_RESET_KEY).maybeSingle(),
+        // The newest ad Meta reports per client, whether or not the CRM made
+        // it. An account run from Ads Manager still has ads.
+        supabase.from('client_newest_ad').select('client_id,ad_id,ad_name,first_seen,is_video'),
       ])
       if (clients.error) throw clients.error
       if (videos.error) throw videos.error
       setData(sortForContent(rollupClients(clients.data || [], saved, published, videos.data || [])))
-      setDrops(videoDrops(clients.data || [], published, videos.data || [], new Date(), files.data || [], reset?.data?.value || ''))
+      setDrops(videoDrops(clients.data || [], [...published, ...syncedAdRows(synced?.data || [])], videos.data || [], new Date(), files.data || [], reset?.data?.value || ''))
       setClientRows(clients.data || [])
       setError('')
     } catch (err) {
