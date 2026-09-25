@@ -258,7 +258,7 @@ const SECTION_META = {
   },
   publish: {
     title: 'Publish',
-    hint: 'Video, image or the funnel, then the client. A video gets its own publish page; image ads publish from the Studio; the funnel builder opens on the client page.',
+    hint: 'Video, image or the funnel, then the client. A video gets its own publish page, the funnel its own builder page; image ads publish from the Studio.',
   },
 }
 
@@ -454,7 +454,7 @@ export default function ContentPage() {
                       : kind === 'video'
                         ? `/publish/${r.id}`
                         : kind === 'funnel'
-                          ? `/client/${r.id}?open=funnel`
+                          ? `/funnel/${r.id}`
                           : `/client/${r.id}?open=publish`
                   }
                   primary={tab === 'studio' ? 'Open the Ad Studio →' : kind === 'video' ? 'Publish a video →' : kind === 'funnel' ? 'Build the funnel →' : 'Open Publish →'}

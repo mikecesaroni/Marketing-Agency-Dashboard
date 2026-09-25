@@ -89,6 +89,18 @@ export const ROUTES = [
     actions: ['"Publish N paused to Meta" creates everything paused; switching on is done in Ads Manager.'],
   },
   {
+    path: '/funnel/:clientId',
+    name: 'Build a funnel',
+    nav: null,
+    purpose:
+      'The funnel builder for one client on a page of its own: Content → Publish → Build a funnel → client. Top of funnel and Retargeting, built in Meta and left paused, with the six audiences. The same builder also sits on the client page.',
+    contains: [
+      'A banner with the client and a "Switch client" select.',
+      'The builder, open: where the ads run, who it reaches (audiences, picked for you), spend per day, where a lead lands, what you get, then "Build it in Meta (paused)".',
+    ],
+    actions: ['"Next: publish a video into it" opens the client\'s publish page once the funnel is built.'],
+  },
+  {
     path: '/client/:clientId',
     name: 'Client detail',
     nav: null,
@@ -124,7 +136,7 @@ export const ROUTES = [
       'Three large cards with live counts: saved ads, Drive folders linked, clients at 10+ days without a new ad and ads live.',
       'This week\'s video drops: one row per client with a Meta account, most behind first: 10+ days since a new ad of any kind (red, oldest first), no ad yet, then fresh (an ad in the last 10 days); each row says how many days since the last ad, its name, and how many clips are ready, and opens the publish page. Shown under the doors and at the top of the Publish door. "Drop a finished clip" on the board is where an editor drops a finished .mp4/.mov against a client; the row then reads "New clip dropped in" with a "Click to publish" button that opens Publish with that clip already ticked (?open=publish&video=<path>).',
       'Ad Studio and Publish: a card per client (saved ads, videos, live ads, last activity) that opens the client page with that tool already open (?open=studio or ?open=publish).',
-      'Publish asks first: Video (the client\'s own publish page, /publish/:id), Image ads (the Studio\'s Publish tab) or Build a funnel (the client page with the funnel builder open, ?open=funnel: the top of funnel and retargeting campaign pair with the six audiences, created paused, no creative needed).',
+      'Publish asks first: Video (the client\'s own publish page, /publish/:id), Image ads (the Studio\'s Publish tab) or Build a funnel (its own page, /funnel/:id: the top of funnel and retargeting campaign pair with the six audiences, created paused, no creative needed).',
       'Google Drive: every client with an "Open in Drive" button per linked folder, "Browse files" for the read-only browser (click a file to open it in Drive to view or download), and "Link a folder" to paste a folder link.',
     ],
     actions: [

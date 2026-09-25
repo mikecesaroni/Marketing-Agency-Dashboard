@@ -6,6 +6,7 @@ import DeliverablesPage from './pages/DeliverablesPage'
 import TasksPage from './pages/TasksPage'
 import ContentPage from './pages/ContentPage'
 import PublishVideoPage from './pages/PublishVideoPage'
+import FunnelPage from './pages/FunnelPage'
 import PaymentsPage from './pages/PaymentsPage'
 import ReportsPage from './pages/ReportsPage'
 import SopsPage from './pages/SopsPage'
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/clients" element={<ClientsPage />} />
         <Route path="/content" element={<ContentPage />} />
         <Route path="/publish/:clientId" element={<PublishVideoPage />} />
+        <Route path="/funnel/:clientId" element={<FunnelPage />} />
         <Route path="/client/:clientId" element={<ClientDetailPage />} />
         <Route path="/deliverables" element={<DeliverablesPage />} />
         <Route path="/tasks" element={<TasksPage />} />
