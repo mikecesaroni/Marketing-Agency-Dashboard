@@ -11,8 +11,8 @@ versions) and `docs/content.md` (the Content tab).
    clip": pick the client, drop the file. It uploads, goes to Meta, and the
    client's row on the board turns purple: new clip dropped in, click to
    publish.
-1. **Content tab.** The board under the three doors says who needs a video
-   this week, most behind first, with dropped clips at the very top. Click
+1. **Content tab.** The board under the three doors says who is 10+ days
+   without a new ad, most behind first, with dropped clips at the very top. Click
    the client (or the purple "Click to publish", which lands with the clip
    ticked).
 2. **The publish page opens** (`/publish/:client`, also reachable as Content → Publish → Video → client) with the launch strip across the top:

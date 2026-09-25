@@ -40,12 +40,12 @@ check('video ad: video_id set', isVideoAd({ video_id: '123', size_key: null }), 
 check('video ad: legacy row with no size_key', isVideoAd({ size_key: null }), true)
 check('image ad: sizes recorded', isVideoAd({ size_key: 'feed,story' }), false)
 
-check('state: no meta account', dropState({ hasMeta: false, lastVideoAt: '2026-09-23T00:00:00Z', now: NOW }), 'no-meta')
-check('state: never', dropState({ hasMeta: true, lastVideoAt: null, now: NOW }), 'never')
-check('state: done (3 days ago)', dropState({ hasMeta: true, lastVideoAt: '2026-09-21T00:00:00Z', now: NOW }), 'done')
-check('state: done at exactly 7 days', dropState({ hasMeta: true, lastVideoAt: '2026-09-17T12:00:00Z', now: NOW }), 'done')
-check('state: due (10 days)', dropState({ hasMeta: true, lastVideoAt: '2026-09-14T00:00:00Z', now: NOW }), 'due')
-check('state: overdue (3 weeks)', dropState({ hasMeta: true, lastVideoAt: '2026-09-03T00:00:00Z', now: NOW }), 'overdue')
+check('state: no meta account', dropState({ hasMeta: false, lastAdAt: '2026-09-23T00:00:00Z', now: NOW }), 'no-meta')
+check('state: never', dropState({ hasMeta: true, lastAdAt: null, now: NOW }), 'never')
+check('state: fresh (3 days ago)', dropState({ hasMeta: true, lastAdAt: '2026-09-21T00:00:00Z', now: NOW }), 'done')
+check('state: fresh at 9 days', dropState({ hasMeta: true, lastAdAt: '2026-09-15T12:00:00Z', now: NOW }), 'done')
+check('state: stale at exactly 10 days', dropState({ hasMeta: true, lastAdAt: '2026-09-14T12:00:00Z', now: NOW }), 'stale')
+check('state: stale (3 weeks)', dropState({ hasMeta: true, lastAdAt: '2026-09-03T00:00:00Z', now: NOW }), 'stale')
 
 const CLIENTS = [
   { id: 'A', name: 'Belk', meta_ad_account_id: 'act_1' },
@@ -74,14 +74,17 @@ const CLIPS = [
 const rows = videoDrops(CLIENTS, ADS, CLIPS, NOW)
 const byId = Object.fromEntries(rows.map((r) => [r.id, r]))
 check('archived client left out', rows.map((r) => r.id).includes('D'), false)
-check('most urgent first: overdue, due, never, done, no-meta', rows.map((r) => r.id), ['C', 'B', 'F', 'A', 'E'])
+check('most behind first: stale (oldest first), never, fresh, no-meta', rows.map((r) => r.id), ['C', 'B', 'F', 'A', 'E'])
+check('last ad counts any kind, and says which', [byId.A.lastAdAt, byId.A.daysSince, byId.A.lastAdWasVideo], ['2026-09-22T00:00:00Z', 2, true])
+check('a static alone keeps a client fresh', dropState({ hasMeta: true, lastAdAt: '2026-09-23T00:00:00Z', now: NOW }), 'done')
+check('behind: stale and never are behind, fresh is not', [byId.B.behind, byId.F.behind, byId.A.behind, byId.E.behind], [true, true, false, false])
 check('this week counts video ads only', byId.A.thisWeek, 1)
 check('total counts every video ad, legacy included', byId.A.total, 2)
 check('last video ad name carried', byId.A.lastAdName, 'WC_Belk · tune-up')
 check('ready clips need a thumbnail', byId.B.readyClips, 1)
 check('clip count is every registered clip', byId.B.clips, 3)
 check('internal flag carried', byId.F.internal, true)
-check('stats', dropStats(rows), { ready: 0, done: 1, due: 3, overdue: 1, thisWeek: 2, withMeta: 4 })
+check('stats', dropStats(rows), { ready: 0, done: 1, due: 3, stale: 2, never: 1, thisWeek: 2, withMeta: 4 })
 
 // Clips an editor dropped in and nobody has published.
 const NOW_ISO = NOW.toISOString()
@@ -104,6 +107,9 @@ check('waiting: a registered, unpublished, fresh clip is', wait.map((w) => [w.pa
 const waitB = waitingClips({ files: FILES.filter((f) => f.client_id === 'B'), ads: ADS.filter((a) => a.client_id === 'B'), now: NOW })
 check('waiting: an unregistered upload counts, with who dropped it', waitB.map((w) => [w.name, w.by]), [['new.mp4', 'Sam']])
 check('waiting: an image is not a clip, and 30 days is the window', waitB.length, 1)
+check('waiting: start fresh hides everything before the reset', waitingClips({ files: FILES.filter((f) => f.client_id === 'B'), ads: [], now: NOW, resetAt: '2026-09-24T10:00:00Z' }).length, 0)
+check('waiting: a drop after the reset still shows', waitingClips({ files: FILES.filter((f) => f.client_id === 'B'), ads: [], now: NOW, resetAt: '2026-09-24T08:00:00Z' }).length, 1)
+check('drops: reset threads through', videoDrops(CLIENTS, ADS, [...CLIPS, ...REGISTERED], NOW, FILES, NOW.toISOString()).filter((r) => r.state === 'ready').length, 0)
 check('waiting: a legacy video ad newer than the upload hides it', waitingClips({ files: [{ storage_path: 'x.mp4', file_name: 'x.mp4', date_uploaded: '2026-09-10T00:00:00Z' }], ads: [{ created_at: '2026-09-12T00:00:00Z', size_key: null }], now: NOW }).length, 0)
 
 const rows2 = videoDrops(CLIENTS, ADS, [...CLIPS, ...REGISTERED], NOW, FILES)
@@ -112,7 +118,8 @@ check('ready: a client with a waiting clip is ready, and first', [rows2[0].id, r
 check('ready: newest drop first among ready rows', rows2.slice(0, 2).map((r) => r.id), ['B', 'A'])
 check('ready: the row carries the waiting clips', by2.B.waiting.map((w) => w.name), ['new.mp4'])
 check('ready: no Meta account is never ready', by2.E.state, 'no-meta')
-check('stats: ready counted, done and due still add up', dropStats(rows2), { ready: 2, done: 1, due: 3, overdue: 1, thisWeek: 2, withMeta: 4 })
+check('stats: ready counted, fresh and behind still add up', dropStats(rows2), { ready: 2, done: 1, due: 3, stale: 2, never: 1, thisWeek: 2, withMeta: 4 })
+check('a ready row for a stale client is still behind', by2.B.behind, true)
 void NOW_ISO
 
 // Clip checks.

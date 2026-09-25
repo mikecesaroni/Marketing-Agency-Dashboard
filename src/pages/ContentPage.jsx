@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabaseClient'
 import { fetchAllRows } from '../lib/pagedQuery'
 import { saveDriveFolder } from '../lib/driveAssets'
 import { ago, folderUrl, hubStats, rollupClients, searchClients, sortForContent } from '../lib/contentHub'
-import { dropStats, videoDrops } from '../lib/videoLaunch'
+import { DROPS_RESET_KEY, dropStats, videoDrops } from '../lib/videoLaunch'
 
 /**
  * Content: the creative side of the CRM behind three doors.
@@ -61,7 +61,7 @@ const DOORS = [
     key: 'publish',
     title: 'Publish',
     blurb: 'A fresh video ad per client per week. Drop the clip, pick the words, send it into the funnel.',
-    cta: 'See who needs a video this week',
+    cta: 'See who is 10+ days without a new ad',
     tone: 'from-emerald-600 to-teal-400',
     ring: 'group-hover:ring-emerald-300',
     icon: (
@@ -71,8 +71,8 @@ const DOORS = [
       </svg>
     ),
     stat: (s) => [
-      s.drops ? `${s.drops.due} need a video this week` : `${s.readyToPublish} clients with creative ready`,
-      s.drops ? `${s.drops.done} done · ${s.live} ads live` : `${s.live} ads live`,
+      s.drops ? `${s.drops.due} at 10+ days without a new ad` : `${s.readyToPublish} clients with creative ready`,
+      s.drops ? `${s.drops.done} fresh · ${s.live} ads live` : `${s.live} ads live`,
     ],
   },
 ]
@@ -278,18 +278,20 @@ export default function ContentPage() {
 
   const load = async () => {
     try {
-      const [clients, saved, published, videos, files] = await Promise.all([
+      const [clients, saved, published, videos, files, reset] = await Promise.all([
         supabase.from('clients').select('id,name,industry,archived,is_internal,drive_folder_id,extra_drive_folder_ids,meta_ad_account_id').order('name'),
         fetchAllRows(() => supabase.from('saved_ads').select('client_id,created_at').order('created_at').order('id')),
         fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name').order('created_at').order('id')),
         supabase.from('ad_videos').select('client_id,created_at,status,meta_video_id,thumb_url,storage_path,file_name'),
         // Only the clips: the table also holds every photo ever uploaded.
         supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by').ilike('file_type', 'video/%'),
+        // "Start fresh": clips from before this moment are not new.
+        supabase.from('app_settings').select('value').eq('key', DROPS_RESET_KEY).maybeSingle(),
       ])
       if (clients.error) throw clients.error
       if (videos.error) throw videos.error
       setData(sortForContent(rollupClients(clients.data || [], saved, published, videos.data || [])))
-      setDrops(videoDrops(clients.data || [], published, videos.data || [], new Date(), files.data || []))
+      setDrops(videoDrops(clients.data || [], published, videos.data || [], new Date(), files.data || [], reset?.data?.value || ''))
       setClientRows(clients.data || [])
       setError('')
     } catch (err) {
@@ -301,6 +303,19 @@ export default function ContentPage() {
   useEffect(() => {
     load()
   }, [])
+
+  // Clears every "new clip dropped in" flag: anything already in the CRM
+  // stops counting, and only clips dropped from now on show.
+  const resetDrops = async () => {
+    const { error: err } = await supabase
+      .from('app_settings')
+      .upsert({ key: DROPS_RESET_KEY, value: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: 'key' })
+    if (err) {
+      setError(err.message)
+      return
+    }
+    await load()
+  }
 
   const stats = useMemo(() => (data ? { ...hubStats(data), drops: drops ? dropStats(drops) : null } : null), [data, drops])
   const rows = useMemo(() => (data ? searchClients(data, q) : []), [data, q])
@@ -334,7 +349,7 @@ export default function ContentPage() {
               <Door key={d.key} door={d} stats={stats} onOpen={() => openTab(d.key)} />
             ))}
           </div>
-          <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} compact />
+          <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} onReset={resetDrops} compact />
         </div>
       ) : (
         <div className="space-y-4">
@@ -387,7 +402,7 @@ export default function ContentPage() {
             </div>
           )}
 
-          {tab === 'publish' && !kind && !q && <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} />}
+          {tab === 'publish' && !kind && !q && <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} onReset={resetDrops} />}
 
           {tab === 'publish' && kind && (
             <div className="flex items-center gap-2 text-xs text-slate-500">

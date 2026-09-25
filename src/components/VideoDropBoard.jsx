@@ -24,9 +24,9 @@ import { readMe, saveMe } from '../lib/tasksData'
  * never needs to know what an ad set is; the publisher never needs to go
  * looking for the file.
  *
- * Rows come from src/lib/videoDrops(): a video ad published in the last
- * seven days is done; ten days is due; more than two weeks is overdue; a
- * clip waiting to be published is ready, and ready sorts first.
+ * Rows come from src/lib/videoDrops(): a client with no new ad of any
+ * kind for ten days or more is stale; one with an ad in the last ten days
+ * is fresh; a clip waiting to be published is ready, and ready sorts first.
  */
 
 const TONES = {
@@ -51,7 +51,9 @@ const publishHref = (row, clip) => `/publish/${row.id}${clip ? `?video=${encodeU
 
 function Row({ row }) {
   const clip = row.state === 'ready' ? row.waiting[0] : null
-  const last = row.lastVideoAt ? `last video ${ago(row.lastVideoAt)}` : 'no video ad yet'
+  const last = row.lastAdAt
+    ? `last ad ${row.daysSince === 0 ? 'today' : row.daysSince === 1 ? 'yesterday' : `${row.daysSince} days ago`}`
+    : 'no ad yet'
   const line = clip
     ? `${clip.name} · dropped ${ago(clip.at)}${clip.by ? ` by ${clip.by}` : ''}${row.waiting.length > 1 ? ` · ${row.waiting.length - 1} more waiting` : ''}`
     : `${last}${row.lastAdName ? ` · ${row.lastAdName}` : ''}${row.thisWeek > 1 ? ` · ${row.thisWeek} this week` : ''}`
@@ -249,7 +251,7 @@ function DropIn({ clients, onDropped }) {
   )
 }
 
-export default function VideoDropBoard({ rows, clients, onDropped, compact = false }) {
+export default function VideoDropBoard({ rows, clients, onDropped, onReset, compact = false }) {
   const [showAll, setShowAll] = useState(false)
   if (!rows) return null
   const stats = dropStats(rows)
@@ -264,7 +266,7 @@ export default function VideoDropBoard({ rows, clients, onDropped, compact = fal
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-900">This week&rsquo;s video drops</h2>
           <p className="text-xs text-slate-500">
-            One video ad per client per week. Most behind at the top; click a client to publish theirs.
+            A client with no new ad for 10 days or more is flagged. Most behind at the top; click a client to publish.
           </p>
         </div>
         <div className="flex gap-2 text-xs">
@@ -273,13 +275,13 @@ export default function VideoDropBoard({ rows, clients, onDropped, compact = fal
               {stats.ready} new clip{stats.ready === 1 ? '' : 's'} to publish
             </span>
           )}
-          <span className="rounded-lg bg-green-50 px-2.5 py-1 font-semibold text-green-800">{stats.done} done</span>
-          <span className={`rounded-lg px-2.5 py-1 font-semibold ${stats.due ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-500'}`}>
-            {stats.due} to do
+          <span className={`rounded-lg px-2.5 py-1 font-semibold ${stats.stale ? 'bg-red-50 text-red-800' : 'bg-slate-100 text-slate-500'}`}>
+            {stats.stale} at 10+ days
           </span>
-          {stats.overdue > 0 && (
-            <span className="rounded-lg bg-red-50 px-2.5 py-1 font-semibold text-red-800">{stats.overdue} overdue</span>
+          {stats.never > 0 && (
+            <span className="rounded-lg bg-blue-50 px-2.5 py-1 font-semibold text-blue-800">{stats.never} no ad yet</span>
           )}
+          <span className="rounded-lg bg-green-50 px-2.5 py-1 font-semibold text-green-800">{stats.done} fresh</span>
         </div>
       </div>
 
@@ -291,7 +293,7 @@ export default function VideoDropBoard({ rows, clients, onDropped, compact = fal
         <p className="mt-4 text-sm text-slate-500">No client has a Meta ad account connected yet.</p>
       ) : shown.length === 0 ? (
         <p className="mt-4 rounded-xl bg-green-50 px-3 py-2 text-sm text-green-800">
-          Every client has had a video this week. 🎉
+          Every client has had a new ad in the last 10 days. 🎉
         </p>
       ) : (
         <ul className="mt-3 divide-y divide-slate-100">
@@ -309,13 +311,25 @@ export default function VideoDropBoard({ rows, clients, onDropped, compact = fal
         )}
         {compact && showAll && withMeta.length > 6 && (
           <button type="button" onClick={() => setShowAll(false)} className="text-blue-700 hover:underline">
-            just the ones to do
+            just the ones behind
           </button>
         )}
         {noMeta.length > 0 && (
           <span title={noMeta.map((r) => r.name).join(', ')}>
             {noMeta.length} client{noMeta.length === 1 ? ' has' : 's have'} no Meta ad account connected
           </span>
+        )}
+        {stats.ready > 0 && onReset && (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm('Clear every "new clip dropped in" flag? The clips stay; they just stop showing as new. Only clips dropped from now on will show.')) onReset()
+            }}
+            className="ml-auto text-slate-400 hover:text-slate-700 hover:underline"
+            title="Start fresh: nothing already in the CRM counts as new"
+          >
+            clear new-clip flags
+          </button>
         )}
       </div>
     </section>

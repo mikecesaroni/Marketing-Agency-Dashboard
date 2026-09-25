@@ -14,6 +14,10 @@
 import { wcName } from './adNaming.js'
 
 export const WEEK_MS = 7 * 86400000
+// A client with no new ad for this long is flagged. Ten days, not seven:
+// a weekly rhythm that slips by a weekend is not a problem, ten days is.
+export const STALE_DAYS = 10
+export const STALE_MS = STALE_DAYS * 86400000
 // A clip older than this that was never published is not "waiting", it is
 // forgotten; the board would otherwise fill with last quarter's B-roll.
 export const WAITING_WINDOW_MS = 30 * 86400000
@@ -32,33 +36,30 @@ export function isVideoAd(row) {
 }
 
 /**
- * The weekly drop status for one client, given their published ads and
- * registered clips.
+ * The drop status for one client, from when their last ad of any kind was
+ * published through the CRM (lastAdAt) and whether a Meta account exists.
  *
- *   done      a video ad went out in the last seven days
- *   due       none this week, but they have had one before (the machine
- *             missed a beat) or they have a Meta account and clips waiting
- *   overdue   the last one is more than fourteen days old
- *   never     a Meta account and no video ad ever
+ *   stale     ten or more days since a new ad
+ *   never     a Meta account and no ad ever
+ *   done      an ad in the last ten days
  *   no-meta   nothing to publish into
+ *
+ * "Any kind" on purpose: the ask was "clients who have gone 10+ days since a
+ * new ad", and a static counts as a new ad.
  */
-export function dropState({ hasMeta, lastVideoAt, now }) {
+export function dropState({ hasMeta, lastAdAt, now }) {
   if (!hasMeta) return 'no-meta'
-  if (!lastVideoAt) return 'never'
-  const age = now - new Date(lastVideoAt)
-  if (age <= WEEK_MS) return 'done'
-  if (age > 2 * WEEK_MS) return 'overdue'
-  return 'due'
+  if (!lastAdAt) return 'never'
+  return now - new Date(lastAdAt) >= STALE_MS ? 'stale' : 'done'
 }
 
-const STATE_ORDER = { ready: 0, overdue: 1, due: 2, never: 3, done: 4, 'no-meta': 5 }
+const STATE_ORDER = { ready: 0, stale: 1, never: 2, done: 3, 'no-meta': 4 }
 
 export const DROP_STATES = {
   ready: { label: 'New clip dropped in', tone: 'purple' },
-  overdue: { label: 'Overdue', tone: 'red' },
-  due: { label: 'Due this week', tone: 'amber' },
-  never: { label: 'No video yet', tone: 'blue' },
-  done: { label: 'Done this week', tone: 'green' },
+  stale: { label: '10+ days, no new ad', tone: 'red' },
+  never: { label: 'No ad yet', tone: 'blue' },
+  done: { label: 'Ad in the last 10 days', tone: 'green' },
   'no-meta': { label: 'No Meta account', tone: 'slate' },
 }
 
@@ -75,14 +76,17 @@ export const DROP_STATES = {
  * registered: ad_videos rows (storage_path, meta_video_id, created_at, file_name)
  * files: client_files video rows (storage_path, file_name, date_uploaded, uploaded_by)
  * ads: this client's video ads
+ * resetAt: "start fresh" (app_settings.video_drops_reset_at): nothing added
+ *   before this moment counts, whatever else is true of it
  */
-export function waitingClips({ registered = [], files = [], ads = [], now = new Date() }) {
+export function waitingClips({ registered = [], files = [], ads = [], now = new Date(), resetAt = '' }) {
   const published = new Set(ads.map((a) => a.video_id).filter(Boolean))
   const legacyCutoff = ads
     .filter((a) => !a.video_id)
     .reduce((best, a) => (a.created_at > (best || '') ? a.created_at : best), '')
   const since = new Date(now - WAITING_WINDOW_MS).toISOString()
-  const fresh = (at) => at && at > since && at > legacyCutoff
+  const reset = resetAt ? new Date(resetAt).toISOString() : ''
+  const fresh = (at) => at && at > since && at > legacyCutoff && at > reset
   const byPath = new Map(files.map((f) => [f.storage_path, f]))
   const out = []
   const seen = new Set()
@@ -113,10 +117,15 @@ export function waitingClips({ registered = [], files = [], ads = [], now = new 
  * videos (ad_videos): client_id, status, meta_video_id, thumb_url, created_at, storage_path, file_name
  * files (client_files): client_id, storage_path, file_name, date_uploaded, uploaded_by
  */
-export function videoDrops(clients = [], publishedAds = [], videos = [], now = new Date(), files = []) {
+export function videoDrops(clients = [], publishedAds = [], videos = [], now = new Date(), files = [], resetAt = '') {
+  // Video ads, for the clip bookkeeping; every ad, for "when was the last".
   const ads = new Map()
+  const anyAds = new Map()
   for (const r of publishedAds) {
-    if (!r?.client_id || !isVideoAd(r)) continue
+    if (!r?.client_id) continue
+    if (!anyAds.has(r.client_id)) anyAds.set(r.client_id, [])
+    anyAds.get(r.client_id).push(r)
+    if (!isVideoAd(r)) continue
     if (!ads.has(r.client_id)) ads.set(r.client_id, [])
     ads.get(r.client_id).push(r)
   }
@@ -137,13 +146,17 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
     .filter((c) => c && !c.archived)
     .map((c) => {
       const mine = ads.get(c.id) || []
-      const lastVideoAt = mine.reduce((best, r) => (r.created_at > (best || '') ? r.created_at : best), null)
+      const every = anyAds.get(c.id) || []
+      const newest = (rows) => rows.reduce((best, r) => (r.created_at > (best || '') ? r.created_at : best), null)
+      const lastVideoAt = newest(mine)
+      const lastAdAt = newest(every)
+      const daysSince = lastAdAt ? Math.floor((now - new Date(lastAdAt)) / 86400000) : null
       const thisWeek = mine.filter((r) => now - new Date(r.created_at) <= WEEK_MS)
       const own = clips.get(c.id) || []
       const ready = own.filter((v) => v.status === 'ready' && v.meta_video_id && v.thumb_url).length
       const hasMeta = Boolean(c.meta_ad_account_id)
-      const waiting = waitingClips({ registered: own, files: uploads.get(c.id) || [], ads: mine, now })
-      const state = dropState({ hasMeta, lastVideoAt, now })
+      const waiting = waitingClips({ registered: own, files: uploads.get(c.id) || [], ads: mine, now, resetAt })
+      const state = dropState({ hasMeta, lastAdAt, now })
       return {
         id: c.id,
         name: c.name,
@@ -152,7 +165,13 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
         thisWeek: thisWeek.length,
         total: mine.length,
         lastVideoAt,
-        lastAdName: mine.find((r) => r.created_at === lastVideoAt)?.ad_name || '',
+        lastAdAt,
+        daysSince,
+        lastAdName: every.find((r) => r.created_at === lastAdAt)?.ad_name || '',
+        lastAdWasVideo: every.some((r) => r.created_at === lastAdAt && isVideoAd(r)),
+        // Behind on the promise, whatever else the row shows: a dropped clip
+        // for a client who is also stale is still a stale client.
+        behind: hasMeta && (!lastAdAt || now - new Date(lastAdAt) >= STALE_MS),
         readyClips: ready,
         clips: own.length,
         waiting,
@@ -166,10 +185,10 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
       // Newest drop first among the ready ones.
       if (a.state === 'ready') return a.waiting[0].at < b.waiting[0].at ? 1 : -1
       // Within a state, the one waiting longest first; never-published by name.
-      if (a.lastVideoAt !== b.lastVideoAt) {
-        if (!a.lastVideoAt) return 1
-        if (!b.lastVideoAt) return -1
-        return a.lastVideoAt < b.lastVideoAt ? -1 : 1
+      if (a.lastAdAt !== b.lastAdAt) {
+        if (!a.lastAdAt) return 1
+        if (!b.lastAdAt) return -1
+        return a.lastAdAt < b.lastAdAt ? -1 : 1
       }
       return a.name.localeCompare(b.name)
     })
@@ -178,13 +197,15 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
 /** The numbers over the board. */
 export function dropStats(rows) {
   const n = (state) => rows.filter((r) => r.state === state).length
-  // A client with a clip waiting still needs this week's video counted once.
-  const behind = (r) => r.state === 'ready' && r.thisWeek === 0
   return {
     ready: n('ready'),
-    done: n('done') + rows.filter((r) => r.state === 'ready' && r.thisWeek > 0).length,
-    due: n('due') + n('overdue') + n('never') + rows.filter(behind).length,
-    overdue: n('overdue'),
+    // Fresh and behind count every client with a Meta account exactly once,
+    // whatever the row shows: a dropped clip for a stale client is still a
+    // stale client.
+    done: rows.filter((r) => r.hasMeta && !r.behind).length,
+    due: rows.filter((r) => r.behind).length,
+    stale: rows.filter((r) => r.hasMeta && r.behind && r.lastAdAt).length,
+    never: rows.filter((r) => r.hasMeta && !r.lastAdAt).length,
     thisWeek: rows.reduce((s, r) => s + r.thisWeek, 0),
     withMeta: rows.filter((r) => r.hasMeta).length,
   }
@@ -302,6 +323,9 @@ export function describeLaunch(memory, objectives = []) {
   }
   return parts.join(' · ')
 }
+
+/** app_settings key: everything dropped before this moment is not "new". */
+export const DROPS_RESET_KEY = 'video_drops_reset_at'
 
 export const launchMemoryKey = (clientId) => `crm.videoLaunch.${clientId}`
 

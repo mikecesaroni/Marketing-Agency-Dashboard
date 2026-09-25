@@ -33,12 +33,12 @@ Manager to add it.
 ## This week's video drops
 
 Under the three doors, and again at the top of the Publish door: one row per
-client with a Meta ad account, most behind first. A video ad published in the
-last seven days is **done**; none for more than a week is **due**; more than
-two weeks is **overdue**; a client who has never had one is **no video yet**.
-Each row says when the last video ad went out, its name, and how many clips
-are already sent to Meta and ready, and opens Publish on that client's page.
-The Publish door counts how many clients need one this week.
+client with a Meta ad account, most behind first. A client with no new ad of
+any kind (video or static) for **10 days or more** is flagged red, oldest
+first; one who has never had an ad is **no ad yet**; one with an ad in the
+last 10 days is **fresh**. Each row says how many days since the last ad,
+its name, and how many clips are already sent to Meta and ready, and opens
+the publish page. The Publish door counts how many clients are at 10+ days.
 
 **The editor's drop zone** sits at the top of the board: pick the client,
 drop the finished .mp4 or .mov. It goes to the bucket and on to Meta to
@@ -47,7 +47,9 @@ tuneup.mp4 · dropped 2h ago by Sam · Click to publish". That click opens
 Publish on the client page with the clip already ticked (`?open=publish&video=`),
 so the transcript and the three versions of copy start on their own. A clip
 counts as waiting until a published ad carries its Meta video id, for 30
-days. The name comes from the "You:" the CRM keeps for tasks.
+days. The name comes from the "You:" the CRM keeps for tasks. "clear
+new-clip flags" under the board starts fresh: everything already in the CRM
+stops counting as new (`app_settings.video_drops_reset_at`).
 
 The rules are in `src/lib/videoLaunch.js` (`videoDrops`, `dropState`, `waitingClips`) and
 pinned by `scripts/check-video-launch.mjs`. See `docs/video-machine.md` for

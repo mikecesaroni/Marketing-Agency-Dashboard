@@ -26,3 +26,11 @@ create index if not exists published_ads_client_created_idx on published_ads (cl
 --   tasks. The board says "tuneup.mp4 dropped 2h ago by Sam" so the person
 --   publishing knows who to ask what it is.
 alter table client_files add column if not exists uploaded_by text;
+
+-- app_settings.video_drops_reset_at
+--   "Start fresh": clips added before this moment never show as "new clip
+--   dropped in", whatever else is true of them. Written by the board's
+--   "clear new-clip flags" link; set once by hand on 2026-09-25 so the
+--   clips already in the CRM did not all light up on day one.
+insert into app_settings (key, value, updated_at) values ('video_drops_reset_at', now()::text, now())
+on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at;
