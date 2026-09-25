@@ -82,11 +82,6 @@ function Row({ row, onDismiss }) {
           </span>
         </span>
         <span className="flex items-center gap-2 text-[11px]">
-          {!clip && row.readyClips > 0 && row.state !== 'done' && (
-            <span className="hidden rounded-md bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-800 sm:inline">
-              {row.readyClips} clip{row.readyClips === 1 ? '' : 's'} ready
-            </span>
-          )}
           {clip ? (
             <>
               {onDismiss && (

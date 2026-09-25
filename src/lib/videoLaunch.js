@@ -189,6 +189,9 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
       const daysSince = lastAdAt ? Math.floor((now - new Date(lastAdAt)) / 86400000) : null
       const thisWeek = mine.filter((r) => now - new Date(r.created_at) <= WEEK_MS)
       const own = clips.get(c.id) || []
+      // Every registered clip that Meta has finished with, published or not.
+      // Not shown on the board (a clip that already ran is not news); the
+      // waiting list is what "new" means.
       const ready = own.filter((v) => v.status === 'ready' && v.meta_video_id && v.thumb_url).length
       const hasMeta = Boolean(c.meta_ad_account_id)
       const paused = Boolean(c.paused_at)

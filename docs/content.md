@@ -36,9 +36,9 @@ Under the three doors, and again at the top of the Publish door: one row per
 client with a Meta ad account, most behind first. A client with no new ad of
 any kind (video or static) for **10 days or more** is flagged red, oldest
 first; one who has never had an ad is **no ad yet**; one with an ad in the
-last 10 days is **fresh**. Each row says how many days since the last ad,
-its name, and how many clips are already sent to Meta and ready, and opens
-the publish page. The Publish door counts how many clients are at 10+ days.
+last 10 days is **fresh**. Each row says how many days since the last ad and
+its name, and opens the publish page. Only a clip that was dropped in and not
+yet published counts as new; clips that already ran are not mentioned. The Publish door counts how many clients are at 10+ days.
 "Last ad" means the newest of what the CRM published and what the nightly
 Meta sync reports (`client_newest_ad`), so an account run from Ads Manager
 counts too.
