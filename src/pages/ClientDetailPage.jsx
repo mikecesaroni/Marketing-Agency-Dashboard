@@ -8,7 +8,6 @@ import { useAuth } from '../context/AuthContext'
 import { isAdmin } from '../lib/access'
 import DeleteClientButton from '../components/DeleteClientButton'
 import Modal from '../components/Modal'
-import ClientDeliverablesSection from '../components/ClientDeliverablesSection'
 import MetaAdAccountCard from '../components/MetaAdAccountCard'
 import LiveToggle from '../components/LiveToggle'
 import AdPerformanceSection from '../components/AdPerformanceSection'
@@ -18,26 +17,18 @@ import GoogleSearchPanel from '../components/GoogleSearchPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
 import LogKPIsForm from '../components/LogKPIsForm'
-import AddWorkLogForm from '../components/AddWorkLogForm'
-import AddCreativeForm from '../components/AddCreativeForm'
 import ClientFilesSection from '../components/ClientFilesSection'
 import PaymentTracker from '../components/PaymentTracker'
 import ClientFormsPanel from '../components/ClientFormsPanel'
 import OnboardingCallPanel from '../components/OnboardingCallPanel'
 import NextUpBar from '../components/NextUpBar'
-import MemoryPanel from '../components/MemoryPanel'
+import ClientSnapshot from '../components/ClientSnapshot'
+import ClientTasksPanel from '../components/ClientTasksPanel'
 import SetupMessageModal from '../components/SetupMessageModal'
 import OnboardingLinkPanel from '../components/OnboardingLinkPanel'
 import { fetchNextStepsFor } from '../lib/nextStepsData'
 import { markStepDone, undoStepDone, whoAmI } from '../lib/completeStep'
 import { Button, Card } from '../components/ui'
-import {
-  addTask,
-  deleteTask,
-  extractTasksFromChat,
-  fetchTasks,
-  toggleTask as toggleTaskRow,
-} from '../lib/clientTasks'
 
 // Deep links like /client/:id#ad-performance come from the Reports table.
 // The ad section renders nothing until its own fetch resolves, so scrolling on
@@ -73,18 +64,15 @@ export default function ClientDetailPage() {
   const navigate = useNavigate()
   const { role } = useAuth()
   const [client, setClient] = useState(null)
+  // This client's rows from the Tasks tab, as the task panel last loaded
+  // them, for the open-task count up top. tasksKey remounts the panel when
+  // the chat adds tasks behind its back.
   const [tasks, setTasks] = useState([])
-  const [newTask, setNewTask] = useState('')
-  const [extracting, setExtracting] = useState(false)
-  const [extractNote, setExtractNote] = useState('')
+  const [tasksKey, setTasksKey] = useState(0)
   const [weeklyKPIs, setWeeklyKPIs] = useState([])
-  const [workLogs, setWorkLogs] = useState([])
-  const [creativeLogs, setCreativeLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showKPIsModal, setShowKPIsModal] = useState(false)
-  const [showWorkLogModal, setShowWorkLogModal] = useState(false)
-  const [showCreativeModal, setShowCreativeModal] = useState(false)
   const [showChatModal, setShowChatModal] = useState(false)
   // Set when the chat is opened from a task rather than the button, so it
   // knows to open straight into a conversation about that task instead of a
@@ -171,8 +159,6 @@ export default function ClientDetailPage() {
 
       if (clientError) throw clientError
 
-      const tasksData = await fetchTasks(clientId)
-
       const { data: kpisData, error: kpisError } = await supabase
         .from('weekly_kpis')
         .select('*')
@@ -180,22 +166,6 @@ export default function ClientDetailPage() {
         .order('week_of', { ascending: false })
 
       if (kpisError) throw kpisError
-
-      const { data: logsData, error: logsError } = await supabase
-        .from('weekly_work_log')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('week_of', { ascending: false })
-
-      if (logsError) throw logsError
-
-      const { data: creativesData, error: creativesError } = await supabase
-        .from('creative_log')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('date', { ascending: false })
-
-      if (creativesError) throw creativesError
 
       // The brief needs both, but neither should be able to break the page.
       const [intakeRes, adRows] = await Promise.all([
@@ -206,10 +176,7 @@ export default function ClientDetailPage() {
       setBriefAds(summariseAds(adRows || []))
 
       setClient(clientData)
-      setTasks(tasksData)
       setWeeklyKPIs(kpisData)
-      setWorkLogs(logsData)
-      setCreativeLogs(creativesData)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -260,74 +227,12 @@ export default function ClientDetailPage() {
     else loadClientData()
   }
 
-  const handleToggleTask = async (taskId, currentDone) => {
-    try {
-      await toggleTaskRow(taskId, currentDone)
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                done: !currentDone,
-                date_completed: !currentDone ? new Date().toISOString().split('T')[0] : null,
-              }
-            : t
-        )
-      )
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
-  const handleAddTask = async () => {
-    const name = newTask.trim()
-    if (!name) return
-    setNewTask('')
-    try {
-      const row = await addTask(clientId, name)
-      setTasks((prev) => [...prev, row])
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
-  const handleDeleteTask = async (taskId) => {
-    try {
-      await deleteTask(taskId)
-      setTasks((prev) => prev.filter((t) => t.id !== taskId))
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
   // Opens the chat already talking about one task, instead of a blank box the
   // agency has to re-explain the task into.
   const handleAskAboutTask = (task) => {
-    const context = task.notes ? `\n\nContext: ${task.notes}` : ''
-    setChatSeed(`How do I complete "${task.task_name}" and do it well?${context}`)
+    const context = task.description ? `\n\nContext: ${task.description}` : ''
+    setChatSeed(`How do I complete "${task.title}" and do it well?${context}`)
     setShowChatModal(true)
-  }
-
-  // Reads the client's chat history — Fireflies summaries pasted in, "remember
-  // this" asides — and turns whatever is still actionable into rows here.
-  const handleExtractTasks = async () => {
-    setExtracting(true)
-    setExtractNote('')
-    setError('')
-    try {
-      const res = await extractTasksFromChat(clientId)
-      if (res.inserted > 0) {
-        setTasks((prev) => [...prev, ...res.tasks])
-        setExtractNote(`Added ${res.inserted} task${res.inserted === 1 ? '' : 's'} from the chat.`)
-      } else {
-        setExtractNote(res.note || 'Nothing new to pull from the chat.')
-      }
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setExtracting(false)
-      setTimeout(() => setExtractNote(''), 5000)
-    }
   }
 
   // The whole point of the handoff: the hook, offer and CTA the chat wrote go
@@ -361,7 +266,8 @@ export default function ClientDetailPage() {
   }
 
   // One step on the Next-up bar, one thing opened. The kinds are the ones
-  // nextSteps() emits; anything unknown scrolls to the deliverables.
+  // nextSteps() emits; anything unknown opens the Onboarding Progress board,
+  // which is where the deliverables list lives now it is off this page.
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const openStudio = (tab, video = '') => {
     setStudioTab(tab)
@@ -402,22 +308,13 @@ export default function ClientDetailPage() {
       case 'report':
         return navigate('/reports')
       default:
-        return scrollTo('deliverables')
+        return navigate('/deliverables')
     }
   }
 
-  // Only ever called with 'kpis', 'worklog' or 'creative'. It used to carry
-  // 'intake' and 'ghl' branches closing modals that no longer exist on this
-  // page, calling setters that were deleted with them — dead code that would
-  // have thrown the moment anything passed either name again.
-  const handleDataAdded = async (type) => {
-    if (type === 'kpis') {
-      setShowKPIsModal(false)
-    } else if (type === 'worklog') {
-      setShowWorkLogModal(false)
-    } else if (type === 'creative') {
-      setShowCreativeModal(false)
-    }
+  // The KPI logger is the one form left on this page.
+  const handleKpisLogged = () => {
+    setShowKPIsModal(false)
     loadClientData()
   }
 
@@ -441,13 +338,6 @@ export default function ClientDetailPage() {
       </Layout>
     )
   }
-
-  const progressDone = tasks.filter((t) => t.done).length
-  const progressTotal = tasks.length
-  const progressPercent = progressTotal > 0 ? Math.round((progressDone / progressTotal) * 100) : 0
-  // Open tasks first, done ones sink to the bottom struck through — this is a
-  // working list, not a log, so what still needs doing should be on top.
-  const sortedTasks = [...tasks].sort((a, b) => Number(a.done) - Number(b.done))
 
   const intakeButton = (
     <div className="flex flex-col md:flex-row gap-2">
@@ -568,34 +458,11 @@ export default function ClientDetailPage() {
           }}
         />
 
-        {/* The row of live toggles that used to sit here is gone: Meta, LSA,
-            GBP and GHL-live are steps on the plan above, marked done or
-            undone there. The one switch with no step of its own, whether GHL
-            is part of the plan at all, lives in the plan header with Archive. */}
-        <div className="mb-6 md:mb-8">
-          <Card className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-            <div>
-              <p className="text-xs text-slate-500 uppercase font-medium">Industry</p>
-              <p className="font-semibold text-slate-900 text-sm md:text-base">{client.industry || '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 uppercase font-medium">Market</p>
-              <p className="font-semibold text-slate-900 text-sm md:text-base">{client.market || '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 uppercase font-medium">Meta/day</p>
-              <p className="font-semibold text-slate-900 text-sm md:text-base">
-                ${client.meta_budget_per_day ? client.meta_budget_per_day.toFixed(2) : '0'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 uppercase font-medium">LSA/day</p>
-              <p className="font-semibold text-slate-900 text-sm md:text-base">
-                ${client.lsa_budget_per_day ? client.lsa_budget_per_day.toFixed(2) : '0'}
-              </p>
-            </div>
-          </Card>
-        </div>
+        {/* HOW TO REACH THEM, AND HOW THEY ARE DOING. Phone, email and
+            website up front, then five numbers from the rest of the CRM.
+            (The Industry / Market / Meta-day / LSA-day card that sat here
+            showed typed-in budgets; these are the real numbers.) */}
+        <ClientSnapshot client={client} intake={intake} tasks={tasks} showMoney={isAdmin(role)} />
 
         {/* CLIENT FORMS — what they have sent back, and how to chase the rest.
             High up on purpose: at the start of a client this is the whole job,
@@ -610,110 +477,8 @@ export default function ClientDetailPage() {
           <OnboardingCallPanel client={client} intake={intake} />
         </div>
 
-        {/* TASKS */}
-        <Card padding="none" className="mb-6 p-4 md:mb-8 md:p-6">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4">
-            <h2 className="text-lg font-semibold tracking-tight text-slate-900">Tasks</h2>
-            <Button
-              variant="dark"
-              onClick={handleExtractTasks}
-              disabled={extracting}
-              title="The chat only makes tasks from call summaries and direct asks now — use this to sweep the whole history on demand."
-              className="w-full md:w-auto"
-            >
-              {extracting ? 'Reading chat...' : 'Check chat now'}
-            </Button>
-          </div>
-
-          <p className="mb-3 text-xs text-slate-400">
-            The chat only makes tasks from a pasted call summary or a direct ask. This sweeps the
-            whole history on demand.
-          </p>
-
-          {extractNote && <p className="text-xs text-slate-500 mb-3">{extractNote}</p>}
-
-          {progressTotal > 0 && (
-            <div className="mb-4 flex items-center gap-2">
-              <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 transition-all"
-                  style={{ width: `${progressPercent}%` }}
-                ></div>
-              </div>
-              <span className="text-sm font-semibold text-slate-600">
-                {progressDone}/{progressTotal}
-              </span>
-            </div>
-          )}
-
-          <div className="flex gap-2 mb-3">
-            <input
-              value={newTask}
-              onChange={(e) => setNewTask(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleAddTask()
-                }
-              }}
-              placeholder="Add a task..."
-              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-            <Button
-              onClick={handleAddTask}
-              disabled={!newTask.trim()}
-              variant="primary"
-            >
-              Add
-            </Button>
-          </div>
-
-          {sortedTasks.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              No tasks yet. Add one, or pull from what&rsquo;s already been discussed in the chat.
-            </p>
-          ) : (
-            <div className="space-y-1">
-              {sortedTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="group flex items-start gap-3 p-2 rounded hover:bg-slate-50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={task.done}
-                    onChange={() => handleToggleTask(task.id, task.done)}
-                    className="w-4 h-4 rounded mt-0.5 flex-shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <button
-                      onClick={() => handleAskAboutTask(task)}
-                      title="Ask the chat how to do this well"
-                      className={`text-left hover:text-blue-600 hover:underline ${
-                        task.done ? 'line-through text-slate-400' : 'text-slate-700'
-                      }`}
-                    >
-                      {task.task_name}
-                    </button>
-                    {task.source === 'chat' && (
-                      <span className="ml-1.5 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-semibold align-middle">
-                        from chat
-                      </span>
-                    )}
-                    {task.notes && <p className="text-xs text-slate-400 mt-0.5">{task.notes}</p>}
-                  </div>
-                  <button
-                    onClick={() => handleDeleteTask(task.id)}
-                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 text-sm flex-shrink-0 transition"
-                    aria-label={`Delete ${task.task_name}`}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+        {/* TASKS, straight from the Tasks tab: one list, not two. */}
+        <ClientTasksPanel key={tasksKey} client={client} onAsk={handleAskAboutTask} onChange={setTasks} />
 
         {/* WEEKLY KPIs */}
         <Card padding="none" className="mb-6 p-4 md:mb-8 md:p-6">
@@ -763,73 +528,6 @@ export default function ClientDetailPage() {
           )}
         </Card>
 
-        {/* WORK LOG */}
-        <Card padding="none" className="mb-6 p-4 md:mb-8 md:p-6">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
-            <h2 className="text-lg md:text-xl font-bold text-slate-900">Weekly Work Log</h2>
-            <Button
-              size="sm"
-              onClick={() => setShowWorkLogModal(true)}
-              className="w-full touch-none md:w-auto"
-            >
-              + Add Entry
-            </Button>
-          </div>
-          {workLogs.length === 0 ? (
-            <p className="text-slate-500">No work log entries yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {workLogs.map((log) => (
-                <div key={log.id} className="border-b border-slate-200 pb-4 last:border-b-0">
-                  <p className="text-sm text-slate-500 mb-1">Week of {log.week_of}</p>
-                  <p className="text-slate-700">{log.work_summary}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* CREATIVE LOG */}
-        <Card padding="none" className="p-4 md:p-6">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
-            <h2 className="text-lg md:text-xl font-bold text-slate-900">Creative Log</h2>
-            <Button
-              size="sm"
-              onClick={() => setShowCreativeModal(true)}
-              className="w-full touch-none md:w-auto"
-            >
-              + Add Entry
-            </Button>
-          </div>
-          {creativeLogs.length === 0 ? (
-            <p className="text-slate-500">No creative entries yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {creativeLogs.map((creative) => (
-                <div key={creative.id} className="border-b border-slate-200 pb-4 last:border-b-0">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="text-sm text-slate-500 mb-1">{creative.date}</p>
-                      <p className="font-semibold text-slate-900">{creative.description}</p>
-                    </div>
-                    <span
-                      className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
-                        creative.status === 'live'
-                          ? 'bg-green-100 text-green-800'
-                          : creative.status === 'in progress'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-slate-100 text-slate-800'
-                      }`}
-                    >
-                      {creative.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
         {/* META ADS SYNC */}
         <div className="mt-6 md:mt-8">
           <MetaAdAccountCard
@@ -865,15 +563,6 @@ export default function ClientDetailPage() {
           <GoogleSearchPanel client={client} onUpdate={loadClientData} />
         </div>
 
-        {/* MEMORY — what the agency remembers about this client and the trade,
-            read by the chat and the Ad Studio on every call. */}
-        <MemoryPanel client={client} />
-
-        {/* DELIVERABLES */}
-        <div id="deliverables" className="mt-6 scroll-mt-40 md:mt-8">
-          <ClientDeliverablesSection clientId={clientId} />
-        </div>
-
         {/* CLIENT FILES */}
         <div className="mt-6 md:mt-8 mb-6 md:mb-8">
           <ClientFilesSection
@@ -887,7 +576,7 @@ export default function ClientDetailPage() {
             anyway (row-level security on payments), and an empty money panel
             reads as "this client has never paid". */}
         {isAdmin(role) && (
-          <div className="mb-6 md:mb-8">
+          <div id="payments" className="mb-6 scroll-mt-40 md:mb-8">
             <PaymentTracker client={client} onClientUpdate={loadClientData} />
           </div>
         )}
@@ -940,7 +629,7 @@ export default function ClientDetailPage() {
             intake={intake}
             ads={briefAds}
             onUseCreativeSet={handleUseCreativeSet}
-            onTasksAdded={(newTasks) => setTasks((prev) => [...prev, ...newTasks])}
+            onTasksAdded={() => setTasksKey((k) => k + 1)}
             autoPrompt={chatSeed}
           />
         </Modal>
@@ -953,36 +642,11 @@ export default function ClientDetailPage() {
           <LogKPIsForm
             clientId={clientId}
             clientName={client.name}
-            onSuccess={() => handleDataAdded('kpis')}
+            onSuccess={handleKpisLogged}
             onClose={() => setShowKPIsModal(false)}
           />
         </Modal>
 
-        <Modal
-          isOpen={showWorkLogModal}
-          onClose={() => setShowWorkLogModal(false)}
-          title="Add Work Log Entry"
-        >
-          <AddWorkLogForm
-            clientId={clientId}
-            clientName={client.name}
-            onSuccess={() => handleDataAdded('worklog')}
-            onClose={() => setShowWorkLogModal(false)}
-          />
-        </Modal>
-
-        <Modal
-          isOpen={showCreativeModal}
-          onClose={() => setShowCreativeModal(false)}
-          title="Add Creative Entry"
-        >
-          <AddCreativeForm
-            clientId={clientId}
-            clientName={client.name}
-            onSuccess={() => handleDataAdded('creative')}
-            onClose={() => setShowCreativeModal(false)}
-          />
-        </Modal>
       </div>
     </Layout>
   )

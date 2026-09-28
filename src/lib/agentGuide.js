@@ -109,14 +109,14 @@ export const ROUTES = [
     contains: [
       'Status switches: Meta ads, Google LSA, Google Business Profile, GHL build, and — only once GHL build is on — GHL account.',
       '"Live onboarding call": the sheet for the onboarding Zoom, worked top to bottom — pre-call email, opening lines, GoHighLevel, Meta (find the portfolio in Page setup, business.facebook.com/select, partner access, 2FA), Google (the "Own this business?" trick to find the owning account), website and domain, photos and other lead sources, recap email. Steps the CRM can already see (Drive folder linked, Meta connected, GHL live) tick themselves; the rest are ticked by hand and stored per client. Copy buttons produce the pre-call email, the opening lines, the why-admin explanation and a recap built from what is still open.',
-      'Industry, Market, Meta budget per day, LSA budget per day.',
+      'Up front: the owner, their area, phone (tap to call), email (tap to write) and website, each with a copy button; from the onboarding form, with the GHL setup form as the fallback. Under them, five numbers from the rest of the CRM: leads and ad spend over 30 days across Meta and Google, days since the last new ad (flagged at 10+), open and overdue tasks, and (admin only) the monthly fee with the next payment or anything overdue.',
       '"Client forms" — whether the onboarding form and the GHL setup form have come back, and the links to send them.',
-      'Tasks, with a progress bar.',
-      'Weekly KPI History, Weekly Work Log, Creative Log.',
+      'Tasks: this client\'s rows from the Tasks tab, the same list, with who, when, repeats and "from chat". The quick-add line takes the Tasks tab shorthand ("@Kyle fri", "every week", "!urgent"); ticking one marks it done there too. "Pull from chat" sweeps the client chat for to-dos into the Tasks tab.',
+      'Weekly KPI History (the weekly numbers logged by hand, which is where LSA comes from).',
       'The Meta ad account connection: which ad account, Page and pixel this client advertises with.',
       'Ad performance, anchored at #ad-performance so it can be linked to directly.',
       'Ad Doctor Agent — kill, watch and scale verdicts run against the last 30 days of synced data with the arithmetic shown, plus the 2026 signals: whether a cost rise is the creative (click rate down, CPM flat) or the auction (CPM up, click rate flat), video hold and hook rates against benchmarks, and each ad set\'s learning status. Every verdict carries a prescription. "Full diagnosis" hands the table, the Meta knowledge base and last night\'s agency-wide learnings to the chat, which writes the plan; it lands in the client chat history. It never pauses anything on its own.',
-      'Deliverables for this client, Client Files, and Payments & Billing.',
+      'Client Files, and Payments & Billing. The deliverables checklist is on Onboarding Progress (/deliverables), not here.',
     ],
     actions: [
       '"Ad Studio" in the header opens the ad builder in a modal (see below).',
@@ -124,7 +124,7 @@ export const ROUTES = [
       'Each status switch saves immediately on click. There is no separate save.',
       '"Pause client" next to it puts a client on pause: still a client everywhere (lists, sync), but out of MRR from the day they paused, the scheduled months inside the pause are not owed (shown "on pause", never overdue), and the dashboard\'s ads-stopped alert and the Content board\'s "10+ days without a new ad" flag leave them alone until "Resume client". Resuming clears the paused months already behind us from the schedule, since Stripe never billed them; the months ahead carry on. An amber banner at the top of the page says they are paused.',
       '"Archive client" is at the end of the switch row. Archiving excludes the client from MRR, the Meta sync and every list; it is reversible with "Restore client".',
-      'Buttons open modals for logging weekly KPIs, adding a work log entry, and adding a creative entry.',
+      '"+ Log KPIs" opens the weekly KPI form. The weekly work log, creative log and memory panel were taken off this page on 2026-09-28; their data is still in the database.',
     ],
   },
   {
@@ -176,7 +176,7 @@ export const ROUTES = [
       'Tick a row to mark it done. Drag a card between people (Team) or statuses (All, Board).',
       '"Team" / "Manage team" opens the roster: add a person with a name and what they do, rename (moves their tasks), remove (keeps their tasks).',
       '"You:" at the top right picks your name from the roster; it drives My day and signs tasks and comments.',
-      'Separate from the per-client onboarding checklist on the client page (client_tasks) and from Onboarding Progress (the /deliverables page), which tracks each client\u2019s launch pipeline.',
+      'The client page shows the same tasks for that client, not a list of its own. Separate from Onboarding Progress (the /deliverables page), which tracks each client\u2019s launch pipeline.',
     ],
   },
   {

@@ -4,7 +4,8 @@
 // this" asides get typed — the chat's message history is the closest thing
 // this CRM has to a record of what was actually discussed. Nothing here
 // changes that history; it only reads it and writes new rows to
-// client_tasks, tagged source = 'chat' so an extracted task is never
+// the Tasks tab (tasks, client_id set, tagged 'from chat'; client_tasks until
+// 2026-09-28), so an extracted task is never
 // confused for one someone typed in by hand.
 //
 // Two ways in, and the difference matters:
@@ -138,12 +139,20 @@ Deno.serve(async (req) => {
   const focus = String(body.focus || '').trim()
   const reason = String(body.reason || '').trim()
 
-  const existingRes = await fetch(
-    `${supabaseUrl}/rest/v1/client_tasks?client_id=eq.${body.client_id}&select=task_name`,
-    { headers }
-  )
-  const existing = await existingRes.json()
-  const existingNames = (existing || []).map((t: { task_name: string }) => t.task_name)
+  // Everything already on this client's lists, so a pass never adds a job
+  // twice: the Tasks tab (where extracted tasks go now) and the old
+  // per-client checklist (client_tasks), which still holds the August
+  // chat pulls and must not have them re-created.
+  const [tabRes, oldRes] = await Promise.all([
+    fetch(`${supabaseUrl}/rest/v1/tasks?client_id=eq.${body.client_id}&select=title`, { headers }),
+    fetch(`${supabaseUrl}/rest/v1/client_tasks?client_id=eq.${body.client_id}&select=task_name`, { headers }),
+  ])
+  const tabTasks = tabRes.ok ? await tabRes.json() : []
+  const oldTasks = oldRes.ok ? await oldRes.json() : []
+  const existingNames = [
+    ...(tabTasks || []).map((t: { title: string }) => t.title),
+    ...(oldTasks || []).map((t: { task_name: string }) => t.task_name),
+  ].filter(Boolean)
 
   // What the model reads. One message when something triggered this, the whole
   // history when a person pressed the button.
@@ -249,15 +258,21 @@ If there is nothing new that clears the bar above, return [].`
 
     if (kept.length === 0) return json({ inserted: 0, tasks: [] })
 
+    // Into the Tasks tab, on this client, tagged so it reads as pulled from
+    // the chat rather than typed by a person. The client page's task list
+    // and the Tasks tab are the same list now.
     const rows = kept.map((it) => ({
       client_id: body.client_id,
-      task_name: String(it.task).slice(0, 200),
-      source: 'chat',
-      notes: it.notes ? String(it.notes).slice(0, 500) : null,
-      date_completed: null,
+      title: String(it.task).slice(0, 200),
+      description: it.notes ? String(it.notes).slice(0, 500) : null,
+      status: 'todo',
+      priority: 'normal',
+      tags: ['from chat'],
+      assignees: [],
+      due_date: it.due_date && /^\d{4}-\d{2}-\d{2}$/.test(String(it.due_date)) ? it.due_date : null,
     }))
 
-    const insertRes = await fetch(`${supabaseUrl}/rest/v1/client_tasks`, {
+    const insertRes = await fetch(`${supabaseUrl}/rest/v1/tasks`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify(rows),
