@@ -15,7 +15,7 @@ import { cleanCustomerId, dashedId, explainSyncError } from '../lib/googleAdsId'
  * Used on the client page's Google Search panel and on the Google Search
  * report, beside every client still waiting.
  */
-export default function GoogleAdsIdInput({ client, onSaved, compact = false }) {
+export default function GoogleAdsIdInput({ client, onSaved, compact = false, dark = false }) {
   const [value, setValue] = useState(client.google_ads_customer_id ? dashedId(client.google_ads_customer_id) : '')
   const [state, setState] = useState('idle') // idle | saving | syncing | done
   const [result, setResult] = useState(null) // { ok, text }
@@ -98,21 +98,21 @@ export default function GoogleAdsIdInput({ client, onSaved, compact = false }) {
           inputMode="numeric"
           placeholder="123-456-7890"
           aria-label={`${client.name} Google Ads customer ID`}
-          className={`rounded-lg border bg-white px-2.5 font-mono tabular-nums text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+          className={`rounded-lg border px-2.5 font-mono tabular-nums focus:outline-none focus:ring-2 ${dark ? 'bg-white/[0.04] text-white placeholder:text-slate-600 focus:ring-emerald-400/60' : 'bg-white text-slate-900 focus:ring-blue-400'} ${
             compact ? 'w-36 py-1 text-xs' : 'w-44 py-1.5 text-sm'
-          } ${digits.length > 0 && !valid ? 'border-amber-400' : 'border-slate-300'}`}
+          } ${digits.length > 0 && !valid ? 'border-amber-400' : dark ? 'border-white/15' : 'border-slate-300'}`}
         />
         <button
           type="button"
           onClick={save}
           disabled={busy || !digits || (unchanged && !client.google_ads_sync_error)}
-          className={`rounded-lg bg-blue-600 font-medium text-white hover:bg-blue-700 disabled:opacity-40 ${compact ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
+          className={`rounded-lg font-medium disabled:opacity-40 ${dark ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400' : 'bg-blue-600 text-white hover:bg-blue-700'} ${compact ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
         >
           {state === 'saving' ? 'Saving…' : state === 'syncing' ? 'Checking access…' : unchanged ? (client.google_ads_sync_error ? 'Check again' : 'Saved') : 'Save & sync'}
         </button>
       </div>
       {result && (
-        <p className={`mt-1.5 text-xs ${result.ok ? 'text-emerald-700' : 'text-amber-800'}`}>{result.ok ? '✓ ' : ''}{result.text}</p>
+        <p className={`mt-1.5 text-xs ${result.ok ? (dark ? 'text-emerald-300' : 'text-emerald-700') : dark ? 'text-amber-300' : 'text-amber-800'}`}>{result.ok ? '✓ ' : ''}{result.text}</p>
       )}
     </div>
   )

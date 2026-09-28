@@ -167,10 +167,13 @@ Sidebar: Reports
 Ad performance across every client, over time. The place to answer "how are we doing".
 
 What is on it:
-  - Channels first: Meta, Google Search and Google LSA, each with spend, leads and cost per lead for the range. The Google Search card opens its own full page (/reports/google-search).
+  - A dark analytics page, each channel in its own colour everywhere it appears: Meta blue, Google aqua, LSA orange.
+  - All channels first: blended spend, leads and cost per lead against the previous range, spend and leads split by channel, and cost per lead per channel.
+  - One card per channel with spend, leads, cost per lead and a daily sparkline. The Google Search card opens its own full page (/reports/google-search); the Meta card jumps to the Meta section.
+  - Spend (or leads) by day with Meta and Google stacked, so each day shows which channel carried it. LSA is weekly, so it is on its card only.
   - Ad spend, leads and cost per lead for the range, each against the previous equivalent range.
   - A daily chart, switchable between ad spend, leads and cost per lead.
-  - Per-client performance, and the agency's own businesses kept separate from client work.
+  - Every client: a channel split bar, Meta, Google and LSA spend, total, leads and cost per lead, biggest first. The agency's own businesses are kept separate from client work.
   - Ad accounts the sync found that no client claims, sorted by spend.
   - The monthly client report log: who was sent one, who was skipped and why.
 

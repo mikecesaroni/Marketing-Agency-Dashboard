@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { LOGIN_REQUIRED, ROLE_LABELS, navWithoutLogin, visibleNav } from '../lib/access'
@@ -71,7 +71,20 @@ function UserMenu() {
   )
 }
 
-export default function Layout({ title, subtitle, actions, children }) {
+export default function Layout({ title, subtitle, actions, children, tone = 'light' }) {
+  // The report pages run dark: the page, the sticky header and the title.
+  // Everything else in the app keeps the light frame.
+  const dark = tone === 'dark'
+  // The body is the scroll container (index.css), so an overscroll bounce
+  // shows its colour. Match it on dark pages, put it back on the way out.
+  useEffect(() => {
+    if (!dark) return
+    const prev = document.body.style.backgroundColor
+    document.body.style.backgroundColor = '#070b14'
+    return () => {
+      document.body.style.backgroundColor = prev
+    }
+  }, [dark])
   const { role } = useAuth()
   // Only the pages this role may open. A VA gets no Money > Payments row and
   // no Admin group at all, and RequireAuth turns them away from the URL too.
@@ -80,7 +93,7 @@ export default function Layout({ title, subtitle, actions, children }) {
   const groups = LOGIN_REQUIRED ? visibleNav(NAV_GROUPS, role) : navWithoutLogin(NAV_GROUPS)
   const mobileItems = groups.flatMap((g) => g.items).filter((i) => i.mobile !== false)
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={`min-h-screen ${dark ? 'bg-[#070b14]' : 'bg-slate-50'}`}>
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 bg-slate-950 text-white">
         <div className="px-5 py-5">
@@ -147,13 +160,13 @@ export default function Layout({ title, subtitle, actions, children }) {
         {/* Sticky, so the page title and its actions stay reachable down a long
             client page. Translucent rather than solid so content scrolling
             under it reads as depth instead of a seam. */}
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-slate-50/85 px-4 py-4 backdrop-blur md:px-8 md:py-5">
+        <header className={`sticky top-0 z-30 border-b px-4 py-4 backdrop-blur md:px-8 md:py-5 ${dark ? 'border-white/[0.06] bg-[#070b14]/80' : 'border-slate-200 bg-slate-50/85'}`}>
           <div className="mx-auto flex max-w-7xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900 md:text-2xl">
+              <h1 className={`truncate text-xl font-semibold tracking-tight md:text-2xl ${dark ? 'text-white' : 'text-slate-900'}`}>
                 {title}
               </h1>
-              {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+              {subtitle && <p className={`mt-0.5 text-sm ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{subtitle}</p>}
             </div>
             {/* Shrinkable on a phone so a long actions row scrolls inside itself
                 instead of widening the document; fixed from md up where

@@ -53,7 +53,12 @@ function labelFor(dateStr) {
  * the average alone hides the days that actually happened. One axis, always —
  * a second scale for the average would let it be drawn anywhere.
  */
-export default function DailyChart({ series, metric, height = 240 }) {
+const LIGHT = { bar: DAILY, trend: TREND, grid: GRID, axis: AXIS_TEXT, ring: '#FFFFFF', dark: false }
+
+export default function DailyChart({ series, metric, height = 240, theme = LIGHT }) {
+  // The report pages pass a dark theme with their channel's colour; every
+  // other caller gets the light one this chart was validated with.
+  const t = { ...LIGHT, ...theme }
   // Callers that only have one formatter get to reuse it for the axis.
   const axisFmt = metric.axis || metric.format
   const [active, setActive] = useState(null)
@@ -145,25 +150,25 @@ export default function DailyChart({ series, metric, height = 240 }) {
         onBlur={() => setActive(null)}
         className="outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
       >
-        {ticks.map((t) => (
-          <g key={t}>
+        {ticks.map((tick) => (
+          <g key={tick}>
             <line
               x1={PAD.left}
               x2={width - PAD.right}
-              y1={yOf(t)}
-              y2={yOf(t)}
-              stroke={GRID}
+              y1={yOf(tick)}
+              y2={yOf(tick)}
+              stroke={t.grid}
               strokeWidth="1"
             />
             <text
               x={PAD.left - 8}
-              y={yOf(t) + 4}
+              y={yOf(tick) + 4}
               textAnchor="end"
               fontSize="11"
-              fill={AXIS_TEXT}
+              fill={t.axis}
               style={{ fontVariantNumeric: 'tabular-nums' }}
             >
-              {axisFmt(t)}
+              {axisFmt(tick)}
             </text>
           </g>
         ))}
@@ -178,7 +183,7 @@ export default function DailyChart({ series, metric, height = 240 }) {
               y={PAD.top}
               width={band}
               height={plotH}
-              fill={DAILY}
+              fill={t.bar}
               opacity="0.09"
             />
             <line
@@ -186,7 +191,7 @@ export default function DailyChart({ series, metric, height = 240 }) {
               x2={xOf(active) + band / 2}
               y1={PAD.top}
               y2={PAD.top + plotH}
-              stroke={AXIS_TEXT}
+              stroke={t.axis}
               strokeWidth="1"
               strokeOpacity="0.35"
             />
@@ -195,11 +200,11 @@ export default function DailyChart({ series, metric, height = 240 }) {
 
         {asArea ? (
           <>
-            <path d={areaPath} fill={DAILY} opacity="0.12" />
+            <path d={areaPath} fill={t.bar} opacity="0.12" />
             <polyline
               points={dailyPoints}
               fill="none"
-              stroke={DAILY}
+              stroke={t.bar}
               strokeWidth="2"
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -215,7 +220,7 @@ export default function DailyChart({ series, metric, height = 240 }) {
               <path
                 key={r.date}
                 d={columnPath(xOf(i) + (band - barW) / 2, y, barW, h)}
-                fill={DAILY}
+                fill={t.bar}
               />
             )
           })
@@ -225,7 +230,7 @@ export default function DailyChart({ series, metric, height = 240 }) {
           <polyline
             points={linePoints}
             fill="none"
-            stroke={TREND}
+            stroke={t.trend}
             strokeWidth="2"
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -237,8 +242,8 @@ export default function DailyChart({ series, metric, height = 240 }) {
             cx={xOf(active) + band / 2}
             cy={yOf(series[active][metric.key])}
             r="4"
-            fill={DAILY}
-            stroke="#FFFFFF"
+            fill={t.bar}
+            stroke={t.ring}
             strokeWidth="2"
           />
         )}
@@ -248,8 +253,8 @@ export default function DailyChart({ series, metric, height = 240 }) {
             cx={xOf(active) + band / 2}
             cy={yOf(rowAvg)}
             r="4"
-            fill={TREND}
-            stroke="#FFFFFF"
+            fill={t.trend}
+            stroke={t.ring}
             strokeWidth="2"
           />
         )}
@@ -264,7 +269,7 @@ export default function DailyChart({ series, metric, height = 240 }) {
               y={height - 8}
               textAnchor="middle"
               fontSize="11"
-              fill={AXIS_TEXT}
+              fill={t.axis}
             >
               {labelFor(series[i].date)}
             </text>
@@ -273,26 +278,26 @@ export default function DailyChart({ series, metric, height = 240 }) {
 
       {row && (
         <div
-          className="pointer-events-none absolute -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg"
+          className={`pointer-events-none absolute -translate-x-1/2 rounded-lg border px-3 py-2 shadow-lg ${t.dark ? 'border-white/10 bg-[#0b1220]/95 backdrop-blur' : 'border-slate-200 bg-white'}`}
           style={{ left: tipLeft, top: 4 }}
         >
-          <p className="text-[11px] font-medium text-slate-500">{labelFor(row.date)}</p>
+          <p className={`text-[11px] font-medium ${t.dark ? 'text-slate-400' : 'text-slate-500'}`}>{labelFor(row.date)}</p>
           <div className="mt-1 space-y-0.5 text-xs">
-            <p className="font-semibold text-slate-900 tabular-nums">
+            <p className={`font-semibold tabular-nums ${t.dark ? 'text-white' : 'text-slate-900'}`}>
               {money(row.spend)} <span className="font-normal text-slate-500">spend</span>
             </p>
-            <p className="font-semibold text-slate-900 tabular-nums">
+            <p className={`font-semibold tabular-nums ${t.dark ? 'text-white' : 'text-slate-900'}`}>
               {row.leads} <span className="font-normal text-slate-500">
                 {row.leads === 1 ? 'lead' : 'leads'}
               </span>
             </p>
-            <p className="font-semibold text-slate-900 tabular-nums">
+            <p className={`font-semibold tabular-nums ${t.dark ? 'text-white' : 'text-slate-900'}`}>
               {row.cpl > 0 ? `$${row.cpl.toFixed(2)}` : '—'}{' '}
               <span className="font-normal text-slate-500">cost/lead</span>
             </p>
             {rowAvg != null && (
               <p className="flex items-center gap-1.5 pt-0.5 text-slate-500">
-                <span className="inline-block h-0.5 w-3 rounded" style={{ background: TREND }} />
+                <span className="inline-block h-0.5 w-3 rounded" style={{ background: t.trend }} />
                 {AVG_WINDOW}-day avg {metric.format(rowAvg)}
               </p>
             )}
@@ -304,12 +309,12 @@ export default function DailyChart({ series, metric, height = 240 }) {
         <span className="flex items-center gap-1.5">
           <span
             className={asArea ? 'inline-block h-0.5 w-4 rounded' : 'inline-block h-2.5 w-2.5 rounded-sm'}
-            style={{ background: DAILY }}
+            style={{ background: t.bar }}
           />
           {metric.label} per day
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 rounded" style={{ background: TREND }} />
+          <span className="inline-block h-0.5 w-4 rounded" style={{ background: t.trend }} />
           {AVG_WINDOW}-day average
         </span>
         <span className="ml-auto hidden sm:inline">Hover, or focus and use ← →</span>

@@ -3,177 +3,124 @@ import { Link, useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
 import UnmappedAccountsPanel from '../components/UnmappedAccountsPanel'
 import MonthlyReportsPanel from '../components/MonthlyReportsPanel'
-import {
-  fetchAdRowsForRange,
-  formatDate,
-  getMonday,
-  isLive,
-  money,
-} from '../lib/queries'
+import { fetchAdRowsForRange, formatDate, getMonday, isLive, money } from '../lib/queries'
 import { LOWER_IS_BETTER, buildDailySeries, daysAgo, pctChange, totals as sumSeries } from '../lib/dailySeries'
 import DailyChart from '../components/DailyChart'
-import StatTile from '../components/StatTile'
-import { Button, Card, Table, THead, TBody, Tr, Th, Td } from '../components/ui'
+import ChannelDailyChart from '../components/reports/ChannelDailyChart'
+import {
+  ChannelDot,
+  DTable,
+  DTd,
+  DTh,
+  DTr,
+  DarkButton,
+  Eyebrow,
+  KpiTile,
+  MixBar,
+  Panel,
+  SectionTitle,
+  Segmented,
+  Sparkline,
+} from '../components/reports/kit'
+import { CHANNELS, channelMix, chartTheme, compactMoney, mergeDaily } from '../lib/channels'
+import { dailyRows as googleDailyRows, inRange, kpis as googleKpis } from '../lib/googleSearchReport'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
 import { supabase } from '../lib/supabaseClient'
 
-// Live mode reads per-ad rows so it can filter on ad status; All-time reads the
-// account-level weekly KPIs, which reach further back. Each mode is sourced
-// from wherever it is actually accurate rather than forcing one table to do both.
-// Both scopes read the same daily rows and differ only on ad status, so the
-// toggle is a filter rather than a different source. It used to switch between
-// ad_daily and weekly_kpis, which meant the two scopes silently covered
-// different date ranges and could not be compared.
+/**
+ * Every channel, every client, over time. The "how are we doing" page.
+ *
+ * Top to bottom: all channels blended, each channel on its own card, the
+ * daily split between Meta and Google, Meta's own section, and every client
+ * with their channel split. Google Search has a page of its own for the rest
+ * of its numbers; its card is the door.
+ *
+ * Meta comes from ad_daily (per ad, so Live ads can be filtered on status),
+ * Google from google_campaign_daily (every campaign type), LSA from the
+ * weekly numbers logged by hand. Our own businesses are kept out of every
+ * total and shown on their own at the bottom.
+ */
 const SCOPES = [
-  { key: 'live', label: 'Live ads' },
-  { key: 'all', label: 'All ads' },
+  { value: 'live', label: 'Live ads' },
+  { value: 'all', label: 'All ads' },
 ]
 
 const RANGES = [
-  { days: 14, label: '14 days' },
-  { days: 30, label: '30 days' },
-  { days: 90, label: '90 days' },
+  { value: 14, label: '14d' },
+  { value: 30, label: '30d' },
+  { value: 90, label: '90d' },
 ]
 
-// axis() is separate from format(): an axis tick wants $1.2K where a tooltip
-// wants $1,240, and cramming both into one formatter makes one of them wrong.
 const METRICS = [
-  {
-    key: 'spend',
-    label: 'Ad spend',
-    format: (v) => money(v),
-    axis: (v) => (v >= 1000 ? `$${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `$${Math.round(v)}`),
-  },
+  { key: 'spend', label: 'Ad spend', format: (v) => money(v), axis: (v) => compactMoney(v) },
   { key: 'leads', label: 'Leads', format: (v) => v.toFixed(v % 1 === 0 ? 0 : 1), axis: (v) => String(v) },
-  {
-    key: 'cpl',
-    label: 'Cost per lead',
-    format: (v) => (v > 0 ? `$${v.toFixed(2)}` : '—'),
-    axis: (v) => `$${Math.round(v)}`,
-  },
+  { key: 'cpl', label: 'Cost per lead', format: (v) => (v > 0 ? `$${v.toFixed(2)}` : '—'), axis: (v) => `$${Math.round(v)}` },
 ]
 
-// A channel's totals for the range. With `to`, the whole card is the door to
-// that channel's own page, which is where the rest of its numbers live.
-function ChannelCard({ channel, spend, leads, to, sub }) {
-  const cpl = leads > 0 ? spend / leads : 0
-  const body = (
-    <>
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold tracking-tight text-slate-900">{channel}</p>
-        {to && <span className="text-xs font-medium text-blue-600">Open full report →</span>}
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <div>
-          <p className="text-lg font-bold text-slate-900">{money(spend)}</p>
-          <p className="text-xs text-slate-500">Spend</p>
-        </div>
-        <div>
-          <p className="text-lg font-bold text-slate-900">{leads}</p>
-          <p className="text-xs text-slate-500">Leads</p>
-        </div>
-        <div>
-          <p className="text-lg font-bold text-slate-900">
-            {cpl > 0 ? `$${cpl.toFixed(2)}` : '—'}
-          </p>
-          <p className="text-xs text-slate-500">Cost/lead</p>
-        </div>
-      </div>
-      {sub && <p className="mt-2 text-[11px] text-slate-500">{sub}</p>}
-    </>
-  )
-  if (to) {
-    return (
-      <Link to={to} className="block rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm md:p-5">
-        {body}
-      </Link>
-    )
-  }
-  return <Card>{body}</Card>
-}
+const STACK_METRICS = [
+  { value: 'spend', label: 'Spend', format: (v) => money(v), axis: (v) => compactMoney(v) },
+  { value: 'leads', label: 'Leads', format: (v) => String(Math.round(v * 10) / 10), axis: (v) => String(v) },
+]
 
-function PerformanceTable({ rows, nameHeader, onOpen, showLsa }) {
-  return (
-    <Table>
-      <THead>
-        <tr>
-          <Th>{nameHeader}</Th>
-          <Th numeric>Meta spend</Th>
-          {showLsa && <Th numeric>LSA spend</Th>}
-          <Th numeric>Total spend</Th>
-          <Th numeric>Leads</Th>
-          <Th numeric>Cost/lead</Th>
-          <Th numeric>{'\u00a0'}</Th>
-        </tr>
-      </THead>
-      <TBody>
-        {rows.map((row) => (
-          <Tr
-            key={row.id}
-            onClick={(e) => {
-              // The name cell is a real link — let it handle its own click
-              // (and cmd-click) rather than navigating twice.
-              if (e.target.closest('a')) return
-              onOpen(row.id)
-            }}
-            className="cursor-pointer"
-          >
-            <Td>
-              <Link
-                to={`/client/${row.id}#ad-performance`}
-                className="font-medium text-blue-600 hover:text-blue-800"
-              >
-                {row.name}
-              </Link>
-            </Td>
-            <Td numeric muted>
-              {money(row.metaSpend)}
-            </Td>
-            {showLsa && (
-              <Td numeric muted>
-                {money(row.lsaSpend)}
-              </Td>
-            )}
-            <Td numeric className="font-medium">
-              {money(row.spend)}
-            </Td>
-            <Td numeric className="font-medium">
-              {row.leads}
-            </Td>
-            <Td numeric className="font-medium">
-              {row.cpl > 0 ? `$${row.cpl.toFixed(2)}` : '—'}
-            </Td>
-            <Td numeric className="whitespace-nowrap text-xs font-medium text-blue-600">
-              View ads →
-            </Td>
-          </Tr>
-        ))}
-      </TBody>
-    </Table>
-  )
-}
+const cplText = (v) => (v > 0 ? `$${v.toFixed(2)}` : '—')
 
 export default function ReportsPage() {
   const navigate = useNavigate()
-  const openAds = (id) => navigate(`/client/${id}#ad-performance`)
   const [adRows, setAdRows] = useState([])
+  const [googleRows, setGoogleRows] = useState([])
+  const [lsaRows, setLsaRows] = useState([])
   const [scope, setScope] = useState('live')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [days, setDays] = useState(30)
   const [metricKey, setMetricKey] = useState('spend')
+  const [stackKey, setStackKey] = useState('spend')
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState('')
-  const [googleRows, setGoogleRows] = useState([])
+
+  const windowStart = daysAgo(days - 1)
+  const prevStart = daysAgo(days * 2 - 1)
+  const prevEnd = daysAgo(days)
+
+  // Twice the range, so every number has the window before it to compare
+  // with. Google and LSA fail soft: a missing table must not blank Meta.
+  const load = async () => {
+    const since = daysAgo(days * 2 - 1)
+    const [meta, google, lsa] = await Promise.all([
+      fetchAdRowsForRange(since),
+      supabase
+        .from('google_campaign_daily')
+        .select('client_id, date, cost, conversions, clicks, impressions, conversion_value, clients(name, is_internal, archived)')
+        .gte('date', since)
+        .then(({ data }) => data || [], () => []),
+      supabase
+        .from('weekly_kpis')
+        .select('client_id, week_of, ad_spend, leads, clients(name, is_internal, archived)')
+        .eq('channel', 'LSA')
+        .gte('week_of', formatDate(getMonday(new Date(`${since}T00:00:00`))))
+        .then(({ data }) => data || [], () => []),
+    ])
+    setAdRows(meta)
+    setGoogleRows(google)
+    setLsaRows(lsa)
+  }
+
+  useEffect(() => {
+    setLoading(true)
+    load()
+      .then(() => setError(''))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days])
 
   const handleSync = async () => {
     setSyncing(true)
     setSyncResult('')
     setError('')
     try {
-      const summary = summariseSync(await runMetaSync())
-      setSyncResult(summary)
-      setAdRows(await fetchAdRowsForRange(daysAgo(days * 2 - 1)))
+      setSyncResult(summariseSync(await runMetaSync()))
+      await load()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -181,314 +128,393 @@ export default function ReportsPage() {
     }
   }
 
-  // Twice the range is fetched so each stat can be compared with the window
-  // immediately before it. One extra query beats a second round trip when the
-  // reader switches range.
-  useEffect(() => {
-    setLoading(true)
-    const since = daysAgo(days * 2 - 1)
-    fetchAdRowsForRange(since)
-      .then((rows) => {
-        setAdRows(rows)
-        setError('')
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
-    // Google's totals for the channel card. Campaign grain, clients only,
-    // the range itself. Its own page has the rest.
-    supabase
-      .from('google_campaign_daily')
-      .select('client_id, cost, conversions, clients(is_internal)')
-      .gte('date', daysAgo(days - 1))
-      .then(({ data }) => setGoogleRows((data || []).filter((r) => !r.clients?.is_internal)))
-  }, [days])
-
-  const metric = METRICS.find((m) => m.key === metricKey)
-
-  // Horizon HVAC and Horizon Water Co are ours, not clients. Their spend is
-  // real and worth seeing, but folding it into agency totals would overstate
-  // what we run for clients — so every headline number below covers clients
-  // only, and the internal businesses get their own table.
-  // Live per-ad rows are reshaped into the weekly_kpis shape (one row per
-  // client per week, channel Meta) so every aggregate below is source-agnostic.
-  // Scope is applied here rather than in the query, so switching is instant.
+  // ---- Meta ---------------------------------------------------------------
   const scopedRows = useMemo(
     () => (scope === 'live' ? adRows.filter((r) => isLive(r.effective_status)) : adRows),
     [adRows, scope]
   )
+  const clientMeta = useMemo(() => scopedRows.filter((r) => !r.clients?.is_internal), [scopedRows])
+  const metaNowRows = useMemo(() => clientMeta.filter((r) => r.date >= windowStart), [clientMeta, windowStart])
+  const metaPrevRows = useMemo(() => clientMeta.filter((r) => r.date >= prevStart && r.date <= prevEnd), [clientMeta, prevStart, prevEnd])
+  const metaDaily = useMemo(() => buildDailySeries(metaNowRows, windowStart, daysAgo(0)), [metaNowRows, windowStart])
+  const metaPrevDaily = useMemo(() => buildDailySeries(metaPrevRows, prevStart, prevEnd), [metaPrevRows, prevStart, prevEnd])
+  const meta = useMemo(() => sumSeries(metaDaily), [metaDaily])
+  const metaBefore = useMemo(() => sumSeries(metaPrevDaily), [metaPrevDaily])
 
-  const windowStart = daysAgo(days - 1)
-  const prevStart = daysAgo(days * 2 - 1)
-  const prevEnd = daysAgo(days)
+  // ---- Google -------------------------------------------------------------
+  const clientGoogle = useMemo(() => googleRows.filter((r) => !r.clients?.is_internal && !r.clients?.archived), [googleRows])
+  const googleNowRows = useMemo(() => inRange(clientGoogle, windowStart), [clientGoogle, windowStart])
+  const googlePrevRows = useMemo(() => inRange(clientGoogle, prevStart, prevEnd), [clientGoogle, prevStart, prevEnd])
+  const googleDaily = useMemo(() => buildDailySeries(googleDailyRows(googleNowRows), windowStart, daysAgo(0)), [googleNowRows, windowStart])
+  const google = useMemo(() => googleKpis(googleNowRows), [googleNowRows])
+  const googleBefore = useMemo(() => googleKpis(googlePrevRows), [googlePrevRows])
 
-  // Twice the range is fetched for the comparison, so the page has to be
-  // explicit about which half it is showing. Every number below the range
-  // buttons comes from currentRows; only the deltas look at prevRows.
-  const currentRows = useMemo(
-    () => scopedRows.filter((r) => r.date >= windowStart),
-    [scopedRows, windowStart]
-  )
-  const prevRows = useMemo(
-    () => scopedRows.filter((r) => r.date >= prevStart && r.date <= prevEnd),
-    [scopedRows, prevStart, prevEnd]
-  )
+  // ---- LSA, weekly, by hand -----------------------------------------------
+  const windowMonday = formatDate(getMonday(new Date(`${windowStart}T00:00:00`)))
+  const clientLsa = useMemo(() => lsaRows.filter((r) => !r.clients?.is_internal && !r.clients?.archived), [lsaRows])
+  const lsaSum = (rows) => ({
+    spend: rows.reduce((s, r) => s + Number(r.ad_spend || 0), 0),
+    leads: rows.reduce((s, r) => s + Number(r.leads || 0), 0),
+  })
+  const lsa = useMemo(() => lsaSum(clientLsa.filter((r) => r.week_of >= windowMonday)), [clientLsa, windowMonday])
+  const lsaBefore = useMemo(() => lsaSum(clientLsa.filter((r) => r.week_of < windowMonday)), [clientLsa, windowMonday])
 
-  const liveAsKpis = useMemo(() => {
-    const byKey = new Map()
-    for (const r of currentRows) {
-      const [y, m, d] = r.date.split('-').map(Number)
-      const week = formatDate(getMonday(new Date(y, m - 1, d)))
-      const key = `${r.client_id}|${week}`
-      const row = byKey.get(key) || {
-        id: key,
-        client_id: r.client_id,
-        week_of: week,
-        channel: 'Meta',
-        ad_spend: 0,
-        leads: 0,
-        clients: r.clients,
-      }
-      row.ad_spend += Number(r.spend) || 0
-      row.leads += r.leads || 0
-      byKey.set(key, row)
-    }
-    return [...byKey.values()]
-  }, [currentRows])
-
-  const active = liveAsKpis
-
-  const clientKpis = useMemo(() => active.filter((k) => !k.clients?.is_internal), [active])
-  const internalKpis = useMemo(() => active.filter((k) => k.clients?.is_internal), [active])
-
-  const rollUpByClient = (rows) => {
-    const byClient = {}
-    for (const kpi of rows) {
-      const row = (byClient[kpi.client_id] ||= {
-        id: kpi.client_id,
-        name: kpi.clients?.name || 'Unknown',
-        spend: 0,
-        leads: 0,
-        metaSpend: 0,
-        lsaSpend: 0,
-      })
-      row.spend += kpi.ad_spend || 0
-      row.leads += kpi.leads || 0
-      if (kpi.channel === 'Meta') row.metaSpend += kpi.ad_spend || 0
-      else row.lsaSpend += kpi.ad_spend || 0
-    }
-    return Object.values(byClient)
-      .map((r) => ({ ...r, cpl: r.leads > 0 ? r.spend / r.leads : 0 }))
-      .sort((a, b) => b.leads - a.leads)
+  // ---- All channels -------------------------------------------------------
+  const all = {
+    spend: meta.spend + google.spend + lsa.spend,
+    leads: meta.leads + google.leads + lsa.leads,
   }
+  all.cpl = all.leads > 0 ? all.spend / all.leads : 0
+  const allBefore = {
+    spend: metaBefore.spend + googleBefore.spend + lsaBefore.spend,
+    leads: metaBefore.leads + googleBefore.leads + lsaBefore.leads,
+  }
+  allBefore.cpl = allBefore.leads > 0 ? allBefore.spend / allBefore.leads : 0
+  const spendMix = channelMix({ meta: meta.spend, google: google.spend, lsa: lsa.spend })
+  const leadMix = channelMix({ meta: meta.leads, google: google.leads, lsa: lsa.leads })
+  const cplBy = [
+    { key: 'meta', cpl: meta.leads > 0 ? meta.spend / meta.leads : 0 },
+    { key: 'google', cpl: google.cpl },
+    { key: 'lsa', cpl: lsa.leads > 0 ? lsa.spend / lsa.leads : 0 },
+  ].filter((c) => c.cpl > 0)
+  const cplMax = Math.max(...cplBy.map((c) => c.cpl), 1)
+  const stacked = useMemo(() => mergeDaily(metaDaily, googleDaily, stackKey), [metaDaily, googleDaily, stackKey])
+  const stackMetric = STACK_METRICS.find((m) => m.value === stackKey)
+  const metric = METRICS.find((m) => m.key === metricKey)
 
-  const clientRows = useMemo(() => rollUpByClient(clientKpis), [clientKpis])
-  const internalRows = useMemo(() => rollUpByClient(internalKpis), [internalKpis])
-
-  // Client rows only: the internal businesses have real spend, but folding it
-  // into the headline would overstate what we run for clients.
-  const daily = useMemo(
-    () =>
-      buildDailySeries(
-        currentRows.filter((r) => !r.clients?.is_internal),
-        windowStart,
-        daysAgo(0)
-      ),
-    [currentRows, windowStart]
-  )
-  const previous = useMemo(
-    () =>
-      buildDailySeries(
-        prevRows.filter((r) => !r.clients?.is_internal),
-        prevStart,
-        prevEnd
-      ),
-    [prevRows, prevStart, prevEnd]
-  )
-
-  const now = useMemo(() => sumSeries(daily), [daily])
-  const before = useMemo(() => sumSeries(previous), [previous])
-  const totals = { spend: now.spend, leads: now.leads }
-
-  const channelTotals = useMemo(() => {
-    // Every channel weekly_kpis can hold needs a bucket here, because the
-    // `continue` below silently drops a row whose channel has none -- the
-    // week would be logged, saved, and then just not appear.
-    const t = {
-      Meta: { spend: 0, leads: 0 },
-      LSA: { spend: 0, leads: 0 },
-      'Google Search': { spend: 0, leads: 0 },
+  // ---- Every client, every channel ----------------------------------------
+  const clientTable = useMemo(() => {
+    const by = new Map()
+    const row = (id, name) => {
+      if (!by.has(id)) by.set(id, { id, name, meta: 0, google: 0, lsa: 0, leads: 0 })
+      return by.get(id)
     }
-    for (const kpi of clientKpis) {
-      const bucket = t[kpi.channel]
-      if (!bucket) continue
-      bucket.spend += kpi.ad_spend || 0
-      bucket.leads += kpi.leads || 0
+    for (const r of metaNowRows) {
+      const x = row(r.client_id, r.clients?.name || 'Unknown')
+      x.meta += Number(r.spend) || 0
+      x.leads += Number(r.leads) || 0
     }
-    return t
-  }, [clientKpis])
+    for (const r of googleNowRows) {
+      const x = row(r.client_id, r.clients?.name || 'Unknown')
+      x.google += Number(r.cost) || 0
+      x.leads += Number(r.conversions) || 0
+    }
+    for (const r of clientLsa.filter((k) => k.week_of >= windowMonday)) {
+      const x = row(r.client_id, r.clients?.name || 'Unknown')
+      x.lsa += Number(r.ad_spend) || 0
+      x.leads += Number(r.leads) || 0
+    }
+    return [...by.values()]
+      .map((r) => {
+        const spend = r.meta + r.google + r.lsa
+        return { ...r, spend, leads: Math.round(r.leads * 10) / 10, cpl: r.leads > 0 ? spend / r.leads : 0 }
+      })
+      .filter((r) => r.spend > 0 || r.leads > 0)
+      .sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name))
+  }, [metaNowRows, googleNowRows, clientLsa, windowMonday])
+  const topSpend = Math.max(...clientTable.map((r) => r.spend), 1)
 
-  const googleTotals = useMemo(
-    () => ({
-      spend: googleRows.reduce((s, r) => s + Number(r.cost || 0), 0),
-      leads: Math.round(googleRows.reduce((s, r) => s + Number(r.conversions || 0), 0)),
-    }),
-    [googleRows]
-  )
+  // Our own businesses: Meta only, as before, never in a total.
+  const internalRows = useMemo(() => {
+    const by = new Map()
+    for (const r of scopedRows.filter((x) => x.clients?.is_internal && x.date >= windowStart)) {
+      const x = by.get(r.client_id) || { id: r.client_id, name: r.clients?.name || 'Unknown', spend: 0, leads: 0 }
+      x.spend += Number(r.spend) || 0
+      x.leads += r.leads || 0
+      by.set(r.client_id, x)
+    }
+    return [...by.values()].map((r) => ({ ...r, cpl: r.leads > 0 ? r.spend / r.leads : 0 })).sort((a, b) => b.spend - a.spend)
+  }, [scopedRows, windowStart])
 
-  const rangeButtons = (
-    // Scrolls within itself on a phone. min-w-0 is the part that matters: as a
-    // flex item this defaults to min-width:auto, which refuses to shrink below
-    // its content no matter what max-width says, and the whole page goes
-    // sideways with it.
-    <div className="flex gap-1.5 min-w-0 max-w-full overflow-x-auto pb-1">
-      <Button onClick={handleSync} disabled={syncing} className="whitespace-nowrap">
-        {syncing ? 'Syncing...' : '↻ Sync Meta'}
-      </Button>
-      {SCOPES.map((sc) => (
-        <Button
-          key={sc.key}
-          variant={scope === sc.key ? 'primary' : 'outline'}
-          onClick={() => setScope(sc.key)}
-          className="whitespace-nowrap"
-        >
-          {sc.label}
-        </Button>
-      ))}
-      <span className="w-px bg-slate-200 mx-0.5" />
-      {RANGES.map((r) => (
-        <Button
-          key={r.days}
-          variant={days === r.days ? 'dark' : 'outline'}
-          onClick={() => setDays(r.days)}
-          className="whitespace-nowrap"
-        >
-          {r.label}
-        </Button>
-      ))}
+  const actions = (
+    <div className="flex min-w-0 max-w-full items-center gap-2 overflow-x-auto pb-1">
+      <DarkButton onClick={handleSync} disabled={syncing}>{syncing ? 'Syncing…' : '↻ Sync Meta'}</DarkButton>
+      <Segmented options={SCOPES} value={scope} onChange={setScope} />
+      <Segmented options={RANGES} value={days} onChange={setDays} />
     </div>
   )
 
+  const channelCards = [
+    {
+      key: 'meta',
+      spend: meta.spend,
+      leads: meta.leads,
+      cpl: meta.cpl,
+      delta: pctChange(meta.spend, metaBefore.spend),
+      spark: metaDaily.map((d) => d.spend),
+      to: '#meta',
+      cta: 'Meta detail ↓',
+      note: scope === 'live' ? 'Live ads only' : 'All ads',
+    },
+    {
+      key: 'google',
+      spend: google.spend,
+      leads: google.leads,
+      cpl: google.cpl,
+      delta: pctChange(google.spend, googleBefore.spend),
+      spark: googleDaily.map((d) => d.spend),
+      to: '/reports/google-search',
+      cta: 'Open full report →',
+      note: 'Every client, campaign, keyword',
+    },
+    {
+      key: 'lsa',
+      spend: lsa.spend,
+      leads: lsa.leads,
+      cpl: lsa.leads > 0 ? lsa.spend / lsa.leads : 0,
+      delta: pctChange(lsa.spend, lsaBefore.spend),
+      spark: null,
+      note: 'Logged weekly on each client page',
+    },
+  ]
+
   return (
     <Layout
-      title="Performance Reports"
-      subtitle={`Last ${days} days · ${
-        scope === 'live' ? 'live ads only' : 'all ads'
-      } · ${money(totals.spend)} spend · ${totals.leads} leads`}
-      actions={rangeButtons}
+      tone="dark"
+      title="Performance"
+      subtitle={`Last ${days} days · every channel · ${money(all.spend)} spend · ${Math.round(all.leads)} leads`}
+      actions={actions}
     >
-      <UnmappedAccountsPanel />
-      <MonthlyReportsPanel />
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 mb-4">
-          Error: {error}
-        </div>
-      )}
-
-      {syncResult && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-800 mb-4 text-sm">
-          {syncResult}
-        </div>
-      )}
+      {error && <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">Error: {error}</div>}
+      {syncResult && <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">{syncResult}</div>}
 
       {loading ? (
-        <p className="text-slate-500">Loading...</p>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[0, 1, 2].map((i) => <div key={i} className="h-40 animate-pulse rounded-2xl bg-white/[0.04]" />)}
+        </div>
       ) : (
-        <>
-          {/* Channels first: each card is that channel for the range, and
-              the Google Search card is the door to its own page, where the
-              numbers Google has and Meta does not live. */}
-          <h2 className="font-bold text-slate-900 mb-3">Channels</h2>
-          <div className="grid gap-3 md:grid-cols-3 md:gap-4 mb-6">
-            <ChannelCard
-              channel="Meta Ads"
-              spend={channelTotals.Meta.spend}
-              leads={channelTotals.Meta.leads}
-              sub="The rest of this page"
-            />
-            <ChannelCard
-              channel="Google Search"
-              spend={googleTotals.spend}
-              leads={googleTotals.leads}
-              to="/reports/google-search"
-              sub="Every client, every campaign, keywords and searches to block"
-            />
-            <ChannelCard
-              channel="Google LSA"
-              spend={channelTotals.LSA.spend}
-              leads={channelTotals.LSA.leads}
-              sub="Logged by hand on each client page"
-            />
-          </div>
-
-          <h2 className="font-bold text-slate-900 mb-3">Meta</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-4">
-            <StatTile
-              label="Ad spend"
-              value={money(now.spend)}
-              delta={pctChange(now.spend, before.spend)}
-            />
-            <StatTile label="Leads" value={now.leads} delta={pctChange(now.leads, before.leads)} />
-            <StatTile
-              label="Cost per lead"
-              value={now.cpl > 0 ? `$${now.cpl.toFixed(2)}` : '—'}
-              delta={pctChange(now.cpl, before.cpl)}
-              lowerIsBetter={LOWER_IS_BETTER.has('cpl')}
-            />
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 mb-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-              <div>
-                <h2 className="font-bold text-slate-900">{metric.label} by day</h2>
-                <p className="text-xs text-slate-500">
-                  Meta · {scope === 'live' ? 'live ads only' : 'all ads'} · clients only
-                </p>
+        <div className="space-y-6">
+          {/* ALL CHANNELS: the one number first, then how it splits. */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel className="p-5 lg:col-span-2">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <Eyebrow>All channels · ad spend</Eyebrow>
+                  <p className="mt-2 text-5xl font-semibold tracking-tight text-white md:text-6xl">{money(all.spend)}</p>
+                  <Delta value={pctChange(all.spend, allBefore.spend)} />
+                </div>
+                <div className="grid grid-cols-2 gap-6 text-right">
+                  <div>
+                    <Eyebrow>Leads</Eyebrow>
+                    <p className="mt-2 text-3xl font-semibold text-white">{Math.round(all.leads)}</p>
+                    <Delta value={pctChange(all.leads, allBefore.leads)} align="right" />
+                  </div>
+                  <div>
+                    <Eyebrow>Blended cost / lead</Eyebrow>
+                    <p className="mt-2 text-3xl font-semibold text-white">{cplText(all.cpl)}</p>
+                    <Delta value={pctChange(all.cpl, allBefore.cpl)} lowerIsBetter align="right" />
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-1.5">
-                {METRICS.map((m) => (
-                  <Button
-                    key={m.key}
-                    size="sm"
-                    variant={metricKey === m.key ? 'primary' : 'secondary'}
-                    onClick={() => setMetricKey(m.key)}
-                  >
-                    {m.label}
-                  </Button>
-                ))}
+              <div className="mt-6">
+                <Eyebrow className="mb-2">Spend by channel</Eyebrow>
+                <MixBar mix={spendMix} format={money} />
               </div>
-            </div>
-            <DailyChart series={daily} metric={metric} />
+            </Panel>
+
+            <Panel className="p-5">
+              <Eyebrow>Leads by channel</Eyebrow>
+              <div className="mt-3">
+                <MixBar mix={leadMix} format={(v) => String(Math.round(v))} />
+              </div>
+              <Eyebrow className="mb-2 mt-6">Cost per lead · lower is better</Eyebrow>
+              {cplBy.length === 0 ? (
+                <p className="text-sm text-slate-500">No leads in this range yet.</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {cplBy.map((c) => (
+                    <li key={c.key}>
+                      <div className="mb-1 flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1.5 text-slate-300"><ChannelDot channel={c.key} />{CHANNELS[c.key].long}</span>
+                        <span className="tabular-nums text-white">{cplText(c.cpl)}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-white/5">
+                        <span className="block h-full rounded-full" style={{ width: `${(c.cpl / cplMax) * 100}%`, background: CHANNELS[c.key].color }} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
           </div>
 
-          <h2 className="font-bold text-slate-900 mb-3">Client performance</h2>
-          {clientRows.length === 0 ? (
-            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
-              <p className="text-slate-500">
-                No KPI data logged yet. Log weekly KPIs on a client page to see reports here.
-              </p>
+          {/* ONE CARD PER CHANNEL, each in its own colour. */}
+          <div className="grid gap-4 md:grid-cols-3">
+            {channelCards.map((c) => {
+              const body = (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 text-sm font-semibold text-white">
+                      <ChannelDot channel={c.key} size="md" />
+                      {CHANNELS[c.key].long}
+                    </span>
+                    {c.cta && <span className="text-xs font-medium" style={{ color: CHANNELS[c.key].color }}>{c.cta}</span>}
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <Stat label="Spend" value={money(c.spend)} />
+                    <Stat label="Leads" value={Math.round(c.leads)} />
+                    <Stat label="Cost/lead" value={cplText(c.cpl)} />
+                  </div>
+                  <div className="mt-3">
+                    {c.spark ? <Sparkline values={c.spark} channel={c.key} height={40} /> : <div className="h-10" />}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500">{c.note}</span>
+                    <Delta value={c.delta} compact />
+                  </div>
+                </>
+              )
+              if (c.to?.startsWith('/')) {
+                return (
+                  <Link key={c.key} to={c.to} className="block rounded-2xl transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2" style={{ '--tw-ring-color': CHANNELS[c.key].color }} aria-label={`${CHANNELS[c.key].long}: open full report`}>
+                    <Panel channel={c.key} className="h-full p-5 transition hover:border-white/15">{body}</Panel>
+                  </Link>
+                )
+              }
+              if (c.to) {
+                return (
+                  <a key={c.key} href={c.to} className="block rounded-2xl transition hover:-translate-y-0.5">
+                    <Panel channel={c.key} className="h-full p-5 transition hover:border-white/15">{body}</Panel>
+                  </a>
+                )
+              }
+              return <Panel key={c.key} channel={c.key} className="p-5">{body}</Panel>
+            })}
+          </div>
+
+          {/* THE DAILY SPLIT. */}
+          <Panel className="p-5">
+            <SectionTitle
+              title={`${stackMetric.label} by day, by channel`}
+              sub="Meta and Google stacked · clients only · LSA is weekly, so it is on the cards above"
+              right={<Segmented size="sm" options={STACK_METRICS} value={stackKey} onChange={setStackKey} />}
+            />
+            <ChannelDailyChart series={stacked} format={stackMetric.format} axis={stackMetric.axis} />
+          </Panel>
+
+          {/* META'S OWN SECTION. */}
+          <section id="meta" className="scroll-mt-24">
+            <SectionTitle channel="meta" title="Meta" sub={`${scope === 'live' ? 'Live ads only' : 'All ads'} · clients only`} />
+            <div className="mb-4 grid gap-4 sm:grid-cols-3">
+              <KpiTile channel="meta" label="Ad spend" value={money(meta.spend)} delta={pctChange(meta.spend, metaBefore.spend)} spark={metaDaily.map((d) => d.spend)} />
+              <KpiTile channel="meta" label="Leads" value={meta.leads} delta={pctChange(meta.leads, metaBefore.leads)} spark={metaDaily.map((d) => d.leads)} />
+              <KpiTile channel="meta" label="Cost per lead" value={cplText(meta.cpl)} delta={pctChange(meta.cpl, metaBefore.cpl)} lowerIsBetter={LOWER_IS_BETTER.has('cpl')} spark={metaDaily.map((d) => d.cpl)} />
             </div>
-          ) : (
-            <PerformanceTable rows={clientRows} nameHeader="Client" onOpen={openAds} showLsa={scope === 'all'} />
-          )}
+            <Panel className="p-5">
+              <SectionTitle
+                title={`${metric.label} by day`}
+                sub="Daily columns with a 7-day average"
+                right={<Segmented size="sm" options={METRICS.map((m) => ({ value: m.key, label: m.label }))} value={metricKey} onChange={setMetricKey} />}
+              />
+              <DailyChart series={metaDaily} metric={metric} theme={chartTheme('meta')} />
+            </Panel>
+          </section>
+
+          {/* EVERY CLIENT, EVERY CHANNEL. */}
+          <section>
+            <SectionTitle title="Every client" sub="Spend split by channel · biggest first · click a client for their ads" />
+            {clientTable.length === 0 ? (
+              <Panel className="p-8 text-center text-sm text-slate-500">No spend or leads from any channel in this range.</Panel>
+            ) : (
+              <DTable>
+                <thead>
+                  <tr>
+                    <DTh>Client</DTh>
+                    <DTh className="w-[28%]">Channel split</DTh>
+                    <DTh numeric><span className="inline-flex items-center gap-1.5"><ChannelDot channel="meta" />Meta</span></DTh>
+                    <DTh numeric><span className="inline-flex items-center gap-1.5"><ChannelDot channel="google" />Google</span></DTh>
+                    <DTh numeric><span className="inline-flex items-center gap-1.5"><ChannelDot channel="lsa" />LSA</span></DTh>
+                    <DTh numeric>Total</DTh>
+                    <DTh numeric>Leads</DTh>
+                    <DTh numeric>Cost/lead</DTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientTable.map((r) => (
+                    <DTr key={r.id} className="cursor-pointer" onClick={(e) => { if (!e.target.closest('a')) navigate(`/client/${r.id}#ad-performance`) }}>
+                      <DTd className="whitespace-nowrap">
+                        <Link to={`/client/${r.id}#ad-performance`} className="font-medium text-white hover:text-sky-300">{r.name}</Link>
+                      </DTd>
+                      <DTd>
+                        {/* Bar length is the client's total against the
+                            biggest client; the segments are its channels. */}
+                        <div className="flex h-2 gap-[2px] overflow-hidden rounded-full bg-white/5" style={{ width: `${Math.max(6, (r.spend / topSpend) * 100)}%` }} title={`Meta ${money(r.meta)} · Google ${money(r.google)} · LSA ${money(r.lsa)}`}>
+                          {['meta', 'google', 'lsa'].map((k) => r[k] > 0 && (
+                            <span key={k} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${(r[k] / r.spend) * 100}%`, background: CHANNELS[k].color }} />
+                          ))}
+                        </div>
+                      </DTd>
+                      <DTd numeric muted={!r.meta}>{r.meta ? money(r.meta) : '—'}</DTd>
+                      <DTd numeric muted={!r.google}>{r.google ? money(r.google) : '—'}</DTd>
+                      <DTd numeric muted={!r.lsa}>{r.lsa ? money(r.lsa) : '—'}</DTd>
+                      <DTd numeric className="font-semibold text-white">{money(r.spend)}</DTd>
+                      <DTd numeric>{Math.round(r.leads * 10) / 10}</DTd>
+                      <DTd numeric>{cplText(r.cpl)}</DTd>
+                    </DTr>
+                  ))}
+                </tbody>
+              </DTable>
+            )}
+          </section>
 
           {internalRows.length > 0 && (
-            <>
-              <div className="flex items-baseline gap-2 mt-6 mb-3">
-                <h2 className="font-bold text-slate-900">My businesses</h2>
-                <span className="text-xs text-slate-500">
-                  Not clients — excluded from the totals and charts above
-                </span>
-              </div>
-              <PerformanceTable
-                rows={internalRows}
-                nameHeader="Business"
-                onOpen={openAds}
-                showLsa={scope === 'all'}
-              />
-            </>
+            <section>
+              <SectionTitle title="My businesses" sub="Not clients · Meta · left out of every total above" />
+              <DTable>
+                <thead>
+                  <tr>
+                    <DTh>Business</DTh>
+                    <DTh numeric>Meta spend</DTh>
+                    <DTh numeric>Leads</DTh>
+                    <DTh numeric>Cost/lead</DTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {internalRows.map((r) => (
+                    <DTr key={r.id}>
+                      <DTd className="whitespace-nowrap"><Link to={`/client/${r.id}#ad-performance`} className="font-medium text-white hover:text-sky-300">{r.name}</Link></DTd>
+                      <DTd numeric>{money(r.spend)}</DTd>
+                      <DTd numeric>{r.leads}</DTd>
+                      <DTd numeric>{cplText(r.cpl)}</DTd>
+                    </DTr>
+                  ))}
+                </tbody>
+              </DTable>
+            </section>
           )}
-        </>
+
+          {/* HOUSEKEEPING: things to act on, not numbers. */}
+          <section>
+            <SectionTitle title="Housekeeping" sub="Unclaimed ad accounts and the monthly client report log" />
+            <UnmappedAccountsPanel />
+            <MonthlyReportsPanel />
+          </section>
+        </div>
       )}
     </Layout>
+  )
+}
+
+function Stat({ label, value }) {
+  return (
+    <div>
+      <p className="text-lg font-semibold text-white">{value}</p>
+      <p className="text-[11px] text-slate-500">{label}</p>
+    </div>
+  )
+}
+
+/** A delta against the previous window, coloured by whether it is good. */
+function Delta({ value, lowerIsBetter = false, align = 'left', compact = false }) {
+  const has = value != null && Number.isFinite(value)
+  if (!has) return <p className={`mt-1 text-xs text-slate-500 ${align === 'right' ? 'text-right' : ''}`}>{compact ? '' : 'No earlier period'}</p>
+  const up = value > 0
+  const flat = Math.abs(value) < 0.5
+  const good = flat ? null : lowerIsBetter ? !up : up
+  const cls = good === null ? 'text-slate-400' : good ? 'text-emerald-300' : 'text-rose-300'
+  return (
+    <p className={`mt-1 text-xs tabular-nums ${cls} ${align === 'right' ? 'text-right' : ''}`}>
+      {flat ? '±' : up ? '▲' : '▼'} {Math.abs(value).toFixed(0)}%{compact ? '' : <span className="text-slate-500"> vs previous</span>}
+    </p>
   )
 }
