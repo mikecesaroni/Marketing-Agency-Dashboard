@@ -242,9 +242,9 @@ export default function ReportsPage() {
       cpl: meta.cpl,
       delta: pctChange(meta.spend, metaBefore.spend),
       spark: metaDaily.map((d) => d.spend),
-      to: '#meta',
-      cta: 'Meta detail ↓',
-      note: scope === 'live' ? 'Live ads only' : 'All ads',
+      to: '/reports/meta',
+      cta: 'Open full report →',
+      note: scope === 'live' ? 'Live ads only · every client, ad, placement' : 'All ads · every client, ad, placement',
     },
     {
       key: 'google',

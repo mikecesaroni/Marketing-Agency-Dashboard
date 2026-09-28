@@ -208,7 +208,7 @@ export const ROUTES = [
     contains: [
       'A dark analytics page, each channel in its own colour everywhere it appears: Meta blue, Google aqua, LSA orange.',
       'All channels first: blended spend, leads and cost per lead against the previous range, spend and leads split by channel, and cost per lead per channel.',
-      'One card per channel with spend, leads, cost per lead and a daily sparkline. The Google Search card opens its own full page (/reports/google-search); the Meta card jumps to the Meta section.',
+      'One card per channel with spend, leads, cost per lead and a daily sparkline. The Meta card opens its own full page (/reports/meta) and the Google Search card opens its own (/reports/google-search).',
       'Spend (or leads) by day with Meta and Google stacked, so each day shows which channel carried it. LSA is weekly, so it is on its card only.',
       'Ad spend, leads and cost per lead for the range, each against the previous equivalent range.',
       'A daily chart, switchable between ad spend, leads and cost per lead.',
@@ -219,6 +219,23 @@ export const ROUTES = [
     actions: [
       'In the page header: "Sync Meta" pulls fresh data from Meta on demand rather than waiting for the morning job. It can take a while and is safe to run.',
       'Scope: Live ads or All ads. Range: 14, 30 or 90 days.',
+    ],
+  },
+  {
+    path: '/reports/meta',
+    name: 'Meta report',
+    purpose: 'Meta Ads across every client on one page: every rate Meta reports, where the ads ran, and which ads to act on.',
+    contains: [
+      'Eight tiles for the range, each against the previous range, with a daily sparkline: spend, leads, cost per lead, click-through rate, clicks, cost per click, cost per 1,000 views (CPM) and hook rate (2-second video views over impressions, video ads only).',
+      'A daily chart switchable between spend, leads, clicks and cost per lead.',
+      '"Ads spending, no leads" in dollars, the number of winning ads, and where the ads ran (Facebook, Instagram, Audience Network...) with the share of spend and cost per lead on each. The placement split covers all ads.',
+      'Every client: status (Running, No spend, No ad account), spend, leads, cost per lead, impressions, CTR, CPC, CPM, hook rate, live/total ads. Name opens the client\'s ad performance.',
+      'Ads to act on across clients: no leads ($75+ spent, none back), too expensive (over twice the average cost per lead), winners (3+ leads at under three quarters of it), each saying why.',
+      'Every campaign across clients, then at the bottom how many clients have a Meta ad account on file and who does not.',
+    ],
+    actions: [
+      '"Sync Meta" pulls fresh data now. Scope: Live ads or All ads. Range: 14, 30 or 90 days.',
+      'Reach is left out on purpose: a day\'s reach cannot be added to the next day\'s.',
     ],
   },
   {

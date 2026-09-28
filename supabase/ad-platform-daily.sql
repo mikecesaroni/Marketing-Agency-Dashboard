@@ -36,3 +36,15 @@ create index if not exists ad_platform_daily_client_date_idx
   on public.ad_platform_daily (client_id, date desc);
 create index if not exists ad_platform_daily_ad_idx
   on public.ad_platform_daily (ad_id, date desc);
+
+-- ad_platform_client_daily
+--   The placement split rolled up to client × day × platform, for the Meta
+--   report (/reports/meta). ad_platform_daily is one row per ad per surface
+--   per position per day, about 14,000 rows in 60 days; this is a few
+--   thousand, which the page can read in a couple of requests.
+create or replace view ad_platform_client_daily as
+select client_id, date, platform,
+       sum(spend) as spend, sum(impressions) as impressions, sum(clicks) as clicks, sum(leads) as leads
+from ad_platform_daily
+group by client_id, date, platform;
+grant select on ad_platform_client_daily to anon, authenticated;
