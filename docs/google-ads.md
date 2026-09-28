@@ -202,11 +202,18 @@ POST /functions/v1/google-daily-sync
 ```
 
 It exchanges the refresh token, lists the Google Ads accounts that login can
-see, and lists the accounts linked under the manager. `token: ok` plus
+see (each with its name, so a bare id reads as whose account it is), and
+lists the accounts linked under the manager. `token: ok` plus
 `manager_visible: true` means steps 1 to 5 are right; an empty
 `linked_accounts` just means step 6 has not happened yet. A failure names the
 step: `refresh token` (step 5) or `list accessible customers` (step 4, the
 project is still on Test).
+
+First run against the live secrets, 2026-09-28: `token: ok`, `v22`, the
+manager visible, and nothing linked yet. It also caught a request-shape bug:
+the search request no longer accepts `pageSize` (removed in v17), and v22
+answers "Request contains an invalid argument". Removed; pages are a fixed
+10,000 rows now.
 
 Then, once a client has an ID, call the sync by hand rather than waiting for
 the cron:

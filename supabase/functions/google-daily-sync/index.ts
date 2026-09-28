@@ -143,16 +143,17 @@ async function accessToken(): Promise<string> {
  * response chunks that has to be assembled anyway, and paged search fails in
  * an obvious way rather than truncating quietly.
  */
-async function gaql(customerId: string, query: string, token: string): Promise<any[]> {
+async function gaql(customerId: string, query: string, token: string, loginAs?: string): Promise<any[]> {
   const version = Deno.env.get('GOOGLE_ADS_API_VERSION') || DEFAULT_API_VERSION
-  const loginCustomerId = bareId(Deno.env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID'))
+  // The manager account is how one credential reaches every client account.
+  // The check passes its own login for accounts the login holds directly.
+  const loginCustomerId = loginAs || bareId(Deno.env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID'))
   const devToken = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN')
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }
-  // The manager account is how one credential reaches every client account.
   if (loginCustomerId) headers['login-customer-id'] = loginCustomerId
   // Optional and ignored since the 2026-09-09 sunset; sent only if present so
   // an older project that still has one keeps working.
@@ -160,16 +161,19 @@ async function gaql(customerId: string, query: string, token: string): Promise<a
 
   const out: any[] = []
   let pageToken: string | undefined
-  // A guard, not a limit anyone should hit: 10k rows a page, so this is
-  // 500k rows for one client for one window. Reaching it means the query is
-  // wrong, and looping forever on a bad nextPageToken is worse than stopping.
+  // A guard, not a limit anyone should hit: pages are a fixed 10k rows, so
+  // this is 500k rows for one client for one window. Reaching it means the
+  // query is wrong, and looping forever on a bad nextPageToken is worse than
+  // stopping.
   for (let page = 0; page < 50; page++) {
+    // No pageSize: the field was removed from the search request in v17 and
+    // v22 rejects it with "Request contains an invalid argument".
     const res = await fetch(
       `https://googleads.googleapis.com/${version}/customers/${customerId}/googleAds:search`,
       {
         method: 'POST',
         headers,
-        body: JSON.stringify({ query, pageSize: 10000, ...(pageToken ? { pageToken } : {}) }),
+        body: JSON.stringify({ query, ...(pageToken ? { pageToken } : {}) }),
       }
     )
     const body = await res.json().catch(() => null)
@@ -270,6 +274,20 @@ Deno.serve(async (req) => {
         )
       }
       const accessible = (accBody?.resourceNames || []).map((r: string) => r.replace('customers/', ''))
+      // Name each account the login holds directly, so "1553921574" reads as
+      // whose account it is. Each is asked as itself; a failure is reported
+      // beside the id rather than failing the check.
+      const named = await Promise.all(
+        accessible.map(async (id: string) => {
+          try {
+            const rows = await gaql(id, 'SELECT customer.id, customer.descriptive_name, customer.manager, customer.currency_code FROM customer', token, id)
+            const c = rows[0]?.customer || {}
+            return { id, name: c.descriptiveName || '', manager: Boolean(c.manager), currency: c.currencyCode || '' }
+          } catch (err) {
+            return { id, error: String(err instanceof Error ? err.message : err) }
+          }
+        })
+      )
       let linked: { id: string; name: string; manager: boolean }[] = []
       let linkedError = ''
       if (manager) {
@@ -293,7 +311,7 @@ Deno.serve(async (req) => {
         api_version: version,
         manager: manager || null,
         manager_visible: manager ? accessible.includes(manager) : null,
-        accessible_customers: accessible,
+        accessible_customers: named,
         linked_accounts: linked,
         ...(linkedError ? { linked_error: linkedError } : {}),
         ...(!manager ? { note: 'GOOGLE_ADS_LOGIN_CUSTOMER_ID is not set; the sync needs it to reach client accounts through the manager.' } : {}),
