@@ -299,6 +299,10 @@ What you can do:
 WHERE TO FIND A PARTICULAR THING
 ================================
 
+Go back to the page I was just on
+  Go to: Top of any page, above its title
+  "← <page name>" appears once you have come from another page in this tab, named after that page ("← Google Search" on a client opened from the Google Search report). It is browser back underneath, so it returns to exactly where you were, filters and all, and pressing it again keeps stepping back. It survives a reload; the first page of a tab has none.
+
 How much a client pays, or whether they have paid
   Go to: Payments, or the "Payments & Billing" section on the client's own page
   The client page shows one client's setup fee, monthly payment and what is collected. /payments shows all of them at once and is the better place to compare.

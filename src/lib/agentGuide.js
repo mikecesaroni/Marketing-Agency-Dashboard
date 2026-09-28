@@ -345,6 +345,11 @@ export const ROUTES = [
 // the honest answer is often a page whose name does not contain the word.
 export const LOOKUPS = [
   {
+    need: 'Go back to the page I was just on',
+    where: 'Top of any page, above its title',
+    how: '"← <page name>" appears once you have come from another page in this tab, named after that page ("← Google Search" on a client opened from the Google Search report). It is browser back underneath, so it returns to exactly where you were, filters and all, and pressing it again keeps stepping back. It survives a reload; the first page of a tab has none.',
+  },
+  {
     need: 'How much a client pays, or whether they have paid',
     where: 'Payments, or the "Payments & Billing" section on the client\'s own page',
     how: 'The client page shows one client\'s setup fee, monthly payment and what is collected. /payments shows all of them at once and is the better place to compare.',

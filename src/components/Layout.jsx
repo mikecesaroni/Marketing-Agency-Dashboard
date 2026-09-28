@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
+import { cleanTitle, previousOf, readTrail, stepTrail, trailLabel, writeTrail } from '../lib/trail'
 import { useAuth } from '../context/AuthContext'
 import { LOGIN_REQUIRED, ROLE_LABELS, navWithoutLogin, visibleNav } from '../lib/access'
 import ChangePasswordModal from './ChangePasswordModal'
@@ -71,7 +72,83 @@ function UserMenu() {
   )
 }
 
+// Names for pages whose title is not a good button label.
+const PATH_NAMES = {
+  ...Object.fromEntries(NAV_GROUPS.flatMap((g) => g.items).map((i) => [i.to, i.label])),
+  '/dashboard': 'Dashboard',
+  '/reports': 'Reports',
+  '/reports/google-search': 'Google Search',
+  '/reports/meta': 'Meta Ads',
+}
+
+/**
+ * "← <the page you came from>", on every page.
+ *
+ * Browser back underneath, so it returns to the exact place, filters and
+ * all. It shows only when there is an earlier page in this tab, and is
+ * named after that page, so from a client opened off the Google Search
+ * report it reads "← Google Search".
+ */
+/**
+ * A key for this history entry that is unique and survives a reload.
+ *
+ * React Router gives every in-app navigation its own key, but every full
+ * page load (a pasted link, a link from an email, opening a bookmark) comes
+ * in as "default", so two different pages would share one. Those entries get
+ * an id of our own, stored on the history entry itself, where a reload finds
+ * it again.
+ */
+function entryKey(routerKey) {
+  if (routerKey && routerKey !== 'default') return routerKey
+  try {
+    const state = window.history.state || {}
+    if (state.crmKey) return state.crmKey
+    const crmKey = `load-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+    window.history.replaceState({ ...state, crmKey }, '')
+    return crmKey
+  } catch {
+    return 'default'
+  }
+}
+
+function useBackTo(title) {
+  const location = useLocation()
+  const navType = useNavigationType()
+  const [prev, setPrev] = useState(null)
+  const path = location.pathname + location.search
+  const clean = cleanTitle(title)
+  useEffect(() => {
+    const key = entryKey(location.key)
+    // A full load is always a step of its own, whatever React Router calls it.
+    const type = location.key === 'default' ? 'PUSH' : navType
+    const next = stepTrail(readTrail(), { key, path, title: clean }, type)
+    writeTrail(next)
+    setPrev(previousOf(next, key))
+  }, [location.key, path, clean, navType])
+  return prev
+}
+
+function BackButton({ entry, dark }) {
+  const navigate = useNavigate()
+  if (!entry) return null
+  const label = trailLabel(entry, PATH_NAMES)
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(-1)}
+      title={`Back to ${label}`}
+      className={`mb-1 inline-flex max-w-full items-center gap-1 truncate rounded-md text-xs font-medium transition ${
+        dark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
+      }`}
+    >
+      <span aria-hidden="true">←</span>
+      <span className="truncate">{label}</span>
+    </button>
+  )
+}
+
 export default function Layout({ title, subtitle, actions, children, tone = 'light' }) {
+  const backTo = useBackTo(typeof title === 'string' ? title : '')
   // The report pages run dark: the page, the sticky header and the title.
   // Everything else in the app keeps the light frame.
   const dark = tone === 'dark'
@@ -163,6 +240,7 @@ export default function Layout({ title, subtitle, actions, children, tone = 'lig
         <header className={`sticky top-0 z-30 border-b px-4 py-4 backdrop-blur md:px-8 md:py-5 ${dark ? 'border-white/[0.06] bg-[#070b14]/80' : 'border-slate-200 bg-slate-50/85'}`}>
           <div className="mx-auto flex max-w-7xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
+              <BackButton entry={backTo} dark={dark} />
               <h1 className={`truncate text-xl font-semibold tracking-tight md:text-2xl ${dark ? 'text-white' : 'text-slate-900'}`}>
                 {title}
               </h1>
