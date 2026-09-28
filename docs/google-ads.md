@@ -184,11 +184,30 @@ Two optional ones, neither needed today:
 
 ## 6. Per client: the customer ID
 
-On the client's page in the CRM, in the **Google Search** panel, paste their
-Google Ads customer ID. Dashes are fine — the field strips them, because Google
-shows the ID with dashes everywhere and the API refuses it that way.
+Nobody types it. Once a client's account is **linked under the manager**
+(section 1), the nightly run asks the manager what is linked, matches each
+account to a client by name, and saves the id on the client row. The
+client's page then shows Google Search data the next morning.
 
-That is the whole per-client step. The next nightly run picks them up.
+What gets saved on its own: an account whose name equals the client's name
+(punctuation and Inc/LLC aside), or contains it, and only when that pairing
+is unique both ways. Anything less sure is never saved, because a wrong id
+syncs one client's spend onto another's report.
+
+For the rest, and for anyone who does not want to wait for the night: on the
+client's page, **Google Search → Find their account** lists every linked
+account not yet on a client, closest name first, with a **Use this** button.
+The old text box is still there under "Or type the customer ID by hand".
+
+Asking the client for the link: the **Google Ads access request** message
+(Quick copy on the dashboard, or the button on the Google Search panel). It
+gives them two ways: send us their customer id so we send the link request,
+or add manager `270-103-8317` themselves under Admin → Access and security →
+Managers. Either way, once the link is active the id is found by itself.
+
+The manager id in that message is a constant in
+`src/lib/googleAdsAccessMessage.js`. It has to be the same account as the
+`GOOGLE_ADS_LOGIN_CUSTOMER_ID` secret.
 
 ---
 
@@ -215,6 +234,20 @@ the search request no longer accepts `pageSize` (removed in v17), and v22
 answers "Request contains an invalid argument". Removed; pages are a fixed
 10,000 rows now.
 
+Then, to see what is linked and how it pairs with clients, without saving:
+
+```
+POST /functions/v1/google-daily-sync
+{ "discover": true, "dry_run": true }
+```
+
+It answers with `linked` (every account under the manager, with name and
+status), `pending` (link requests the client has not accepted), `matches`
+(what a real run would save), `candidates` per client (closest names,
+scored), `unclaimed` (linked accounts on no client) and `without_id` (clients
+still not connected). Without `dry_run` it saves the matches; the nightly run
+does exactly that first, and reports it under `discovered`.
+
 Then, once a client has an ID, call the sync by hand rather than waiting for
 the cron:
 
@@ -230,7 +263,9 @@ one broken link never stops the run.
 
 The errors are written to be actionable:
 
-- **"No client has google_ads_customer_id set"** — step 6 has not been done.
+- **"No client has google_ads_customer_id set"** — no client account is linked
+  under the manager yet (step 6), or the linked names were not close enough
+  to save: open the client's page and pick from Find their account.
 - **"Google refused the refresh token"** — step 5. Usually the consent screen
   is still in Testing (see the warning above), or the secret was truncated
   when pasted.

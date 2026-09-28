@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { fetchAllRows } from '../lib/pagedQuery'
 import { diagnoseKeywords, negativeCandidates, wasteSummary } from '../lib/googleSearchRules'
+import { discoverGoogleAdsAccounts } from '../lib/googleAdsDiscover'
+import { buildGoogleAdsAccessMessage, GOOGLE_ADS_MANAGER_ID_DISPLAY } from '../lib/googleAdsAccessMessage'
+import CopySetupMessageButton from './CopySetupMessageButton'
 
 /**
  * Google Search, for one client: where the money went and what to switch off.
@@ -81,6 +84,137 @@ function CustomerIdRow({ client, onUpdate }) {
   )
 }
 
+const dashed = (id) => String(id || '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3')
+
+/**
+ * Find the client's account among what is linked under the manager, so the
+ * id is picked from a list rather than typed. The nightly run saves the sure
+ * matches on its own; this is for the day someone does not want to wait, and
+ * for a name that was not close enough to be sure.
+ */
+function FindAccount({ client, onUpdate }) {
+  const [state, setState] = useState('idle') // idle | looking | shown | saving
+  const [found, setFound] = useState(null)
+  const [error, setError] = useState('')
+
+  const look = async () => {
+    setState('looking')
+    setError('')
+    try {
+      const res = await discoverGoogleAdsAccounts({ dryRun: true })
+      setFound(res)
+      setState('shown')
+    } catch (err) {
+      setError(err.message)
+      setState('idle')
+    }
+  }
+
+  const use = async (customerId) => {
+    setState('saving')
+    const { error: err } = await supabase
+      .from('clients')
+      .update({ google_ads_customer_id: customerId })
+      .eq('id', client.id)
+    if (err) {
+      setError(err.message)
+      setState('shown')
+    } else onUpdate?.()
+  }
+
+  const mine = found?.candidates?.[client.id] || []
+  const sure = found?.matches?.find((m) => m.client_id === client.id) || null
+  const ranked = [
+    ...(sure ? [{ customer_id: sure.customer_id, account: sure.account, score: 1 }] : []),
+    ...mine.filter((c) => c.customer_id !== sure?.customer_id),
+  ]
+  const others = (found?.unclaimed || []).filter((a) => !ranked.some((c) => c.customer_id === a.id))
+  const pending = found?.pending || []
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={look}
+          disabled={state === 'looking' || state === 'saving'}
+          className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+        >
+          {state === 'looking' ? 'Looking…' : '🔎 Find their account'}
+        </button>
+        <span className="text-xs text-slate-500">
+          Lists what is linked under our manager account ({GOOGLE_ADS_MANAGER_ID_DISPLAY}) and picks
+          the one that matches this client.
+        </span>
+      </div>
+      {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+
+      {state !== 'idle' && state !== 'looking' && found && (
+        <div className="mt-3 space-y-2">
+          {found.linked.length === 0 ? (
+            <p className="text-xs text-slate-700">
+              Nothing is linked under the manager account yet. Send the access message below; once
+              the client accepts the link, this fills in by itself on the next nightly run.
+            </p>
+          ) : ranked.length === 0 && others.length === 0 ? (
+            <p className="text-xs text-slate-700">
+              Every linked account is already on a client. If this client&apos;s account is linked, it
+              is saved on the wrong client, or under a name the CRM does not have.
+            </p>
+          ) : (
+            <>
+              {ranked.length > 0 && (
+                <ul className="space-y-1">
+                  {ranked.map((c, i) => (
+                    <li key={c.customer_id} className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-xs">
+                      <span className="font-medium text-slate-900">{c.account || '(no name)'}</span>
+                      <span className="text-slate-500">{dashed(c.customer_id)}</span>
+                      {i === 0 && (
+                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">
+                          {c.score >= 1 ? 'match' : 'closest'}
+                        </span>
+                      )}
+                      <button type="button" onClick={() => use(c.customer_id)} disabled={state === 'saving'} className="ml-auto rounded-lg bg-emerald-600 px-2.5 py-1 font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                        Use this
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {others.length > 0 && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-slate-600">
+                    {ranked.length ? `${others.length} other linked ${others.length === 1 ? 'account' : 'accounts'} not on any client` : `${others.length} linked ${others.length === 1 ? 'account' : 'accounts'}, none named like this client`}
+                  </summary>
+                  <ul className="mt-1 space-y-1">
+                    {others.map((a) => (
+                      <li key={a.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+                        <span className="font-medium text-slate-900">{a.name || '(no name)'}</span>
+                        <span className="text-slate-500">{dashed(a.id)}</span>
+                        {a.status && a.status !== 'ENABLED' && <span className="text-slate-400">{a.status.toLowerCase()}</span>}
+                        <button type="button" onClick={() => use(a.id)} disabled={state === 'saving'} className="ml-auto rounded-lg border border-slate-300 px-2.5 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                          Use this
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </>
+          )}
+          {pending.length > 0 && (
+            <p className="text-xs text-slate-600">
+              Link {pending.length === 1 ? 'request' : 'requests'} sent and waiting on the client:{' '}
+              {pending.map(dashed).join(', ')}. They accept it in Google Ads under Admin → Access and
+              security → Managers.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function GoogleSearchPanel({ client, onUpdate }) {
   const [days, setDays] = useState(30)
   const [keywordRows, setKeywordRows] = useState([])
@@ -137,12 +271,24 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
   if (!client?.google_ads_customer_id) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h3 className="mb-1 font-semibold text-slate-900">Google Search</h3>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold text-slate-900">Google Search</h3>
+          <CopySetupMessageButton message={buildGoogleAdsAccessMessage()} />
+        </div>
         <p className="mb-3 text-sm text-slate-600">
-          Not connected. Put this client&apos;s Google Ads customer ID in and the nightly sync picks
-          them up — keywords, search terms and spend.
+          Not connected. Once this client&apos;s Google Ads account is linked under our manager
+          account, the nightly sync finds it by name and saves the ID here itself. The button
+          above copies the message that asks them for the link.
         </p>
-        <CustomerIdRow client={client} onUpdate={onUpdate} />
+        <div className="space-y-3">
+          <FindAccount client={client} onUpdate={onUpdate} />
+          <details className="text-xs text-slate-500">
+            <summary className="cursor-pointer">Or type the customer ID by hand</summary>
+            <div className="mt-2">
+              <CustomerIdRow client={client} onUpdate={onUpdate} />
+            </div>
+          </details>
+        </div>
       </div>
     )
   }

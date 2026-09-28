@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { buildMetaSetupMessage, META_ACCESS_WATCHOUTS } from '../lib/metaSetupMessage'
 import { buildLsaSetupMessage } from '../lib/lsaSetupMessage'
 import { buildGbpSetupMessage } from '../lib/gbpSetupMessage'
+import { buildGoogleAdsAccessMessage } from '../lib/googleAdsAccessMessage'
 import CopySetupMessageButton from './CopySetupMessageButton'
 import GbpAgentPromptButton from './GbpAgentPromptButton'
 import Modal from './Modal'
@@ -39,6 +40,12 @@ const CHANNELS = {
     title: 'Google Business Profile access request',
     build: () => buildGbpSetupMessage(),
     blurb: 'Send this to the owner. Once we are a manager on the profile, the agent brief below does the optimisation.',
+  },
+  // No key: the manager id is a constant in the code, next to the message.
+  googleads: {
+    title: 'Google Ads access request',
+    build: () => buildGoogleAdsAccessMessage(),
+    blurb: 'Send this to the owner. Once their account is linked under our manager account, the nightly sync finds it and saves the id itself.',
   },
 }
 

@@ -201,6 +201,190 @@ async function gaql(customerId: string, query: string, token: string, loginAs?: 
   return out
 }
 
+// ---------------------------------------------------------------------------
+// FINDING EACH CLIENT'S ACCOUNT, so nobody types a customer id by hand.
+//
+// Once a client's account is linked under the manager, the manager can list
+// it with its name. So the nightly run asks the manager what is linked,
+// matches each account to a CRM client by name, and saves the id on the
+// client row. The client page offers the same list to pick from when a name
+// is not close enough to be sure.
+// ---------------------------------------------------------------------------
+
+export type LinkedAccount = { id: string; name: string; manager: boolean; status: string; currency: string }
+
+/** Every account linked under the manager, itself excluded. */
+async function linkedAccounts(token: string, manager: string): Promise<LinkedAccount[]> {
+  const rows = await gaql(
+    manager,
+    'SELECT customer_client.id, customer_client.descriptive_name, customer_client.manager, customer_client.status, customer_client.currency_code, customer_client.level FROM customer_client WHERE customer_client.level <= 1',
+    token
+  )
+  return rows
+    .map((r: any) => r.customerClient)
+    .filter((c: any) => c && String(c.id) !== manager)
+    .map((c: any) => ({
+      id: String(c.id),
+      name: c.descriptiveName || '',
+      manager: Boolean(c.manager),
+      status: String(c.status || ''),
+      currency: c.currencyCode || '',
+    }))
+}
+
+/**
+ * Link requests the manager has sent that the client has not accepted yet,
+ * so the client page can say "asked, waiting on them" rather than nothing.
+ */
+async function pendingLinks(token: string, manager: string): Promise<string[]> {
+  const rows = await gaql(
+    manager,
+    "SELECT customer_client_link.client_customer, customer_client_link.status FROM customer_client_link WHERE customer_client_link.status = 'PENDING'",
+    token
+  )
+  return rows
+    .map((r: any) => bareId(String(r.customerClientLink?.clientCustomer || '').split('/').pop()))
+    .filter(Boolean)
+}
+
+// Words that say nothing about WHICH business it is. "Belk Heating and
+// Cooling" and "Belk Heating & Air" are the same client; the word that
+// decides it is Belk.
+const FILLER = new Set([
+  'the', 'and', 'of', 'inc', 'llc', 'co', 'corp', 'ltd', 'company', 'services', 'service',
+  'heating', 'cooling', 'air', 'hvac', 'plumbing', 'electric', 'electrical', 'construction',
+  'pressure', 'washing', 'appliances', 'appliance', 'mechanical', 'home', 'group',
+])
+
+/** Lowercase, punctuation gone, legal suffixes gone. "Dynamic Flow, Inc." is "dynamic flow". */
+export function normalizeName(s: unknown): string {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[’'`]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(inc|llc|co|corp|ltd|corporation|incorporated)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function meaningful(s: string): string[] {
+  return normalizeName(s).split(' ').filter((w) => w && !FILLER.has(w))
+}
+
+export type Match = { client_id: string; client: string; customer_id: string; account: string; how: 'exact' | 'contains' }
+export type Candidate = { customer_id: string; account: string; score: number }
+
+/**
+ * Pair linked accounts with CRM clients by name.
+ *
+ * Saved on its own only when it is sure: the normalized names are equal, or
+ * one contains the other, AND the pairing is unique both ways. Everything
+ * else comes back as ranked candidates for a person to pick from; a wrong
+ * customer id would sync one client's spend onto another's report, which is
+ * worse than an empty panel.
+ */
+export function matchAccounts(
+  clients: { id: string; name: string; google_ads_customer_id?: string | null }[],
+  accounts: LinkedAccount[]
+): { matches: Match[]; candidates: Record<string, Candidate[]>; unclaimed: LinkedAccount[] } {
+  const claimed = new Set(clients.map((c) => bareId(c.google_ads_customer_id)).filter(Boolean))
+  const open = accounts.filter((a) => !a.manager && !claimed.has(a.id))
+  const need = clients.filter((c) => !bareId(c.google_ads_customer_id))
+
+  const sure = new Map<string, { account: LinkedAccount; how: Match['how'] }[]>()
+  const candidates: Record<string, Candidate[]> = {}
+  for (const c of need) {
+    const cn = normalizeName(c.name)
+    const cw = meaningful(c.name)
+    const ranked: Candidate[] = []
+    for (const a of open) {
+      const an = normalizeName(a.name)
+      if (!cn || !an) continue
+      let how: Match['how'] | null = null
+      if (cn === an) how = 'exact'
+      else if (Math.min(cn.length, an.length) >= 8 && (cn.includes(an) || an.includes(cn))) how = 'contains'
+      if (how) (sure.get(c.id) || sure.set(c.id, []).get(c.id)!).push({ account: a, how })
+      const aw = new Set(meaningful(a.name))
+      const score = cw.length ? cw.filter((w) => aw.has(w)).length / cw.length : 0
+      if (how || score > 0) ranked.push({ customer_id: a.id, account: a.name, score: how ? 1 : Number(score.toFixed(2)) })
+    }
+    ranked.sort((x, y) => y.score - x.score || x.account.localeCompare(y.account))
+    if (ranked.length) candidates[c.id] = ranked
+  }
+
+  // Unique both ways: one account per client, and no other client sure of it.
+  const takers = new Map<string, number>()
+  for (const list of sure.values()) for (const s of list) takers.set(s.account.id, (takers.get(s.account.id) || 0) + 1)
+  const matches: Match[] = []
+  const taken = new Set<string>()
+  for (const c of need) {
+    const list = sure.get(c.id) || []
+    if (list.length !== 1 || takers.get(list[0].account.id) !== 1) continue
+    matches.push({ client_id: c.id, client: c.name, customer_id: list[0].account.id, account: list[0].account.name, how: list[0].how })
+    taken.add(list[0].account.id)
+  }
+  return { matches, candidates, unclaimed: open.filter((a) => !taken.has(a.id)) }
+}
+
+/**
+ * Ask the manager what is linked, match, and (unless dry) save the sure
+ * matches on the client rows. Returns everything the client page shows.
+ */
+async function discover(
+  supabaseUrl: string,
+  db: Record<string, string>,
+  token: string,
+  manager: string,
+  opts: { dryRun?: boolean } = {}
+) {
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id&archived=eq.false&order=name`,
+    { headers: db }
+  )
+  const clients = await res.json()
+  if (!res.ok) throw new Error(`Could not read clients: ${JSON.stringify(clients)}`)
+
+  const linked = await linkedAccounts(token, manager)
+  let pending: string[] = []
+  let pendingError = ''
+  try {
+    pending = await pendingLinks(token, manager)
+  } catch (err) {
+    pendingError = String(err instanceof Error ? err.message : err)
+  }
+
+  const { matches, candidates, unclaimed } = matchAccounts(clients, linked)
+  const saved: Match[] = []
+  const failed: { client: string; error: string }[] = []
+  if (!opts.dryRun) {
+    for (const m of matches) {
+      const up = await fetch(`${supabaseUrl}/rest/v1/clients?id=eq.${encodeURIComponent(m.client_id)}`, {
+        method: 'PATCH',
+        headers: { ...db, Prefer: 'return=minimal' },
+        body: JSON.stringify({ google_ads_customer_id: m.customer_id }),
+      })
+      if (up.ok) saved.push(m)
+      else failed.push({ client: m.client, error: await up.text() })
+    }
+  }
+  return {
+    linked,
+    pending,
+    ...(pendingError ? { pending_error: pendingError } : {}),
+    matches,
+    saved,
+    ...(failed.length ? { failed } : {}),
+    candidates,
+    unclaimed,
+    // Who still has no id after this pass, so the answer to "why is X not
+    // syncing" is in the same response.
+    without_id: clients
+      .filter((c: any) => !bareId(c.google_ads_customer_id) && !saved.some((s) => s.client_id === c.id))
+      .map((c: any) => ({ client_id: c.id, client: c.name })),
+  }
+}
+
 const KEYWORD_QUERY = (since: string, until: string) => `
   SELECT segments.date, campaign.id, campaign.name, ad_group.id, ad_group.name,
          ad_group_criterion.criterion_id, ad_group_criterion.keyword.text,
@@ -230,7 +414,7 @@ const CAMPAIGN_QUERY = (since: string, until: string) => `
   WHERE segments.date BETWEEN '${since}' AND '${until}'
 `
 
-Deno.serve(async (req) => {
+async function serve(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return json({}, 200)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -288,19 +472,11 @@ Deno.serve(async (req) => {
           }
         })
       )
-      let linked: { id: string; name: string; manager: boolean }[] = []
+      let linked: LinkedAccount[] = []
       let linkedError = ''
       if (manager) {
         try {
-          const rows = await gaql(
-            manager,
-            'SELECT customer_client.id, customer_client.descriptive_name, customer_client.manager, customer_client.level FROM customer_client WHERE customer_client.level <= 1',
-            token
-          )
-          linked = rows
-            .map((r: any) => r.customerClient)
-            .filter((c: any) => c && String(c.id) !== manager)
-            .map((c: any) => ({ id: String(c.id), name: c.descriptiveName || '', manager: Boolean(c.manager) }))
+          linked = await linkedAccounts(token, manager)
         } catch (err) {
           linkedError = String(err instanceof Error ? err.message : err)
         }
@@ -321,6 +497,22 @@ Deno.serve(async (req) => {
     }
   }
 
+  // DISCOVER: {discover: true, dry_run?: true}. What is linked under the
+  // manager, matched to clients by name; saves the sure matches unless dry.
+  // The client page's "Find their account" button calls this dry and offers
+  // the list; the nightly run calls it for real before syncing.
+  if (body.discover) {
+    try {
+      const manager = bareId(Deno.env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID'))
+      if (!manager) return json({ ok: false, error: 'GOOGLE_ADS_LOGIN_CUSTOMER_ID is not set; discovery reads the accounts linked under the manager.' }, 500)
+      const token = await accessToken()
+      const found = await discover(supabaseUrl, db, token, manager, { dryRun: Boolean(body.dry_run) })
+      return json({ ok: true, manager, ...found })
+    } catch (err) {
+      return json({ ok: false, error: String(err instanceof Error ? err.message : err) }, 502)
+    }
+  }
+
   const days = Math.max(1, Math.min(90, num(body.days) || LOOKBACK_DAYS))
   const until = new Date()
   const since = new Date()
@@ -329,6 +521,29 @@ Deno.serve(async (req) => {
   const untilStr = toDateString(until)
 
   try {
+    // A full run first fills in any client whose account has been linked
+    // since last time, so a client accepted yesterday syncs today with
+    // nobody typing anything. Never allowed to stop the sync itself.
+    let discovered: Record<string, unknown> | null = null
+    if (!body.client_id) {
+      const manager = bareId(Deno.env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID'))
+      if (manager) {
+        try {
+          const token = await accessToken()
+          const found = await discover(supabaseUrl, db, token, manager)
+          discovered = {
+            linked: found.linked.length,
+            saved: found.saved,
+            pending: found.pending,
+            without_id: found.without_id.map((c) => c.client),
+            ...(found.failed ? { failed: found.failed } : {}),
+          }
+        } catch (err) {
+          discovered = { error: String(err instanceof Error ? err.message : err) }
+        }
+      }
+    }
+
     const filter = body.client_id ? `&id=eq.${encodeURIComponent(String(body.client_id))}` : ''
     const clientsRes = await fetch(
       `${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id` +
@@ -341,8 +556,9 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         note:
-          'No client has google_ads_customer_id set, so there was nothing to sync. Put the 10-digit customer id on the client and it will be picked up on the next run.',
+          'No client has google_ads_customer_id set, so there was nothing to sync. Once a client account is linked under the manager the id is found and saved here by itself; or put the 10-digit customer id on the client.',
         window: { since: sinceStr, until: untilStr },
+        ...(discovered ? { discovered } : {}),
         results: [],
       })
     }
@@ -504,8 +720,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ ok: true, window: { since: sinceStr, until: untilStr }, results })
+    return json({ ok: true, window: { since: sinceStr, until: untilStr }, ...(discovered ? { discovered } : {}), results })
   } catch (err) {
     return json({ error: String(err instanceof Error ? err.message : err) }, 500)
   }
-})
+}
+
+// Registered only under Deno, so scripts/check-google-ads-match.mjs can
+// import matchAccounts above and run it without a Deno runtime.
+// deno-lint-ignore no-explicit-any
+if (typeof (globalThis as any).Deno?.serve === 'function') {
+  Deno.serve(serve)
+}

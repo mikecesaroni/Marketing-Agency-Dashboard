@@ -6,6 +6,7 @@ import { AGENCY_EMAIL } from '../lib/agencyEmail'
 import { ACCESS_EMAIL, buildMetaSetupMessage } from '../lib/metaSetupMessage'
 import { buildLsaSetupMessage } from '../lib/lsaSetupMessage'
 import { buildGbpSetupMessage } from '../lib/gbpSetupMessage'
+import { buildGoogleAdsAccessMessage, GOOGLE_ADS_MANAGER_ID_DISPLAY } from '../lib/googleAdsAccessMessage'
 import { Card } from './ui'
 
 /**
@@ -114,6 +115,7 @@ export default function QuickCopyPanel() {
           <ValueRow label="CRM Google Drive email (share folders with this)" value={driveEmail} loading={driveEmail === null} hint="Drive function did not answer" />
           <ValueRow label="Our email (LSA and GBP access)" value={AGENCY_EMAIL} />
           <ValueRow label="Meta login the client adds" value={ACCESS_EMAIL} />
+          <ValueRow label="Google Ads manager account (clients link to this)" value={GOOGLE_ADS_MANAGER_ID_DISPLAY} />
         </div>
         <div className="divide-y divide-slate-100">
           <MessageRow
@@ -124,6 +126,7 @@ export default function QuickCopyPanel() {
           />
           <MessageRow label="Google LSA access request" blurb="They verify Local Services and add us as an Admin." text={buildLsaSetupMessage()} />
           <MessageRow label="Google Business Profile access request" blurb="They add us as a manager on the profile." text={buildGbpSetupMessage()} />
+          <MessageRow label="Google Ads access request" blurb="They link their Google Ads account under our manager account; the CRM finds the id itself." text={buildGoogleAdsAccessMessage()} />
         </div>
       </div>
     </Card>
