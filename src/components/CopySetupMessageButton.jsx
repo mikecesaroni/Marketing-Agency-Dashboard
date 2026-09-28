@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { copyText } from '../lib/intakeSummary'
 
 // The copy-to-clipboard button on a channel setup panel. Shared by Meta and
-// LSA so the two behave identically rather than drifting apart.
-export default function CopySetupMessageButton({ message }) {
+// LSA so the two behave identically rather than drifting apart. `label` for
+// a panel that offers two messages side by side.
+export default function CopySetupMessageButton({ message, label = 'Copy setup message' }) {
   const [copied, setCopied] = useState(null)
 
   const handleCopy = async () => {
@@ -23,7 +24,7 @@ export default function CopySetupMessageButton({ message }) {
             : 'bg-slate-900 text-white hover:bg-slate-800'
       }`}
     >
-      {copied === 'ok' ? '✓ Copied' : copied === 'fail' ? 'Copy failed' : 'Copy setup message'}
+      {copied === 'ok' ? '✓ Copied' : copied === 'fail' ? 'Copy failed' : label}
     </button>
   )
 }

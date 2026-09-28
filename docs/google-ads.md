@@ -199,8 +199,14 @@ client's page, **Google Search → Find their account** lists every linked
 account not yet on a client, closest name first, with a **Use this** button.
 The old text box is still there under "Or type the customer ID by hand".
 
-Asking the client for the link: the **Google Ads access request** message
-(Quick copy on the dashboard, or the button on the Google Search panel). It
+Asking the client for the link: two copy buttons, in Quick copy on the
+dashboard, on the Google Search panel of the client page, and in the
+client's setup messages. **Google Ads access request** is the short ask,
+with both routes. **Google Ads link, step by step** is the long version for
+a client doing it themselves: every click, the direct link to the Managers
+page (`https://ads.google.com/aw/accountaccess/managers`), what they will
+see, and what to do when it looks different (not an admin, already has a
+manager, cannot find it). The short ask
 gives them two ways: send us their customer id so we send the link request,
 or add manager `270-103-8317` themselves under Admin → Access and security →
 Managers. Either way, once the link is active the id is found by itself.

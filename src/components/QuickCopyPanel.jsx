@@ -6,7 +6,7 @@ import { AGENCY_EMAIL } from '../lib/agencyEmail'
 import { ACCESS_EMAIL, buildMetaSetupMessage } from '../lib/metaSetupMessage'
 import { buildLsaSetupMessage } from '../lib/lsaSetupMessage'
 import { buildGbpSetupMessage } from '../lib/gbpSetupMessage'
-import { buildGoogleAdsAccessMessage, GOOGLE_ADS_MANAGER_ID_DISPLAY } from '../lib/googleAdsAccessMessage'
+import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough, GOOGLE_ADS_MANAGER_ID_DISPLAY } from '../lib/googleAdsAccessMessage'
 import { Card } from './ui'
 
 /**
@@ -127,6 +127,7 @@ export default function QuickCopyPanel() {
           <MessageRow label="Google LSA access request" blurb="They verify Local Services and add us as an Admin." text={buildLsaSetupMessage()} />
           <MessageRow label="Google Business Profile access request" blurb="They add us as a manager on the profile." text={buildGbpSetupMessage()} />
           <MessageRow label="Google Ads access request" blurb="They link their Google Ads account under our manager account; the CRM finds the id itself." text={buildGoogleAdsAccessMessage()} />
+          <MessageRow label="Google Ads link, step by step" blurb="The long version for a client doing it themselves: every click, the direct links, and what to do if it looks different." text={buildGoogleAdsLinkWalkthrough()} />
         </div>
       </div>
     </Card>

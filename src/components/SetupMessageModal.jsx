@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { buildMetaSetupMessage, META_ACCESS_WATCHOUTS } from '../lib/metaSetupMessage'
 import { buildLsaSetupMessage } from '../lib/lsaSetupMessage'
 import { buildGbpSetupMessage } from '../lib/gbpSetupMessage'
-import { buildGoogleAdsAccessMessage } from '../lib/googleAdsAccessMessage'
+import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough } from '../lib/googleAdsAccessMessage'
 import CopySetupMessageButton from './CopySetupMessageButton'
 import GbpAgentPromptButton from './GbpAgentPromptButton'
 import Modal from './Modal'
@@ -46,6 +46,11 @@ const CHANNELS = {
     title: 'Google Ads access request',
     build: () => buildGoogleAdsAccessMessage(),
     blurb: 'Send this to the owner. Once their account is linked under our manager account, the nightly sync finds it and saves the id itself.',
+  },
+  'googleads-steps': {
+    title: 'Google Ads link, step by step',
+    build: () => buildGoogleAdsLinkWalkthrough(),
+    blurb: 'The long version for a client doing it themselves: every click, the direct links, and what to do if it looks different.',
   },
 }
 

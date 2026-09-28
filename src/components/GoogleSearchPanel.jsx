@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { fetchAllRows } from '../lib/pagedQuery'
 import { diagnoseKeywords, negativeCandidates, wasteSummary } from '../lib/googleSearchRules'
 import { discoverGoogleAdsAccounts } from '../lib/googleAdsDiscover'
-import { buildGoogleAdsAccessMessage, GOOGLE_ADS_MANAGER_ID_DISPLAY } from '../lib/googleAdsAccessMessage'
+import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough, GOOGLE_ADS_MANAGER_ID_DISPLAY } from '../lib/googleAdsAccessMessage'
 import CopySetupMessageButton from './CopySetupMessageButton'
 
 /**
@@ -273,12 +273,16 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-semibold text-slate-900">Google Search</h3>
-          <CopySetupMessageButton message={buildGoogleAdsAccessMessage()} />
+          <div className="flex flex-wrap gap-1.5">
+            <CopySetupMessageButton message={buildGoogleAdsAccessMessage()} label="Copy access request" />
+            <CopySetupMessageButton message={buildGoogleAdsLinkWalkthrough()} label="Copy step-by-step" />
+          </div>
         </div>
         <p className="mb-3 text-sm text-slate-600">
           Not connected. Once this client&apos;s Google Ads account is linked under our manager
-          account, the nightly sync finds it by name and saves the ID here itself. The button
-          above copies the message that asks them for the link.
+          account, the nightly sync finds it by name and saves the ID here itself. The buttons
+          copy the message that asks them for the link: the short ask, or the full walkthrough
+          for a client doing it themselves.
         </p>
         <div className="space-y-3">
           <FindAccount client={client} onUpdate={onUpdate} />
