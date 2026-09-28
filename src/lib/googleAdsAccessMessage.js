@@ -31,6 +31,8 @@ Option B: link it yourself
 3. Click the + button and enter our manager ID: ${GOOGLE_ADS_MANAGER_ID_DISPLAY}
 4. Send the request. We accept it on our side and you are done.
 
+No Google Ads account yet? Do not create one, Google will push you into building a campaign and adding a card. Just reply with the Google email you want it under and your business name as you want it shown. We set the account up inside our manager account, linked from day one, and make that email the owner.
+
 Either way, once the link is in place everything else happens automatically on our end. Reply here or text me if Google gives you any trouble.`
 }
 
@@ -48,6 +50,14 @@ What this is: you are giving our agency manager account permission to see your G
 Our manager account: Working Class Marketing
 Our manager ID: ${GOOGLE_ADS_MANAGER_ID_DISPLAY}
 (You will need that number in step 4. Copy it now.)
+
+NO GOOGLE ADS ACCOUNT YET?
+Skip everything below. Do not create one yourself: Google walks new accounts straight into building a campaign and adding a card, and it is easy to end up with something spending money before anyone meant it to. Instead, reply here with:
+1. The Google email you want the account under (a Gmail, or your business email if it is on Google Workspace)
+2. Your business name exactly as you want it to show
+We create the account for you inside our manager account, so it is linked from day one, and we invite that email as the owner, so it is yours and stays yours. The only thing you will ever do in it is add a card for the ad spend, and we will tell you when it is time for that.
+
+If you do have an account, carry on:
 
 Best done on a computer. It works on a phone in a browser too, but the menus are easier to find on a bigger screen.
 
@@ -82,6 +92,7 @@ IF SOMETHING LOOKS DIFFERENT
 - It asks for a number in the format 123-456-7890 and says the ID is not valid: check the dashes and digits, it is ${GOOGLE_ADS_MANAGER_ID_DISPLAY}.
 - It says you already have a manager: that is fine, an account can have more than one. Add us anyway.
 - You cannot find your way in at all: send us a screenshot of what you see, or just send us your customer ID (top right of Google Ads, ten digits) and we will send the request from our side instead. You then only have to click Accept in the email Google sends you.
+- Not sure whether you even have an account: go to https://ads.google.com and sign in. If it offers to create a new account or start a campaign, you do not have one. Stop there and reply with the two things under "No Google Ads account yet" above.
 
 Reply here or text me if you get stuck anywhere. Happy to jump on a quick call and do it together.`
 }

@@ -206,7 +206,11 @@ with both routes. **Google Ads link, step by step** is the long version for
 a client doing it themselves: every click, the direct link to the Managers
 page (`https://ads.google.com/aw/accountaccess/managers`), what they will
 see, and what to do when it looks different (not an admin, already has a
-manager, cannot find it). The short ask
+manager, cannot find it). Both messages also cover a client with no Google
+Ads account yet: do not create one (Google walks a new account straight
+into a campaign and a card), reply with the Google email and the business
+name, and we create it from the manager account, linked from birth, with
+that email invited as owner. The short ask
 gives them two ways: send us their customer id so we send the link request,
 or add manager `270-103-8317` themselves under Admin → Access and security →
 Managers. Either way, once the link is active the id is found by itself.
