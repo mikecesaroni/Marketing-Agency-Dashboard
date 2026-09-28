@@ -45,12 +45,12 @@ const CHANNELS = {
   googleads: {
     title: 'Google Ads access request',
     build: () => buildGoogleAdsAccessMessage(),
-    blurb: 'Send this to the owner. Once their account is linked under our manager account, the nightly sync finds it and saves the id itself.',
+    blurb: 'Send this to the owner. They add our email as a user and reply with their customer ID; put the ID in on the Google Search panel and it syncs straight away.',
   },
   'googleads-steps': {
-    title: 'Google Ads link, step by step',
+    title: 'Google Ads access, step by step',
     build: () => buildGoogleAdsLinkWalkthrough(),
-    blurb: 'The long version for a client doing it themselves: every click, the direct links, and what to do if it looks different.',
+    blurb: 'The long version: add us as a user, find their customer ID, every click and link, and what to do if it looks different.',
   },
 }
 

@@ -79,6 +79,21 @@ check('inRange keeps both ends', inRange(CAMPAIGNS, '2026-09-20', '2026-09-21').
   check('connection counts clients only, not ours or the archived',
     [c.total, c.connected.map((x) => x.id), c.waiting.map((x) => x.id)], [3, ['belk', 'pillar'], ['tito']])
 }
+{
+  // An ID Google refuses is not "connected": it is its own state, because
+  // the fix is on the client's side, not ours.
+  const refused = [...CLIENTS, { id: 'locked', name: 'Locked Out Plumbing', google_ads_customer_id: '3333333333', google_ads_sync_error: 'The caller does not have permission', archived: false, is_internal: false }]
+  const c = connection(refused)
+  check('an ID Google refuses is counted as no access, not connected',
+    [c.connected.map((x) => x.id), c.noAccess.map((x) => x.id), c.total], [['belk', 'pillar'], ['locked'], 4])
+  const rows = clientReport({ clients: refused, campaignRows: CAMPAIGNS, keywordRows: [], termRows: [], since: SINCE, until: UNTIL })
+  check('the client table puts no-access after live, before not connected',
+    rows.map((r) => [r.id, r.state]), [['belk', 'live'], ['pillar', 'live'], ['locked', 'no-access'], ['tito', 'not-connected']])
+  const recovered = clientReport({
+    clients: [{ ...CLIENTS[0], google_ads_sync_error: 'old refusal' }], campaignRows: CAMPAIGNS, keywordRows: [], termRows: [], since: SINCE, until: UNTIL,
+  })
+  check('data in the window beats a stale error', recovered[0].state, 'live')
+}
 check('last synced is the newest stamp', lastSynced(CAMPAIGNS), '2026-09-21T08:10:00Z')
 check('last synced with nothing is null', lastSynced([]), null)
 

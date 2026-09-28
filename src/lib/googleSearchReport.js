@@ -72,13 +72,21 @@ export function dailyRows(campaignRows) {
   }))
 }
 
-/** Who is connected and who is still waiting on a link. Clients only. */
+/**
+ * Who is reporting, who has an ID Google refuses, and who has no ID yet.
+ * Clients only. A saved ID is not the same as access: the last sync's error
+ * on the client row is what tells them apart.
+ */
 export function connection(clients) {
   const mine = (clients || []).filter((c) => !c.archived && !c.is_internal)
-  const connected = mine.filter((c) => String(c.google_ads_customer_id || '').replace(/\D/g, ''))
-  const waiting = mine.filter((c) => !String(c.google_ads_customer_id || '').replace(/\D/g, ''))
+  const hasId = (c) => Boolean(String(c.google_ads_customer_id || '').replace(/\D/g, ''))
   const byName = (a, b) => String(a.name).localeCompare(String(b.name))
-  return { connected: connected.sort(byName), waiting: waiting.sort(byName), total: mine.length }
+  return {
+    connected: mine.filter((c) => hasId(c) && !c.google_ads_sync_error).sort(byName),
+    noAccess: mine.filter((c) => hasId(c) && c.google_ads_sync_error).sort(byName),
+    waiting: mine.filter((c) => !hasId(c)).sort(byName),
+    total: mine.length,
+  }
 }
 
 /** The newest synced_at across rows, or null. */
@@ -152,10 +160,19 @@ export function clientReport({ clients, campaignRows, keywordRows, termRows, sin
       blockable: t.blockable,
       savable: r2(t.savable),
       lastDate,
-      state: !connected ? 'not-connected' : rows.length === 0 ? 'no-data' : 'live',
+      syncError: c.google_ads_sync_error || '',
+      synced: Boolean(c.google_ads_synced_at),
+      // Data in the window wins over a stale error: it proves access worked.
+      state: !connected
+        ? 'not-connected'
+        : rows.length > 0
+          ? 'live'
+          : c.google_ads_sync_error
+            ? 'no-access'
+            : 'no-data',
     })
   }
-  const rank = { live: 0, 'no-data': 1, 'not-connected': 2 }
+  const rank = { live: 0, 'no-access': 1, 'no-data': 2, 'not-connected': 3 }
   return out.sort(
     (a, b) => rank[a.state] - rank[b.state] || b.spend - a.spend || String(a.name).localeCompare(String(b.name))
   )

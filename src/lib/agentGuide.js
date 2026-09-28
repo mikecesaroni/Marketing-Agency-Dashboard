@@ -223,11 +223,11 @@ export const ROUTES = [
     name: 'Google Search report',
     purpose: 'Google Ads across every client on one page: the totals Google has that Meta does not, and what to switch off.',
     contains: [
-      'Who is connected: N of M clients, last synced when, and the clients still waiting on a manager-account link (with the access message to copy).',
+      'Who is connected: N of M clients, how many have an ID Google refuses (No access yet), last synced when, both access messages to copy, and every client still to do with a Google Ads customer ID box beside their name. "Save & sync" saves the ID, syncs that client on the spot and says whether Google let us in.',
       'Eight tiles for the range, each against the previous range: spend, leads, cost per lead, conversion value, clicks, impressions, click-through rate, cost per click.',
       'A daily chart switchable between spend, leads, clicks and cost per lead. Campaign grain, so every campaign type counts.',
       '"Keywords not converting" and "Searches worth blocking" in dollars, never added together (they overlap), and where the spend goes by campaign type.',
-      'Every client: status (Live, Connected but nothing synced yet, Not connected), spend, leads, cost per lead, clicks, CTR, CPC, conversion rate, active/total campaigns, wasted, blockable. Name opens the client\'s Google Search panel.',
+      'Every client: status (Live, No access yet, Connected no spend, No ID yet), spend, leads, cost per lead, clicks, CTR, CPC, conversion rate, active/total campaigns, wasted, blockable. Name opens the client\'s Google Search panel.',
       'Block these searches (top terms across clients, certain ones flagged) and Keywords to act on (losing first, then winners).',
       'Every campaign across clients: type, status, spend, leads, cost per lead, clicks, CTR, CPC, value.',
     ],

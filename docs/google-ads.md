@@ -182,49 +182,49 @@ Two optional ones, neither needed today:
 | `GOOGLE_ADS_API_VERSION` | Google retires API versions on a schedule. If the sync starts returning 404s naming the version, set this to the current one — no deploy needed. |
 | `GOOGLE_ADS_DEVELOPER_TOKEN` | Only if you have a legacy token and want it sent. Google ignores it now and will reject it in a future version. Leave it unset. |
 
-## 6. Per client: the customer ID
+## 6. Per client: access, then the customer ID
 
-Nobody types it. Once a client's account is **linked under the manager**
-(section 1), the nightly run asks the manager what is linked, matches each
-account to a client by name, and saves the id on the client row. The
-client's page then shows Google Search data the next morning.
+**The route we ask for (since 2026-09-28): the client adds our email as a
+user, then sends us their customer ID.** It is one screen they can find,
+needs nothing from us first, and the sync then reads their account
+directly (it asks the account as itself when the manager route is refused).
 
-A client who instead **adds our email as a user** on their account (Admin →
-Access and security → Users → invite marketing@workingclassgroup.com, any
-access level that can read) is just as good. The login then sees that
-account directly; the finder lists it marked "added us as a user", and the
-sync asks it as itself when the manager route is refused. Either route,
-nothing to type.
+1. Send the message. Two copy buttons, in Quick copy on the dashboard, on
+   the client page's Google Search panel, on the Google Search report and in
+   the client's setup messages. **Google Ads access request** is the short
+   ask. **Google Ads access, step by step** is the long version: the direct
+   link to the Users page (`https://ads.google.com/aw/accountaccess/users`),
+   Admin access for `marketing@workingclassgroup.com`, where the customer ID
+   is, and what to do when it looks different (no + button, allowed domains,
+   cannot find it, no account yet).
+2. Accept the invitation in the `marketing@workingclassgroup.com` inbox.
+3. Put the ID in. **Client page → Google Search**, or **Reports → Google
+   Search**, where every client still to do has the box beside their name.
+   Paste it however Google shows it (123-456-7890) and press **Save & sync**:
+   it saves, syncs that client for 30 days on the spot and says whether it
+   worked (the spend and leads it found, or that Google refused us and what
+   the client still has to do).
 
-What gets saved on its own: an account whose name equals the client's name
-(punctuation and Inc/LLC aside), or contains it, and only when that pairing
-is unique both ways. Anything less sure is never saved, because a wrong id
+How the last sync went is kept on the client row (`google_ads_synced_at`,
+`google_ads_sync_error`), so the report can tell **No access yet** (an ID
+Google refuses: the client has not added us, or we have not accepted) from
+**Connected, no spend** (Google let us in, nothing ran).
+
+A client with no Google Ads account yet: both messages tell them not to
+create one (Google walks a new account straight into a campaign and a card)
+and to reply with the Google email and the business name. We create it from
+the manager account, linked from birth, with that email invited as owner.
+
+**Also still works, with nothing to type:** a client account linked under
+the manager (`270-103-8317`), or one that added us as a user before we had
+the ID. The nightly run lists both, matches each to a client by name and
+saves the id itself; on the client page, "Look through the accounts we can
+already see" lists them with a **Use this** button. Saved on its own only
+when sure: equal or containing names, unique both ways, because a wrong id
 syncs one client's spend onto another's report.
 
-For the rest, and for anyone who does not want to wait for the night: on the
-client's page, **Google Search → Find their account** lists every linked
-account not yet on a client, closest name first, with a **Use this** button.
-The old text box is still there under "Or type the customer ID by hand".
-
-Asking the client for the link: two copy buttons, in Quick copy on the
-dashboard, on the Google Search panel of the client page, and in the
-client's setup messages. **Google Ads access request** is the short ask,
-with both routes. **Google Ads link, step by step** is the long version for
-a client doing it themselves: every click, the direct link to the Managers
-page (`https://ads.google.com/aw/accountaccess/managers`), what they will
-see, and what to do when it looks different (not an admin, already has a
-manager, cannot find it). Both messages also cover a client with no Google
-Ads account yet: do not create one (Google walks a new account straight
-into a campaign and a card), reply with the Google email and the business
-name, and we create it from the manager account, linked from birth, with
-that email invited as owner. The short ask
-gives them two ways: send us their customer id so we send the link request,
-or add manager `270-103-8317` themselves under Admin → Access and security →
-Managers. Either way, once the link is active the id is found by itself.
-
-The manager id in that message is a constant in
-`src/lib/googleAdsAccessMessage.js`. It has to be the same account as the
-`GOOGLE_ADS_LOGIN_CUSTOMER_ID` secret.
+The manager id is a constant in `src/lib/googleAdsAccessMessage.js`. It has
+to be the same account as the `GOOGLE_ADS_LOGIN_CUSTOMER_ID` secret.
 
 ---
 

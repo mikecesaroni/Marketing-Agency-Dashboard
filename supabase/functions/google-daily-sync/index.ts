@@ -627,6 +627,21 @@ async function serve(req: Request): Promise<Response> {
     const token = await accessToken()
     const results: Record<string, unknown>[] = []
 
+    // How the last sync went, on the client row, so a page can tell "no
+    // spend" from "Google refused us" without running the sync itself. A
+    // failure to write it never fails the sync.
+    const stamp = async (clientId: string, error: string | null) => {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}`, {
+          method: 'PATCH',
+          headers: { ...db, Prefer: 'return=minimal' },
+          body: JSON.stringify({ google_ads_synced_at: new Date().toISOString(), google_ads_sync_error: error ? error.slice(0, 1000) : null }),
+        })
+      } catch {
+        // The result line still carries it.
+      }
+    }
+
     for (const client of clients) {
       const customerId = bareId(client.google_ads_customer_id)
       if (!customerId) {
@@ -795,12 +810,15 @@ async function serve(req: Request): Promise<Response> {
           spend: Number(kpiRows.reduce((s, r) => s + r.ad_spend, 0).toFixed(2)),
           leads: kpiRows.reduce((s, r) => s + r.leads, 0),
         })
+        await stamp(client.id, null)
       } catch (err) {
+        const message = String(err instanceof Error ? err.message : err)
         results.push({
           client: client.name,
           customer_id: customerId,
-          error: String(err instanceof Error ? err.message : err),
+          error: message,
         })
+        await stamp(client.id, message)
       }
     }
 

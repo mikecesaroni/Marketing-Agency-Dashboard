@@ -126,8 +126,8 @@ export default function QuickCopyPanel() {
           />
           <MessageRow label="Google LSA access request" blurb="They verify Local Services and add us as an Admin." text={buildLsaSetupMessage()} />
           <MessageRow label="Google Business Profile access request" blurb="They add us as a manager on the profile." text={buildGbpSetupMessage()} />
-          <MessageRow label="Google Ads access request" blurb="They link their Google Ads account under our manager account; the CRM finds the id itself." text={buildGoogleAdsAccessMessage()} />
-          <MessageRow label="Google Ads link, step by step" blurb="The long version for a client doing it themselves: every click, the direct links, and what to do if it looks different." text={buildGoogleAdsLinkWalkthrough()} />
+          <MessageRow label="Google Ads access request" blurb="Short ask: they add our email as a user and reply with their customer ID." text={buildGoogleAdsAccessMessage()} />
+          <MessageRow label="Google Ads access, step by step" blurb="The long version: add us as a user, find their customer ID, every click and link, and what to do if it looks different." text={buildGoogleAdsLinkWalkthrough()} />
         </div>
       </div>
     </Card>

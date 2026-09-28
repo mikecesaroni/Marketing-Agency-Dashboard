@@ -39,3 +39,12 @@ alter table google_campaign_daily enable row level security;
 drop policy if exists anon_open_while_login_off on google_campaign_daily;
 create policy anon_open_while_login_off on google_campaign_daily for all to anon using (true) with check (true);
 grant select, insert, update, delete on google_campaign_daily to anon, authenticated;
+
+-- clients.google_ads_synced_at / clients.google_ads_sync_error
+--   How the last Google sync went for this client, written by the sync
+--   function after each client. A saved customer id with an error here means
+--   Google refused us (the client has not added us as a user or linked to the
+--   manager yet), which the report and the client page show as "No access"
+--   rather than as an account that simply had no spend.
+alter table clients add column if not exists google_ads_synced_at timestamptz;
+alter table clients add column if not exists google_ads_sync_error text;

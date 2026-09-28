@@ -5,6 +5,9 @@ import { diagnoseKeywords, negativeCandidates, wasteSummary } from '../lib/googl
 import { discoverGoogleAdsAccounts } from '../lib/googleAdsDiscover'
 import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough, GOOGLE_ADS_MANAGER_ID_DISPLAY } from '../lib/googleAdsAccessMessage'
 import CopySetupMessageButton from './CopySetupMessageButton'
+import GoogleAdsIdInput from './GoogleAdsIdInput'
+import { dashedId, explainSyncError } from '../lib/googleAdsId'
+import { AGENCY_EMAIL } from '../lib/agencyEmail'
 
 /**
  * Google Search, for one client: where the money went and what to switch off.
@@ -41,50 +44,7 @@ const VERDICT = {
   young: { label: 'Too early', cls: 'bg-slate-100 text-slate-500' },
 }
 
-function CustomerIdRow({ client, onUpdate }) {
-  const [value, setValue] = useState(client.google_ads_customer_id || '')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  const save = async () => {
-    setSaving(true)
-    setError('')
-    // Digits only. The id is displayed with dashes everywhere in Google's own
-    // UI and the API rejects it in that form, so the dashes come off here
-    // rather than failing in the nightly sync where nobody would see it.
-    const digits = value.replace(/\D/g, '')
-    const { error: err } = await supabase
-      .from('clients')
-      .update({ google_ads_customer_id: digits || null })
-      .eq('id', client.id)
-    setSaving(false)
-    if (err) setError(err.message)
-    else onUpdate?.()
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <label className="text-xs text-slate-600">Google Ads customer ID</label>
-      <input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="123-456-7890"
-        className="w-40 rounded border border-slate-300 px-2 py-1 text-xs"
-      />
-      <button
-        type="button"
-        onClick={save}
-        disabled={saving}
-        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-      >
-        {saving ? 'Saving…' : 'Save'}
-      </button>
-      {error && <span className="text-xs text-red-700">{error}</span>}
-    </div>
-  )
-}
-
-const dashed = (id) => String(id || '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3')
+const dashed = dashedId
 
 /**
  * Find the client's account among what is linked under the manager, so the
@@ -282,17 +242,16 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
           </div>
         </div>
         <p className="mb-3 text-sm text-slate-600">
-          Not connected. Once this client&apos;s Google Ads account is linked under our manager
-          account, the nightly sync finds it by name and saves the ID here itself. The buttons
-          copy the message that asks them for the link: the short ask, or the full walkthrough
-          for a client doing it themselves.
+          Not connected. Send the client the message: they add {AGENCY_EMAIL} as a user on their
+          Google Ads and reply with their customer ID. Accept the invite in that inbox, put the
+          ID in below, and it syncs straight away.
         </p>
         <div className="space-y-3">
-          <FindAccount client={client} onUpdate={onUpdate} />
+          <GoogleAdsIdInput client={client} onSaved={onUpdate} />
           <details className="text-xs text-slate-500">
-            <summary className="cursor-pointer">Or type the customer ID by hand</summary>
+            <summary className="cursor-pointer">No ID from them? Look through the accounts we can already see</summary>
             <div className="mt-2">
-              <CustomerIdRow client={client} onUpdate={onUpdate} />
+              <FindAccount client={client} onUpdate={onUpdate} />
             </div>
           </details>
         </div>
@@ -324,9 +283,19 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
         <p className="text-sm text-slate-500">Loading…</p>
       ) : error ? (
         <p className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">{error}</p>
+      ) : client.google_ads_sync_error ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-semibold">No access yet</p>
+          <p className="mt-0.5">{explainSyncError(client.google_ads_sync_error)}</p>
+          <div className="mt-2">
+            <CopySetupMessageButton message={buildGoogleAdsLinkWalkthrough()} label="Copy step-by-step" />
+          </div>
+        </div>
       ) : keywordRows.length === 0 && termRows.length === 0 ? (
         <p className="text-sm text-slate-600">
-          Connected, but nothing has synced yet. The sync runs nightly and reads the last 14 days.
+          {client.google_ads_synced_at
+            ? 'Connected. Google let us in, but there is no keyword or search activity in the last 90 days.'
+            : 'Connected, but nothing has synced yet. The sync runs nightly and reads the last 14 days.'}
         </p>
       ) : (
         <>
@@ -408,8 +377,9 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
         </>
       )}
 
-      <div className="mt-4 border-t border-slate-100 pt-3">
-        <CustomerIdRow client={client} onUpdate={onUpdate} />
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-3">
+        <span className="text-xs text-slate-600">Google Ads customer ID</span>
+        <GoogleAdsIdInput client={client} onSaved={onUpdate} compact />
       </div>
     </div>
   )

@@ -20,8 +20,11 @@ import {
   negativesAcross,
   spendByType,
 } from '../lib/googleSearchReport'
-import { buildGoogleAdsAccessMessage } from '../lib/googleAdsAccessMessage'
+import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough } from '../lib/googleAdsAccessMessage'
 import CopySetupMessageButton from '../components/CopySetupMessageButton'
+import GoogleAdsIdInput from '../components/GoogleAdsIdInput'
+import { explainSyncError } from '../lib/googleAdsId'
+import { AGENCY_EMAIL } from '../lib/agencyEmail'
 
 /**
  * Google Search across every client, on a page of its own.
@@ -59,8 +62,9 @@ const dash = (v, f) => (v > 0 ? f(v) : '—')
 
 const STATE = {
   live: { label: 'Live', tone: 'success' },
-  'no-data': { label: 'Connected, nothing synced yet', tone: 'info' },
-  'not-connected': { label: 'Not connected', tone: 'neutral' },
+  'no-access': { label: 'No access yet', tone: 'warning' },
+  'no-data': { label: 'Connected, no spend', tone: 'info' },
+  'not-connected': { label: 'No ID yet', tone: 'neutral' },
 }
 
 const VERDICT = {
@@ -98,7 +102,7 @@ export default function GoogleSearchReportPage() {
       // Twice the range for the campaign rows, so every tile has a previous
       // window to compare with. Keywords and terms only need the window.
       const [clientsRes, campaigns, keywords, terms] = await Promise.all([
-        supabase.from('clients').select('id,name,google_ads_customer_id,archived,is_internal,paused_at').order('name'),
+        supabase.from('clients').select('id,name,google_ads_customer_id,google_ads_sync_error,google_ads_synced_at,archived,is_internal,paused_at').order('name'),
         fetchAllRows(() =>
           supabase.from('google_campaign_daily').select('*').gte('date', prevStart).order('date').order('id')
         ),
@@ -214,27 +218,50 @@ export default function GoogleSearchReportPage() {
       {/* Who is in. First, because until a client is linked nothing below
           can say anything about them, and that is the most common reason a
           number here looks low. */}
-      <Card className="mb-4" tone={link.waiting.length ? 'warning' : 'success'}>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <Card className="mb-4" tone={link.waiting.length || link.noAccess.length ? 'warning' : 'success'}>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
           <p className="text-sm font-semibold text-slate-900">
             {link.connected.length} of {link.total} clients connected
+            {link.noAccess.length > 0 && <span className="ml-1 font-normal text-amber-800">· {link.noAccess.length} with no access yet</span>}
             <span className="ml-2 font-normal text-slate-500">· last synced {whenLabel(synced)}</span>
           </p>
-          {link.waiting.length > 0 && <CopySetupMessageButton message={buildGoogleAdsAccessMessage()} label="Copy access request" />}
+          {(link.waiting.length > 0 || link.noAccess.length > 0) && (
+            <div className="flex flex-wrap gap-1.5">
+              <CopySetupMessageButton message={buildGoogleAdsAccessMessage()} label="Copy access request" />
+              <CopySetupMessageButton message={buildGoogleAdsLinkWalkthrough()} label="Copy step-by-step" />
+            </div>
+          )}
         </div>
-        {link.waiting.length > 0 && (
-          <p className="mt-1.5 text-xs text-slate-600">
-            Waiting on a link:{' '}
-            {link.waiting.map((c, i) => (
-              <span key={c.id}>
-                {i > 0 && ', '}
-                <Link to={`/client/${c.id}#google-search`} className="text-blue-700 hover:underline">
-                  {c.name}
-                </Link>
-              </span>
-            ))}
-            . Once their account is linked under the manager account, the nightly sync finds it by name and it appears here.
-          </p>
+
+        {(link.waiting.length > 0 || link.noAccess.length > 0) && (
+          <>
+            <p className="mt-1.5 text-xs text-slate-600">
+              Send the message: the client adds {AGENCY_EMAIL} as a user and replies with their customer ID. Accept the
+              invite in that inbox, then put the ID in beside their name. It saves and syncs on the spot.
+            </p>
+            {/* One row per client still to do, with the box right there, so
+                the ID goes in where the gap is shown. */}
+            <div className="mt-3 divide-y divide-amber-200/70 rounded-lg border border-amber-200 bg-white/70">
+              {[...link.noAccess, ...link.waiting].map((c) => (
+                <div key={c.id} className="flex flex-col gap-1.5 px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
+                  <div className="min-w-0 sm:w-56">
+                    <Link to={`/client/${c.id}#google-search`} className="block truncate text-sm font-medium text-slate-900 hover:text-blue-700">
+                      {c.name}
+                    </Link>
+                    <p className="text-[11px] text-slate-500">
+                      {c.google_ads_sync_error ? 'ID saved, Google refused us' : 'No ID yet'}
+                    </p>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <GoogleAdsIdInput client={c} onSaved={load} compact />
+                    {c.google_ads_sync_error && (
+                      <p className="mt-1 text-[11px] text-amber-800">{explainSyncError(c.google_ads_sync_error)}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </Card>
 
@@ -340,7 +367,7 @@ export default function GoogleSearchReportPage() {
                         {r.paused && <span className="ml-1.5 text-[10px] text-amber-700">⏸ paused</span>}
                       </Td>
                       <Td>
-                        <Badge tone={st.tone}>{st.label}</Badge>
+                        <span title={r.syncError ? explainSyncError(r.syncError) : undefined}><Badge tone={st.tone}>{st.label}</Badge></span>
                       </Td>
                       <Td numeric className="font-medium">{muted ? '—' : money(r.spend)}</Td>
                       <Td numeric className="font-medium">{muted ? '—' : r.leads}</Td>
