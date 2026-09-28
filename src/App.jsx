@@ -9,6 +9,7 @@ import PublishVideoPage from './pages/PublishVideoPage'
 import FunnelPage from './pages/FunnelPage'
 import PaymentsPage from './pages/PaymentsPage'
 import ReportsPage from './pages/ReportsPage'
+import GoogleSearchReportPage from './pages/GoogleSearchReportPage'
 import SopsPage from './pages/SopsPage'
 import AiSearchPage from './pages/AiSearchPage'
 import ClientOnboardingPage from './pages/ClientOnboardingPage'
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/payments" element={<PaymentsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/reports/google-search" element={<GoogleSearchReportPage />} />
         <Route path="/sops" element={<SopsPage />} />
         <Route path="/ai-search" element={<AiSearchPage />} />
         <Route path="/team" element={<TeamPage />} />

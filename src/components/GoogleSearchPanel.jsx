@@ -124,6 +124,7 @@ function FindAccount({ client, onUpdate }) {
 
   const mine = found?.candidates?.[client.id] || []
   const sure = found?.matches?.find((m) => m.client_id === client.id) || null
+  const viaOf = new Map((found?.linked || []).map((a) => [a.id, a.via]))
   const ranked = [
     ...(sure ? [{ customer_id: sure.customer_id, account: sure.account, score: 1 }] : []),
     ...mine.filter((c) => c.customer_id !== sure?.customer_id),
@@ -143,8 +144,8 @@ function FindAccount({ client, onUpdate }) {
           {state === 'looking' ? 'Looking…' : '🔎 Find their account'}
         </button>
         <span className="text-xs text-slate-500">
-          Lists what is linked under our manager account ({GOOGLE_ADS_MANAGER_ID_DISPLAY}) and picks
-          the one that matches this client.
+          Lists what is linked under our manager account ({GOOGLE_ADS_MANAGER_ID_DISPLAY}), and any account
+          that added our email as a user, and picks the one that matches this client.
         </span>
       </div>
       {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
@@ -169,6 +170,7 @@ function FindAccount({ client, onUpdate }) {
                     <li key={c.customer_id} className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-xs">
                       <span className="font-medium text-slate-900">{c.account || '(no name)'}</span>
                       <span className="text-slate-500">{dashed(c.customer_id)}</span>
+                      {viaOf.get(c.customer_id) === 'user' && <span className="text-slate-400">added us as a user</span>}
                       {i === 0 && (
                         <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">
                           {c.score >= 1 ? 'match' : 'closest'}
@@ -191,6 +193,7 @@ function FindAccount({ client, onUpdate }) {
                       <li key={a.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
                         <span className="font-medium text-slate-900">{a.name || '(no name)'}</span>
                         <span className="text-slate-500">{dashed(a.id)}</span>
+                        {a.via === 'user' && <span className="text-slate-400">added us as a user</span>}
                         {a.status && a.status !== 'ENABLED' && <span className="text-slate-400">{a.status.toLowerCase()}</span>}
                         <button type="button" onClick={() => use(a.id)} disabled={state === 'saving'} className="ml-auto rounded-lg border border-slate-300 px-2.5 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                           Use this

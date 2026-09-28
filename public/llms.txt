@@ -167,15 +167,33 @@ Sidebar: Reports
 Ad performance across every client, over time. The place to answer "how are we doing".
 
 What is on it:
+  - Channels first: Meta, Google Search and Google LSA, each with spend, leads and cost per lead for the range. The Google Search card opens its own full page (/reports/google-search).
   - Ad spend, leads and cost per lead for the range, each against the previous equivalent range.
   - A daily chart, switchable between ad spend, leads and cost per lead.
-  - A channel breakdown, per-client performance, and the agency's own businesses kept separate from client work.
+  - Per-client performance, and the agency's own businesses kept separate from client work.
   - Ad accounts the sync found that no client claims, sorted by spend.
   - The monthly client report log: who was sent one, who was skipped and why.
 
 What you can do:
   - In the page header: "Sync Meta" pulls fresh data from Meta on demand rather than waiting for the morning job. It can take a while and is safe to run.
   - Scope: Live ads or All ads. Range: 14, 30 or 90 days.
+
+Google Search report   /reports/google-search
+---------------------------------------------
+Google Ads across every client on one page: the totals Google has that Meta does not, and what to switch off.
+
+What is on it:
+  - Who is connected: N of M clients, last synced when, and the clients still waiting on a manager-account link (with the access message to copy).
+  - Eight tiles for the range, each against the previous range: spend, leads, cost per lead, conversion value, clicks, impressions, click-through rate, cost per click.
+  - A daily chart switchable between spend, leads, clicks and cost per lead. Campaign grain, so every campaign type counts.
+  - "Keywords not converting" and "Searches worth blocking" in dollars, never added together (they overlap), and where the spend goes by campaign type.
+  - Every client: status (Live, Connected but nothing synced yet, Not connected), spend, leads, cost per lead, clicks, CTR, CPC, conversion rate, active/total campaigns, wasted, blockable. Name opens the client's Google Search panel.
+  - Block these searches (top terms across clients, certain ones flagged) and Keywords to act on (losing first, then winners).
+  - Every campaign across clients: type, status, spend, leads, cost per lead, clicks, CTR, CPC, value.
+
+What you can do:
+  - "Sync Google" runs the nightly sync now for the range, including finding newly linked accounts. Range: 14, 30 or 90 days.
+  - Numbers come from google_campaign_daily (totals), google_keyword_daily (losing keywords) and google_search_term_daily (terms to block). The three are never summed with each other.
 
 SOPs   /sops
 ------------

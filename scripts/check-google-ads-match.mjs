@@ -15,7 +15,7 @@ const check = (name, got, want) => {
   if (!ok) console.log(`        want ${JSON.stringify(want)}\n        got  ${JSON.stringify(got)}`)
 }
 
-const acct = (id, name, over = {}) => ({ id, name, manager: false, status: 'ENABLED', currency: 'USD', ...over })
+const acct = (id, name, over = {}) => ({ id, name, manager: false, status: 'ENABLED', currency: 'USD', via: 'manager', ...over })
 const client = (id, name, over = {}) => ({ id, name, google_ads_customer_id: null, ...over })
 
 check('normalize drops punctuation and legal suffixes',

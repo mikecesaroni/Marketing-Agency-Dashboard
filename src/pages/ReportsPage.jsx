@@ -15,6 +15,7 @@ import DailyChart from '../components/DailyChart'
 import StatTile from '../components/StatTile'
 import { Button, Card, Table, THead, TBody, Tr, Th, Td } from '../components/ui'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
+import { supabase } from '../lib/supabaseClient'
 
 // Live mode reads per-ad rows so it can filter on ad status; All-time reads the
 // account-level weekly KPIs, which reach further back. Each mode is sourced
@@ -52,11 +53,16 @@ const METRICS = [
   },
 ]
 
-function ChannelCard({ channel, spend, leads }) {
+// A channel's totals for the range. With `to`, the whole card is the door to
+// that channel's own page, which is where the rest of its numbers live.
+function ChannelCard({ channel, spend, leads, to, sub }) {
   const cpl = leads > 0 ? spend / leads : 0
-  return (
-    <Card>
-      <p className="mb-3 text-sm font-semibold tracking-tight text-slate-900">{channel}</p>
+  const body = (
+    <>
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold tracking-tight text-slate-900">{channel}</p>
+        {to && <span className="text-xs font-medium text-blue-600">Open full report →</span>}
+      </div>
       <div className="grid grid-cols-3 gap-2">
         <div>
           <p className="text-lg font-bold text-slate-900">{money(spend)}</p>
@@ -73,8 +79,17 @@ function ChannelCard({ channel, spend, leads }) {
           <p className="text-xs text-slate-500">Cost/lead</p>
         </div>
       </div>
-    </Card>
+      {sub && <p className="mt-2 text-[11px] text-slate-500">{sub}</p>}
+    </>
   )
+  if (to) {
+    return (
+      <Link to={to} className="block rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm md:p-5">
+        {body}
+      </Link>
+    )
+  }
+  return <Card>{body}</Card>
 }
 
 function PerformanceTable({ rows, nameHeader, onOpen, showLsa }) {
@@ -149,6 +164,7 @@ export default function ReportsPage() {
   const [metricKey, setMetricKey] = useState('spend')
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState('')
+  const [googleRows, setGoogleRows] = useState([])
 
   const handleSync = async () => {
     setSyncing(true)
@@ -178,6 +194,13 @@ export default function ReportsPage() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
+    // Google's totals for the channel card. Campaign grain, clients only,
+    // the range itself. Its own page has the rest.
+    supabase
+      .from('google_campaign_daily')
+      .select('client_id, cost, conversions, clients(is_internal)')
+      .gte('date', daysAgo(days - 1))
+      .then(({ data }) => setGoogleRows((data || []).filter((r) => !r.clients?.is_internal)))
   }, [days])
 
   const metric = METRICS.find((m) => m.key === metricKey)
@@ -304,6 +327,14 @@ export default function ReportsPage() {
     return t
   }, [clientKpis])
 
+  const googleTotals = useMemo(
+    () => ({
+      spend: googleRows.reduce((s, r) => s + Number(r.cost || 0), 0),
+      leads: Math.round(googleRows.reduce((s, r) => s + Number(r.conversions || 0), 0)),
+    }),
+    [googleRows]
+  )
+
   const rangeButtons = (
     // Scrolls within itself on a phone. min-w-0 is the part that matters: as a
     // flex item this defaults to min-width:auto, which refuses to shrink below
@@ -363,6 +394,33 @@ export default function ReportsPage() {
         <p className="text-slate-500">Loading...</p>
       ) : (
         <>
+          {/* Channels first: each card is that channel for the range, and
+              the Google Search card is the door to its own page, where the
+              numbers Google has and Meta does not live. */}
+          <h2 className="font-bold text-slate-900 mb-3">Channels</h2>
+          <div className="grid gap-3 md:grid-cols-3 md:gap-4 mb-6">
+            <ChannelCard
+              channel="Meta Ads"
+              spend={channelTotals.Meta.spend}
+              leads={channelTotals.Meta.leads}
+              sub="The rest of this page"
+            />
+            <ChannelCard
+              channel="Google Search"
+              spend={googleTotals.spend}
+              leads={googleTotals.leads}
+              to="/reports/google-search"
+              sub="Every client, every campaign, keywords and searches to block"
+            />
+            <ChannelCard
+              channel="Google LSA"
+              spend={channelTotals.LSA.spend}
+              leads={channelTotals.LSA.leads}
+              sub="Logged by hand on each client page"
+            />
+          </div>
+
+          <h2 className="font-bold text-slate-900 mb-3">Meta</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-4">
             <StatTile
               label="Ad spend"
@@ -400,25 +458,6 @@ export default function ReportsPage() {
               </div>
             </div>
             <DailyChart series={daily} metric={metric} />
-          </div>
-
-          <h2 className="font-bold text-slate-900 mb-3">Channel breakdown</h2>
-          <div className="grid gap-3 md:grid-cols-3 md:gap-4 mb-6">
-            <ChannelCard
-              channel="Meta Ads"
-              spend={channelTotals.Meta.spend}
-              leads={channelTotals.Meta.leads}
-            />
-            <ChannelCard
-              channel="Google LSA"
-              spend={channelTotals.LSA.spend}
-              leads={channelTotals.LSA.leads}
-            />
-            <ChannelCard
-              channel="Google Search"
-              spend={channelTotals['Google Search'].spend}
-              leads={channelTotals['Google Search'].leads}
-            />
           </div>
 
           <h2 className="font-bold text-slate-900 mb-3">Client performance</h2>

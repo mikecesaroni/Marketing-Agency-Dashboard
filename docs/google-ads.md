@@ -189,6 +189,13 @@ Nobody types it. Once a client's account is **linked under the manager**
 account to a client by name, and saves the id on the client row. The
 client's page then shows Google Search data the next morning.
 
+A client who instead **adds our email as a user** on their account (Admin →
+Access and security → Users → invite marketing@workingclassgroup.com, any
+access level that can read) is just as good. The login then sees that
+account directly; the finder lists it marked "added us as a user", and the
+sync asks it as itself when the manager route is refused. Either route,
+nothing to type.
+
 What gets saved on its own: an account whose name equals the client's name
 (punctuation and Inc/LLC aside), or contains it, and only when that pairing
 is unique both ways. Anything less sure is never saved, because a wrong id
@@ -293,8 +300,24 @@ The errors are written to be actionable:
 | Table | Grain | What it answers |
 | --- | --- | --- |
 | `weekly_kpis` (`channel = 'Google Search'`) | client × week | What the client sees in Reports, next to Meta |
+| `google_campaign_daily` | campaign × day | The true totals, every campaign type, with clicks, impressions and value. What the Google Search report adds up |
 | `google_keyword_daily` | keyword × day | What we bid on, what it cost, what it booked |
 | `google_search_term_daily` | search term × day | What people actually typed |
+
+## The report page
+
+**Reports → Google Search** (`/reports/google-search`) is Google across every
+client on one page: who is connected and who is still waiting on a link,
+eight KPI tiles against the previous range (spend, leads, cost per lead,
+conversion value, clicks, impressions, CTR, CPC), a daily chart, wasted and
+blockable dollars, spend by campaign type, a table of every client with
+their status and numbers, the searches to block and keywords to act on
+across clients, and every campaign. `src/lib/googleSearchReport.js` holds
+the arithmetic, pinned by `scripts/check-google-search-report.mjs`.
+
+Totals on that page come from `google_campaign_daily`. The keyword and
+search-term lists come from their own tables and are shown beside the
+totals, never added to them or to each other (see below for why).
 
 The roll-up is read from **campaign** grain, not keyword grain, on purpose:
 campaign totals include every campaign type, so adding a Performance Max

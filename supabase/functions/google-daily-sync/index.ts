@@ -211,7 +211,7 @@ async function gaql(customerId: string, query: string, token: string, loginAs?: 
 // is not close enough to be sure.
 // ---------------------------------------------------------------------------
 
-export type LinkedAccount = { id: string; name: string; manager: boolean; status: string; currency: string }
+export type LinkedAccount = { id: string; name: string; manager: boolean; status: string; currency: string; via: 'manager' | 'user' }
 
 /** Every account linked under the manager, itself excluded. */
 async function linkedAccounts(token: string, manager: string): Promise<LinkedAccount[]> {
@@ -229,7 +229,62 @@ async function linkedAccounts(token: string, manager: string): Promise<LinkedAcc
       manager: Boolean(c.manager),
       status: String(c.status || ''),
       currency: c.currencyCode || '',
+      via: 'manager' as const,
     }))
+}
+
+/**
+ * Accounts the login holds DIRECTLY: a client who added our email as a user
+ * on their account instead of linking to the manager. Just as good for the
+ * sync, which asks such an account as itself rather than through the
+ * manager. Named one by one; an account that refuses is left out.
+ */
+async function directAccounts(token: string, manager: string, skip: Set<string>): Promise<LinkedAccount[]> {
+  const version = Deno.env.get('GOOGLE_ADS_API_VERSION') || DEFAULT_API_VERSION
+  const res = await fetch(`https://googleads.googleapis.com/${version}/customers:listAccessibleCustomers`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = await res.json().catch(() => null)
+  if (!res.ok) return []
+  const ids = (body?.resourceNames || [])
+    .map((r: string) => r.replace('customers/', ''))
+    .filter((id: string) => id !== manager && !skip.has(id))
+  const out: LinkedAccount[] = []
+  await Promise.all(
+    ids.map(async (id: string) => {
+      try {
+        const rows = await gaql(id, 'SELECT customer.id, customer.descriptive_name, customer.manager, customer.status, customer.currency_code FROM customer', token, id)
+        const c = rows[0]?.customer
+        if (!c) return
+        out.push({
+          id,
+          name: c.descriptiveName || '',
+          manager: Boolean(c.manager),
+          status: String(c.status || ''),
+          currency: c.currencyCode || '',
+          via: 'user',
+        })
+      } catch {
+        // Refused as itself too: nothing to be done with it from here.
+      }
+    })
+  )
+  return out.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * A client account query that works whichever way we got access: through
+ * the manager first, and if that is refused, as the account itself (the
+ * client added our email as a user rather than linking to the manager).
+ */
+async function gaqlEither(customerId: string, query: string, token: string): Promise<any[]> {
+  try {
+    return await gaql(customerId, query, token)
+  } catch (err) {
+    const msg = String(err instanceof Error ? err.message : err)
+    if (!/refused|permission|not found under the manager/i.test(msg)) throw err
+    return await gaql(customerId, query, token, customerId)
+  }
 }
 
 /**
@@ -346,6 +401,10 @@ async function discover(
   if (!res.ok) throw new Error(`Could not read clients: ${JSON.stringify(clients)}`)
 
   const linked = await linkedAccounts(token, manager)
+  // Plus anything the login holds directly, which is what "add us as a
+  // user" produces. Same list, marked by route, so the page can say which.
+  const direct = await directAccounts(token, manager, new Set(linked.map((a) => a.id)))
+  const all = [...linked, ...direct]
   let pending: string[] = []
   let pendingError = ''
   try {
@@ -354,7 +413,7 @@ async function discover(
     pendingError = String(err instanceof Error ? err.message : err)
   }
 
-  const { matches, candidates, unclaimed } = matchAccounts(clients, linked)
+  const { matches, candidates, unclaimed } = matchAccounts(clients, all)
   const saved: Match[] = []
   const failed: { client: string; error: string }[] = []
   if (!opts.dryRun) {
@@ -369,7 +428,7 @@ async function discover(
     }
   }
   return {
-    linked,
+    linked: all,
     pending,
     ...(pendingError ? { pending_error: pendingError } : {}),
     matches,
@@ -408,8 +467,10 @@ const SEARCH_TERM_QUERY = (since: string, until: string) => `
 
 // Campaign grain, every campaign type, for the client-facing roll-up.
 const CAMPAIGN_QUERY = (since: string, until: string) => `
-  SELECT segments.date, metrics.cost_micros, metrics.clicks,
-         metrics.impressions, metrics.conversions
+  SELECT segments.date, campaign.id, campaign.name, campaign.status,
+         campaign.advertising_channel_type,
+         metrics.cost_micros, metrics.clicks, metrics.impressions,
+         metrics.conversions, metrics.conversions_value
   FROM campaign
   WHERE segments.date BETWEEN '${since}' AND '${until}'
 `
@@ -576,9 +637,9 @@ async function serve(req: Request): Promise<Response> {
       // One client's revoked link must not stop the rest of the run.
       try {
         const [keywords, terms, campaigns] = await Promise.all([
-          gaql(customerId, KEYWORD_QUERY(sinceStr, untilStr), token),
-          gaql(customerId, SEARCH_TERM_QUERY(sinceStr, untilStr), token),
-          gaql(customerId, CAMPAIGN_QUERY(sinceStr, untilStr), token),
+          gaqlEither(customerId, KEYWORD_QUERY(sinceStr, untilStr), token),
+          gaqlEither(customerId, SEARCH_TERM_QUERY(sinceStr, untilStr), token),
+          gaqlEither(customerId, CAMPAIGN_QUERY(sinceStr, untilStr), token),
         ])
 
         const keywordRows = keywords.map((r: any) => ({
@@ -665,6 +726,28 @@ async function serve(req: Request): Promise<Response> {
         await write('google_keyword_daily', keywordsOut, 'client_id,date,ad_group_id,criterion_id')
         await write('google_search_term_daily', termsOut, 'client_id,date,ad_group_id,search_term')
 
+        // Campaign grain, daily, every metric. This is the table the Google
+        // Search report reads for its totals: it counts every campaign type,
+        // where the keyword table only holds what Search keywords did.
+        const campaignRows = dedupe(
+          campaigns.map((r: any) => ({
+            client_id: client.id,
+            date: r.segments?.date,
+            customer_id: customerId,
+            campaign_id: String(r.campaign?.id ?? ''),
+            campaign_name: r.campaign?.name ?? null,
+            campaign_type: r.campaign?.advertisingChannelType ?? null,
+            campaign_status: r.campaign?.status ?? null,
+            impressions: num(r.metrics?.impressions),
+            clicks: num(r.metrics?.clicks),
+            cost: fromMicros(r.metrics?.costMicros),
+            conversions: num(r.metrics?.conversions),
+            conversion_value: num(r.metrics?.conversionsValue),
+          })),
+          (r) => `${r.date}|${r.campaign_id}`
+        )
+        await write('google_campaign_daily', campaignRows, 'client_id,date,campaign_id')
+
         // THE ROLL-UP, from campaign grain so every campaign type is counted.
         const weeks = new Map<string, { spend: number; leads: number }>()
         for (const r of campaigns) {
@@ -707,6 +790,7 @@ async function serve(req: Request): Promise<Response> {
           customer_id: customerId,
           keywords: keywordsOut.length,
           search_terms: termsOut.length,
+          campaign_days: campaignRows.length,
           weeks: kpiRows.length,
           spend: Number(kpiRows.reduce((s, r) => s + r.ad_spend, 0).toFixed(2)),
           leads: kpiRows.reduce((s, r) => s + r.leads, 0),
