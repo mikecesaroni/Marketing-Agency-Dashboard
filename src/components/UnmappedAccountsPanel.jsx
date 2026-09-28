@@ -21,12 +21,16 @@ export default function UnmappedAccountsPanel() {
 
   const load = async () => {
     try {
+      // Every client, archived included: an archived client's account is
+      // theirs, not unclaimed. Only live clients are offered to map onto.
       const [rows, c] = await Promise.all([
         fetchUnmappedAccounts(),
-        supabase.from('clients').select('id, name, meta_ad_account_id').eq('archived', false).order('name'),
+        supabase.from('clients').select('id, name, meta_ad_account_id, archived').order('name'),
       ])
-      setAccounts(rows)
-      setClients(c.data || [])
+      const bare = (v) => String(v || '').replace(/^act_/, '')
+      const owned = new Set((c.data || []).map((x) => bare(x.meta_ad_account_id)).filter(Boolean))
+      setAccounts(rows.filter((a) => !owned.has(bare(a.ad_account_id))))
+      setClients((c.data || []).filter((x) => !x.archived))
       setReady(true)
     } catch {
       // The table may not exist yet on a project without the migration. Staying

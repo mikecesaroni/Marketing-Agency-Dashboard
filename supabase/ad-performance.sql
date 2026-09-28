@@ -84,3 +84,31 @@ create index if not exists meta_unmapped_new_idx
   where status = 'new';
 
 alter table meta_unmapped_accounts disable row level security;
+
+-- An account a client owns is never "unmapped", archived client or not.
+--
+-- Whatever refreshes this table each morning compares against active
+-- clients only, so an archived client whose ad account still spends (Summit
+-- Water Pros, 2026-09-28) came back as unclaimed on the Reports page. This
+-- trigger settles it at write time, whoever the writer is: a row for an
+-- account any client row points at is stamped mapped to that client.
+create or replace function public.meta_unmapped_claim() returns trigger
+language plpgsql as $$
+declare cid uuid;
+begin
+  if new.status = 'new' then
+    select id into cid from clients
+      where replace(coalesce(meta_ad_account_id, ''), 'act_', '') = replace(new.ad_account_id, 'act_', '')
+      order by archived asc
+      limit 1;
+    if cid is not null then
+      new.status := 'mapped';
+      new.mapped_client_id := cid;
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists meta_unmapped_claim on meta_unmapped_accounts;
+create trigger meta_unmapped_claim before insert or update on meta_unmapped_accounts
+for each row execute function public.meta_unmapped_claim();
