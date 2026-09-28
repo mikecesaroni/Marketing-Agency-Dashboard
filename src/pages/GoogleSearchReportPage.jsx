@@ -214,57 +214,6 @@ export default function GoogleSearchReportPage() {
       {syncNote && <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">{syncNote}</div>}
 
       <div className="space-y-6">
-        {/* WHO IS IN. First, because until a client is connected nothing
-            below can say anything about them. */}
-        <Panel channel="google" className="p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <Eyebrow>Connected accounts</Eyebrow>
-              <p className="mt-2 text-3xl font-semibold text-white">
-                {link.connected.length}
-                <span className="text-lg font-normal text-slate-500"> of {link.total} clients connected</span>
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                {link.noAccess.length > 0 && <span className="text-amber-300">{link.noAccess.length} with no access yet · </span>}
-                last synced {whenLabel(synced)}
-              </p>
-            </div>
-            {todo.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                <CopySetupMessageButton message={buildGoogleAdsAccessMessage()} label="Copy access request" onDark />
-                <CopySetupMessageButton message={buildGoogleAdsLinkWalkthrough()} label="Copy step-by-step" onDark />
-              </div>
-            )}
-          </div>
-          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/5">
-            <span className="block h-full rounded-full" style={{ width: `${link.total ? (link.connected.length / link.total) * 100 : 0}%`, background: G }} />
-          </div>
-
-          {todo.length > 0 && (
-            <>
-              <p className="mt-4 text-xs text-slate-400">
-                Send the message: the client adds {AGENCY_EMAIL} as a user and replies with their customer ID. Accept the
-                invite in that inbox, then put the ID in beside their name. It saves and syncs on the spot.
-              </p>
-              {/* One row per client still to do, with the box right there. */}
-              <div className="mt-3 divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">
-                {todo.map((c) => (
-                  <div key={c.id} className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
-                    <div className="min-w-0 sm:w-56">
-                      <Link to={`/client/${c.id}#google-search`} className="block truncate text-sm font-medium text-white hover:text-emerald-300">{c.name}</Link>
-                      <p className="text-[11px] text-slate-500">{c.google_ads_sync_error ? 'ID saved, Google refused us' : 'No ID yet'}</p>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <GoogleAdsIdInput client={c} onSaved={load} compact dark />
-                      {c.google_ads_sync_error && <p className="mt-1 text-[11px] text-amber-300/90">{explainSyncError(c.google_ads_sync_error)}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </Panel>
-
         {loading ? (
           <div className="grid gap-4 md:grid-cols-4">
             {[0, 1, 2, 3].map((i) => <div key={i} className="h-36 animate-pulse rounded-2xl bg-white/[0.04]" />)}
@@ -463,6 +412,58 @@ export default function GoogleSearchReportPage() {
             </section>
           </>
         )}
+
+        {/* WHO IS IN. At the bottom (asked for 2026-09-28): the numbers
+            are what the page is opened for, and connecting a client is a
+            job done once per client. */}
+        <Panel channel="google" className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <Eyebrow>Connected accounts</Eyebrow>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {link.connected.length}
+                <span className="text-lg font-normal text-slate-500"> of {link.total} clients connected</span>
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {link.noAccess.length > 0 && <span className="text-amber-300">{link.noAccess.length} with no access yet · </span>}
+                last synced {whenLabel(synced)}
+              </p>
+            </div>
+            {todo.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                <CopySetupMessageButton message={buildGoogleAdsAccessMessage()} label="Copy access request" onDark />
+                <CopySetupMessageButton message={buildGoogleAdsLinkWalkthrough()} label="Copy step-by-step" onDark />
+              </div>
+            )}
+          </div>
+          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/5">
+            <span className="block h-full rounded-full" style={{ width: `${link.total ? (link.connected.length / link.total) * 100 : 0}%`, background: G }} />
+          </div>
+
+          {todo.length > 0 && (
+            <>
+              <p className="mt-4 text-xs text-slate-400">
+                Send the message: the client adds {AGENCY_EMAIL} as a user and replies with their customer ID. Accept the
+                invite in that inbox, then put the ID in beside their name. It saves and syncs on the spot.
+              </p>
+              {/* One row per client still to do, with the box right there. */}
+              <div className="mt-3 divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">
+                {todo.map((c) => (
+                  <div key={c.id} className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
+                    <div className="min-w-0 sm:w-56">
+                      <Link to={`/client/${c.id}#google-search`} className="block truncate text-sm font-medium text-white hover:text-emerald-300">{c.name}</Link>
+                      <p className="text-[11px] text-slate-500">{c.google_ads_sync_error ? 'ID saved, Google refused us' : 'No ID yet'}</p>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <GoogleAdsIdInput client={c} onSaved={load} compact dark />
+                      {c.google_ads_sync_error && <p className="mt-1 text-[11px] text-amber-300/90">{explainSyncError(c.google_ads_sync_error)}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </Panel>
       </div>
     </Layout>
   )
