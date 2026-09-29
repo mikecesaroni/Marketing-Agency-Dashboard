@@ -18,6 +18,7 @@
 // window and assert.
 
 import { diagnoseKeywords, negativeCandidates } from './googleSearchRules.js'
+import { isAccessError } from './googleAdsId.js'
 
 const r2 = (n) => Math.round(Number(n || 0) * 100) / 100
 
@@ -82,8 +83,10 @@ export function connection(clients) {
   const hasId = (c) => Boolean(String(c.google_ads_customer_id || '').replace(/\D/g, ''))
   const byName = (a, b) => String(a.name).localeCompare(String(b.name))
   return {
-    connected: mine.filter((c) => hasId(c) && !c.google_ads_sync_error).sort(byName),
-    noAccess: mine.filter((c) => hasId(c) && c.google_ads_sync_error).sort(byName),
+    // Only Google keeping us out is "no access". An error saving the numbers
+    // after Google let us in is still a connected account.
+    connected: mine.filter((c) => hasId(c) && !isAccessError(c.google_ads_sync_error)).sort(byName),
+    noAccess: mine.filter((c) => hasId(c) && isAccessError(c.google_ads_sync_error)).sort(byName),
     waiting: mine.filter((c) => !hasId(c)).sort(byName),
     total: mine.length,
   }
@@ -167,7 +170,7 @@ export function clientReport({ clients, campaignRows, keywordRows, termRows, sin
         ? 'not-connected'
         : rows.length > 0
           ? 'live'
-          : c.google_ads_sync_error
+          : isAccessError(c.google_ads_sync_error)
             ? 'no-access'
             : 'no-data',
     })

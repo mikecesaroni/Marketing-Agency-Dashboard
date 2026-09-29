@@ -23,7 +23,7 @@ import {
 import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough } from '../lib/googleAdsAccessMessage'
 import CopySetupMessageButton from '../components/CopySetupMessageButton'
 import GoogleAdsIdInput from '../components/GoogleAdsIdInput'
-import { explainSyncError } from '../lib/googleAdsId'
+import { explainSyncError, isAccessError } from '../lib/googleAdsId'
 import { AGENCY_EMAIL } from '../lib/agencyEmail'
 
 /**
@@ -452,7 +452,7 @@ export default function GoogleSearchReportPage() {
                   <div key={c.id} className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
                     <div className="min-w-0 sm:w-56">
                       <Link to={`/client/${c.id}#google-search`} className="block truncate text-sm font-medium text-white hover:text-emerald-300">{c.name}</Link>
-                      <p className="text-[11px] text-slate-500">{c.google_ads_sync_error ? 'ID saved, Google refused us' : 'No ID yet'}</p>
+                      <p className="text-[11px] text-slate-500">{isAccessError(c.google_ads_sync_error) ? 'ID saved, Google refused us' : 'No ID yet'}</p>
                     </div>
                     <div className="min-w-0 flex-1">
                       <GoogleAdsIdInput client={c} onSaved={load} compact dark />

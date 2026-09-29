@@ -93,6 +93,13 @@ check('inRange keeps both ends', inRange(CAMPAIGNS, '2026-09-20', '2026-09-21').
     clients: [{ ...CLIENTS[0], google_ads_sync_error: 'old refusal' }], campaignRows: CAMPAIGNS, keywordRows: [], termRows: [], since: SINCE, until: UNTIL,
   })
   check('data in the window beats a stale error', recovered[0].state, 'live')
+  // MCL, Sep 29: Google let us in, but our weekly roll-up table refused the
+  // "Google Search" channel. That is connected, not "Google refused us".
+  const saveFail = [{ id: 'mcl', name: 'MCL Construction', google_ads_customer_id: '5192851350', google_ads_sync_error: 'weekly_kpis: {"code":"23514","message":"new row violates check constraint"}', archived: false, is_internal: false }]
+  const sc = connection(saveFail)
+  check('a failed save after Google let us in still counts as connected', [sc.connected.map((x) => x.id), sc.noAccess.length], [['mcl'], 0])
+  check('and with no spend yet it reads no data, not no access',
+    clientReport({ clients: saveFail, campaignRows: [], keywordRows: [], termRows: [], since: SINCE, until: UNTIL })[0].state, 'no-data')
 }
 check('last synced is the newest stamp', lastSynced(CAMPAIGNS), '2026-09-21T08:10:00Z')
 check('last synced with nothing is null', lastSynced([]), null)

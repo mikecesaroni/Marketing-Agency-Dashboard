@@ -49,7 +49,8 @@ create table weekly_kpis (
   week_of date not null,
   ad_spend numeric not null default 0,
   leads integer not null default 0,
-  channel text not null check (channel in ('Meta', 'LSA')),
+  -- 'Google Search' rows are written by the google-daily-sync function.
+  channel text not null check (channel in ('Meta', 'LSA', 'Google Search')),
   notes text
 );
 

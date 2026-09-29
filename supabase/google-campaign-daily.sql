@@ -48,3 +48,9 @@ grant select, insert, update, delete on google_campaign_daily to anon, authentic
 --   rather than as an account that simply had no spend.
 alter table clients add column if not exists google_ads_synced_at timestamptz;
 alter table clients add column if not exists google_ads_sync_error text;
+
+-- weekly_kpis.channel took only 'Meta' and 'LSA', so the sync's weekly
+-- 'Google Search' roll-up was refused (and read as "Google refused us" in the
+-- CRM). Applied 2026-09-29 as migration weekly_kpis_google_channel.
+alter table weekly_kpis drop constraint if exists weekly_kpis_channel_check;
+alter table weekly_kpis add constraint weekly_kpis_channel_check check (channel in ('Meta', 'LSA', 'Google Search'));

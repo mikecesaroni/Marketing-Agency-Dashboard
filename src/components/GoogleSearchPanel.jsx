@@ -6,7 +6,7 @@ import { discoverGoogleAdsAccounts } from '../lib/googleAdsDiscover'
 import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough, GOOGLE_ADS_MANAGER_ID_DISPLAY } from '../lib/googleAdsAccessMessage'
 import CopySetupMessageButton from './CopySetupMessageButton'
 import GoogleAdsIdInput from './GoogleAdsIdInput'
-import { dashedId, explainSyncError } from '../lib/googleAdsId'
+import { dashedId, explainSyncError, isAccessError } from '../lib/googleAdsId'
 import { AGENCY_EMAIL } from '../lib/agencyEmail'
 
 /**
@@ -283,7 +283,7 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
         <p className="text-sm text-slate-500">Loading…</p>
       ) : error ? (
         <p className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">{error}</p>
-      ) : client.google_ads_sync_error ? (
+      ) : isAccessError(client.google_ads_sync_error) ? (
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           <p className="font-semibold">No access yet</p>
           <p className="mt-0.5">{explainSyncError(client.google_ads_sync_error)}</p>
