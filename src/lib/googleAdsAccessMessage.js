@@ -29,16 +29,15 @@ Two short steps in your Google Ads account, then send us your customer ID. About
 1. Sign in at https://ads.google.com
 
 FIRST, ALLOW OUR DOMAIN (Google blocks the invite without this)
-2. Open this page: https://ads.google.com/aw/accountaccess/security
-   (or click Admin, then Access and security, then the Security tab)
-3. Next to Allowed domains, click the pencil to edit
+2. Open this page: https://ads.google.com/aw/accountaccess/users
+   (or click Admin, then Access and security)
+3. Click the Security tab at the top of that page, then the pencil next to Allowed domains
 4. Add: ${AGENCY_EMAIL_DOMAIN}
    Keep any domains already in the list, and if the list is empty add your own too (like gmail.com or yourbusiness.com) so your own logins keep working
 5. Click Save
 
 THEN, ADD US AS A USER
-6. Open this page: https://ads.google.com/aw/accountaccess/users
-   (or the Users tab, right next to Security)
+6. Click the Users tab, right next to Security
 7. Click the blue + button
 8. Enter our email: ${AGENCY_EMAIL}
 9. Pick Admin access and click Send invitation
@@ -81,17 +80,17 @@ Go to https://ads.google.com and sign in with the Google account you use for you
 
 STEP 2: Allow our domain (do this first)
 Google will not let you invite us until our domain is on your account's allowed list, so this comes before adding us.
-1. Click this link, it takes you straight to the Security tab:
-   https://ads.google.com/aw/accountaccess/security
-   If it does not land you there: click Admin in the left menu (the gear icon, near the bottom), then Access and security, then the Security tab at the top.
-2. Find Allowed domains and click the pencil next to it.
-3. Type ${AGENCY_EMAIL_DOMAIN} and add it.
-4. Leave any domains already in the list alone. If the list was empty, also add the domain of your own email (gmail.com if you sign in with Gmail, or yourbusiness.com if you use a work email), so you and your team can still get in.
-5. Click Save.
+1. Click this link, it opens Access and security:
+   https://ads.google.com/aw/accountaccess/users
+   If it does not land you there: click Admin in the left menu (the gear icon, near the bottom), then Access and security.
+2. Click the Security tab at the top of the page.
+3. Find Allowed domains and click the pencil next to it.
+4. Type ${AGENCY_EMAIL_DOMAIN} and add it.
+5. Leave any domains already in the list alone. If the list was empty, also add the domain of your own email (gmail.com if you sign in with Gmail, or yourbusiness.com if you use a work email), so you and your team can still get in.
+6. Click Save.
 
 STEP 3: Open the Users page
-Click the Users tab, right next to Security. Or use this link:
-https://ads.google.com/aw/accountaccess/users
+Click the Users tab, right next to Security, on the same page.
 
 STEP 4: Add us as a user
 1. Click the blue + button (top left of the list).
