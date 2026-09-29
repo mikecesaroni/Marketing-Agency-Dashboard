@@ -306,6 +306,26 @@ export function nextSteps(ctx) {
     detail: liveDone ? 'Spending.' : 'Switch the ads on in Ads Manager, then mark live here so the sync and reports pick them up.',
   })
 
+  if (googleApplies) {
+    const running = counts.googleCampaigns || 0
+    add({
+      key: 'google-publish',
+      phase: 'Launch',
+      title: 'Google Ads campaign published',
+      owner: OWNER.us,
+      applies: true,
+      // Done when the nightly Google sync sees an active campaign with
+      // impressions in the last 30 days, or when marked done by hand.
+      done: running > 0,
+      blockedBy: googleDone ? null : 'google-ads-access',
+      action: { kind: 'google-report', label: 'Open their Google Ads' },
+      detail:
+        running > 0
+          ? `${running} campaign${running === 1 ? '' : 's'} running.`
+          : 'Build and publish the campaign in Google Ads. It ticks itself off once the sync sees it running.',
+    })
+  }
+
   // ---- RUN --------------------------------------------------------------------
   if (liveDone) {
     add({

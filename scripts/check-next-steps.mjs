@@ -140,6 +140,12 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
       [step({ lsa_budget_per_day: 20 }).done, step({ google_ads_customer_id: '5192851350' }).done, step({ google_ads_customer_id: '5192851350', google_ads_sync_error: 'The caller does not have permission' }).done],
       [false, true, false])
     check('its button copies the Google Ads access message', step({ lsa_budget_per_day: 20 }).action.kind, 'google-ads-access')
+    const pub = (client, counts) => nextSteps(base({ client, counts })).steps.find((s) => s.key === 'google-publish')
+    const conn = { google_ads_customer_id: '5192851350' }
+    check('publishing the Google campaign waits on access, then is ours to do',
+      [pub({ lsa_budget_per_day: 20 }).blocked, pub(conn).blocked, pub(conn).owner],
+      [true, false, 'us'])
+    check('it ticks itself off once the sync sees a running campaign', [pub(conn).done, pub(conn, { googleCampaigns: 2 }).done, pub(conn, { googleCampaigns: 2 }).detail], [false, true, '2 campaigns running.'])
   }
   check('no GBP step when the intake says no profile', keys(nextSteps(base({ intake: { has_google_business: false } }))).includes('gbp-access'), false)
 }

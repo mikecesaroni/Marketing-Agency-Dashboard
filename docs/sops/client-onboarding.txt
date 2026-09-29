@@ -131,7 +131,8 @@ LAUNCH
 1. Publish from the client page (Publish tab). Ads go up paused.
 2. Switch them on in Ads Manager.
 3. Flip "Meta ads live" on the client page so the nightly sync and the reports pick them up.
-4. Tell the owner in the thread: ads are live, what to expect in the first week, and that the first few days are Meta learning.
+4. Google Ads (if they have Google Ads or LSA planned): build and publish the campaign in Google Ads. The step "Google Ads campaign published" ticks itself off once the nightly Google sync sees it running. Check it on Reports, Google Ads, click the client.
+5. Tell the owner in the thread: ads are live, what to expect in the first week, and that the first few days are Meta learning.
 
 THE FIRST 30 DAYS
 1. Do not judge an ad too early. Give it about one and a half times the account's cost per lead in spend before calling it.

@@ -307,6 +307,8 @@ export default function ClientDetailPage() {
         return setShowKPIsModal(true)
       case 'report':
         return navigate('/reports')
+      case 'google-report':
+        return navigate(`/reports/google-search/${client.id}`)
       default:
         return navigate('/deliverables')
     }

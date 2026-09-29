@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient'
 import { fetchAllRows } from './pagedQuery'
 import { GHL_REQUIRED_KEYS, missingRequired } from './ghlSetupFields'
 import { formatDate, getMonday, hasInternalColumn, today } from './queries'
+import { daysAgo } from './dailySeries'
 import { nextSteps } from './nextSteps'
 
 /**
@@ -18,7 +19,7 @@ export async function fetchNextStepsForAll() {
   let clientsQuery = supabase.from('clients').select('*').eq('archived', false).order('name')
   if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
 
-  const [clientsRes, intakeRes, linksRes, ghlRes, deliverables, payRes, callsRes, filesRes, savedRes, pubRes, kpiRes, reportRes, overridesRes] =
+  const [clientsRes, intakeRes, linksRes, ghlRes, deliverables, payRes, callsRes, filesRes, savedRes, pubRes, kpiRes, reportRes, overridesRes, googleRows] =
     await Promise.all([
       clientsQuery,
       supabase.from('onboarding_intake').select('*'),
@@ -43,6 +44,17 @@ export async function fetchNextStepsForAll() {
       supabase.from('weekly_kpis').select('client_id').eq('week_of', monday),
       supabase.from('report_sends').select('client_id, status').eq('month_key', month),
       supabase.from('step_overrides').select('client_id, step_key, done_at, done_by, note'),
+      // Active Google campaigns that showed ads in the last 30 days, for the
+      // "Google Ads campaign published" step. Missing table reads as none.
+      fetchAllRows(() =>
+        supabase
+          .from('google_campaign_daily')
+          .select('id, client_id, campaign_id')
+          .eq('campaign_status', 'ENABLED')
+          .gt('impressions', 0)
+          .gte('date', daysAgo(29))
+          .order('id')
+      ).catch(() => []),
     ])
 
   if (clientsRes.error) throw clientsRes.error
@@ -69,6 +81,11 @@ export async function fetchNextStepsForAll() {
   const kpiBy = by(kpiRes.data)
   const reportBy = by((reportRes.data || []).filter((r) => r.status === 'sent'))
   const overBy = by(overridesRes.data)
+  const googleBy = new Map()
+  for (const r of googleRows || []) {
+    if (!googleBy.has(r.client_id)) googleBy.set(r.client_id, new Set())
+    googleBy.get(r.client_id).add(r.campaign_id)
+  }
 
   const stamps = (rows) => new Set((rows || []).map((r) => r.stamp)).size
 
@@ -90,6 +107,7 @@ export async function fetchNextStepsForAll() {
         publishedAds: (pubBy.get(client.id) || []).length,
         kpisThisWeek: (kpiBy.get(client.id) || []).length,
         reportThisMonth: (reportBy.get(client.id) || []).length,
+        googleCampaigns: googleBy.get(client.id)?.size || 0,
       },
       today: today(),
     }
