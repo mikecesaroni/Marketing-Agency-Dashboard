@@ -1,0 +1,164 @@
+WHAT THIS IS
+
+How we take a new client from signed to ads running, step by step. Follow it in order. The CRM tracks every step for you: open the client page and the Next up bar at the top shows what is next and has the button for it. Onboarding Progress shows every client's steps on one board.
+
+Goal: every new client has access handed over, their system built and their first Meta ads live, with nothing forgotten and nothing asked for twice.
+
+THE SIX PHASES AT A GLANCE
+
+1. Before the call: agree the budget, send the form, book the Zoom
+2. Sign up: setup fee paid, onboarding form filled in
+3. The onboarding call: get every access on one call, on their screen
+4. Access check: confirm everything actually came through
+5. Build: GoHighLevel, then the ads
+6. Launch and run: publish, go live, report every week
+
+GROUND RULES
+
+- One email thread with the owner for everything. A group text beside it is fine for quick replies.
+- We never ask for or store a client's passwords. We get added as a user or partner instead, every time.
+- Always ask for Admin or full control access. Meta and Google only warn the admins when something breaks, like a failed payment. With less than admin the ads stop and nobody is told.
+- Every copy and paste message lives in the CRM. Use those, do not rewrite them from memory.
+- If something is not done on the call, it goes in the recap email with who owes it.
+
+---
+
+## PHASE 1: BEFORE THE CALL
+
+1. Add the client in the CRM (Clients, then + New Client). Put in their name, trade, market and monthly fee.
+2. Confirm the daily ad budget from the sales call is written down. If it is not agreed before the onboarding call, the call turns into a sales call.
+3. Start one email thread with the owner.
+4. Send the pre-call email: the onboarding form link and the photos folder link, nothing else. Do not send a list of access requests. That is what the call is for.
+   - In the CRM: client page, Next up bar, "Copy the onboarding message".
+5. Book a 60 to 90 minute Zoom and ask them to join from the Zoom app, not a browser. From the app you can request control of their screen, which turns a two hour call into one hour.
+
+## PHASE 2: SIGN UP
+
+These two need to be done before we build anything.
+
+1. Setup fee paid.
+   - Check it on Payments.
+2. Onboarding form filled in.
+   - It fills the client's brief: trade, towns, offers, reviews, average job value, who answers leads. Everything the ads and the AI chat use comes from here.
+   - If it is not back in two days, nudge them in the thread.
+3. If they are on the GoHighLevel plan, they also fill in the GHL setup form (legal name, address, EIN). This is needed for texting registration.
+   - In the CRM: "Copy the GHL setup message".
+
+## PHASE 3: THE ONBOARDING CALL
+
+Run the call from the client page: "Open the call script". It walks you through every section below and saves your notes to the client as you go. Have them share their screen and click Request remote control. You drive, they watch.
+
+OPENING
+1. Introduce yourself and name the one or two people they will deal with from now on.
+2. Ask who they spoke to on the sales side, then get straight into it. Owners are busy.
+
+### GOHIGHLEVEL (only if on the GHL plan)
+1. Chase the GHL setup form if it is not back.
+2. Add them as a user in GHL and have them open the invite email live. A Google email signs in with "Sign in with Google" and never needs a password.
+3. Show them the walkthrough videos in their GHL side menu.
+4. Connect their calendar (Google, Outlook, iCloud or Calendly) so reminders go out from GHL.
+
+### META (Facebook and Instagram)
+1. On facebook.com: Settings, then Page setup. Confirm the business Page is there and note which business portfolio it belongs to.
+2. Go to business.facebook.com/select and open that exact portfolio, not the first one in the list.
+3. Business settings, then Partners, then "Give a partner access to your assets". Enter our Business Portfolio ID and give full control on the Page, the Instagram account and the ad account.
+   - If the Partners screen is hidden, add our email under People with full control instead, and note it needs moving to partner access later.
+4. If they ask why full control: Meta only emails admins when something breaks.
+5. Turn on two-factor authentication for everyone in the portfolio, Instagram included. Tell them never to click links in messages claiming to be from Meta.
+6. Map the service area: pull up a map, ask which towns the good calls come from and which they will not drive to. Put it in the targeting section.
+
+### GOOGLE ADS (Search and Local Services)
+One Google Ads login covers Search and LSA. The order matters:
+1. Allow our domain FIRST. Google blocks the invite without it.
+   - Open https://ads.google.com/aw/accountaccess/users, click the Security tab at the top, click the pencil next to Allowed domains, add workingclassgroup.com and save.
+   - Keep any domains already in the list. If the list was empty, also add their own email's domain so they do not lock themselves out.
+2. Then add us as a user: click the Users tab, the blue + button, enter marketing@workingclassgroup.com, pick Admin, Send invitation.
+3. Get their customer ID: the ten digit number at the top right, like 123-456-7890.
+4. No Google Ads account yet? Do not let them create one. Google pushes new accounts straight into a campaign and a card. Take the Google email they want it under and their business name, and we set it up with them as the owner.
+   - In the CRM: "Copy the Google Ads access message" (short) or "Copy step-by-step" (long) if they do it on their own.
+
+GOOGLE BUSINESS PROFILE
+1. Find which Google account owns the profile: Google the business name and state, click "Own this business?" in the profile card. Google shows a masked email. Ask the owner which account that is.
+2. Signed in as that account: business.google.com, the listing, People and access, add our email as Manager. Manager, not Owner.
+3. While you are in that Google account, get Search Console and Google Analytics access too. If either does not exist, set it up on the call.
+
+WEBSITE AND DOMAIN
+1. Website admin access (WordPress, Wix, Squarespace): send ourselves an admin invite from inside their account.
+2. Domain access (GoDaddy, Cloudflare, wherever it lives): only to add a few DNS records so GHL emails do not land in spam. Tell them exactly that.
+3. Privacy policy page: Meta will not create a lead form without one. Find it or note that one has to be added, and put the link on the client record.
+
+PHOTOS AND OTHER LEAD SOURCES
+1. Photos folder: job-site photos, trucks, the owner and the team, in daylight. Every ad is built from this folder, so an empty folder means stock-looking ads.
+   - The folder must be set to "Anyone with the link" (Viewer) as well as shared with the CRM address, or the editor cannot open it.
+2. Route their other lead sources into GHL: Angi, Thumbtack, Yelp, the website form. If every lead lands in one place, the owner stops looking in four places.
+
+WRAP UP
+1. Send the recap in the email thread: what was done, what is still outstanding and who owes it, and when they hear from us next.
+   - In the CRM: the call script builds the recap for you. Copy and send.
+
+## PHASE 4: ACCESS CHECK (the day after the call)
+
+Access is not done until the CRM can see it. Check each one:
+
+1. Meta: the client page shows their ad account and Page connected. If not, use "Detect from Meta" on the Meta ad account card.
+2. Google Ads: put their customer ID in on the client page (Google Ads panel) and click Save and sync.
+   - Connected: numbers start showing.
+   - "Google has not let us in yet": they still need to allow our domain or add us. Send the step-by-step.
+   - Accept the Google invite in the marketing@workingclassgroup.com inbox.
+3. Google Business Profile: accept the Manager invite, then flip the Google Business switch when the profile work starts.
+4. Photos: the folder is linked on the client page and has at least a few real photos in it.
+5. Website: the AI chat reads their site on its own the first time you open the client's chat. Check the strip at the top of the chat says "Knows their website". If there is no website on file, type it in there.
+
+Anything missing goes back in the email thread, named, with who owes it.
+
+## PHASE 5: BUILD
+
+### GOHIGHLEVEL (if on the plan)
+1. Build the backend: texting registration (A2P), the pipeline template, the Meta lead form connection and the SMS follow-up.
+2. Test it with a fake lead: it should land in the pipeline and get the follow-up text.
+3. Flip "GHL live" on the client page once real leads flow in.
+
+THE ADS
+1. Open the client chat and press the orange Refill button for five owner video scripts for this time of year. The chat already knows their intake, their website, their offers and their reviews.
+2. Build the statics in the Ad Studio from their real photos. Use their real offer, their real review count and their real towns. Never a placeholder.
+3. Launch rule: launch with images. Stack five or six different creatives in one broad ad set and let Meta pick the winners. Do not split a small budget into several campaigns.
+4. Get the owner video within five days of launch. Never hold the launch waiting for video.
+5. Send the ads to the owner for approval before they go live.
+
+## PHASE 6: LAUNCH AND RUN
+
+LAUNCH
+1. Publish from the client page (Publish tab). Ads go up paused.
+2. Switch them on in Ads Manager.
+3. Flip "Meta ads live" on the client page so the nightly sync and the reports pick them up.
+4. Tell the owner in the thread: ads are live, what to expect in the first week, and that the first few days are Meta learning.
+
+THE FIRST 30 DAYS
+1. Do not judge an ad too early. Give it about one and a half times the account's cost per lead in spend before calling it.
+2. Meta syncs every morning on its own. Check the client's Meta page (Reports, Meta, click the client) a few times a week.
+3. Log anything Meta cannot see, like LSA numbers and booked jobs, with Log KPIs on the client page every week.
+4. Kill what is spending with no leads, keep the winners, and put a new ad up at least every 10 days. The CRM flags any client past 10 days without a new ad.
+5. Send the monthly report at the end of the month. Reports, Housekeeping shows who was sent one.
+
+---
+
+WHERE THINGS ARE IN THE CRM
+
+- What is next for one client: the client page, Next up bar at the top
+- Every client's onboarding steps: Onboarding Progress
+- Every copy and paste message: the client page Next up bar, or Quick copy on the Dashboard
+- The live onboarding call script: the client page, "Open the call script"
+- Payments and setup fees: Payments
+- Ad numbers: Reports, then Meta or Google Ads, then click the client
+- Scripts and ad ideas: the client page, "Ask about" the client, then Refill
+
+IF A CLIENT GOES QUIET
+
+1. Day 2 with no form: nudge in the thread.
+2. Day 5: call them. Most stalls are one confusing step, usually Meta or Google access.
+3. Offer a 15 minute screen share and do the step with them. It is faster than another email.
+
+IF A CLIENT PAUSES
+
+Use "Pause client" on the client page. They stop counting toward monthly revenue from that day, the months inside the pause are not owed, and the 10 day new ad flag leaves them alone. "Resume client" when they come back.
+

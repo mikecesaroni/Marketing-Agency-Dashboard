@@ -6,7 +6,9 @@
 // every SOP. Markdown that happens to be there (#, **bold**, `code`) still
 // works, so both styles render.
 
-const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|https?:\/\/[^\s<>()]+|[\w.+-]+@[\w-]+\.[\w.]+)/g
+// A link stops before trailing punctuation, so "open https://x.com/page, then"
+// links to the page and not to "page,".
+const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|https?:\/\/[^\s<>()]*[^\s<>().,;:!?'"]|[\w.+-]+@[\w-]+\.[\w]+(?:\.[\w]+)*)/g
 
 function inline(text, keyPrefix) {
   return text.split(INLINE).map((part, i) => {

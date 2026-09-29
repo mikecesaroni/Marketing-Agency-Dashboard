@@ -68,10 +68,11 @@ const STATUS_STYLES = {
   done: 'bg-green-100 text-green-800',
 }
 
+// Everyone first and by default (asked for 2026-09-29); the others narrow it.
 const VIEWS = [
+  ['all', 'Everyone'],
   ['us', 'Needs us'],
   ['client', 'Waiting on client'],
-  ['all', 'Everyone'],
   ['launched', 'Launched'],
 ]
 
@@ -273,7 +274,7 @@ function ClientRow({ row, open, onToggle, onModal, onEdit, onStatus, onAssign, o
 export default function DeliverablesPage() {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
-  const [view, setView] = useState('us')
+  const [view, setView] = useState('all')
   const [who, setWho] = useState('all')
   const [query, setQuery] = useState('')
   const [toggled, setToggled] = useState({})
