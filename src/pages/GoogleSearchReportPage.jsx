@@ -24,7 +24,7 @@ import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough } from '../l
 import CopySetupMessageButton from '../components/CopySetupMessageButton'
 import GoogleAdsIdInput from '../components/GoogleAdsIdInput'
 import { explainSyncError, isAccessError } from '../lib/googleAdsId'
-import { AGENCY_EMAIL } from '../lib/agencyEmail'
+import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from '../lib/agencyEmail'
 
 /**
  * Google Search across every client, on a page of its own.
@@ -443,7 +443,7 @@ export default function GoogleSearchReportPage() {
           {todo.length > 0 && (
             <>
               <p className="mt-4 text-xs text-slate-400">
-                Send the message: the client adds {AGENCY_EMAIL} as a user and replies with their customer ID. Accept the
+                Send the message: the client allows {AGENCY_EMAIL_DOMAIN} on their Security tab, adds {AGENCY_EMAIL} as a user and replies with their customer ID. Accept the
                 invite in that inbox, then put the ID in beside their name. It saves and syncs on the spot.
               </p>
               {/* One row per client still to do, with the box right there. */}

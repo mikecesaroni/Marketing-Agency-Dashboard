@@ -7,7 +7,7 @@ import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough, GOOGLE_ADS_
 import CopySetupMessageButton from './CopySetupMessageButton'
 import GoogleAdsIdInput from './GoogleAdsIdInput'
 import { dashedId, explainSyncError, isAccessError } from '../lib/googleAdsId'
-import { AGENCY_EMAIL } from '../lib/agencyEmail'
+import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from '../lib/agencyEmail'
 
 /**
  * Google Search, for one client: where the money went and what to switch off.
@@ -242,8 +242,8 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
           </div>
         </div>
         <p className="mb-3 text-sm text-slate-600">
-          Not connected. Send the client the message: they add {AGENCY_EMAIL} as a user on their
-          Google Ads and reply with their customer ID. Accept the invite in that inbox, put the
+          Not connected. Send the client the message: they allow {AGENCY_EMAIL_DOMAIN} on their
+          Google Ads Security tab, add {AGENCY_EMAIL} as a user and reply with their customer ID. Accept the invite in that inbox, put the
           ID in below, and it syncs straight away.
         </p>
         <div className="space-y-3">

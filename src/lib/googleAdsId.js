@@ -39,7 +39,7 @@ export function explainSyncError(error) {
     return `Google let us in, but saving the numbers hit a problem on our side: ${e.slice(0, 200)}`
   }
   if (REFUSED.test(e)) {
-    return `Google has not let us in yet. The client still needs to add ${AGENCY_EMAIL} as a user (send them the step-by-step), and we need to accept the invite. It connects on the next sync after that.`
+    return `Google has not let us in yet. The client still needs to allow our domain on their Security tab and add ${AGENCY_EMAIL} as a user (send them the step-by-step), and we need to accept the invite. It connects on the next sync after that.`
   }
   if (NOT_ENABLED.test(e)) {
     return 'That Google Ads account is cancelled or not set up yet, so there is nothing to read.'
