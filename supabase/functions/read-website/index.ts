@@ -243,7 +243,9 @@ type Page = { url: string; kind: string; text: string; meta: ReturnType<typeof p
 
 /** One page, as plain HTML when that has words, through the reader when it does not. */
 async function readPage(url: string, kind: string): Promise<Page | null> {
-  const raw = await fetchPage(url)
+  // A broken certificate is common on small business sites; the plain http
+  // address usually still answers.
+  const raw = (await fetchPage(url)) || (url.startsWith('https://') ? await fetchPage(`http://${url.slice(8)}`) : null)
   const text = raw ? htmlToText(raw.html) : ''
   if (raw && text.length >= SHELL_CHARS) {
     return { url: raw.url, kind, text, meta: pageMeta(raw.html), links: sameSiteLinks(raw.html, raw.url), rendered: false }
@@ -363,7 +365,7 @@ export async function serve(req: Request): Promise<Response> {
     return null
   }
   const [clients, intakes, ghls] = await Promise.all([
-    get(`clients?id=eq.${id}&select=id,name,website_url,website_profile_url`),
+    get(`clients?id=eq.${id}&select=id,name,website_url,website_profile_url,website_profile_error,website_profile`),
     get(`onboarding_intake?client_id=eq.${id}&select=website,business_name`),
     get(`ghl_setup?client_id=eq.${id}&select=website_url`),
   ])
@@ -374,7 +376,11 @@ export async function serve(req: Request): Promise<Response> {
 
   const typed = body.url ? siteUrl(body.url) : ''
   if (body.url && !typed) return json({ error: 'That does not look like a web address.' }, 400)
-  const start = typed || pickWebsite([intakes?.[0]?.website, client.website_url, ghls?.[0]?.website_url, client.website_profile_url])
+  // An address that last read cleanly comes first: it is either what the
+  // forms say anyway, or a correction somebody typed in the chat (an intake
+  // with a typo in the domain), which should stick.
+  const lastGood = client.website_profile && !client.website_profile_error ? client.website_profile_url : ''
+  const start = typed || pickWebsite([lastGood, intakes?.[0]?.website, client.website_url, ghls?.[0]?.website_url, client.website_profile_url])
 
   const save = async (fields: Record<string, unknown>) => {
     await fetch(`${supabaseUrl}/rest/v1/clients?id=eq.${id}`, {
