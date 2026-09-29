@@ -17,6 +17,7 @@
 // Pure: scripts/check-next-steps.mjs runs it in Node.
 
 import { GHL_BACKEND_KEYS } from './adsReady.js'
+import { dashedId, isAccessError } from './googleAdsId.js'
 
 export const OWNER = { us: 'us', client: 'client' }
 
@@ -108,6 +109,12 @@ export function nextSteps(ctx) {
   const liveDone = Boolean(c.meta_ads_active)
   const lsaApplies = Number(c.lsa_budget_per_day) > 0 || Boolean(c.lsa_active) || filled(intake?.lsa_status) || Number(intake?.lsa_ad_budget_per_day) > 0
   const gbpApplies = intake ? intake.has_google_business !== false : true
+  // One Google Ads login covers Search and Local Services, so either one
+  // planned means asking for Google Ads access.
+  const googleId = String(c.google_ads_customer_id || '').replace(/\D/g, '')
+  const googleApplies = lsaApplies || Boolean(googleId)
+  const googleRefused = Boolean(googleId) && isAccessError(c.google_ads_sync_error)
+  const googleDone = Boolean(googleId) && !googleRefused
 
   const steps = []
   const add = (s) => steps.push(s)
@@ -212,16 +219,21 @@ export function nextSteps(ctx) {
       detail: c.gbp_optimized ? 'Optimized.' : 'Ask for manager access, then run the GBP agent brief.',
     })
   }
-  if (lsaApplies) {
+  if (googleApplies) {
     add({
-      key: 'lsa-access',
+      key: 'google-ads-access',
       phase: 'Access',
-      title: 'Google LSA access',
+      title: 'Google Ads access',
       owner: OWNER.client,
       applies: true,
-      done: Boolean(c.lsa_active),
-      action: { kind: 'lsa-access', label: 'Copy the LSA access message' },
-      detail: c.lsa_active ? 'Live.' : 'Ask for manager access to their LSA account.',
+      done: googleDone,
+      // The same message as "Google Ads access request" in the copy panel.
+      action: { kind: 'google-ads-access', label: 'Copy the Google Ads access message' },
+      detail: googleDone
+        ? `Connected: ${dashedId(googleId)}.`
+        : googleRefused
+          ? 'ID saved, but Google has not let us in yet. Send the step-by-step.'
+          : 'They allow our domain, add us as a user and send their customer ID. Put it in on the Google Ads panel.',
     })
   }
 

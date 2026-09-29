@@ -13,14 +13,12 @@ const FLAG_STEPS = {
   'ghl-live': { ghl_active: true },
   'go-live': { meta_ads_active: true },
   'gbp-access': { gbp_optimized: true },
-  'lsa-access': { lsa_active: true },
 }
 
 const FLAG_UNDO = {
   'ghl-live': { ghl_active: false },
   'go-live': { meta_ads_active: false },
   'gbp-access': { gbp_optimized: false },
-  'lsa-access': { lsa_active: false },
 }
 
 /** Steps a person is not allowed to wave through: money is recorded on Payments. */

@@ -484,9 +484,9 @@ export default function DeliverablesPage() {
         <GbpSetupPanel />
       </details>
 
-      {modalRow && ['meta-access', 'lsa-access', 'gbp'].includes(modalKind) && (
+      {modalRow && ['meta-access', 'google-ads-access', 'gbp'].includes(modalKind) && (
         <SetupMessageModal
-          channel={modalKind === 'meta-access' ? 'meta' : modalKind === 'lsa-access' ? 'lsa' : 'gbp'}
+          channel={modalKind === 'meta-access' ? 'meta' : modalKind === 'google-ads-access' ? 'googleads' : 'gbp'}
           client={modalRow.client}
           intake={modalRow.intake}
           onClose={() => setModal(null)}

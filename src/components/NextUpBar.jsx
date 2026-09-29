@@ -63,7 +63,7 @@ export function PipelineStrip({ result, compact = false }) {
 
 function DoneControl({ step, onDone, onUndo, size = 'sm' }) {
   if (step.done) {
-    if (!(step.manual || ['ghl-live', 'go-live', 'gbp-access', 'lsa-access'].includes(step.key)) || !onUndo) return null
+    if (!(step.manual || ['ghl-live', 'go-live', 'gbp-access'].includes(step.key)) || !onUndo) return null
     return (
       <button type="button" onClick={() => onUndo(step)} title="Take this back" className="flex-shrink-0 text-[11px] text-slate-400 hover:text-slate-700 hover:underline">
         undo

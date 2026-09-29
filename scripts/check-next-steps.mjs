@@ -132,8 +132,15 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
 
 // --- LSA only when it applies ------------------------------------------------------
 {
-  check('no LSA step by default', keys(nextSteps(base())).includes('lsa-access'), false)
-  check('LSA step with a budget', keys(nextSteps(base({ client: { lsa_budget_per_day: 20 } }))).includes('lsa-access'), true)
+  check('no Google Ads step by default', keys(nextSteps(base())).includes('google-ads-access'), false)
+  check('Google Ads step when LSA is planned', keys(nextSteps(base({ client: { lsa_budget_per_day: 20 } }))).includes('google-ads-access'), true)
+  {
+    const step = (client) => nextSteps(base({ client })).steps.find((s) => s.key === 'google-ads-access')
+    check('Google Ads access is done once the ID is in and Google let us in',
+      [step({ lsa_budget_per_day: 20 }).done, step({ google_ads_customer_id: '5192851350' }).done, step({ google_ads_customer_id: '5192851350', google_ads_sync_error: 'The caller does not have permission' }).done],
+      [false, true, false])
+    check('its button copies the Google Ads access message', step({ lsa_budget_per_day: 20 }).action.kind, 'google-ads-access')
+  }
   check('no GBP step when the intake says no profile', keys(nextSteps(base({ intake: { has_google_business: false } }))).includes('gbp-access'), false)
 }
 
@@ -149,7 +156,7 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
   check('next moves on to creatives', after.next.key, 'creatives')
   const both = nextSteps({ ...ctx, client: { ...ctx.client, drive_folder_id: 'f' }, overrides: [{ step_key: 'photos', done_at: '2026-09-18', done_by: 'Maria' }] })
   check('data done plus an override keeps the data detail', both.steps.find((s) => s.key === 'photos').detail, 'Drive folder linked.')
-  check('an override for a step that does not apply is ignored', nextSteps({ ...ctx, overrides: [{ step_key: 'lsa-access', done_at: '2026-09-18' }] }).steps.some((s) => s.key === 'lsa-access'), false)
+  check('an override for a step that does not apply is ignored', nextSteps({ ...ctx, overrides: [{ step_key: 'google-ads-access', done_at: '2026-09-18' }] }).steps.some((s) => s.key === 'google-ads-access'), false)
 }
 
 check('phases are in launch order', PHASES, ['Sign up', 'Access', 'Build', 'Launch', 'Run'])

@@ -289,8 +289,8 @@ export default function ClientDetailPage() {
         return scrollTo('onboarding-call')
       case 'meta-access':
         return setSetupModal('meta')
-      case 'lsa-access':
-        return setSetupModal('lsa')
+      case 'google-ads-access':
+        return setSetupModal('googleads')
       case 'gbp':
         return setSetupModal('gbp')
       case 'ghl-toggle':
