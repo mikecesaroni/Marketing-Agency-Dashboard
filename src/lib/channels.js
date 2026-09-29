@@ -12,7 +12,7 @@
 
 export const CHANNELS = {
   meta: { key: 'meta', label: 'Meta', long: 'Meta Ads', color: '#3987e5', soft: 'rgba(57,135,229,0.14)', ring: 'rgba(57,135,229,0.35)' },
-  google: { key: 'google', label: 'Google', long: 'Google Search', color: '#199e70', soft: 'rgba(25,158,112,0.14)', ring: 'rgba(25,158,112,0.35)' },
+  google: { key: 'google', label: 'Google', long: 'Google Ads', color: '#199e70', soft: 'rgba(25,158,112,0.14)', ring: 'rgba(25,158,112,0.35)' },
   lsa: { key: 'lsa', label: 'LSA', long: 'Google LSA', color: '#d95926', soft: 'rgba(217,89,38,0.14)', ring: 'rgba(217,89,38,0.35)' },
 }
 

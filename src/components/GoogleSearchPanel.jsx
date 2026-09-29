@@ -235,7 +235,7 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-semibold text-slate-900">Google Search</h3>
+          <h3 className="font-semibold text-slate-900">Google Ads</h3>
           <div className="flex flex-wrap gap-1.5">
             <CopySetupMessageButton message={buildGoogleAdsAccessMessage()} label="Copy access request" />
             <CopySetupMessageButton message={buildGoogleAdsLinkWalkthrough()} label="Copy step-by-step" />
@@ -262,7 +262,7 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-semibold text-slate-900">Google Search</h3>
+        <h3 className="font-semibold text-slate-900">Google Ads</h3>
         <div className="flex items-center gap-1">
           {WINDOWS.map(([n, label]) => (
             <button

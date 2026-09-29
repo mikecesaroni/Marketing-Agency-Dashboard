@@ -209,7 +209,7 @@ export const ROUTES = [
     contains: [
       'A dark analytics page, each channel in its own colour everywhere it appears: Meta blue, Google aqua, LSA orange.',
       'All channels first: blended spend, leads and cost per lead against the previous range, spend and leads split by channel, and cost per lead per channel.',
-      'One card per channel with spend, leads, cost per lead and a daily sparkline. The Meta card opens its own full page (/reports/meta) and the Google Search card opens its own (/reports/google-search).',
+      'One card per channel with spend, leads, cost per lead and a daily sparkline. The Meta card opens its own full page (/reports/meta) and the Google Ads card opens its own (/reports/google-search).',
       'Spend (or leads) by day with Meta and Google stacked, so each day shows which channel carried it. LSA is weekly, so it is on its card only.',
       'Ad spend, leads and cost per lead for the range, each against the previous equivalent range.',
       'A daily chart, switchable between ad spend, leads and cost per lead.',
@@ -241,20 +241,33 @@ export const ROUTES = [
   },
   {
     path: '/reports/google-search',
-    name: 'Google Search report',
+    name: 'Google Ads report',
     purpose: 'Google Ads across every client on one page: the totals Google has that Meta does not, and what to switch off.',
     contains: [
       'At the bottom: who is connected, N of M clients, how many have an ID Google refuses (No access yet), last synced when, both access messages to copy, and every client still to do with a Google Ads customer ID box beside their name. "Save & sync" saves the ID, syncs that client on the spot and says whether Google let us in.',
       'Eight tiles for the range, each against the previous range: spend, leads, cost per lead, conversion value, clicks, impressions, click-through rate, cost per click.',
       'A daily chart switchable between spend, leads, clicks and cost per lead. Campaign grain, so every campaign type counts.',
       '"Keywords not converting" and "Searches worth blocking" in dollars, never added together (they overlap), and where the spend goes by campaign type.',
-      'Every client: status (Live, No access yet, Connected no spend, No ID yet), spend, leads, cost per lead, clicks, CTR, CPC, conversion rate, active/total campaigns, wasted, blockable. Name opens the client\'s Google Search panel.',
+      'Every client: status (Live, No access yet, Connected no spend, No ID yet), spend, leads, cost per lead, clicks, CTR, CPC, conversion rate, active/total campaigns, wasted, blockable. Name opens that client\'s own Google Ads page (below).',
       'Block these searches (top terms across clients, certain ones flagged) and Keywords to act on (losing first, then winners).',
       'Every campaign across clients: type, status, spend, leads, cost per lead, clicks, CTR, CPC, value.',
     ],
     actions: [
       '"Sync Google" runs the nightly sync now for the range, including finding newly linked accounts. Range: 14, 30 or 90 days.',
       'Numbers come from google_campaign_daily (totals), google_keyword_daily (losing keywords) and google_search_term_daily (terms to block). The three are never summed with each other.',
+    ],
+  },
+  {
+    path: '/reports/google-search/:clientId',
+    name: 'One client on Google Ads',
+    purpose: 'Everything Google Ads has for one client, laid out like the Google Ads overview screen. Opened by clicking a client on the Google Ads report.',
+    contains: [
+      'Eight scorecards against the previous range: clicks, impressions, CTR, avg. CPC, cost, conversions, cost per conversion, conversion rate. Click one or two to chart them; two show one chart under the other (never two scales on one chart). Hover the chart for the day and value.',
+      'Tabs: Campaigns (status, type and every metric), Ad groups (from keyword data, so Search only), Keywords (with the Not converting / Too expensive / Winner verdicts), Search terms (added, excluded, or flagged to block) and Days. Every column header sorts.',
+    ],
+    actions: [
+      '"Sync" pulls this one client from Google now. Range: 7, 14, 30 or 90 days.',
+      'No customer ID yet, or Google refusing us, shows what to do instead of empty tables, with a link to their Google panel on the client page.',
     ],
   },
   {

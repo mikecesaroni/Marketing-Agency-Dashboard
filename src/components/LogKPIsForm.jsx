@@ -88,7 +88,7 @@ export default function LogKPIsForm({ clientId, clientName, onSuccess, onClose }
         >
           <option value="Meta">Meta (Facebook/Instagram)</option>
           <option value="LSA">LSA (Google Local Services)</option>
-          <option value="Google Search">Google Search (keywords)</option>
+          <option value="Google Search">Google Ads (keywords)</option>
         </select>
       </div>
 

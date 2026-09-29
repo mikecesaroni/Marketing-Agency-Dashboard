@@ -77,7 +77,7 @@ const PATH_NAMES = {
   ...Object.fromEntries(NAV_GROUPS.flatMap((g) => g.items).map((i) => [i.to, i.label])),
   '/dashboard': 'Dashboard',
   '/reports': 'Reports',
-  '/reports/google-search': 'Google Search',
+  '/reports/google-search': 'Google Ads',
   '/reports/meta': 'Meta Ads',
 }
 
@@ -87,7 +87,7 @@ const PATH_NAMES = {
  * Browser back underneath, so it returns to the exact place, filters and
  * all. It shows only when there is an earlier page in this tab, and is
  * named after that page, so from a client opened off the Google Search
- * report it reads "← Google Search".
+ * report it reads "← Google Ads".
  */
 /**
  * A key for this history entry that is unique and survives a reload.
