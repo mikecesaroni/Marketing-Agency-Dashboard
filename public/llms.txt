@@ -185,10 +185,11 @@ Meta report   /reports/meta
 Meta Ads across every client on one page: every rate Meta reports, where the ads ran, and which ads to act on.
 
 What is on it:
-  - Eight tiles for the range, each against the previous range, with a daily sparkline: spend, leads, cost per lead, click-through rate, clicks, cost per click, cost per 1,000 views (CPM) and hook rate (2-second video views over impressions, video ads only).
+  - Leads first: Meta leads for the range as the big number, the dates it covers and the change, with ad spend and cost per lead beside it and a leads sparkline.
+  - Five tiles under it, each against the previous range: click-through rate, clicks, cost per click, cost per 1,000 views (CPM) and hook rate (2-second video views over impressions, video ads only).
   - A daily chart switchable between spend, leads, clicks and cost per lead.
   - "Ads spending, no leads" in dollars, the number of winning ads, and where the ads ran (Facebook, Instagram, Audience Network...) with the share of spend and cost per lead on each. The placement split covers all ads.
-  - Every client: status (Running, No spend, No ad account), spend, leads, cost per lead, impressions, CTR, CPC, CPM, hook rate, live/total ads. Name opens the client's ad performance.
+  - Every client: status (Running, No spend, No ad account), spend, leads, cost per lead, impressions, CTR, CPC, CPM, hook rate, live/total ads. Name opens that client's own Meta page (below), in the same Live / All scope.
   - Ads to act on across clients: no leads ($75+ spent, none back), too expensive (over twice the average cost per lead), winners (3+ leads at under three quarters of it), each saying why.
   - Every campaign across clients, then at the bottom how many clients have a Meta ad account on file and who does not.
 
@@ -212,6 +213,18 @@ What is on it:
 What you can do:
   - "Sync Google" runs the nightly sync now for the range, including finding newly linked accounts. Range: 14, 30 or 90 days.
   - Numbers come from google_campaign_daily (totals), google_keyword_daily (losing keywords) and google_search_term_daily (terms to block). The three are never summed with each other.
+
+One client on Meta   /reports/meta/:clientId
+--------------------------------------------
+Everything Meta has for one client, laid out like the Ads Manager overview. Opened by clicking a client or campaign on the Meta report, which passes its Live / All scope along.
+
+What is on it:
+  - Eight scorecards against the previous range: amount spent, leads, cost per lead, impressions, link clicks, CTR, cost per click, CPM. Click one or two to chart them; two show one chart under the other. Hover the chart for the day and value.
+  - Tabs: Campaigns (live ads out of total), Ad sets, Ads (status, the No leads / Too expensive / Winner verdicts against this client's own cost per lead, and hook and hold rates on video), Placements (Facebook, Instagram and the rest with share of spend) and Days. Every column header sorts.
+
+What you can do:
+  - "Sync" pulls this one client from Meta now. Scope: Live ads or All ads (All by default). Range: 7, 14, 30 or 90 days.
+  - No ad account on file shows that instead of empty tables, with a link to the client page.
 
 One client on Google Ads   /reports/google-search/:clientId
 -----------------------------------------------------------

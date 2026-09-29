@@ -290,7 +290,7 @@ export default function MetaReportPage() {
                   return (
                     <DTr key={r.id}>
                       <DTd className="whitespace-nowrap">
-                        <Link to={`/client/${r.id}#ad-performance`} className="font-medium text-white hover:text-sky-300">{r.name}</Link>
+                        <Link to={`/reports/meta/${r.id}?scope=${scope}`} className="font-medium text-white hover:text-sky-300">{r.name}</Link>
                         {r.paused && <span className="ml-1.5 text-[10px] text-amber-300">⏸ paused</span>}
                       </DTd>
                       <DTd><Pill tone={st.tone}>{st.label}</Pill></DTd>
@@ -357,7 +357,7 @@ export default function MetaReportPage() {
                 <tbody>
                   {campaigns.slice(0, 60).map((c) => (
                     <DTr key={c.key}>
-                      <DTd className="whitespace-nowrap"><Link to={`/client/${c.clientId}#ad-performance`} className="text-white hover:text-sky-300">{c.clientName}</Link></DTd>
+                      <DTd className="whitespace-nowrap"><Link to={`/reports/meta/${c.clientId}?scope=${scope}`} className="text-white hover:text-sky-300">{c.clientName}</Link></DTd>
                       <DTd className="max-w-[280px] truncate" title={c.name}>{c.name}</DTd>
                       <DTd numeric className="font-semibold text-white">{money(c.spend)}</DTd>
                       <DTd numeric>{c.leads}</DTd>

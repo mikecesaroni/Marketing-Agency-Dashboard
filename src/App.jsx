@@ -11,6 +11,7 @@ import PaymentsPage from './pages/PaymentsPage'
 import ReportsPage from './pages/ReportsPage'
 import GoogleSearchReportPage from './pages/GoogleSearchReportPage'
 import GoogleClientReportPage from './pages/GoogleClientReportPage'
+import MetaClientReportPage from './pages/MetaClientReportPage'
 import MetaReportPage from './pages/MetaReportPage'
 import SopsPage from './pages/SopsPage'
 import AiSearchPage from './pages/AiSearchPage'
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/reports/google-search" element={<GoogleSearchReportPage />} />
         <Route path="/reports/google-search/:clientId" element={<GoogleClientReportPage />} />
         <Route path="/reports/meta" element={<MetaReportPage />} />
+        <Route path="/reports/meta/:clientId" element={<MetaClientReportPage />} />
         <Route path="/sops" element={<SopsPage />} />
         <Route path="/ai-search" element={<AiSearchPage />} />
         <Route path="/team" element={<TeamPage />} />
