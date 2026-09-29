@@ -4,11 +4,10 @@ import Layout from '../components/Layout'
 import UnmappedAccountsPanel from '../components/UnmappedAccountsPanel'
 import MonthlyReportsPanel from '../components/MonthlyReportsPanel'
 import { fetchAdRowsForRange, formatDate, getMonday, isLive, money } from '../lib/queries'
-import { LOWER_IS_BETTER, buildDailySeries, daysAgo, pctChange, totals as sumSeries } from '../lib/dailySeries'
-import DailyChart from '../components/DailyChart'
+import { buildDailySeries, daysAgo, pctChange, totals as sumSeries } from '../lib/dailySeries'
 import ChannelDailyChart from '../components/reports/ChannelDailyChart'
-import { ChannelDot, DTable, DTd, DTh, DTr, DarkButton, Delta, Eyebrow, KpiTile, MixBar, Panel, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
-import { CHANNELS, channelMix, chartTheme, compactMoney, mergeDaily, rangeLabel } from '../lib/channels'
+import { ChannelDot, DTable, DTd, DTh, DTr, DarkButton, Delta, Eyebrow, MixBar, Panel, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
+import { CHANNELS, channelMix, compactMoney, mergeDaily, rangeLabel } from '../lib/channels'
 import { dailyRows as googleDailyRows, inRange, kpis as googleKpis } from '../lib/googleSearchReport'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
 import { supabase } from '../lib/supabaseClient'
@@ -17,9 +16,9 @@ import { supabase } from '../lib/supabaseClient'
  * Every channel, every client, over time. The "how are we doing" page.
  *
  * Top to bottom: all channels blended, each channel on its own card, the
- * daily split between Meta and Google, Meta's own section, and every client
- * with their channel split. Google Search has a page of its own for the rest
- * of its numbers; its card is the door.
+ * daily split between Meta and Google, and every client with their channel
+ * split. Meta and Google Ads each have a full page of their own; their cards
+ * are the door.
  *
  * Meta comes from ad_daily (per ad, so Live ads can be filtered on status),
  * Google from google_campaign_daily (every campaign type), LSA from the
@@ -35,12 +34,6 @@ const RANGES = [
   { value: 14, label: '14d' },
   { value: 30, label: '30d' },
   { value: 90, label: '90d' },
-]
-
-const METRICS = [
-  { key: 'spend', label: 'Ad spend', format: (v) => money(v), axis: (v) => compactMoney(v) },
-  { key: 'leads', label: 'Leads', format: (v) => v.toFixed(v % 1 === 0 ? 0 : 1), axis: (v) => String(v) },
-  { key: 'cpl', label: 'Cost per lead', format: (v) => (v > 0 ? `$${v.toFixed(2)}` : '—'), axis: (v) => `$${Math.round(v)}` },
 ]
 
 const STACK_METRICS = [
@@ -60,7 +53,6 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [days, setDays] = useState(30)
-  const [metricKey, setMetricKey] = useState('spend')
   const [stackKey, setStackKey] = useState('spend')
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState('')
@@ -167,7 +159,6 @@ export default function ReportsPage() {
   const cplMax = Math.max(...cplBy.map((c) => c.cpl), 1)
   const stacked = useMemo(() => mergeDaily(metaDaily, googleDaily, stackKey), [metaDaily, googleDaily, stackKey])
   const stackMetric = STACK_METRICS.find((m) => m.value === stackKey)
-  const metric = METRICS.find((m) => m.key === metricKey)
 
   // ---- Every client, every channel ----------------------------------------
   const clientTable = useMemo(() => {
@@ -382,24 +373,6 @@ export default function ReportsPage() {
             />
             <ChannelDailyChart series={stacked} format={stackMetric.format} axis={stackMetric.axis} />
           </Panel>
-
-          {/* META'S OWN SECTION. */}
-          <section id="meta" className="scroll-mt-24">
-            <SectionTitle channel="meta" title="Meta" sub={`${scope === 'live' ? 'Live ads only' : 'All ads'} · clients only`} />
-            <div className="mb-4 grid gap-4 sm:grid-cols-3">
-              <KpiTile channel="meta" label="Ad spend" value={money(meta.spend)} delta={pctChange(meta.spend, metaBefore.spend)} spark={metaDaily.map((d) => d.spend)} />
-              <KpiTile channel="meta" label="Leads" value={meta.leads} delta={pctChange(meta.leads, metaBefore.leads)} spark={metaDaily.map((d) => d.leads)} />
-              <KpiTile channel="meta" label="Cost per lead" value={cplText(meta.cpl)} delta={pctChange(meta.cpl, metaBefore.cpl)} lowerIsBetter={LOWER_IS_BETTER.has('cpl')} spark={metaDaily.map((d) => d.cpl)} />
-            </div>
-            <Panel className="p-5">
-              <SectionTitle
-                title={`${metric.label} by day`}
-                sub="Daily columns with a 7-day average"
-                right={<Segmented size="sm" options={METRICS.map((m) => ({ value: m.key, label: m.label }))} value={metricKey} onChange={setMetricKey} />}
-              />
-              <DailyChart series={metaDaily} metric={metric} theme={chartTheme('meta')} />
-            </Panel>
-          </section>
 
           {/* EVERY CLIENT, EVERY CHANNEL. */}
           <section>
