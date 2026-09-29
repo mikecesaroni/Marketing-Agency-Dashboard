@@ -13,6 +13,7 @@ import { formatIntake } from './intakeSummary'
 import { PLAYBOOK } from './playbook'
 import { META_KNOWLEDGE } from './metaKnowledge'
 import { learningsBlock } from './adLearnings'
+import { websiteBlock } from './websiteProfile'
 
 // Below this daily budget the playbook says stay on one broad ad set. Splitting
 // a small budget across campaigns starves each of data and none exit learning.
@@ -211,7 +212,7 @@ Proof: ${val(i.reviews_star_rating)} stars, ${val(i.reviews_count)} reviews.
   Before/after photos: ${val(i.has_before_after_photos)}. Video footage: ${val(i.has_video_footage)}. Logo: ${val(i.has_logo)}.
 Where leads go: ${val(i.leads_go_to)} (answered by ${val(i.who_answers_leads)}, response time ${val(i.response_time_to_lead)})
 CRM / booking: ${val(i.crm_system)}
-
+${websiteBlock(client) ? `\n${websiteBlock(client)}\n` : ''}
 === STRUCTURE DECISION (already made, do not re-derive) ===
 ${stageLine}
 
