@@ -11,7 +11,9 @@
 // It reads the home page, then up to seven more pages of the same site picked
 // by what they are about (services, about, reviews, specials, financing,
 // service area, maintenance plans), strips them to text and has Claude write
-// the fact sheet. Only what the site actually says goes in.
+// the fact sheet. Only what the site actually says goes in. A page drawn by
+// JavaScript (an empty shell to a plain fetch) goes through a reader service
+// that renders it; see fetchRendered.
 //
 // Secrets: ANTHROPIC_API_KEY (already set for the client chat).
 
@@ -135,7 +137,7 @@ const PAGE_KINDS: [string, RegExp][] = [
   ['reviews', /review|testimonial|what.*(customers|clients).*say/i],
   ['about', /about|our.?story|who.?we.?are|meet|team|why.?(us|choose)/i],
   ['financing', /financ|payment.?plan|credit/i],
-  ['plans', /maintenance|membership|club|plan|agreement|protection/i],
+  ['plans', /maintenance|membership|club|\bplans?\b|agreement|protection/i],
   ['guarantee', /guarantee|warrant/i],
   ['areas', /service.?area|areas|locations|cities|communities|where.?we/i],
   ['services', /service|repair|install|replace|heating|cooling|furnace|air.?cond|ac-|hvac|plumb|drain|water.?heater|roof|electric|panel|generator|wash|lawn|pool|pest|mini.?split|heat.?pump|boiler|duct/i],
@@ -184,6 +186,80 @@ async function fetchPage(url: string): Promise<{ url: string; html: string } | n
   }
 }
 
+// Some sites (Belk's, many site builders) send an empty shell and draw the
+// page with JavaScript, so a plain fetch finds no words and no links. For
+// those, a public reader service loads the page in a real browser and hands
+// back its text. Only the public web address goes to it.
+const RENDER_URL = 'https://r.jina.ai/'
+const RENDER_MS = 40000
+// Below this many characters of text a page is taken to be a shell.
+export const SHELL_CHARS = 400
+
+async function fetchRendered(url: string): Promise<string | null> {
+  const ctl = new AbortController()
+  const timer = setTimeout(() => ctl.abort(), RENDER_MS)
+  try {
+    const res = await fetch(`${RENDER_URL}${url}`, { headers: { Accept: 'text/plain', 'X-Return-Format': 'markdown' }, signal: ctl.signal })
+    if (!res.ok) return null
+    return (await res.text()).slice(0, 300000)
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** The reader service's answer: a "Title:" header, then the page as markdown. */
+export function parseRendered(body: string): { title: string; markdown: string } {
+  const s = String(body || '')
+  const title = s.match(/^Title:\s*(.*)$/m)?.[1]?.trim() || ''
+  const i = s.indexOf('Markdown Content:')
+  return { title, markdown: (i >= 0 ? s.slice(i + 'Markdown Content:'.length) : s).trim() }
+}
+
+/** Markdown to plain lines: images dropped, links kept as their words. */
+export function markdownToText(md: string): string {
+  return String(md || '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`#>]+/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !/^[-=|: ]+$/.test(l))
+    .filter((l, i, all) => l.length > 40 || all.indexOf(l) === i)
+    .join('\n')
+}
+
+/** Same-site links out of markdown, in the shape sameSiteLinks gives. */
+export function markdownLinks(md: string, base: string): Link[] {
+  const anchors = [...String(md || '').matchAll(/\[((?:[^\[\]]|\[[^\]]*\])*)\]\((https?:\/\/[^)\s]+)\)/g)]
+    .map((m) => `<a href="${m[2]}">${markdownToText(m[1])}</a>`)
+    .join('')
+  return sameSiteLinks(anchors, base)
+}
+
+type Page = { url: string; kind: string; text: string; meta: ReturnType<typeof pageMeta>; links: Link[]; rendered: boolean }
+
+/** One page, as plain HTML when that has words, through the reader when it does not. */
+async function readPage(url: string, kind: string): Promise<Page | null> {
+  const raw = await fetchPage(url)
+  const text = raw ? htmlToText(raw.html) : ''
+  if (raw && text.length >= SHELL_CHARS) {
+    return { url: raw.url, kind, text, meta: pageMeta(raw.html), links: sameSiteLinks(raw.html, raw.url), rendered: false }
+  }
+  const body = await fetchRendered(raw?.url || url)
+  if (body) {
+    const { title, markdown } = parseRendered(body)
+    const words = markdownToText(markdown)
+    if (words.length > text.length) {
+      const meta = raw ? pageMeta(raw.html) : { title: '', description: '', structured: [] }
+      return { url: raw?.url || url, kind, text: words, meta: { ...meta, title: meta.title || title }, links: markdownLinks(markdown, raw?.url || url), rendered: true }
+    }
+  }
+  return raw ? { url: raw.url, kind, text, meta: pageMeta(raw.html), links: sameSiteLinks(raw.html, raw.url), rendered: false } : null
+}
+
 const INSTRUCTIONS = `You are reading a home-services business's own website so an ad agency can write video scripts and ads in their voice. Write a fact sheet from the pages below.
 
 Rules:
@@ -220,7 +296,7 @@ Notes on the sections:
 
 Start with the first section label. Nothing before it and nothing after the last section.`
 
-async function writeFactSheet(apiKey: string, name: string, pages: { url: string; kind: string; text: string; meta: ReturnType<typeof pageMeta> }[]) {
+async function writeFactSheet(apiKey: string, name: string, pages: Page[]) {
   const { default: Anthropic } = await import('npm:@anthropic-ai/sdk')
   const client = new Anthropic({ apiKey })
   let budget = TOTAL_CHARS
@@ -278,16 +354,21 @@ export async function serve(req: Request): Promise<Response> {
   if (!body.client_id) return json({ error: 'client_id is required' }, 400)
   const id = encodeURIComponent(body.client_id)
 
+  // One retry: a single dropped database call should not read as "no such client".
   const get = async (path: string) => {
-    const r = await fetch(`${supabaseUrl}/rest/v1/${path}`, { headers })
-    return r.ok ? r.json() : []
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const r = await fetch(`${supabaseUrl}/rest/v1/${path}`, { headers }).catch(() => null)
+      if (r?.ok) return r.json()
+    }
+    return null
   }
   const [clients, intakes, ghls] = await Promise.all([
     get(`clients?id=eq.${id}&select=id,name,website_url,website_profile_url`),
     get(`onboarding_intake?client_id=eq.${id}&select=website,business_name`),
     get(`ghl_setup?client_id=eq.${id}&select=website_url`),
   ])
-  const client = clients?.[0]
+  if (!clients) return json({ error: 'Could not read the client from the database. Try again.' }, 502)
+  const client = clients[0]
   if (!client) return json({ error: 'No such client' }, 404)
   const name = intakes?.[0]?.business_name || client.name
 
@@ -311,32 +392,27 @@ export async function serve(req: Request): Promise<Response> {
   // A saved address is often a landing page (/free-estimate); the home page
   // is where the menu to everything else is.
   const home = new URL(start).origin + '/'
-  const first = await fetchPage(home)
-  const landing = start !== home ? await fetchPage(start) : null
+  const [first, landing] = await Promise.all([readPage(home, 'home'), start !== home ? readPage(start, 'landing') : Promise.resolve(null)])
   if (!first && !landing) {
     const error = `Could not open ${home}. The site may be down or blocking readers.`
     if (!body.dry_run) await save({ website_profile_error: error, website_profile_url: start, website_profile_at: new Date().toISOString() })
     return json({ error }, 502)
   }
 
-  const homePage = first || landing!
-  const picks = pickPages([...sameSiteLinks(homePage.html, homePage.url), ...(landing && first ? sameSiteLinks(landing.html, landing.url) : [])])
+  const opened = [first, landing].filter(Boolean) as Page[]
+  const picks = pickPages(opened.flatMap((p) => p.links)).filter((p) => !opened.some((o) => o.url.replace(/\/$/, '') === p.url.replace(/\/$/, '')))
+  const room = MAX_PAGES - opened.length
   if (body.dry_run) {
-    return json({ ok: true, start, home: homePage.url, pages: [{ url: homePage.url, kind: 'home' }, ...(landing && first ? [{ url: landing.url, kind: 'landing' }] : []), ...picks] })
+    return json({ ok: true, start, pages: [...opened.map((p) => ({ url: p.url, kind: p.kind, rendered: p.rendered, chars: p.text.length })), ...picks.slice(0, room)] })
   }
   if (!apiKey) return json({ error: 'ANTHROPIC_API_KEY is not set on this project.' }, 500)
 
-  const others = (await Promise.all(picks.slice(0, landing && first ? MAX_PAGES - 2 : MAX_PAGES - 1).map((p) => fetchPage(p.url).then((r) => (r ? { ...r, kind: p.kind } : null))))).filter(Boolean) as { url: string; html: string; kind: string }[]
-  const pages = [{ ...homePage, kind: 'home' }, ...(landing && first ? [{ ...landing, kind: 'landing' }] : []), ...others].map((p) => ({
-    url: p.url,
-    kind: p.kind,
-    text: htmlToText(p.html),
-    meta: pageMeta(p.html),
-  }))
+  const others = (await Promise.all(picks.slice(0, room).map((p) => readPage(p.url, p.kind)))).filter(Boolean) as Page[]
+  const pages = [...opened, ...others]
 
   const words = pages.reduce((n, p) => n + p.text.length, 0)
   if (words < 200) {
-    const error = 'The site loaded but had almost no readable text (it may build itself with scripts). Paste the key facts into the chat instead.'
+    const error = 'The site loaded but had almost no readable text, even through the page reader. Paste the key facts into the chat instead.'
     await save({ website_profile_error: error, website_profile_url: start, website_profile_at: new Date().toISOString() })
     return json({ error, pages: pages.map((p) => p.url) }, 422)
   }

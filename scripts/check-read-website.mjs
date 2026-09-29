@@ -3,7 +3,7 @@
 // Run: node scripts/check-read-website.mjs
 
 import { shouldAutoRead, websiteBlock } from '../src/lib/websiteProfile.js'
-import { htmlToText, isPublicHost, pageMeta, pickPages, pickWebsite, sameSiteLinks, siteUrl } from '../supabase/functions/read-website/index.ts'
+import { markdownLinks, markdownToText, parseRendered, htmlToText, isPublicHost, pageMeta, pickPages, pickWebsite, sameSiteLinks, siteUrl } from '../supabase/functions/read-website/index.ts'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -51,6 +51,35 @@ check('page text keeps words and drops code', htmlToText(html).split('\n').slice
   const many = Array.from({ length: 20 }, (_, i) => ({ url: `https://x.com/services/thing-${i}`, text: `Service ${i}` }))
   check('never more than seven extra pages', pickPages(many).length, 7)
 }
+
+// --- sites drawn by JavaScript, through the reader service -----------------
+{
+  const body = `Title: Belk Heating & Cooling
+
+URL Source: https://belkhvac.com/
+
+Markdown Content:
+**Belk Heating & Cooling** Need Warranty?  Now Offering 10 YR - Parts, Labor, and Refrigeration Warranty!
+
+[View Now](https://belkhvac.com/warranty)
+
+[![Image 2: Belk logo](https://belkhvac.com/images/logo.svg)](https://belkhvac.com/)
+
+[![Image 4](https://belkhvac.com/images/metal-roof.png) Metal Roofing We install metal roofing systems.](https://belkhvac.com/metal-roofing)
+[Reviews](https://belkhvac.com/reviews) [Facebook](https://facebook.com/belk)
+---`
+  const r = parseRendered(body)
+  check('the reader answer splits into a title and the page', [r.title, r.markdown.startsWith('**Belk')], ['Belk Heating & Cooling', true])
+  check('markdown to plain words, images gone, link words kept',
+    markdownToText(r.markdown).split('\n'),
+    ['Belk Heating & Cooling Need Warranty? Now Offering 10 YR - Parts, Labor, and Refrigeration Warranty!', 'View Now', 'Metal Roofing We install metal roofing systems.', 'Reviews Facebook'])
+  check('same-site links out of the markdown, image-wrapped ones too',
+    markdownLinks(r.markdown, 'https://belkhvac.com/').map((l) => `${new URL(l.url).pathname} ${l.text}`),
+    ['/warranty View Now', '/metal-roofing Metal Roofing We install metal roofing systems.', '/reviews Reviews'])
+}
+check('a town called Plano is not a maintenance plan',
+  pickPages([{ url: 'https://x.com/tankless-water-heater-installation-plano', text: 'Tankless' }, { url: 'https://x.com/maintenance-plans', text: 'Plans' }]).map((p) => p.kind),
+  ['plans', 'services'])
 
 // --- the brief --------------------------------------------------------------
 {
