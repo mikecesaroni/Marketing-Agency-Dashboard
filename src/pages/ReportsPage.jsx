@@ -36,9 +36,10 @@ const RANGES = [
   { value: 90, label: '90d' },
 ]
 
+// Leads first and by default (asked for 2026-09-29), to match the headline.
 const STACK_METRICS = [
-  { value: 'spend', label: 'Spend', format: (v) => money(v), axis: (v) => compactMoney(v) },
   { value: 'leads', label: 'Leads', format: (v) => String(Math.round(v * 10) / 10), axis: (v) => String(v) },
+  { value: 'spend', label: 'Spend', format: (v) => money(v), axis: (v) => compactMoney(v) },
 ]
 
 const cplText = (v) => (v > 0 ? `$${v.toFixed(2)}` : '—')
@@ -53,7 +54,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [days, setDays] = useState(30)
-  const [stackKey, setStackKey] = useState('spend')
+  const [stackKey, setStackKey] = useState('leads')
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState('')
 
