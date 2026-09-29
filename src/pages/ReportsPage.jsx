@@ -64,6 +64,12 @@ const STACK_METRICS = [
 
 const cplText = (v) => (v > 0 ? `$${v.toFixed(2)}` : '—')
 
+/** "Aug 31 to Sep 29", the dates the headline numbers cover. */
+function rangeLabel(since, until) {
+  const f = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return `${f(since)} to ${f(until)}`
+}
+
 export default function ReportsPage() {
   const navigate = useNavigate()
   const [adRows, setAdRows] = useState([])
@@ -284,20 +290,21 @@ export default function ReportsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* ALL CHANNELS: the one number first, then how it splits. */}
+          {/* ALL CHANNELS: leads first (asked for 2026-09-29), then spend and cost per lead, then how it splits. */}
           <div className="grid gap-4 lg:grid-cols-3">
             <Panel className="p-5 lg:col-span-2">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <Eyebrow>All channels · ad spend</Eyebrow>
-                  <p className="mt-2 text-5xl font-semibold tracking-tight text-white md:text-6xl">{money(all.spend)}</p>
-                  <Delta value={pctChange(all.spend, allBefore.spend)} />
+                  <Eyebrow>All channels · leads · last {days} days</Eyebrow>
+                  <p className="mt-2 text-5xl font-semibold tracking-tight text-white md:text-6xl">{Math.round(all.leads).toLocaleString('en-US')}</p>
+                  <p className="mt-1 text-xs text-slate-500">{rangeLabel(windowStart, daysAgo(0))}</p>
+                  <Delta value={pctChange(all.leads, allBefore.leads)} />
                 </div>
                 <div className="grid grid-cols-2 gap-6 text-right">
                   <div>
-                    <Eyebrow>Leads</Eyebrow>
-                    <p className="mt-2 text-3xl font-semibold text-white">{Math.round(all.leads)}</p>
-                    <Delta value={pctChange(all.leads, allBefore.leads)} align="right" />
+                    <Eyebrow>Ad spend</Eyebrow>
+                    <p className="mt-2 text-3xl font-semibold text-white">{money(all.spend)}</p>
+                    <Delta value={pctChange(all.spend, allBefore.spend)} align="right" />
                   </div>
                   <div>
                     <Eyebrow>Blended cost / lead</Eyebrow>
@@ -307,15 +314,15 @@ export default function ReportsPage() {
                 </div>
               </div>
               <div className="mt-6">
-                <Eyebrow className="mb-2">Spend by channel</Eyebrow>
-                <MixBar mix={spendMix} format={money} />
+                <Eyebrow className="mb-2">Leads by channel</Eyebrow>
+                <MixBar mix={leadMix} format={(v) => String(Math.round(v))} />
               </div>
             </Panel>
 
             <Panel className="p-5">
-              <Eyebrow>Leads by channel</Eyebrow>
+              <Eyebrow>Spend by channel</Eyebrow>
               <div className="mt-3">
-                <MixBar mix={leadMix} format={(v) => String(Math.round(v))} />
+                <MixBar mix={spendMix} format={money} />
               </div>
               <Eyebrow className="mb-2 mt-6">Cost per lead · lower is better</Eyebrow>
               {cplBy.length === 0 ? (

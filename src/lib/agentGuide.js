@@ -208,7 +208,7 @@ export const ROUTES = [
     purpose: 'Ad performance across every client, over time. The place to answer "how are we doing".',
     contains: [
       'A dark analytics page, each channel in its own colour everywhere it appears: Meta blue, Google aqua, LSA orange.',
-      'All channels first: blended spend, leads and cost per lead against the previous range, spend and leads split by channel, and cost per lead per channel.',
+      'All channels first: total leads as the big number, with ad spend and blended cost per lead beside it, each against the previous range, spend and leads split by channel, and cost per lead per channel.',
       'One card per channel with spend, leads, cost per lead and a daily sparkline. The Meta card opens its own full page (/reports/meta) and the Google Ads card opens its own (/reports/google-search).',
       'Spend (or leads) by day with Meta and Google stacked, so each day shows which channel carried it. LSA is weekly, so it is on its card only.',
       'Ad spend, leads and cost per lead for the range, each against the previous equivalent range.',
