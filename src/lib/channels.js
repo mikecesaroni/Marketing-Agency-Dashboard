@@ -76,3 +76,9 @@ export function mergeDaily(metaSeries, googleSeries, key) {
     return { date: r.date, meta, google, total: meta + google }
   })
 }
+
+/** "Aug 31 to Sep 29", the dates the headline numbers cover. */
+export function rangeLabel(since, until) {
+  const f = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return `${f(since)} to ${f(until)}`
+}

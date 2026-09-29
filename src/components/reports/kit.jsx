@@ -254,3 +254,18 @@ export function Pill({ tone = 'neutral', children, title }) {
     </span>
   )
 }
+
+/** A delta against the previous window, coloured by whether it is good. */
+export function Delta({ value, lowerIsBetter = false, align = 'left', compact = false }) {
+  const has = value != null && Number.isFinite(value)
+  if (!has) return <p className={`mt-1 text-xs text-slate-500 ${align === 'right' ? 'text-right' : ''}`}>{compact ? '' : 'No earlier period'}</p>
+  const up = value > 0
+  const flat = Math.abs(value) < 0.5
+  const good = flat ? null : lowerIsBetter ? !up : up
+  const cls = good === null ? 'text-slate-400' : good ? 'text-emerald-300' : 'text-rose-300'
+  return (
+    <p className={`mt-1 text-xs tabular-nums ${cls} ${align === 'right' ? 'text-right' : ''}`}>
+      {flat ? '±' : up ? '▲' : '▼'} {Math.abs(value).toFixed(0)}%{compact ? '' : <span className="text-slate-500"> vs previous</span>}
+    </p>
+  )
+}

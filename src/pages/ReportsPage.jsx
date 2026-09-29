@@ -7,22 +7,8 @@ import { fetchAdRowsForRange, formatDate, getMonday, isLive, money } from '../li
 import { LOWER_IS_BETTER, buildDailySeries, daysAgo, pctChange, totals as sumSeries } from '../lib/dailySeries'
 import DailyChart from '../components/DailyChart'
 import ChannelDailyChart from '../components/reports/ChannelDailyChart'
-import {
-  ChannelDot,
-  DTable,
-  DTd,
-  DTh,
-  DTr,
-  DarkButton,
-  Eyebrow,
-  KpiTile,
-  MixBar,
-  Panel,
-  SectionTitle,
-  Segmented,
-  Sparkline,
-} from '../components/reports/kit'
-import { CHANNELS, channelMix, chartTheme, compactMoney, mergeDaily } from '../lib/channels'
+import { ChannelDot, DTable, DTd, DTh, DTr, DarkButton, Delta, Eyebrow, KpiTile, MixBar, Panel, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
+import { CHANNELS, channelMix, chartTheme, compactMoney, mergeDaily, rangeLabel } from '../lib/channels'
 import { dailyRows as googleDailyRows, inRange, kpis as googleKpis } from '../lib/googleSearchReport'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
 import { supabase } from '../lib/supabaseClient'
@@ -64,11 +50,6 @@ const STACK_METRICS = [
 
 const cplText = (v) => (v > 0 ? `$${v.toFixed(2)}` : '—')
 
-/** "Aug 31 to Sep 29", the dates the headline numbers cover. */
-function rangeLabel(since, until) {
-  const f = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  return `${f(since)} to ${f(until)}`
-}
 
 export default function ReportsPage() {
   const navigate = useNavigate()
@@ -296,7 +277,10 @@ export default function ReportsPage() {
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <Eyebrow>All channels · leads · last {days} days</Eyebrow>
-                  <p className="mt-2 text-5xl font-semibold tracking-tight text-white md:text-6xl">{Math.round(all.leads).toLocaleString('en-US')}</p>
+                  <p className="mt-2 text-5xl font-semibold tracking-tight text-white md:text-6xl">
+                    {Math.round(all.leads).toLocaleString('en-US')}
+                    <span className="ml-2 text-2xl font-medium text-slate-400 md:text-3xl">{Math.round(all.leads) === 1 ? 'lead' : 'leads'}</span>
+                  </p>
                   <p className="mt-1 text-xs text-slate-500">{rangeLabel(windowStart, daysAgo(0))}</p>
                   <Delta value={pctChange(all.leads, allBefore.leads)} />
                 </div>
@@ -511,17 +495,3 @@ function Stat({ label, value }) {
   )
 }
 
-/** A delta against the previous window, coloured by whether it is good. */
-function Delta({ value, lowerIsBetter = false, align = 'left', compact = false }) {
-  const has = value != null && Number.isFinite(value)
-  if (!has) return <p className={`mt-1 text-xs text-slate-500 ${align === 'right' ? 'text-right' : ''}`}>{compact ? '' : 'No earlier period'}</p>
-  const up = value > 0
-  const flat = Math.abs(value) < 0.5
-  const good = flat ? null : lowerIsBetter ? !up : up
-  const cls = good === null ? 'text-slate-400' : good ? 'text-emerald-300' : 'text-rose-300'
-  return (
-    <p className={`mt-1 text-xs tabular-nums ${cls} ${align === 'right' ? 'text-right' : ''}`}>
-      {flat ? '±' : up ? '▲' : '▼'} {Math.abs(value).toFixed(0)}%{compact ? '' : <span className="text-slate-500"> vs previous</span>}
-    </p>
-  )
-}

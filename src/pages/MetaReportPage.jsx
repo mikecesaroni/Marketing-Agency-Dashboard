@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import DailyChart from '../components/DailyChart'
-import { DTable, DTd, DTh, DTr, DarkButton, Eyebrow, KpiTile, Panel, Pill, SectionTitle, Segmented } from '../components/reports/kit'
-import { CHANNELS, chartTheme, compactMoney } from '../lib/channels'
+import { DTable, DTd, DTh, DTr, DarkButton, Delta, Eyebrow, KpiTile, Panel, Pill, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
+import { CHANNELS, chartTheme, compactMoney, rangeLabel } from '../lib/channels'
 import { supabase } from '../lib/supabaseClient'
 import { fetchAllRows } from '../lib/pagedQuery'
 import { isLive, money } from '../lib/queries'
@@ -177,10 +177,38 @@ export default function MetaReportPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <KpiTile channel="meta" label="Spend" value={money(now.spend)} delta={pctChange(now.spend, before.spend)} spark={spark('spend')} />
-            <KpiTile channel="meta" label="Leads" value={now.leads} delta={pctChange(now.leads, before.leads)} spark={spark('leads')} />
-            <KpiTile channel="meta" label="Cost per lead" value={dash(now.cpl, usd)} delta={pctChange(now.cpl, before.cpl)} lowerIsBetter={LOWER_IS_BETTER.has('cpl')} spark={spark('cpl')} />
+          {/* LEADS FIRST, like Reports (asked for 2026-09-29): the range and
+              its dates right under the number, spend and cost per lead beside. */}
+          <Panel channel="meta" className="p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <Eyebrow>Meta · leads · last {days} days</Eyebrow>
+                <p className="mt-2 text-5xl font-semibold tracking-tight text-white md:text-6xl">
+                    {Math.round(now.leads).toLocaleString('en-US')}
+                    <span className="ml-2 text-2xl font-medium text-slate-400 md:text-3xl">{Math.round(now.leads) === 1 ? 'lead' : 'leads'}</span>
+                  </p>
+                <p className="mt-1 text-xs text-slate-500">{rangeLabel(windowStart, daysAgo(0))}</p>
+                <Delta value={pctChange(now.leads, before.leads)} />
+              </div>
+              <div className="grid grid-cols-2 gap-6 text-right">
+                <div>
+                  <Eyebrow>Ad spend</Eyebrow>
+                  <p className="mt-2 text-3xl font-semibold text-white">{money(now.spend)}</p>
+                  <Delta value={pctChange(now.spend, before.spend)} align="right" />
+                </div>
+                <div>
+                  <Eyebrow>Cost per lead</Eyebrow>
+                  <p className="mt-2 text-3xl font-semibold text-white">{dash(now.cpl, usd)}</p>
+                  <Delta value={pctChange(now.cpl, before.cpl)} lowerIsBetter={LOWER_IS_BETTER.has('cpl')} align="right" />
+                </div>
+              </div>
+            </div>
+            <div className="mt-5">
+              <Sparkline values={spark('leads')} channel="meta" height={44} />
+            </div>
+          </Panel>
+
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             <KpiTile channel="meta" label="Click-through rate" value={dash(now.ctr, pct)} delta={pctChange(now.ctr, before.ctr)} spark={spark('ctr')} />
             <KpiTile channel="meta" label="Clicks" value={int(now.clicks)} delta={pctChange(now.clicks, before.clicks)} spark={spark('clicks')} />
             <KpiTile channel="meta" label="Cost per click" value={dash(now.cpc, usd)} delta={pctChange(now.cpc, before.cpc)} lowerIsBetter />
