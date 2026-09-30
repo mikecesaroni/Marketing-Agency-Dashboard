@@ -12,6 +12,7 @@ import {
   metaCampaignReport,
   metaClientReport,
   metaConnection,
+  pixelState,
   metaKpis,
   platformSplit,
 } from '../src/lib/metaReport.js'
@@ -107,6 +108,23 @@ check('campaigns biggest first, ours and archived out',
   check('platforms by spend, named, with share and cost per lead; empty ones and ours out',
     platformSplit(P, CLIENTS, SINCE, UNTIL).map((p) => [p.label, p.spend, p.share, p.cpl]),
     [['Facebook', 150, 75, 30], ['Instagram', 50, 25, 50]])
+}
+
+// --- pixels ------------------------------------------------------------------
+{
+  const P = [
+    { id: 'rel', name: 'Reliable', meta_ad_account_id: '2985507794986286', meta_pixel_id: '1702027560797350' },
+    { id: 'pil', name: 'Pillar HVAC', meta_ad_account_id: '1751786542754391', meta_pixel_id: null },
+    { id: 'luc', name: 'Luccia', meta_ad_account_id: null, meta_pixel_id: null },
+    { id: 'old', name: 'Archived', meta_ad_account_id: '1', meta_pixel_id: null, archived: true },
+  ]
+  check('pixel state per client: on file, missing, or no ad account to report to',
+    P.slice(0, 3).map(pixelState), ['on-file', 'missing', 'no-account'])
+  const c = metaConnection(P)
+  check('pixels count only clients with an ad account, archived left out',
+    [c.withPixel.map((x) => x.id), c.noPixel.map((x) => x.id)], [['rel'], ['pil']])
+  const rows = metaClientReport({ clients: P, rows: [], since: '2026-09-01' })
+  check('the client table carries the pixel', rows.map((r) => [r.id, r.pixel, r.pixelId]), [['pil', 'missing', ''], ['rel', 'on-file', '1702027560797350'], ['luc', 'no-account', '']])
 }
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)

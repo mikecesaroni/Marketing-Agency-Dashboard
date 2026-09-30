@@ -104,7 +104,7 @@ export default function MetaClientReportPage() {
     setError('')
     try {
       const [c, ads, platforms] = await Promise.all([
-        supabase.from('clients').select('id,name,meta_ad_account_id,paused_at').eq('id', clientId).maybeSingle(),
+        supabase.from('clients').select('id,name,meta_ad_account_id,meta_pixel_id,paused_at').eq('id', clientId).maybeSingle(),
         fetchAllRows(() =>
           supabase
             .from('ad_daily')
@@ -174,7 +174,7 @@ export default function MetaClientReportPage() {
     <Layout
       tone="dark"
       title={client?.name || 'Client'}
-      subtitle={client ? `Meta${client.meta_ad_account_id ? ` · act_${client.meta_ad_account_id}` : ''} · last ${days} days · ${scope === 'live' ? 'live ads only' : 'all ads'}` : 'Meta'}
+      subtitle={client ? `Meta${client.meta_ad_account_id ? ` · act_${client.meta_ad_account_id}` : ''}${client.meta_ad_account_id ? (client.meta_pixel_id ? ` · pixel ${client.meta_pixel_id}` : ' · no pixel yet') : ''} · last ${days} days · ${scope === 'live' ? 'live ads only' : 'all ads'}` : 'Meta'}
       actions={actions}
     >
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">

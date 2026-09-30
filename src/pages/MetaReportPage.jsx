@@ -50,6 +50,11 @@ const STATE = {
   'no-account': { label: 'No ad account', tone: 'neutral' },
 }
 
+const PIXEL = {
+  'on-file': { label: 'Pixel on file', tone: 'success' },
+  missing: { label: 'No pixel', tone: 'warning' },
+}
+
 const VERDICT = {
   dead: { label: 'No leads', tone: 'danger' },
   expensive: { label: 'Too expensive', tone: 'warning' },
@@ -79,7 +84,7 @@ export default function MetaReportPage() {
       // Twice the range for the ad rows, so every tile has the window before
       // it to compare with. Placements only need the window.
       const [clientsRes, ads, platforms] = await Promise.all([
-        supabase.from('clients').select('id,name,meta_ad_account_id,archived,is_internal,paused_at').order('name'),
+        supabase.from('clients').select('id,name,meta_ad_account_id,meta_pixel_id,archived,is_internal,paused_at').order('name'),
         fetchAllRows(() =>
           supabase
             .from('ad_daily')
@@ -271,7 +276,7 @@ export default function MetaReportPage() {
               <thead>
                 <tr>
                   <DTh>Client</DTh>
-                  <DTh>Status</DTh>
+                  <DTh>Status · pixel</DTh>
                   <DTh numeric>Spend</DTh>
                   <DTh numeric>Leads</DTh>
                   <DTh numeric>Cost/lead</DTh>
@@ -293,7 +298,16 @@ export default function MetaReportPage() {
                         <Link to={`/reports/meta/${r.id}?scope=${scope}`} className="font-medium text-white hover:text-sky-300">{r.name}</Link>
                         {r.paused && <span className="ml-1.5 text-[10px] text-amber-300">⏸ paused</span>}
                       </DTd>
-                      <DTd><Pill tone={st.tone}>{st.label}</Pill></DTd>
+                      <DTd className="whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Pill tone={st.tone}>{st.label}</Pill>
+                          {PIXEL[r.pixel] && (
+                            <Pill tone={PIXEL[r.pixel].tone} title={r.pixelId ? `Pixel ${r.pixelId}` : 'The ad account has no pixel Meta can see yet'}>
+                              {PIXEL[r.pixel].label}{r.pixelId ? ` …${r.pixelId.slice(-4)}` : ''}
+                            </Pill>
+                          )}
+                        </span>
+                      </DTd>
                       <DTd numeric className="font-semibold text-white">{off ? '—' : money(r.spend)}</DTd>
                       <DTd numeric>{off ? '—' : r.leads}</DTd>
                       <DTd numeric>{off ? '—' : dash(r.cpl, usd)}</DTd>
@@ -396,6 +410,25 @@ export default function MetaReportPage() {
                 . Open the client and use the Meta ad account card (Detect from Meta finds it).
               </p>
             )}
+
+            <div className="mt-5 border-t border-white/[0.06] pt-4">
+              <Eyebrow>Pixels on file</Eyebrow>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {link.withPixel.length}
+                <span className="text-base font-normal text-slate-500"> of {link.connected.length} with an ad account</span>
+              </p>
+              {link.noPixel.length > 0 && (
+                <p className="mt-2 text-xs text-slate-400">
+                  Once a pixel is shared to a client&apos;s ad account, the nightly Meta check picks up its ID on its own. No pixel yet:{' '}
+                  {link.noPixel.map((c, i) => (
+                    <span key={c.id}>
+                      {i > 0 && ', '}
+                      <Link to={`/reports/meta/${c.id}`} className="text-amber-300 hover:underline">{c.name}</Link>
+                    </span>
+                  ))}
+                </p>
+              )}
+            </div>
           </Panel>
         </div>
       )}

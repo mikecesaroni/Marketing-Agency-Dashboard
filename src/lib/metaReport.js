@@ -65,8 +65,21 @@ export function metaConnection(clients) {
   return {
     connected: mine.filter(hasAccount).sort(byName),
     missing: mine.filter((c) => !hasAccount(c)).sort(byName),
+    // Pixels, among clients that have an ad account (a pixel needs one to
+    // report to). meta_pixel_id is filled nightly by meta-account-health
+    // when the ad account has exactly one pixel.
+    withPixel: mine.filter((c) => hasAccount(c) && hasPixel(c)).sort(byName),
+    noPixel: mine.filter((c) => hasAccount(c) && !hasPixel(c)).sort(byName),
     total: mine.length,
   }
+}
+
+const hasPixel = (c) => Boolean(String(c.meta_pixel_id || '').replace(/\D/g, ''))
+
+/** 'on-file', 'missing', or 'no-account' (nothing for a pixel to report to yet). */
+export function pixelState(client) {
+  if (!hasAccount(client)) return 'no-account'
+  return hasPixel(client) ? 'on-file' : 'missing'
 }
 
 /**
@@ -92,6 +105,8 @@ export function metaClientReport({ clients, rows, since, until }) {
       id: c.id,
       name: c.name,
       paused: Boolean(c.paused_at),
+      pixelId: String(c.meta_pixel_id || ''),
+      pixel: pixelState(c),
       ...k,
       ads: ads.size,
       liveAds: live.size,
