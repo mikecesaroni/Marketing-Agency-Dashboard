@@ -294,7 +294,6 @@ export default function GoogleSearchReportPage() {
                     <DTh numeric>Campaigns</DTh>
                     <DTh numeric>Wasted</DTh>
                     <DTh numeric>Blockable</DTh>
-                    <DTh>Keywords</DTh>
                   </tr>
                 </thead>
                 <tbody>
@@ -306,6 +305,7 @@ export default function GoogleSearchReportPage() {
                         <DTd className="whitespace-nowrap">
                           <Link to={`/reports/client/${r.id}?channel=google`} className="font-medium text-white hover:text-emerald-300">{r.name}</Link>
                           {r.paused && <span className="ml-1.5 text-[10px] text-amber-300">⏸ paused</span>}
+                          <Link to={`/reports/client/${r.id}/keyword-plan`} title="Build their Google Ads keyword plan" className="ml-2 text-[11px] font-medium text-emerald-300/80 hover:text-white">✦ plan</Link>
                         </DTd>
                         <DTd><Pill tone={st.tone} title={r.syncError ? explainSyncError(r.syncError) : undefined}>{st.label}</Pill></DTd>
                         <DTd numeric className="font-semibold text-white">{off ? '—' : money(r.spend)}</DTd>
@@ -318,7 +318,6 @@ export default function GoogleSearchReportPage() {
                         <DTd numeric muted>{off ? '—' : `${r.activeCampaigns}/${r.campaigns}`}</DTd>
                         <DTd numeric className={r.wasted > 0 ? 'font-medium text-rose-300' : 'text-slate-500'}>{off ? '—' : r.wasted > 0 ? money(r.wasted) : '$0'}</DTd>
                         <DTd numeric className={r.blockable > 0 ? 'font-medium text-amber-300' : 'text-slate-500'}>{off ? '—' : r.blockable}</DTd>
-                        <DTd><Link to={`/reports/client/${r.id}/keyword-plan`} className="whitespace-nowrap text-xs font-medium text-emerald-300 hover:text-white">✦ Plan</Link></DTd>
                       </DTr>
                     )
                   })}
