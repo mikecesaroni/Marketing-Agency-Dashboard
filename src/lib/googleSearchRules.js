@@ -53,7 +53,7 @@ export const RULES = {
 //
 // Matched as whole words, so "parts" does not fire on "apartments" and "job"
 // does not fire on "jobsite".
-const JUNK_PATTERNS = [
+export const JUNK_PATTERNS = [
   { re: /\b(job|jobs|hiring|careers?|salary|salaries|apprentice|apprenticeship|employment|resume)\b/i, why: 'someone looking for work' },
   { re: /\b(training|school|schools|course|courses|certification|certified|license|licensing|class|classes)\b/i, why: 'someone training for the trade' },
   { re: /\b(diy|myself|yourself|how to|tutorial|youtube|instructions|manual)\b/i, why: 'someone doing it themselves' },

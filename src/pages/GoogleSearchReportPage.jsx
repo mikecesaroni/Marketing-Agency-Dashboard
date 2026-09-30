@@ -294,6 +294,7 @@ export default function GoogleSearchReportPage() {
                     <DTh numeric>Campaigns</DTh>
                     <DTh numeric>Wasted</DTh>
                     <DTh numeric>Blockable</DTh>
+                    <DTh>Keywords</DTh>
                   </tr>
                 </thead>
                 <tbody>
@@ -317,6 +318,7 @@ export default function GoogleSearchReportPage() {
                         <DTd numeric muted>{off ? '—' : `${r.activeCampaigns}/${r.campaigns}`}</DTd>
                         <DTd numeric className={r.wasted > 0 ? 'font-medium text-rose-300' : 'text-slate-500'}>{off ? '—' : r.wasted > 0 ? money(r.wasted) : '$0'}</DTd>
                         <DTd numeric className={r.blockable > 0 ? 'font-medium text-amber-300' : 'text-slate-500'}>{off ? '—' : r.blockable}</DTd>
+                        <DTd><Link to={`/reports/client/${r.id}/keyword-plan`} className="whitespace-nowrap text-xs font-medium text-emerald-300 hover:text-white">✦ Plan</Link></DTd>
                       </DTr>
                     )
                   })}

@@ -258,6 +258,19 @@ export const ROUTES = [
     ],
   },
   {
+    path: '/reports/client/:clientId/keyword-plan',
+    name: 'Google Ads keyword builder',
+    purpose: 'A Google Ads keyword plan for one client, built from what the CRM knows about them. Opened from "Keyword plan" on their Google Ads page, the Google Ads report, or the Google panel on the client page.',
+    contains: [
+      'What we ask Google for: seed searches (the trade\'s core set plus the services on their website), up to 10 places (from the intake and the website\'s service area), whether to read their site for more, and the average job value. All editable, then "Build the plan".',
+      'Google\'s planner answers with monthly searches, competition and bid ranges inside those places. Each idea is then read for what the searcher wants (Emergency, Repair, Install / replace, Pricing, Maintenance, Looking for a company, Brand, or Do not bid), which service line it is, whether the click pays for itself against the job value (Pays / Tight / Too pricey), its season (12-month sparkline), and whether the account already runs it (Running, Converting so add it, Wasted so block it).',
+      'The plan: campaigns by intent (Emergency & Repair, Installation & Replacement, Core Services, Maintenance & Tune-ups, Brand), ad groups by service, 3 to 15 keywords each, exact match for big clear buyers and phrase elsewhere. Untick to drop a keyword, click the match type to flip it; choices save to the plan. Negatives: junk searches Google surfaced, wasted search terms, and the standard home-services list. Estimates: monthly searches, spend, leads and cost per lead, labelled rough.',
+      'Export: Copy for Ads Editor (CSV with Campaign, Ad Group, Keyword, Criterion Type, Max CPC, plus negatives), Download CSV, Copy as text.',
+      'Until the Google API project has Basic access, Google refuses the volumes; the page then builds the plan from the seeds and towns alone, shows a dash for the numbers, and explains how to apply (manager account, Admin, API Center, Apply for Basic access).',
+    ],
+    actions: ['"Build the plan" / "Build again" asks Google (about ten seconds). Plans are saved per client in google_keyword_plans; the newest opens.'],
+  },
+  {
     path: '/reports/client/:clientId',
     aliases: ['/reports/meta/:clientId', '/reports/google-search/:clientId'],
     name: 'One client\'s ads',

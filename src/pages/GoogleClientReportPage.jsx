@@ -157,6 +157,9 @@ export default function GoogleClientReportPage({ switcher }) {
 
   const actions = (
     <div className="flex min-w-0 max-w-full items-center gap-2 overflow-x-auto pb-1">
+      <Link to={`/reports/client/${clientId}/keyword-plan`} className="whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-semibold text-white shadow" style={{ background: G }}>
+        ✦ Keyword plan
+      </Link>
       <DarkButton onClick={sync} disabled={syncing || noId}>{syncing ? 'Syncing…' : '↻ Sync'}</DarkButton>
       <Segmented options={RANGES} value={days} onChange={setDays} />
     </div>

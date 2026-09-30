@@ -11,6 +11,7 @@ import PaymentsPage from './pages/PaymentsPage'
 import ReportsPage from './pages/ReportsPage'
 import GoogleSearchReportPage from './pages/GoogleSearchReportPage'
 import ClientAdsPage, { ChannelRedirect } from './pages/ClientAdsPage'
+import KeywordPlanPage from './pages/KeywordPlanPage'
 import MetaReportPage from './pages/MetaReportPage'
 import SopsPage from './pages/SopsPage'
 import AiSearchPage from './pages/AiSearchPage'
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/reports/meta" element={<MetaReportPage />} />
         <Route path="/reports/meta/:clientId" element={<ChannelRedirect channel="meta" />} />
         <Route path="/reports/client/:clientId" element={<ClientAdsPage />} />
+        <Route path="/reports/client/:clientId/keyword-plan" element={<KeywordPlanPage />} />
         <Route path="/sops" element={<SopsPage />} />
         <Route path="/ai-search" element={<AiSearchPage />} />
         <Route path="/team" element={<TeamPage />} />

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { fetchAllRows } from '../lib/pagedQuery'
@@ -236,7 +237,8 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-semibold text-slate-900">Google Ads</h3>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Link to={`/reports/client/${client.id}/keyword-plan`} className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700">✦ Keyword plan</Link>
             <CopySetupMessageButton message={buildGoogleAdsAccessMessage()} label="Copy access request" />
             <CopySetupMessageButton message={buildGoogleAdsLinkWalkthrough()} label="Copy step-by-step" />
           </div>
