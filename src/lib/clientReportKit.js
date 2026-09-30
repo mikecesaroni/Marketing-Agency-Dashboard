@@ -55,3 +55,11 @@ export function sortRows(rows, key, dir) {
     })
     .map(([r]) => r)
 }
+
+/** Meta when they have an ad account, else Google Ads when they have an ID, else Meta. */
+export function defaultChannel(client) {
+  const has = (v) => Boolean(String(v || '').replace(/\D/g, ''))
+  if (has(client?.meta_ad_account_id)) return 'meta'
+  if (has(client?.google_ads_customer_id)) return 'google'
+  return 'meta'
+}

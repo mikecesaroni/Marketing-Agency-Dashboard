@@ -25,7 +25,7 @@ export function stepHref(clientId, step) {
     case 'report':
       return '/reports'
     case 'google-report':
-      return `/reports/google-search/${clientId}`
+      return `/reports/client/${clientId}?channel=google`
     // The message steps have no page of their own: from the dashboard they
     // go to the client page, whose Next-up bar has the copy button.
     case 'send-onboarding':

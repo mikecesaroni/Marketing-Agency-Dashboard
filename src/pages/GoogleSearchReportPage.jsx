@@ -303,7 +303,7 @@ export default function GoogleSearchReportPage() {
                     return (
                       <DTr key={r.id}>
                         <DTd className="whitespace-nowrap">
-                          <Link to={`/reports/google-search/${r.id}`} className="font-medium text-white hover:text-emerald-300">{r.name}</Link>
+                          <Link to={`/reports/client/${r.id}?channel=google`} className="font-medium text-white hover:text-emerald-300">{r.name}</Link>
                           {r.paused && <span className="ml-1.5 text-[10px] text-amber-300">⏸ paused</span>}
                         </DTd>
                         <DTd><Pill tone={st.tone} title={r.syncError ? explainSyncError(r.syncError) : undefined}>{st.label}</Pill></DTd>
@@ -393,7 +393,7 @@ export default function GoogleSearchReportPage() {
                   <tbody>
                     {campaigns.slice(0, 60).map((c) => (
                       <DTr key={c.key}>
-                        <DTd className="whitespace-nowrap"><Link to={`/reports/google-search/${c.clientId}`} className="text-white hover:text-emerald-300">{c.clientName}</Link></DTd>
+                        <DTd className="whitespace-nowrap"><Link to={`/reports/client/${c.clientId}?channel=google`} className="text-white hover:text-emerald-300">{c.clientName}</Link></DTd>
                         <DTd className="max-w-[260px] truncate" title={c.name}>{c.name}</DTd>
                         <DTd muted>{c.type}</DTd>
                         <DTd><Pill tone={c.status === 'ENABLED' ? 'success' : 'neutral'}>{c.status === 'ENABLED' ? 'Active' : c.status.toLowerCase() || '—'}</Pill></DTd>

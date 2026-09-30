@@ -162,6 +162,9 @@ export default function ReportsPage() {
   const stackMetric = STACK_METRICS.find((m) => m.value === stackKey)
 
   // ---- Every client, every channel ----------------------------------------
+  // A client's row opens their ad page on the channel that carried the most
+  // spend in this range, with the same range; the switch there flips it.
+  const adsLink = (r) => `/reports/client/${r.id}?channel=${r.google > r.meta ? 'google' : 'meta'}&days=${days}`
   const clientTable = useMemo(() => {
     const by = new Map()
     const row = (id, name) => {
@@ -396,9 +399,9 @@ export default function ReportsPage() {
                 </thead>
                 <tbody>
                   {clientTable.map((r) => (
-                    <DTr key={r.id} className="cursor-pointer" onClick={(e) => { if (!e.target.closest('a')) navigate(`/client/${r.id}#ad-performance`) }}>
+                    <DTr key={r.id} className="cursor-pointer" onClick={(e) => { if (!e.target.closest('a')) navigate(adsLink(r)) }}>
                       <DTd className="whitespace-nowrap">
-                        <Link to={`/client/${r.id}#ad-performance`} className="font-medium text-white hover:text-sky-300">{r.name}</Link>
+                        <Link to={adsLink(r)} className="font-medium text-white hover:text-sky-300">{r.name}</Link>
                       </DTd>
                       <DTd>
                         {/* Bar length is the client's total against the

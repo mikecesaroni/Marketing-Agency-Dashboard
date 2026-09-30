@@ -2,6 +2,7 @@
 // in the chart, and the campaign, ad group, keyword and search term tables.
 // Run: node scripts/check-google-client-report.mjs
 
+import { defaultChannel } from '../src/lib/clientReportKit.js'
 import { adGroupsFor, campaignsFor, dateRange, dayTotals, keywordsFor, sortRows, termsFor, togglePick } from '../src/lib/googleClientReport.js'
 
 let failures = 0
@@ -69,6 +70,10 @@ const TERMS = [
   check('text sorts A to Z by default', sortRows(rows, 'n').map((r) => r.n), ['a', 'b', 'c'])
   check('and flips when asked', sortRows(rows, 'v', 'asc').map((r) => r.n), ['b', 'a', 'c'])
 }
+
+check('the shared client ad page opens on Meta when there is an ad account, else Google Ads',
+  [defaultChannel({ meta_ad_account_id: '123', google_ads_customer_id: '5192851350' }), defaultChannel({ google_ads_customer_id: '519-285-1350' }), defaultChannel({}), defaultChannel(null)],
+  ['meta', 'google', 'meta', 'meta'])
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

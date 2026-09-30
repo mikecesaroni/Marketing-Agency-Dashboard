@@ -308,7 +308,7 @@ export default function ClientDetailPage() {
       case 'report':
         return navigate('/reports')
       case 'google-report':
-        return navigate(`/reports/google-search/${client.id}`)
+        return navigate(`/reports/client/${client.id}?channel=google`)
       default:
         return navigate('/deliverables')
     }

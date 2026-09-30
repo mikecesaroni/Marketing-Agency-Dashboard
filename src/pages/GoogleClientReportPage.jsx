@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout'
 import MetricLineChart from '../components/reports/MetricLineChart'
 import { Scorecard, SortTable } from '../components/reports/ClientReportParts'
@@ -65,9 +65,16 @@ function whenLabel(iso) {
   return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
-export default function GoogleClientReportPage() {
+export default function GoogleClientReportPage({ switcher }) {
   const { clientId } = useParams()
-  const [days, setDays] = useState(30)
+  // The range lives in the address, so the Meta / Google Ads switch keeps it.
+  const [params, setParams] = useSearchParams()
+  const days = RANGES.some((r) => r.value === Number(params.get('days'))) ? Number(params.get('days')) : 30
+  const setDays = (d) => {
+    const next = new URLSearchParams(params)
+    next.set('days', String(d))
+    setParams(next, { replace: true })
+  }
   const [picked, setPicked] = useState(['clicks', 'spend'])
   const [tab, setTab] = useState('campaigns')
   const [client, setClient] = useState(null)
@@ -162,7 +169,8 @@ export default function GoogleClientReportPage() {
       subtitle={client ? `Google Ads${client.google_ads_customer_id ? ` · ${dashedId(client.google_ads_customer_id)}` : ''} · last ${days} days · synced ${whenLabel(client.google_ads_synced_at)}` : 'Google Ads'}
       actions={actions}
     >
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        {switcher}
         {client && <Link to={`/client/${client.id}`} className="text-slate-400 hover:text-white">Client page →</Link>}
         {client?.paused_at && <span className="text-amber-300">⏸ On pause</span>}
       </div>

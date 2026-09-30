@@ -79,11 +79,20 @@ function statusPill(live, status) {
   return <Pill tone="neutral">{s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Off'}</Pill>
 }
 
-export default function MetaClientReportPage() {
+export default function MetaClientReportPage({ switcher }) {
   const { clientId } = useParams()
-  const [params] = useSearchParams()
-  const [days, setDays] = useState(30)
-  const [scope, setScope] = useState(params.get('scope') === 'live' ? 'live' : 'all')
+  // Range and scope live in the address, so the Meta / Google Ads switch
+  // keeps them and a copied link opens on the same view.
+  const [params, setParams] = useSearchParams()
+  const days = RANGES.some((r) => r.value === Number(params.get('days'))) ? Number(params.get('days')) : 30
+  const scope = params.get('scope') === 'live' ? 'live' : 'all'
+  const setParam = (key, value) => {
+    const next = new URLSearchParams(params)
+    next.set(key, String(value))
+    setParams(next, { replace: true })
+  }
+  const setDays = (d) => setParam('days', d)
+  const setScope = (s) => setParam('scope', s)
   const [picked, setPicked] = useState(['leads', 'spend'])
   const [tab, setTab] = useState('campaigns')
   const [client, setClient] = useState(null)
@@ -177,7 +186,8 @@ export default function MetaClientReportPage() {
       subtitle={client ? `Meta${client.meta_ad_account_id ? ` · act_${client.meta_ad_account_id}` : ''}${client.meta_ad_account_id ? (client.meta_pixel_id ? ` · pixel ${client.meta_pixel_id}` : ' · no pixel yet') : ''} · last ${days} days · ${scope === 'live' ? 'live ads only' : 'all ads'}` : 'Meta'}
       actions={actions}
     >
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        {switcher}
         {client && <Link to={`/client/${client.id}`} className="text-slate-400 hover:text-white">Client page →</Link>}
         {client?.paused_at && <span className="text-amber-300">⏸ On pause</span>}
       </div>

@@ -295,7 +295,7 @@ export default function MetaReportPage() {
                   return (
                     <DTr key={r.id}>
                       <DTd className="whitespace-nowrap">
-                        <Link to={`/reports/meta/${r.id}?scope=${scope}`} className="font-medium text-white hover:text-sky-300">{r.name}</Link>
+                        <Link to={`/reports/client/${r.id}?channel=meta&scope=${scope}`} className="font-medium text-white hover:text-sky-300">{r.name}</Link>
                         {r.paused && <span className="ml-1.5 text-[10px] text-amber-300">⏸ paused</span>}
                       </DTd>
                       <DTd className="whitespace-nowrap">
@@ -371,7 +371,7 @@ export default function MetaReportPage() {
                 <tbody>
                   {campaigns.slice(0, 60).map((c) => (
                     <DTr key={c.key}>
-                      <DTd className="whitespace-nowrap"><Link to={`/reports/meta/${c.clientId}?scope=${scope}`} className="text-white hover:text-sky-300">{c.clientName}</Link></DTd>
+                      <DTd className="whitespace-nowrap"><Link to={`/reports/client/${c.clientId}?channel=meta&scope=${scope}`} className="text-white hover:text-sky-300">{c.clientName}</Link></DTd>
                       <DTd className="max-w-[280px] truncate" title={c.name}>{c.name}</DTd>
                       <DTd numeric className="font-semibold text-white">{money(c.spend)}</DTd>
                       <DTd numeric>{c.leads}</DTd>
@@ -423,7 +423,7 @@ export default function MetaReportPage() {
                   {link.noPixel.map((c, i) => (
                     <span key={c.id}>
                       {i > 0 && ', '}
-                      <Link to={`/reports/meta/${c.id}`} className="text-amber-300 hover:underline">{c.name}</Link>
+                      <Link to={`/reports/client/${c.id}?channel=meta`} className="text-amber-300 hover:underline">{c.name}</Link>
                     </span>
                   ))}
                 </p>
