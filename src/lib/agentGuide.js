@@ -555,6 +555,10 @@ export const DOWNLOADS = [
 // retrying. Every one of these has actually caught somebody out.
 export const GOTCHAS = [
   {
+    title: 'Pages remember what they showed last',
+    body: 'The client list, a client page, the dashboard and the onboarding board put their last answer on screen at once and refresh it behind. So a number can change a moment after a page opens: the first paint is what was true on the last visit, the second is now. It lives for the browser tab only and is at most six hours old; a reload still asks the database every time.',
+  },
+  {
     title: 'Publishing an ad never spends money',
     body: 'Everything the CRM creates in Meta — campaigns, ad sets, ads — is created paused. Nothing delivers until somebody switches it on in Meta Ads Manager, which is a separate deliberate act outside this CRM. So publishing is safe; switching on is not.',
   },

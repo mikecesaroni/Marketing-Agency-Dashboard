@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import AddClientForm from '../components/AddClientForm'
 import { fetchClientsWithKPIs, money } from '../lib/queries'
+import { cached, keys } from '../lib/pageCache'
 import {
   Badge,
   Button,
@@ -112,9 +113,14 @@ export default function ClientsPage() {
     loadClients()
   }, [])
 
+  // The last list shows at once and refreshes behind it, so coming back
+  // from a client page does not start from a blank screen.
   const loadClients = async () => {
     try {
-      setClients(await fetchClientsWithKPIs())
+      await cached(keys.clients(), fetchClientsWithKPIs, (rows) => {
+        setClients(rows)
+        setLoading(false)
+      })
     } catch (err) {
       setError(err.message)
     } finally {

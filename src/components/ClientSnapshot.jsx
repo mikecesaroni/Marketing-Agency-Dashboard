@@ -6,6 +6,7 @@ import { isPausedPayment } from '../lib/billing'
 import { daysAgo } from '../lib/dailySeries'
 import { clientContact, clientGlance, taskCounts, telHref, websiteHref, websiteLabel } from '../lib/clientGlance'
 import { Card } from './ui'
+import { cached, keys } from '../lib/pageCache'
 
 /**
  * The top of a client page: how to reach them, and how they are doing.
@@ -24,17 +25,7 @@ export default function ClientSnapshot({ client, intake, tasks = [], showMoney =
   useEffect(() => {
     let cancelled = false
     const since = daysAgo(29)
-    Promise.all([
-      // Only the reachable-by fields: this table also holds an EIN.
-      supabase.from('ghl_setup').select('main_phone, support_email, website_url, business_city, authorized_rep_name').eq('client_id', client.id).maybeSingle(),
-      supabase.from('ad_daily').select('spend, leads').eq('client_id', client.id).gte('date', since),
-      supabase.from('google_campaign_daily').select('cost, conversions').eq('client_id', client.id).gte('date', since),
-      supabase.from('client_newest_ad').select('first_seen').eq('client_id', client.id).maybeSingle(),
-      supabase.from('published_ads').select('created_at').eq('client_id', client.id).order('created_at', { ascending: false }).limit(1),
-      showMoney
-        ? supabase.from('payments').select('id, payment_type, status, due_date, amount').eq('client_id', client.id).neq('status', 'paid').order('due_date')
-        : Promise.resolve({ data: null }),
-    ]).then(([g, meta, google, newest, published, pay]) => {
+    const apply = ([g, meta, google, newest, published, pay]) => {
       if (cancelled) return
       setGhl(g?.data || null)
       setGlance(
@@ -51,7 +42,20 @@ export default function ClientSnapshot({ client, intake, tasks = [], showMoney =
         const overdue = owed.filter((p) => p.due_date < todayIso())
         setMoney30({ next: owed.find((p) => p.due_date >= todayIso()) || null, overdue })
       }
-    })
+    }
+    // Cached per client (and whether money is included), so the strip paints
+    // at once on a return visit and refreshes behind.
+    cached(`${keys.clientSnapshot(client.id)}:${showMoney ? 'money' : 'plain'}`, () => Promise.all([
+      // Only the reachable-by fields: this table also holds an EIN.
+      supabase.from('ghl_setup').select('main_phone, support_email, website_url, business_city, authorized_rep_name').eq('client_id', client.id).maybeSingle(),
+      supabase.from('ad_daily').select('spend, leads').eq('client_id', client.id).gte('date', since),
+      supabase.from('google_campaign_daily').select('cost, conversions').eq('client_id', client.id).gte('date', since),
+      supabase.from('client_newest_ad').select('first_seen').eq('client_id', client.id).maybeSingle(),
+      supabase.from('published_ads').select('created_at').eq('client_id', client.id).order('created_at', { ascending: false }).limit(1),
+      showMoney
+        ? supabase.from('payments').select('id, payment_type, status, due_date, amount').eq('client_id', client.id).neq('status', 'paid').order('due_date')
+        : Promise.resolve({ data: null }),
+    ]).then((parts) => parts.map((r) => ({ data: r?.data ?? null }))), apply).catch(() => {})
     return () => {
       cancelled = true
     }

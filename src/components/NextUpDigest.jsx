@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchNextStepsForAll } from '../lib/nextStepsData'
+import { cached, keys } from '../lib/pageCache'
 import { OWNER, urgency } from '../lib/nextSteps'
 import { stepHref } from '../lib/stepLinks'
 import { Card } from './ui'
@@ -21,9 +22,7 @@ export default function NextUpDigest() {
 
   useEffect(() => {
     let cancelled = false
-    fetchNextStepsForAll()
-      .then((r) => !cancelled && setRows(r))
-      .catch(() => !cancelled && setRows([]))
+    cached(keys.nextSteps(), fetchNextStepsForAll, (r) => !cancelled && setRows(r)).catch(() => !cancelled && setRows((prev) => prev || []))
     return () => {
       cancelled = true
     }

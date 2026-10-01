@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useLocation, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import { cacheBust, cached, keys } from '../lib/pageCache'
 import { fetchAdDaily, summariseAds, today } from '../lib/queries'
 import { pauseCleanup } from '../lib/billing'
 import Layout from '../components/Layout'
@@ -144,39 +145,55 @@ export default function ClientDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, client?.id, pageLocation.search])
 
+  // Which client this page is on now, so a slow answer for the last one
+  // cannot land on top of a client we have since moved to.
+  const onClientRef = useRef(clientId)
   useEffect(() => {
+    onClientRef.current = clientId
     loadClientData()
   }, [clientId])
 
+  // The page's core (client, KPIs, intake, ad summary) is cached per client,
+  // so hopping between clients, or back from the list, paints at once and
+  // refreshes behind. Everything below the fold loads on its own as before.
   const loadClientData = async () => {
     loadNextUp()
+    const forClient = clientId
+    const apply = (d) => {
+      if (onClientRef.current !== forClient) return
+      setIntake(d.intake)
+      setBriefAds(summariseAds(d.adRows || []))
+      setClient(d.client)
+      setWeeklyKPIs(d.kpis)
+      setLoading(false)
+    }
     try {
-      const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('id', clientId)
-        .single()
+      await cached(
+        keys.client(clientId),
+        async () => {
+          const { data: clientData, error: clientError } = await supabase
+            .from('clients')
+            .select('*')
+            .eq('id', clientId)
+            .single()
+          if (clientError) throw clientError
 
-      if (clientError) throw clientError
+          const { data: kpisData, error: kpisError } = await supabase
+            .from('weekly_kpis')
+            .select('*')
+            .eq('client_id', clientId)
+            .order('week_of', { ascending: false })
+          if (kpisError) throw kpisError
 
-      const { data: kpisData, error: kpisError } = await supabase
-        .from('weekly_kpis')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('week_of', { ascending: false })
-
-      if (kpisError) throw kpisError
-
-      // The brief needs both, but neither should be able to break the page.
-      const [intakeRes, adRows] = await Promise.all([
-        supabase.from('onboarding_intake').select('*').eq('client_id', clientId).maybeSingle(),
-        fetchAdDaily(clientId).catch(() => []),
-      ])
-      setIntake(intakeRes?.data || null)
-      setBriefAds(summariseAds(adRows || []))
-
-      setClient(clientData)
-      setWeeklyKPIs(kpisData)
+          // The brief needs both, but neither should be able to break the page.
+          const [intakeRes, adRows] = await Promise.all([
+            supabase.from('onboarding_intake').select('*').eq('client_id', clientId).maybeSingle(),
+            fetchAdDaily(clientId).catch(() => []),
+          ])
+          return { client: clientData, kpis: kpisData, intake: intakeRes?.data || null, adRows: adRows || [] }
+        },
+        apply
+      )
     } catch (err) {
       setError(err.message)
     } finally {
@@ -214,6 +231,7 @@ export default function ClientDetailPage() {
       if (delErr) return setError(delErr.message)
     }
     const { error: err } = await supabase.from('clients').update({ paused_at: next }).eq('id', client.id)
+    cacheBust(keys.clients())
     if (err) setError(err.message)
     else loadClientData()
   }
@@ -223,6 +241,7 @@ export default function ClientDetailPage() {
     if (next && !confirm(`Archive ${client.name}? They'll drop out of MRR, the Meta sync and every list, but nothing is deleted.`)) return
 
     const { error: err } = await supabase.from('clients').update({ archived: next }).eq('id', client.id)
+    cacheBust(keys.clients())
     if (err) setError(err.message)
     else loadClientData()
   }
@@ -415,6 +434,7 @@ export default function ClientDetailPage() {
           assignedTo={client.assigned_to}
           onAssign={async (name) => {
             await supabase.from('clients').update({ assigned_to: name || null }).eq('id', client.id)
+            cacheBust(keys.clients())
             loadClientData()
           }}
           onAction={handleNextAction}

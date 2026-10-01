@@ -26,6 +26,7 @@ import {
   money,
   today,
 } from '../lib/queries'
+import { cached, keys } from '../lib/pageCache'
 
 /**
  * One channel's coverage: how many clients have it live, out of how many it
@@ -162,9 +163,8 @@ export default function HomePage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetchDashboardData()
-      .then(setData)
-      .catch((err) => setError(err.message))
+    // Last dashboard first, fresh one behind it.
+    cached(keys.dashboard(), fetchDashboardData, setData).catch((err) => setError(err.message))
   }, [])
 
   if (error) {

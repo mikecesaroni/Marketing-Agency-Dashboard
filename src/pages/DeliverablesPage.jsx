@@ -13,6 +13,7 @@ import { PipelineStrip } from '../components/NextUpBar'
 import { supabase } from '../lib/supabaseClient'
 import { today } from '../lib/queries'
 import { fetchNextStepsForAll } from '../lib/nextStepsData'
+import { cached, keys } from '../lib/pageCache'
 import { OWNER, urgency } from '../lib/nextSteps'
 import { MODAL_KINDS, stepHref } from '../lib/stepLinks'
 import { NOT_MARKABLE, canUndo, markStepDone, undoStepDone, whoAmI } from '../lib/completeStep'
@@ -283,12 +284,10 @@ export default function DeliverablesPage() {
   const [adding, setAdding] = useState(null) // client or 'any'
 
   const load = () =>
-    fetchNextStepsForAll()
-      .then((r) => {
-        setRows(r)
-        setError('')
-      })
-      .catch((err) => setError(err.message))
+    cached(keys.nextSteps(), fetchNextStepsForAll, (r) => {
+      setRows(r)
+      setError('')
+    }).catch((err) => setError(err.message))
 
   useEffect(() => {
     load()

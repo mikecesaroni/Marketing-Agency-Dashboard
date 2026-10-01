@@ -5,6 +5,7 @@ import { createTask, readMe, updateTask } from '../lib/tasksData'
 import { isOverdue, isoDay, knownNames, parseQuickAdd, repeatLabel, sortTasks } from '../lib/tasks'
 import { extractTasksFromChat } from '../lib/clientTasks'
 import { Button, Card } from './ui'
+import { cached, keys } from '../lib/pageCache'
 
 /**
  * This client's tasks, straight from the Tasks tab.
@@ -28,14 +29,27 @@ export default function ClientTasksPanel({ client, onAsk, onChange }) {
   const [note, setNote] = useState('')
 
   const load = useCallback(async () => {
-    const [t, m] = await Promise.all([
-      supabase.from('tasks').select('*').eq('client_id', client.id).is('parent_id', null).order('created_at'),
-      supabase.from('team_members').select('name').eq('active', true).order('sort_order').order('name'),
-    ])
-    if (t.error) setError(t.error.message)
-    setTasks(t.data || [])
-    setMembers(m.data || [])
-    setLoading(false)
+    try {
+      await cached(
+        keys.clientTasks(client.id),
+        async () => {
+          const [t, m] = await Promise.all([
+            supabase.from('tasks').select('*').eq('client_id', client.id).is('parent_id', null).order('created_at'),
+            supabase.from('team_members').select('name').eq('active', true).order('sort_order').order('name'),
+          ])
+          if (t.error) throw t.error
+          return { tasks: t.data || [], members: m.data || [] }
+        },
+        (d) => {
+          setTasks(d.tasks)
+          setMembers(d.members)
+          setLoading(false)
+        }
+      )
+    } catch (err) {
+      setError(err.message)
+      setLoading(false)
+    }
   }, [client.id])
 
   useEffect(() => {
