@@ -336,7 +336,7 @@ Deno.serve(async (req) => {
             `trashed = false and ` +
             `(mimeType contains 'image/' or mimeType contains 'video/' or ` +
             `mimeType = 'application/pdf')`,
-          fields: 'files(id,name,mimeType,size,modifiedTime,thumbnailLink)',
+          fields: 'files(id,name,mimeType,size,createdTime,modifiedTime,thumbnailLink)',
           orderBy: 'modifiedTime desc',
           // Drive's maximum, and it is needed rather than generous. 200 was
           // fine for one folder and became a silent truncation the moment a
@@ -362,6 +362,9 @@ Deno.serve(async (req) => {
         mime_type: f.mimeType,
         size: Number(f.size) || null,
         modified_time: f.modifiedTime,
+        // When it was added to Drive, which is what "newest" means to the
+        // person who just dropped it in; modifiedTime moves on a rename.
+        created_time: f.createdTime,
         has_thumbnail: Boolean(f.thumbnailLink),
         // The picker shows this so a HEIC that only works because Drive
         // converts it is not mistaken for a normal upload.

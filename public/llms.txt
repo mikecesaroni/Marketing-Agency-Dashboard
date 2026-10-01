@@ -94,6 +94,19 @@ What you can do:
   - "Archive client" is at the end of the switch row. Archiving excludes the client from MRR, the Meta sync and every list; it is reversible with "Restore client".
   - "+ Log KPIs" opens the weekly KPI form. The weekly work log, creative log and memory panel were taken off this page on 2026-09-28; their data is still in the database.
 
+Drive photos   /content/drive/:clientId
+---------------------------------------
+Every photo, video poster and PDF in one client's linked Drive folders (subfolders included), big enough to see, newest added first and grouped by the day they were added (Added today, Added yesterday, then the date).
+
+What is on it:
+  - Header: client name, how many photos and other files, one "Open in Drive" button per linked folder, Refresh, and a link to the client page.
+  - Tiles: click one for the full-size view with the file name, when it was added, its size, "Open in Drive" and previous/next (arrow keys work, Escape closes).
+  - Videos and PDFs carry a small label and show Drive's poster frame or first page.
+
+What you can do:
+  - Read-only, live from Drive: nothing is stored or changed here. Remove or add files in Drive; they show up on Refresh.
+  - Opened from the Google Drive door on the Content tab (the client name or "View photos").
+
 Content   /content
 ------------------
 Sidebar: Content
@@ -104,7 +117,7 @@ What is on it:
   - This week's video drops: one row per client with a Meta account, most behind first: 10+ days since a new ad of any kind (red, oldest first), no ad yet, then fresh (an ad in the last 10 days); each row says how many days since the last ad and its name, and opens the publish page. Only a clip dropped in and not yet published counts as new; clips that already ran are not mentioned. Shown under the doors and at the top of the Publish door. "Drop a finished clip" on the board is where an editor drops a finished .mp4/.mov against a client; the row then reads "New clip dropped in" with a "Click to publish" button that opens Publish with that clip already ticked (?open=publish&video=<path>).
   - Ad Studio and Publish: a card per client (saved ads, videos, live ads, last activity) that opens the client page with that tool already open (?open=studio or ?open=publish).
   - Publish asks first: Video (the client's own publish page, /publish/:id), Image ads (the Studio's Publish tab) or Build a funnel (its own page, /funnel/:id: the top of funnel and retargeting campaign pair with the six audiences, created paused, no creative needed).
-  - Google Drive: every client with an "Open in Drive" button per linked folder, "Browse files" for the read-only browser (click a file to open it in Drive to view or download), and "Link a folder" to paste a folder link.
+  - Google Drive: every client with an "Open in Drive" button per linked folder, a × on each folder button to remove that folder from the CRM (an inline confirm; nothing in Drive is touched), "View photos" (and the client name) opening the photo view, "Browse files" for the small read-only browser (click a file to open it in Drive to view or download), and "Link a folder" to paste a folder link.
 
 What you can do:
   - Click a door, then a client. The door switcher at the top moves between the three without going back.

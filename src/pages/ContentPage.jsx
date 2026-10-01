@@ -6,7 +6,7 @@ import VideoDropBoard from '../components/VideoDropBoard'
 import { Card, Input } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { fetchAllRows } from '../lib/pagedQuery'
-import { saveDriveFolder } from '../lib/driveAssets'
+import { removeDriveFolder, saveDriveFolder } from '../lib/driveAssets'
 import { ago, folderUrl, hubStats, rollupClients, searchClients, sortForContent } from '../lib/contentHub'
 import { DROPS_RESET_KEY, dropStats, syncedAdRows, videoDrops } from '../lib/videoLaunch'
 
@@ -137,13 +137,30 @@ function ClientCard({ row, href, lines, primary }) {
   )
 }
 
-/** Google Drive: folders, browse, download, and link one that is missing. */
+/** Google Drive: folders, browse, download, link one that is missing, or unlink one. */
 function DriveCard({ row, onLinked }) {
   const [open, setOpen] = useState(false)
   const [linking, setLinking] = useState(false)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Folder id waiting on a yes before it is unlinked.
+  const [removing, setRemoving] = useState('')
+
+  const unlink = async () => {
+    if (!removing) return
+    setBusy(true)
+    setError('')
+    try {
+      await removeDriveFolder(row.id, removing)
+      setRemoving('')
+      onLinked()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const link = async () => {
     if (!draft.trim()) return
@@ -166,7 +183,8 @@ function DriveCard({ row, onLinked }) {
       <div className="flex flex-wrap items-center gap-2 px-4 py-3">
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-slate-900">
-            <Link to={`/client/${row.id}`} className="hover:underline">
+            {/* The name opens the photo view: every file, big, newest added first. */}
+            <Link to={row.folders.length ? `/content/drive/${row.id}` : `/client/${row.id}`} className="hover:underline">
               {row.name}
             </Link>
           </p>
@@ -175,20 +193,37 @@ function DriveCard({ row, onLinked }) {
             {row.internal ? ' · internal' : ''}
           </p>
         </div>
+        {row.folders.length > 0 && (
+          <Link
+            to={`/content/drive/${row.id}`}
+            className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-700"
+          >
+            View photos
+          </Link>
+        )}
         {row.folders.length === 0 ? (
           <Pill tone="amber">No folder linked</Pill>
         ) : (
           <>
             {row.folders.map((f, i) => (
-              <a
-                key={f}
-                href={folderUrl(f)}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 hover:bg-blue-100"
-              >
-                {row.folders.length > 1 ? `Folder ${i + 1}` : 'Open in Drive'} ↗
-              </a>
+              <span key={f} className="inline-flex items-stretch overflow-hidden rounded-lg border border-blue-200 bg-blue-50 text-xs font-medium text-blue-800">
+                <a href={folderUrl(f)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1 hover:bg-blue-100">
+                  {row.folders.length > 1 ? `Folder ${i + 1}` : 'Open in Drive'} ↗
+                </a>
+                {/* Unlink from the CRM only. Nothing in Drive is touched. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRemoving(f)
+                    setLinking(false)
+                  }}
+                  aria-label={`Remove ${row.folders.length > 1 ? `folder ${i + 1}` : 'this folder'} from ${row.name}`}
+                  title="Remove this folder from the CRM"
+                  className="border-l border-blue-200 px-1.5 text-blue-400 hover:bg-red-50 hover:text-red-700"
+                >
+                  ×
+                </button>
+              </span>
             ))}
             <button
               type="button"
@@ -199,10 +234,32 @@ function DriveCard({ row, onLinked }) {
             </button>
           </>
         )}
-        <button type="button" onClick={() => setLinking((v) => !v)} className="text-xs text-slate-500 hover:text-slate-900 hover:underline">
+        <button
+          type="button"
+          onClick={() => {
+            setLinking((v) => !v)
+            setRemoving('')
+          }}
+          className="text-xs text-slate-500 hover:text-slate-900 hover:underline"
+        >
           {row.folders.length ? '+ folder' : 'Link a folder'}
         </button>
       </div>
+
+      {removing && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <span className="flex-1">
+            Remove this folder from {row.name} in the CRM? The folder and its files stay in Google Drive. Nothing is deleted there.
+          </span>
+          <button type="button" onClick={unlink} disabled={busy} className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">
+            {busy ? 'Removing…' : 'Remove from CRM'}
+          </button>
+          <button type="button" onClick={() => setRemoving('')} className="text-xs text-amber-900 hover:underline">
+            Keep it
+          </button>
+          {error && <p className="w-full text-xs text-red-700">{error}</p>}
+        </div>
+      )}
 
       {linking && (
         <div className="border-t border-slate-100 bg-slate-50 px-4 py-3">
