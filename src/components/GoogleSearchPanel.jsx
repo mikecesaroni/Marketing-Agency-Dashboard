@@ -245,8 +245,8 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
         </div>
         <p className="mb-3 text-sm text-slate-600">
           Not connected. Send the client the message: they allow {AGENCY_EMAIL_DOMAIN} on their
-          Google Ads Security tab, add {AGENCY_EMAIL} as a user and reply with their customer ID. Accept the invite in that inbox, put the
-          ID in below, and it syncs straight away.
+          Google Ads Security tab and add {AGENCY_EMAIL} as a user. Accept the invite in that inbox, read the customer ID off our
+          manager account (it appears under Accounts once we are in), put it in below, and it syncs straight away.
         </p>
         <div className="space-y-3">
           <GoogleAdsIdInput client={client} onSaved={onUpdate} />

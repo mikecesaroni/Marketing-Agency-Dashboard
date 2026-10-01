@@ -233,7 +233,7 @@ export function nextSteps(ctx) {
         ? `Connected: ${dashedId(googleId)}.`
         : googleRefused
           ? 'ID saved, but Google has not let us in yet. Send the step-by-step.'
-          : 'They allow our domain, add us as a user and send their customer ID. Put it in on the Google Ads panel.',
+          : 'They allow our domain and add us as a user. Accept the invite, read the customer ID off our manager account and put it in on the Google Ads panel.',
     })
   }
 

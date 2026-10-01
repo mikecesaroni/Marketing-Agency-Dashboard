@@ -2,7 +2,10 @@
 // managed from the CRM.
 //
 // The route we ask for: allow our email domain on their account's Security
-// tab, add our email as a user, then send us their customer ID. The domain
+// tab, then add our email as a user. No customer ID to send back: once the
+// invite lands, the account and its ID show up under our manager login, so
+// asking the client to find and type a ten digit number was a step that only
+// ever lost people. The domain
 // comes first because an account with "Allowed domains" switched on refuses
 // the invite outright, and the client gives up at step 4 thinking it broke. It is one screen they can find, it needs nothing from
 // our side before they start, and once it is done the CRM reads the account
@@ -24,7 +27,7 @@ export const GOOGLE_ADS_MANAGER_ID_DISPLAY = GOOGLE_ADS_MANAGER_ID.replace(/(\d{
 export function buildGoogleAdsAccessMessage() {
   return `Quick one so we can run and report on your Google Ads:
 
-Two short steps in your Google Ads account, then send us your customer ID. About 3 minutes, and you keep full ownership.
+Two short steps in your Google Ads account. About 3 minutes, and you keep full ownership.
 
 1. Sign in at https://ads.google.com
 
@@ -41,9 +44,7 @@ THEN, ADD US AS A USER
 7. Click the blue + button
 8. Enter our email: ${AGENCY_EMAIL}
 9. Pick Admin access and click Send invitation
-
-LAST
-10. Reply here with your customer ID. It is the ten digit number at the top right of Google Ads, like 123-456-7890
+10. Reply here with "sent" and we take it from there
 
 No Google Ads account yet? Do not create one, Google will push you into building a campaign and adding a card. Just reply with the Google email you want it under and your business name as you want it shown, and we will set it up and make you the owner.
 
@@ -98,11 +99,8 @@ STEP 4: Add us as a user
 3. Under access level, pick Admin. That lets us build campaigns, fix problems and pull reports without having to ask you each time. You stay the owner either way.
 4. Click Send invitation.
 
-STEP 5: Find your customer ID
-Look at the top right of Google Ads, next to your account name. There is a ten digit number that looks like 123-456-7890. That is your customer ID.
-
-STEP 6: Send it to us
-Reply here with "sent" and that number. We accept the invitation on our side, usually within the hour, and that is it. You will see ${AGENCY_EMAIL} on your Users tab.
+STEP 5: Tell us it is sent
+Reply here with "sent". We accept the invitation on our side, usually within the hour, and that is it. You will see ${AGENCY_EMAIL} on your Users tab. Nothing to look up or copy: once we are in, your account shows up on our side on its own.
 
 From then on your Google Ads numbers show up in our reporting on their own. Nothing else for you to do.
 

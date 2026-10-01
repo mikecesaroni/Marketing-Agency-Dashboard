@@ -184,8 +184,10 @@ Two optional ones, neither needed today:
 
 ## 6. Per client: access, then the customer ID
 
-**The route we ask for (since 2026-09-28): the client adds our email as a
-user, then sends us their customer ID.** It is one screen they can find,
+**The route we ask for (since 2026-09-28): the client allows our domain,
+then adds our email as a user.** We do not ask for the customer ID any more
+(since 2026-10-02): once the invite is accepted the account shows in our
+manager account under Accounts, with its ID. It is one screen they can find,
 needs nothing from us first, and the sync then reads their account
 directly (it asks the account as itself when the manager route is refused).
 
@@ -194,8 +196,8 @@ directly (it asks the account as itself when the manager route is refused).
    the client's setup messages. **Google Ads access request** is the short
    ask. **Google Ads access, step by step** is the long version: the direct
    link to the Users page (`https://ads.google.com/aw/accountaccess/users`),
-   Admin access for `marketing@workingclassgroup.com`, where the customer ID
-   is, and what to do when it looks different (no + button, allowed domains,
+   Admin access for `marketing@workingclassgroup.com`, and what to do when
+   it looks different (no + button, allowed domains,
    cannot find it, no account yet).
 2. Accept the invitation in the `marketing@workingclassgroup.com` inbox.
 3. Put the ID in. **Client page → Google Search**, or **Reports → Google

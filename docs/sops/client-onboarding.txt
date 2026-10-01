@@ -73,7 +73,7 @@ One Google Ads login covers Search and LSA. The order matters:
    - Open https://ads.google.com/aw/accountaccess/users, click the Security tab at the top, click the pencil next to Allowed domains, add workingclassgroup.com and save.
    - Keep any domains already in the list. If the list was empty, also add their own email's domain so they do not lock themselves out.
 2. Then add us as a user: click the Users tab, the blue + button, enter marketing@workingclassgroup.com, pick Admin, Send invitation.
-3. Get their customer ID: the ten digit number at the top right, like 123-456-7890.
+3. Do not ask them for their customer ID. Once the invite is accepted, the account and its ID show in our manager account (270-103-8317) under Accounts. Read it there and put it in on the client page.
 4. No Google Ads account yet? Do not let them create one. Google pushes new accounts straight into a campaign and a card. Take the Google email they want it under and their business name, and we set it up with them as the owner.
    - In the CRM: "Copy the Google Ads access message" (short) or "Copy step-by-step" (long) if they do it on their own.
 

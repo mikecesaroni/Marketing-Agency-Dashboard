@@ -444,8 +444,8 @@ export default function GoogleSearchReportPage() {
           {todo.length > 0 && (
             <>
               <p className="mt-4 text-xs text-slate-400">
-                Send the message: the client allows {AGENCY_EMAIL_DOMAIN} on their Security tab, adds {AGENCY_EMAIL} as a user and replies with their customer ID. Accept the
-                invite in that inbox, then put the ID in beside their name. It saves and syncs on the spot.
+                Send the message: the client allows {AGENCY_EMAIL_DOMAIN} on their Security tab and adds {AGENCY_EMAIL} as a user. Accept the
+                invite in that inbox, read the customer ID off our manager account, then put it in beside their name. It saves and syncs on the spot.
               </p>
               {/* One row per client still to do, with the box right there. */}
               <div className="mt-3 divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">

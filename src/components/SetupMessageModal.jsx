@@ -45,12 +45,12 @@ const CHANNELS = {
   googleads: {
     title: 'Google Ads access request',
     build: () => buildGoogleAdsAccessMessage(),
-    blurb: 'Send this to the owner. They allow our domain on their Security tab, add our email as a user and reply with their customer ID; put the ID in on the Google Ads panel and it syncs straight away.',
+    blurb: 'Send this to the owner. They allow our domain on their Security tab, add our email as a user and reply sent. Accept the invite, read the customer ID off our manager account, put it in on the Google Ads panel and it syncs straight away.',
   },
   'googleads-steps': {
     title: 'Google Ads access, step by step',
     build: () => buildGoogleAdsLinkWalkthrough(),
-    blurb: 'The long version: allow our domain, add us as a user, find their customer ID, every click and link, and what to do if it looks different.',
+    blurb: 'The long version: allow our domain, add us as a user, every click and link, and what to do if it looks different.',
   },
 }
 
