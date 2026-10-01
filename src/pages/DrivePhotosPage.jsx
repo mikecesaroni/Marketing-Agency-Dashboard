@@ -123,13 +123,6 @@ export default function DrivePhotosPage() {
       actions={actions}
     >
       <div className="space-y-5">
-        <Link
-          to="/content?tab=drive"
-          className="inline-block text-xs text-slate-500 hover:text-slate-900 hover:underline"
-        >
-          ← Google Drive
-        </Link>
-
         {error && (
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
