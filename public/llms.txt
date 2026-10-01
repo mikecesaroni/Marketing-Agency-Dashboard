@@ -235,7 +235,7 @@ Everything Meta and Google Ads have for one client on one page, with a Meta / Go
 
 What is on it:
   - The switch at the top flips between the two channels and keeps the range (and the Meta scope), which live in the address (?channel=, ?days=, ?scope=).
-  - Meta, laid out like Ads Manager: eight scorecards against the previous range (amount spent, leads, cost per lead, impressions, link clicks, CTR, cost per click, CPM); click one or two to chart them, hover for the day. Tabs: Campaigns, Ad sets, Ads (status, No leads / Too expensive / Winner against this client's own cost per lead, hook and hold on video), Placements and Days. The subtitle shows the pixel, or no pixel yet.
+  - Meta, laid out like Ads Manager: eight scorecards against the previous range (amount spent, leads, cost per lead, impressions, link clicks, CTR, cost per click, CPM); click one or two to chart them, hover for the day. Tabs: Campaigns, Ad sets, Ads (status, No leads / Too expensive / Winner against this client's own cost per lead, hook and hold on video; click an ad to see it as Meta renders it, where it ran, and "Show who filled in the form": the instant-form leads for that ad read live from Meta with name, phone, email, answers and time, never stored), Placements and Days. The subtitle shows the pixel, or no pixel yet.
   - Google Ads, laid out like the Google Ads overview: eight scorecards (clicks, impressions, CTR, avg. CPC, cost, conversions, cost per conversion, conversion rate), the same charting, and tabs for Campaigns, Ad groups (Search only), Keywords (with verdicts), Search terms (added, excluded or flagged to block) and Days.
   - Every column header sorts. No ad account, no Google Ads ID, or Google refusing us shows what to do instead of empty tables.
 

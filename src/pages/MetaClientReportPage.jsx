@@ -13,6 +13,7 @@ import { inRange, metaKpis } from '../lib/metaReport'
 import { togglePick } from '../lib/clientReportKit'
 import { META_CLIENT_METRICS, adSetsFor, adsFor, metaCampaignsFor, metaDayTotals, placementsFor } from '../lib/metaClientReport'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
+import AdPreviewModal from '../components/AdPreviewModal'
 
 /**
  * One client's Meta ads, laid out like the Ads Manager overview: scorecards
@@ -102,6 +103,8 @@ export default function MetaClientReportPage({ switcher }) {
   const [error, setError] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [note, setNote] = useState('')
+  // The ad whose preview and leads are open, as the modal wants it.
+  const [openAd, setOpenAd] = useState(null)
 
   const today = daysAgo(0)
   const since = daysAgo(days - 1)
@@ -298,7 +301,16 @@ export default function MetaClientReportPage({ switcher }) {
                   initial={{ key: 'spend', dir: 'desc' }}
                   empty="No ad data in this range."
                   columns={[
-                    { key: 'name', label: 'Ad', className: 'max-w-[240px] truncate font-medium text-white' },
+                    {
+                      key: 'name',
+                      label: 'Ad',
+                      className: 'max-w-[260px] truncate font-medium text-white',
+                      render: (r) => (
+                        <button type="button" onClick={() => setOpenAd({ ad_id: r.id, ad_name: r.name, spend: r.spend, leads: r.leads })} title="See the ad and who filled in its form" className="truncate text-left hover:text-sky-300 hover:underline">
+                          {r.name}
+                        </button>
+                      ),
+                    },
                     { key: 'live', label: 'Status', render: (r) => statusPill(r.live, r.status) },
                     { key: 'verdict', label: 'Verdict', render: (r) => (r.verdict ? <Pill tone={VERDICT[r.verdict].tone} title={r.why}>{VERDICT[r.verdict].label}</Pill> : <span className="text-slate-600">—</span>) },
                     num('spend', 'Spent', { className: 'font-semibold text-white' }),
@@ -352,6 +364,7 @@ export default function MetaClientReportPage({ switcher }) {
           </section>
         </div>
       )}
+      {openAd && <AdPreviewModal clientId={clientId} ad={openAd} since={since} onClose={() => setOpenAd(null)} />}
     </Layout>
   )
 }

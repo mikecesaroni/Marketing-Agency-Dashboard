@@ -3,6 +3,8 @@ import Modal from './Modal'
 import PlatformSplit, { PlatformTable } from './charts/PlatformSplit'
 import { Badge, Button, Card } from './ui'
 import { byPlatform, byPosition, fetchAdPreview, fetchPlatformRows } from '../lib/adPlatforms'
+import { fetchAdLeads } from '../lib/adLeads'
+import { leadWhen, prettyPhone } from '../lib/adLeadsFormat'
 import { money } from '../lib/queries'
 
 /**
@@ -56,6 +58,13 @@ export default function AdPreviewModal({ clientId, ad, since = null, onClose }) 
   const [showTable, setShowTable] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  // Who came in from this ad, from Meta, when asked for. Not loaded with the
+  // preview: it is personal data, so it is fetched only when the section is
+  // opened, and never stored.
+  const [formLeads, setFormLeads] = useState(null)
+  const [leadsOpen, setLeadsOpen] = useState(false)
+  const [leadsBusy, setLeadsBusy] = useState(false)
+  const [leadsError, setLeadsError] = useState('')
 
   const adId = ad?.ad_id
 
@@ -85,6 +94,26 @@ export default function AdPreviewModal({ clientId, ad, since = null, onClose }) 
       cancelled = true
     }
   }, [clientId, adId, since])
+
+  useEffect(() => {
+    setFormLeads(null)
+    setLeadsOpen(false)
+    setLeadsError('')
+  }, [adId])
+
+  const openLeads = async () => {
+    setLeadsOpen(true)
+    if (formLeads || leadsBusy) return
+    setLeadsBusy(true)
+    setLeadsError('')
+    try {
+      setFormLeads(await fetchAdLeads(clientId, adId))
+    } catch (err) {
+      setLeadsError(err.message)
+    } finally {
+      setLeadsBusy(false)
+    }
+  }
 
   const available = (preview?.previews || []).map((p) => p.key)
   const shown = available.includes(tab) ? tab : available[0]
@@ -237,6 +266,70 @@ export default function AdPreviewModal({ clientId, ad, since = null, onClose }) 
                 weeks of delivery.
               </p>
             )}
+
+            {/* WHO CAME IN. The row's lead count is from the sync; these are
+                the people behind it, read from Meta's Lead Center. */}
+            <div className="border-t border-slate-200 pt-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Leads from this ad{rowLeads ? ` · ${rowLeads} in this window` : ''}
+                </p>
+                {!leadsOpen ? (
+                  <Button variant="outline" size="sm" onClick={openLeads}>Show who filled in the form</Button>
+                ) : (
+                  <Button variant="link" size="sm" onClick={() => setLeadsOpen(false)}>Hide</Button>
+                )}
+              </div>
+              {leadsOpen && (
+                <div className="mt-2">
+                  {leadsBusy ? (
+                    <p className="text-sm text-slate-500">Asking Meta…</p>
+                  ) : leadsError ? (
+                    <p className="text-sm text-red-700">{leadsError}</p>
+                  ) : formLeads?.needsAccess ? (
+                    <Card tone="warning" padding="sm" className="text-sm text-amber-900">
+                      <p className="font-semibold">Meta is not letting the CRM read lead details yet</p>
+                      <p className="mt-1">{formLeads.fix}</p>
+                      {formLeads.detail && <p className="mt-1 text-xs text-amber-700">Meta said: {formLeads.detail}</p>}
+                    </Card>
+                  ) : formLeads && formLeads.leads.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      Meta has no form submissions for this ad. If the ad sends people to a website form instead of an instant form, the leads are in GHL, not here.
+                    </p>
+                  ) : formLeads ? (
+                    <>
+                      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                        {formLeads.leads.map((l) => (
+                          <li key={l.id} className="px-3 py-2 text-sm">
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                              <span className="font-medium text-slate-900">{l.name || 'No name given'}</span>
+                              <span className="text-xs text-slate-400">{leadWhen(l.at)}{l.platform ? ` · ${l.platform.toLowerCase()}` : ''}</span>
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                              {l.phone && <a href={`tel:${String(l.phone).replace(/[^\d+]/g, '')}`} className="text-blue-700 hover:underline">{prettyPhone(l.phone)}</a>}
+                              {l.email && <a href={`mailto:${l.email}`} className="text-blue-700 hover:underline">{l.email}</a>}
+                            </div>
+                            {l.answers.length > 0 && (
+                              <dl className="mt-1 space-y-0.5">
+                                {l.answers.map((a, i) => (
+                                  <div key={i} className="flex gap-2 text-xs">
+                                    <dt className="text-slate-500">{a.question}</dt>
+                                    <dd className="text-slate-800">{a.answer}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-1.5 text-[11px] text-slate-400">
+                        {formLeads.count} shown{formLeads.more ? ', the newest; the rest are in Meta\'s Lead Center' : ''}. Read live from Meta, not stored in the CRM.
+                      </p>
+                    </>
+                  ) : null}
+                </div>
+              )}
+            </div>
 
             {preview?.status && (
               <div className="flex items-center gap-2 border-t border-slate-200 pt-3">

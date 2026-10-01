@@ -69,10 +69,17 @@ imply Page access. Without them, instant form creation fails even when the
 Page is correctly assigned to the system user — the scopes and the asset
 assignment are two separate gates, and you need both.
 
-`leads_retrieval` is deliberately **not** in that list. It is only needed to
-pull submitted leads back into the CRM, which nothing here does: leads land in
-Meta's Lead Center on the Page, where they can be emailed out or exported. Add
-it only if the CRM ever grows a lead inbox of its own.
+`leads_retrieval` **is needed now** (added 2026-10-01): the ad preview on a
+client's Meta page and on the client page has a "Show who filled in the form"
+button that reads one ad's instant-form leads back from Meta (function
+`meta-ad-leads`). Nothing is stored; every open asks Meta again. Two gates,
+both agency-side: the token must carry `leads_retrieval` (regenerate the
+System User token with it ticked and update `META_ACCESS_TOKEN`), and the
+system user needs Leads Access on each Page (Business Settings > Integrations
+> Leads Access). Until both are done the button explains this instead of
+listing leads. Checked live 2026-10-01: Meta answered "(#100) Requires
+pages_manage_ads or leads_retrieval permission" on Reliable's ad, so the
+current token lacks it.
 
 The token is shown **once**. Copy it immediately. If the dialog closes, revoke
 it and generate another.
