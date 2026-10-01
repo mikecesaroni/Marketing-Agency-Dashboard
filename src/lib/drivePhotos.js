@@ -17,6 +17,26 @@ export function kindOf(f) {
   return 'photo'
 }
 
+/** The filter chips: everything, photos only, videos only. PDFs show under All. */
+export const KIND_FILTERS = [
+  { key: '', label: 'All' },
+  { key: 'photo', label: 'Photos' },
+  { key: 'video', label: 'Videos' },
+]
+
+/** Files of one kind, or all of them when kind is empty or unknown. */
+export function filterByKind(files = [], kind = '') {
+  if (!kind || !KIND_FILTERS.some((k) => k.key === kind)) return files
+  return files.filter((f) => kindOf(f) === kind)
+}
+
+/** How many of each kind, for the chip counts. */
+export function kindCounts(files = []) {
+  const counts = { all: files.length, photo: 0, video: 0, pdf: 0 }
+  for (const f of files) counts[kindOf(f)]++
+  return counts
+}
+
 const dayKey = (iso) => (iso ? String(iso).slice(0, 10) : '')
 
 /**

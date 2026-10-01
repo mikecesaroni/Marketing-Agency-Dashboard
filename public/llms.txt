@@ -100,6 +100,7 @@ Every photo, video poster and PDF in one client's linked Drive folders (subfolde
 
 What is on it:
   - Header: client name, how many photos and other files, one "Open in Drive" button per linked folder, Refresh, and a link to the client page.
+  - Filter chips under the header: All, Photos, Videos, each with its count (?kind=photo or ?kind=video in the URL, so a reload keeps it). PDFs show under All. Previous/next in the full-size view stays inside the filter.
   - Tiles: click one for the full-size view with the file name, when it was added, its size, "Open in Drive" and previous/next (arrow keys work, Escape closes).
   - Videos and PDFs carry a small label and show Drive's poster frame or first page.
 

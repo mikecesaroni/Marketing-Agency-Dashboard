@@ -1,6 +1,6 @@
 // Self-check for the Drive photos page's arithmetic: newest added first,
 // grouped by local day with plain labels. Run: node scripts/check-drive-photos.mjs
-import { groupByAdded, kindOf, sortNewestAdded } from '../src/lib/drivePhotos.js'
+import { filterByKind, groupByAdded, kindCounts, kindOf, sortNewestAdded } from '../src/lib/drivePhotos.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -33,6 +33,10 @@ check('grouped by local day, newest day first, with plain labels', groups.map((g
 ])
 check('an older year shows the year', groupByAdded([{ id: 'x', created_time: iso(2025, 1, 5) }], today)[0].label, new Date(2025, 0, 5).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }))
 check('empty in, empty out', groupByAdded([], today), [])
+check('Photos filter keeps only photos', filterByKind(files, 'photo').map((f) => f.id), ['old', 'today', 'legacy'])
+check('Videos filter keeps only videos', filterByKind(files, 'video').map((f) => f.id), ['yday'])
+check('All (and an unknown kind) keeps everything, PDFs included', [filterByKind(files, '').length, filterByKind(files, 'nope').length], [5, 5])
+check('chip counts', kindCounts(files), { all: 5, photo: 3, video: 1, pdf: 1 })
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)
