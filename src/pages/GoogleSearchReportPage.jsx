@@ -38,6 +38,7 @@ import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from '../lib/agencyEmail'
  * keyword and search-term lists sit beside them and are never added in.
  */
 const RANGES = [
+  { value: 7, label: '7d' },
   { value: 14, label: '14d' },
   { value: 30, label: '30d' },
   { value: 90, label: '90d' },

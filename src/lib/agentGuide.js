@@ -235,7 +235,7 @@ export const ROUTES = [
     ],
     actions: [
       'In the page header: "Sync Meta" pulls fresh data from Meta on demand rather than waiting for the morning job. It can take a while and is safe to run.',
-      'Scope: Live ads or All ads. Range: 14, 30 or 90 days.',
+      'Scope: Live ads or All ads. Range: 7, 14, 30 or 90 days.',
     ],
   },
   {
@@ -253,7 +253,7 @@ export const ROUTES = [
       'Every campaign across clients, then at the bottom how many clients have a Meta ad account on file and who does not.',
     ],
     actions: [
-      '"Sync Meta" pulls fresh data now. Scope: Live ads or All ads. Range: 14, 30 or 90 days.',
+      '"Sync Meta" pulls fresh data now. Scope: Live ads or All ads. Range: 7, 14, 30 or 90 days.',
       'Reach is left out on purpose: a day\'s reach cannot be added to the next day\'s.',
     ],
   },
@@ -271,7 +271,7 @@ export const ROUTES = [
       'Every campaign across clients: type, status, spend, leads, cost per lead, clicks, CTR, CPC, value.',
     ],
     actions: [
-      '"Sync Google" runs the nightly sync now for the range, including finding newly linked accounts. Range: 14, 30 or 90 days.',
+      '"Sync Google" runs the nightly sync now for the range, including finding newly linked accounts. Range: 7, 14, 30 or 90 days.',
       'Numbers come from google_campaign_daily (totals), google_keyword_daily (losing keywords) and google_search_term_daily (terms to block). The three are never summed with each other.',
     ],
   },
