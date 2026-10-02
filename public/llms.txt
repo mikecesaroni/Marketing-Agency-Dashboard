@@ -74,6 +74,7 @@ Client detail   /client/:clientId
 Everything about one client, on a single long page. This is where most work actually happens. Reach it by clicking a client on /clients rather than by constructing the URL — clientId is a UUID and is not guessable from the name.
 
 What is on it:
+  - Landing pages panel (below Google Ads): the pages this client's ads send people to, by purpose (Meta ads, Google Ads, Booking, Website, Other), each with Copy, Open, Edit and remove; "+ Add a page" to paste a new link; "Copy all" for one message with every page. The client chat reads them too.
   - Status switches: Meta ads, Google LSA, Google Business Profile, GHL build, and — only once GHL build is on — GHL account.
   - "Live onboarding call": the sheet for the onboarding Zoom, worked top to bottom — pre-call email, opening lines, GoHighLevel, Meta (find the portfolio in Page setup, business.facebook.com/select, partner access, 2FA), Google (the "Own this business?" trick to find the owning account), website and domain, photos and other lead sources, recap email. Steps the CRM can already see (Drive folder linked, Meta connected, GHL live) tick themselves; the rest are ticked by hand and stored per client. Copy buttons produce the pre-call email, the opening lines, the why-admin explanation and a recap built from what is still open.
   - Up front: the owner, their area, phone (tap to call), email (tap to write) and website, each with a copy button; from the onboarding form, with the GHL setup form as the fallback. Under them, five numbers from the rest of the CRM: leads and ad spend over 30 days across Meta and Google, days since the last new ad (flagged at 10+), open and overdue tasks, and (admin only) the monthly fee with the next payment or anything overdue.
@@ -111,13 +112,14 @@ What you can do:
 Content   /content
 ------------------
 Sidebar: Content
-The creative side, entered by the job rather than the client: three doors, Ad Studio, Google Drive and Publish, each opening the same client list ordered by recent creative work.
+The creative side, entered by the job rather than the client: four doors, Ad Studio, Google Drive, Landing pages and Publish, each opening the same client list ordered by recent creative work.
 
 What is on it:
-  - Three large cards with live counts: saved ads, Drive folders linked, clients at 10+ days without a new ad and ads live.
+  - Four large cards with live counts: saved ads, Drive folders linked, landing pages saved, clients at 10+ days without a new ad and ads live.
   - This week's video drops: one row per client with a Meta account, most behind first: 10+ days since a new ad of any kind (red, oldest first), no ad yet, then fresh (an ad in the last 10 days); each row says how many days since the last ad and its name, and opens the publish page. Only a clip dropped in and not yet published counts as new; clips that already ran are not mentioned. Shown under the doors and at the top of the Publish door. "Drop a finished clip" on the board is where an editor drops a finished .mp4/.mov against a client; the row then reads "New clip dropped in" with a "Click to publish" button that opens Publish with that clip already ticked (?open=publish&video=<path>).
   - Ad Studio and Publish: a card per client (saved ads, videos, live ads, last activity) that opens the client page with that tool already open (?open=studio or ?open=publish).
   - Publish asks first: Video (the client's own publish page, /publish/:id), Image ads (the Studio's Publish tab) or Build a funnel (its own page, /funnel/:id: the top of funnel and retargeting campaign pair with the six audiences, created paused, no creative needed).
+  - Landing pages: every client with the pages their ads send people to (purpose: Meta ads, Google Ads, Booking, Website, Other), each with Copy, Open, Edit and ×; "+ Add a page" pastes a link (name and purpose filled in from the link, editable); "Copy all" gives one message with every page. Clients with no page yet are listed first. Removing a row only forgets it in the CRM; the page itself is untouched.
   - Google Drive: every client with an "Open in Drive" button per linked folder, a × on each folder button to remove that folder from the CRM (an inline confirm; nothing in Drive is touched), "View photos" (and the client name) opening the photo view, "Browse files" for the small read-only browser (click a file to open it in Drive to view or download), and "Link a folder" to paste a folder link.
 
 What you can do:

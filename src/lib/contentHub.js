@@ -23,7 +23,7 @@ const newest = (rows) => rows.reduce((best, r) => (r.created_at && (!best || r.c
  * savedAds, publishedAds, videos: rows with client_id and created_at
  * (publishedAds also status; live means status ACTIVE).
  */
-export function rollupClients(clients = [], savedAds = [], publishedAds = [], videos = []) {
+export function rollupClients(clients = [], savedAds = [], publishedAds = [], videos = [], landingPages = []) {
   const by = (rows) => {
     const m = new Map()
     for (const r of rows) {
@@ -36,6 +36,7 @@ export function rollupClients(clients = [], savedAds = [], publishedAds = [], vi
   const saved = by(savedAds)
   const published = by(publishedAds)
   const vids = by(videos)
+  const pages = by(landingPages)
 
   return clients
     .filter((c) => c && !c.archived)
@@ -50,6 +51,7 @@ export function rollupClients(clients = [], savedAds = [], publishedAds = [], vi
         industry: c.industry || '',
         internal: Boolean(c.is_internal),
         folders: driveFolders(c),
+        pages: pages.get(c.id) || [],
         saved: s.length,
         published: p.length,
         live: p.filter((x) => String(x.status || '').toUpperCase() === 'ACTIVE').length,
@@ -86,6 +88,8 @@ export function hubStats(rows) {
     videos: rows.reduce((n, r) => n + r.videos, 0),
     withDrive: rows.filter((r) => r.folders.length > 0).length,
     folders: rows.reduce((n, r) => n + r.folders.length, 0),
+    pages: rows.reduce((n, r) => n + (r.pages?.length || 0), 0),
+    withPages: rows.filter((r) => (r.pages?.length || 0) > 0).length,
     published: rows.reduce((n, r) => n + r.published, 0),
     live: rows.reduce((n, r) => n + r.live, 0),
     readyToPublish: rows.filter((r) => r.saved > 0 || r.videos > 0).length,

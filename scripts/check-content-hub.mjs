@@ -60,6 +60,8 @@ check('hub stats', hubStats(rows), {
   videos: 1,
   withDrive: 3,
   folders: 5,
+  pages: 0,
+  withPages: 0,
   published: 3,
   live: 2,
   readyToPublish: 3,

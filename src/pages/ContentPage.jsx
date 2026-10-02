@@ -7,6 +7,8 @@ import { Card, Input } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { fetchAllRows } from '../lib/pagedQuery'
 import { removeDriveFolder, saveDriveFolder } from '../lib/driveAssets'
+import { fetchAllLandingPages } from '../lib/landingPagesStore'
+import { LandingPagesList } from '../components/LandingPagesPanel'
 import { ago, folderUrl, hubStats, rollupClients, searchClients, sortForContent } from '../lib/contentHub'
 import { DROPS_RESET_KEY, dropStats, syncedAdRows, videoDrops } from '../lib/videoLaunch'
 
@@ -56,6 +58,22 @@ const DOORS = [
       </svg>
     ),
     stat: (s) => [`${s.folders} folders`, `${s.withDrive} of ${s.clients} clients linked`],
+  },
+  {
+    key: 'pages',
+    title: 'Landing pages',
+    blurb: 'Where every client’s ads send people. Copy a link, add the new one, see who has none yet.',
+    cta: 'See every client’s pages',
+    tone: 'from-violet-600 to-fuchsia-400',
+    ring: 'group-hover:ring-violet-300',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
+        <rect x="3" y="4" width="18" height="16" rx="2.5" />
+        <path d="M3 9h18M7 6.5h.01M10 6.5h.01" />
+        <path d="M7 13h6M7 16h10" />
+      </svg>
+    ),
+    stat: (s) => [`${s.pages} pages`, `${s.withPages} of ${s.clients} clients have one`],
   },
   {
     key: 'publish',
@@ -304,6 +322,29 @@ function DriveCard({ row, onLinked }) {
   )
 }
 
+/** Landing pages: one client's list, with add, copy, edit and remove. */
+function PagesCard({ row, onChange }) {
+  return (
+    <Card padding="none" className="px-4 py-3">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold text-slate-900">
+            <Link to={`/client/${row.id}#landing-pages`} className="hover:underline">
+              {row.name}
+            </Link>
+          </p>
+          <p className="truncate text-xs text-slate-500">
+            {row.industry || 'Client'}
+            {row.internal ? ' · internal' : ''}
+          </p>
+        </div>
+        {row.pages.length === 0 ? <Pill tone="amber">No page yet</Pill> : <Pill tone="blue">{row.pages.length} page{row.pages.length === 1 ? '' : 's'}</Pill>}
+      </div>
+      <LandingPagesList clientId={row.id} clientName={row.name} pages={row.pages} onChange={onChange} compact />
+    </Card>
+  )
+}
+
 const SECTION_META = {
   studio: {
     title: 'Ad Studio',
@@ -312,6 +353,10 @@ const SECTION_META = {
   drive: {
     title: 'Google Drive',
     hint: 'Every client’s linked folders. Open in Drive to download or upload; browse here to see what is in them.',
+  },
+  pages: {
+    title: 'Landing pages',
+    hint: 'Every client’s pages in one list. Copy a link, open it, or add the new one so the team can find it. Clients with none are at the top.',
   },
   publish: {
     title: 'Publish',
@@ -335,7 +380,7 @@ export default function ContentPage() {
 
   const load = async () => {
     try {
-      const [clients, saved, published, videos, files, reset, synced] = await Promise.all([
+      const [clients, saved, published, videos, files, reset, synced, pages] = await Promise.all([
         supabase.from('clients').select('id,name,industry,archived,is_internal,drive_folder_id,extra_drive_folder_ids,meta_ad_account_id,paused_at').order('name'),
         fetchAllRows(() => supabase.from('saved_ads').select('client_id,created_at').order('created_at').order('id')),
         fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name').order('created_at').order('id')),
@@ -347,10 +392,12 @@ export default function ContentPage() {
         // The newest ad Meta reports per client, whether or not the CRM made
         // it. An account run from Ads Manager still has ads.
         supabase.from('client_newest_ad').select('client_id,ad_id,ad_name,first_seen,is_video'),
+        // A missing table must not take the whole tab down with it.
+        fetchAllLandingPages().catch(() => []),
       ])
       if (clients.error) throw clients.error
       if (videos.error) throw videos.error
-      setData(sortForContent(rollupClients(clients.data || [], saved, published, videos.data || [])))
+      setData(sortForContent(rollupClients(clients.data || [], saved, published, videos.data || [], pages)))
       setDrops(videoDrops(clients.data || [], [...published, ...syncedAdRows(synced?.data || [])], videos.data || [], new Date(), files.data || [], reset?.data?.value || ''))
       setClientRows(clients.data || [])
       setError('')
@@ -404,7 +451,7 @@ export default function ContentPage() {
         /* THE HUB: three doors, and under them the week's video board,
            because the week's job is the video board. */
         <div className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {DOORS.map((d) => (
               <Door key={d.key} door={d} stats={stats} onOpen={() => openTab(d.key)} />
             ))}
@@ -498,6 +545,15 @@ export default function ContentPage() {
               {rows.map((r) => (
                 <DriveCard key={r.id} row={r} onLinked={load} />
               ))}
+            </div>
+          ) : tab === 'pages' ? (
+            <div className="space-y-2">
+              {/* Clients with no page yet first: that is the gap to fill. */}
+              {[...rows]
+                .sort((a, b) => ((a.pages.length === 0) === (b.pages.length === 0) ? 0 : a.pages.length === 0 ? -1 : 1))
+                .map((r) => (
+                  <PagesCard key={r.id} row={r} onChange={load} />
+                ))}
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

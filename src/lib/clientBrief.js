@@ -14,6 +14,7 @@ import { PLAYBOOK } from './playbook'
 import { META_KNOWLEDGE } from './metaKnowledge'
 import { learningsBlock } from './adLearnings'
 import { websiteBlock } from './websiteProfile'
+import { landingPagesBlock } from './landingPages'
 
 // Below this daily budget the playbook says stay on one broad ad set. Splitting
 // a small budget across campaigns starves each of data and none exit learning.
@@ -142,7 +143,7 @@ function ctaFor(intake) {
   return 'Get Quote'
 }
 
-export function buildBrief({ client, intake, ads, learnings }) {
+export function buildBrief({ client, intake, ads, learnings, pages = [] }) {
   const i = intake || {}
   const name = i.business_name || client?.name || 'this client'
   const daily = Number(i.meta_ad_budget_per_day) || 0
@@ -212,7 +213,7 @@ Proof: ${val(i.reviews_star_rating)} stars, ${val(i.reviews_count)} reviews.
   Before/after photos: ${val(i.has_before_after_photos)}. Video footage: ${val(i.has_video_footage)}. Logo: ${val(i.has_logo)}.
 Where leads go: ${val(i.leads_go_to)} (answered by ${val(i.who_answers_leads)}, response time ${val(i.response_time_to_lead)})
 CRM / booking: ${val(i.crm_system)}
-${websiteBlock(client) ? `\n${websiteBlock(client)}\n` : ''}
+${websiteBlock(client) ? `\n${websiteBlock(client)}\n` : ''}${landingPagesBlock(pages) ? `\n${landingPagesBlock(pages)}\n` : ''}
 === STRUCTURE DECISION (already made, do not re-derive) ===
 ${stageLine}
 

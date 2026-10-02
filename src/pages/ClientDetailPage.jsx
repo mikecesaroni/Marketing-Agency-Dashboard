@@ -15,6 +15,7 @@ import AdPerformanceSection from '../components/AdPerformanceSection'
 import AdDoctorPanel from '../components/AdDoctorPanel'
 import FunnelPanel from '../components/FunnelPanel'
 import GoogleSearchPanel from '../components/GoogleSearchPanel'
+import LandingPagesPanel from '../components/LandingPagesPanel'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
 import LogKPIsForm from '../components/LogKPIsForm'
@@ -583,6 +584,12 @@ export default function ClientDetailPage() {
             what is losing money and what to switch off. */}
         <div id="google-search" className="mt-6 scroll-mt-4 md:mt-8">
           <GoogleSearchPanel client={client} onUpdate={loadClientData} />
+        </div>
+
+        {/* LANDING PAGES: where the ads send people. Next to the channels
+            because that is what the pages are for. */}
+        <div className="mt-6 scroll-mt-4 md:mt-8">
+          <LandingPagesPanel client={client} />
         </div>
 
         {/* CLIENT FILES */}

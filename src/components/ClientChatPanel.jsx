@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildBrief } from '../lib/clientBrief'
 import { fetchLearnings } from '../lib/adLearningsStore'
+import { fetchLandingPages } from '../lib/landingPagesStore'
 import {
   clearChat,
   creativeSetToStudio,
@@ -251,10 +252,21 @@ export default function ClientChatPanel({
     }
   }, [client?.id])
   const [site, setSite] = useState(() => Object.fromEntries(SITE_FIELDS.map((k) => [k, client?.[k] ?? null])))
+  // The saved landing pages, so the chat knows where the ads send people.
+  const [pages, setPages] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    fetchLandingPages(client?.id)
+      .then((rows) => !cancelled && setPages(rows))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [client?.id])
   const briefClient = useMemo(() => ({ ...client, ...site }), [client, site])
   const brief = useMemo(
-    () => buildBrief({ client: briefClient, intake, ads, learnings }),
-    [briefClient, intake, ads, learnings]
+    () => buildBrief({ client: briefClient, intake, ads, learnings, pages }),
+    [briefClient, intake, ads, learnings, pages]
   )
 
   useEffect(() => {

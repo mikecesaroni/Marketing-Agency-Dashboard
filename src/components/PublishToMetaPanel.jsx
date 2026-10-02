@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { fetchLandingPages } from '../lib/landingPagesStore'
+import { pageTitle, pagesForMetaLink, purposeMeta } from '../lib/landingPages'
 import ZoomImage from './ui/ZoomImage'
 import LocationPicker from './LocationPicker'
 import LeadFormPicker from './LeadFormPicker'
@@ -650,6 +652,17 @@ export default function PublishToMetaPanel({
 
   const [cta, setCta] = useState('LEARN_MORE')
   const [linkUrl, setLinkUrl] = useState(() => websiteFromIntake(intake, client))
+  // Landing pages saved on the client, offered as one-click choices below.
+  const [savedPages, setSavedPages] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    fetchLandingPages(client?.id)
+      .then((rows) => !cancelled && setSavedPages(pagesForMetaLink(rows)))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [client?.id])
 
   // Instant form is the default: no landing page to build, and Meta prefills
   // the fields, so it is both less setup and a better mobile conversion rate.
@@ -1299,6 +1312,24 @@ export default function PublishToMetaPanel({
                     : 'not set on the client'
             }
           />
+          {/* The pages saved on the client (Landing pages panel): one click
+              instead of hunting for the link in Slack. */}
+          {savedPages.length > 0 && (
+            <div className="-mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-slate-500">Saved pages:</span>
+              {savedPages.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setLinkUrl(p.url)}
+                  title={p.url}
+                  className={`rounded-lg border px-2 py-0.5 ${linkUrl.trim() === p.url ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                >
+                  {pageTitle(p)} · {purposeMeta(p.purpose).label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </Section>
 
