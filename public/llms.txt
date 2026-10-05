@@ -153,8 +153,8 @@ What is on it:
   - Avatar chips for each team member and one dropdown for client or list. Both filter what you see AND decide where a new task goes.
 
 What you can do:
-  - Type a task and press Enter. Click a row or card to open it; every field saves on change.
-  - Tick a row to mark it done. Drag a card between people (Team) or statuses (All, Board).
+  - Type a task and press Enter. Click a row or card to open it. In the task, ticks, status, dates, people and tags save on change and the line beside the status says Saving… then ✓ Saved; the title and description show Unsaved changes with a Save button until saved (Enter in the title, or Cmd/Ctrl+Enter in the description, also saves).
+  - Tick a row, or the circle on a card, to mark it done without opening it. Drag a card between people (Team) or statuses (All, Board).
   - "Team" / "Manage team" opens the roster: add a person with a name and what they do, rename (moves their tasks), remove (keeps their tasks).
   - "You:" at the top right picks your name from the roster; it drives My day and signs tasks and comments.
   - The client page shows the same tasks for that client, not a list of its own. Separate from Onboarding Progress (the /deliverables page), which tracks each client’s launch pipeline.

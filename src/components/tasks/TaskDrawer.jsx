@@ -144,6 +144,9 @@ export default function TaskDrawer({
   const [checkDraft, setCheckDraft] = useState('')
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // What the save line says: '' (everything saved), 'saving', 'saved'.
+  const [saveState, setSaveState] = useState('')
+  const savedTimer = useRef(null)
   const titleRef = useRef(null)
 
   useEffect(() => {
@@ -171,12 +174,29 @@ export default function TaskDrawer({
   const save = async (patch) => {
     setT((prev) => ({ ...prev, ...patch }))
     setError('')
+    setSaveState('saving')
+    clearTimeout(savedTimer.current)
     try {
       const saved = await updateTask(task.id, patch)
       onChanged?.(saved)
+      setSaveState('saved')
+      savedTimer.current = setTimeout(() => setSaveState(''), 2500)
     } catch (err) {
       setError(err.message)
+      setSaveState('')
     }
+  }
+
+  // Title and description are typed, so they wait for a blur, Enter or the
+  // Save button; everything else saves the moment it changes.
+  const titleDirty = title.trim() !== (t.title || '') && title.trim() !== ''
+  const descDirty = description !== (t.description || '')
+  const dirty = titleDirty || descDirty
+  const saveTyped = () => {
+    const patch = {}
+    if (titleDirty) patch.title = title.trim()
+    if (descDirty) patch.description = description || null
+    if (Object.keys(patch).length) save(patch)
   }
 
   const subtasks = sortTasks((allTasks || []).filter((x) => x.parent_id === task.id))
@@ -260,12 +280,32 @@ export default function TaskDrawer({
             ref={titleRef}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => title.trim() && title !== t.title && save({ title: title.trim() })}
+            onBlur={() => titleDirty && save({ title: title.trim() })}
             onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
             className="w-full rounded-lg border border-transparent px-2 py-1 text-lg font-semibold text-slate-900 hover:border-slate-200 focus:border-slate-300 focus:outline-none"
           />
 
-          <StatusPills value={t.status} onChange={(status) => save({ status })} size="md" />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <StatusPills value={t.status} onChange={(status) => save({ status })} size="md" />
+            {/* The save line. Ticks, dates, people and tags save on their own;
+                typed text has a button so nobody wonders whether it took. */}
+            <div className="flex items-center gap-2 text-xs" aria-live="polite">
+              {dirty ? (
+                <>
+                  <span className="text-amber-700">Unsaved changes</span>
+                  <button type="button" onClick={saveTyped} className="rounded-lg bg-slate-900 px-3 py-1 font-semibold text-white hover:bg-slate-700">
+                    Save
+                  </button>
+                </>
+              ) : saveState === 'saving' ? (
+                <span className="text-slate-500">Saving…</span>
+              ) : saveState === 'saved' ? (
+                <span className="font-medium text-green-700">✓ Saved</span>
+              ) : (
+                <span className="text-slate-400">Changes save automatically</span>
+              )}
+            </div>
+          </div>
 
           <div>
             <p className="mb-1 text-xs font-medium text-slate-500">Description</p>
@@ -273,7 +313,8 @@ export default function TaskDrawer({
               rows={4}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              onBlur={() => description !== (t.description || '') && save({ description: description || null })}
+              onBlur={() => descDirty && save({ description: description || null })}
+              onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === 'Enter' && saveTyped()}
               placeholder="What, why, and anything the next person needs to know."
             />
           </div>

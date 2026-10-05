@@ -172,7 +172,7 @@ function TaskRow({ task, clients, lists, members, onOpen, onToggle, sub = false,
 }
 
 /** A card on any board. */
-function TaskCard({ task, clients, lists, members, onOpen, onDragStart, hideWhere = false, hideWho = false }) {
+function TaskCard({ task, clients, lists, members, onOpen, onToggle, onDragStart, hideWhere = false, hideWho = false }) {
   const done = task.status === 'done'
   return (
     <div
@@ -186,6 +186,20 @@ function TaskCard({ task, clients, lists, members, onOpen, onDragStart, hideWher
       className="cursor-grab rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-px hover:border-slate-300 hover:shadow active:cursor-grabbing"
     >
       <div className="flex items-start gap-2">
+        {/* Done without opening the task: the same tick the rows have. */}
+        <button
+          type="button"
+          draggable={false}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggle?.(task)
+          }}
+          aria-label={`${done ? 'Reopen' : 'Mark done'}: ${task.title}`}
+          title={done ? 'Reopen' : 'Mark done'}
+          className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border text-[10px] leading-none transition ${done ? 'border-green-600 bg-green-600 text-white' : 'border-slate-300 bg-white text-transparent hover:border-green-600 hover:text-green-600'}`}
+        >
+          ✓
+        </button>
         <PriorityFlag priority={task.priority} className="mt-1.5" />
         <p className={`flex-1 text-sm leading-snug ${done ? 'line-through text-slate-400' : 'text-slate-900'}`}>{task.title}</p>
       </div>
@@ -473,7 +487,7 @@ export default function TasksPage() {
 
   const open = (t) => setSelectedId(t.id)
   const rowProps = { clients, lists, members, onOpen: open, onToggle: toggle }
-  const cardProps = { clients, lists, members, onOpen: open }
+  const cardProps = { clients, lists, members, onOpen: open, onToggle: toggle }
   const whereLabel = scope.kind === 'client' ? names.clients[scope.id] : scope.kind === 'list' ? names.lists[scope.id] : scope.kind === 'inbox' ? 'the inbox' : ''
   const target = [view === 'day' ? me : view !== 'team' ? person : '', whereLabel].filter(Boolean).join(' · ')
   const teamButton = (label) => (
