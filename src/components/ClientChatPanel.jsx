@@ -20,7 +20,7 @@ import {
 } from '../lib/chatImages'
 import { copyText } from '../lib/intakeSummary'
 import { extractTasksFromChat, taskTrigger } from '../lib/clientTasks'
-import { buildRefillPrompt, isRefillPrompt, outsideScripts, refillLabel, splitScripts } from '../lib/season'
+import { SCRIPT_ANGLES, buildRefillPrompt, isRefillPrompt, outsideScripts, refillLabel, splitScripts } from '../lib/season'
 import { today as todayIso } from '../lib/queries'
 import WebsiteMemory from './WebsiteMemory'
 
@@ -476,7 +476,9 @@ export default function ClientChatPanel({
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
 
-  const refill = () => send(buildRefillPrompt({ client, intake, today: todayIso(), count: 5 }))
+  // One click per kind of script. The buttons live above the box so they
+  // are there whether the chat is empty or a hundred messages deep.
+  const scripts = (angle = 'season') => send(buildRefillPrompt({ client, intake, today: todayIso(), angle }))
 
   const canSend = Boolean(input.trim()) || attachments.length > 0
 
@@ -521,12 +523,6 @@ export default function ClientChatPanel({
               Intake, their website, offers, budget, and what is currently running in the ad account.
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
-              <button
-                onClick={refill}
-                className="px-3 py-1.5 rounded-full bg-orange-600 text-white text-xs font-medium hover:bg-orange-700 transition"
-              >
-                ↻ Refill video scripts
-              </button>
               {STARTERS.map((s) => (
                 <button
                   key={s}
@@ -561,6 +557,23 @@ export default function ClientChatPanel({
       </div>
 
       <div className="pt-3 border-t border-slate-200 mt-3">
+        {/* VIDEO SCRIPTS. Always shown, history or not. */}
+        <div className="mb-2 flex flex-wrap items-center gap-1.5" aria-label="Video scripts">
+          <span className="mr-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">Video scripts</span>
+          {SCRIPT_ANGLES.map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              onClick={() => scripts(a.key)}
+              disabled={sending}
+              title={a.key === 'season' ? '5 fresh owner video scripts for this time of year, from everything the chat knows about them' : `${a.count} owner video scripts on this angle`}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium transition disabled:opacity-50 ${a.tone === 'orange' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'border border-slate-300 bg-white text-slate-700 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-800'}`}
+            >
+              {a.key === 'season' ? '↻ ' : ''}
+              {a.label}
+            </button>
+          ))}
+        </div>
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
             {attachments.map((a) => (
@@ -617,14 +630,6 @@ export default function ClientChatPanel({
             placeholder={`Ask anything about ${client.name}...`}
             className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <button
-            onClick={refill}
-            disabled={sending}
-            title="5 fresh owner video scripts for this time of year, from everything the chat knows about them"
-            className="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition self-end whitespace-nowrap"
-          >
-            ↻ Refill
-          </button>
           <button
             onClick={() => send()}
             disabled={sending || !canSend}

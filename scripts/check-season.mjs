@@ -2,7 +2,7 @@
 // market, and pulling scripts back out of a reply.
 // Run: node scripts/check-season.mjs
 
-import { outsideScripts, buildRefillPrompt, climateOf, isRefillPrompt, refillLabel, seasonContext, seasonOf, splitScripts, tradeOf, upcomingMoments } from '../src/lib/season.js'
+import { SCRIPT_ANGLES, scriptAngle, outsideScripts, buildRefillPrompt, climateOf, isRefillPrompt, refillLabel, seasonContext, seasonOf, splitScripts, tradeOf, upcomingMoments } from '../src/lib/season.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -49,6 +49,12 @@ check('late September is fall up north and still summer in Florida',
     [/Rhode Island/.test(p), /Halloween/.test(p), /HOOK \(0-3s\)/.test(p), /\[|\]|—/.test(p)], [true, true, true, false])
   check('the client row fills in for a missing intake', /Belk/.test(buildRefillPrompt({ client: { name: 'Belk', industry: 'HVAC', market: 'Austin' }, today: '2026-09-29' })), true)
   check('an ordinary message is not a refill', isRefillPrompt('Write me 5 hooks'), false)
+  const offer = buildRefillPrompt({ client: { name: 'Horizon HVAC' }, intake: { industry_trade: 'HVAC', service_area: 'Rhode Island' }, today: '2026-09-29', angle: 'offer' })
+  check('an angle button asks for 3 on that angle, still as a refill', [isRefillPrompt(offer), refillLabel(offer), /leads with their current offer/.test(offer), /Mix the angles/.test(offer)], [true, '3 new owner video scripts for Horizon HVAC: offer.', true, false])
+  check('the season button keeps the mixed brief', /Mix the angles/.test(p), true)
+  check('every angle has a label, a count and (bar the season) an ask', SCRIPT_ANGLES.every((a) => a.label && a.count > 0 && (a.key === 'season' || a.ask.length > 40)), true)
+  check('an unknown angle falls back to the season', scriptAngle('nope').key, 'season')
+  check('every angle keeps the script layout', SCRIPT_ANGLES.every((a) => /HOOK \(0-3s\)/.test(buildRefillPrompt({ client: { name: 'X' }, today: '2026-09-29', angle: a.key }))), true)
 }
 
 {

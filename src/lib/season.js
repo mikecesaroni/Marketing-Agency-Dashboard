@@ -237,11 +237,62 @@ const TRADE_WORDS = {
 export const REFILL_MARKER = 'REFILL:'
 
 /**
+ * The script buttons in the chat. The first is the seasonal refill; the
+ * rest each take one angle, so a person can ask for exactly the kind of
+ * script the week needs without typing the brief out. `ask` replaces the
+ * "mix the angles" paragraph of the prompt; the layout stays the same so
+ * the cards render.
+ */
+export const SCRIPT_ANGLES = [
+  { key: 'season', label: '5 for the season', short: 'Refill', count: 5, tone: 'orange', ask: '' },
+  {
+    key: 'offer',
+    label: 'Offer',
+    count: 3,
+    ask: 'Every script leads with their current offer, exactly as they run it (price, free item, financing, guarantee). Make the offer the reason to call this week; say what it is worth and why it is on now. If they have no offer on record, write them around the strongest guarantee or proof they do have and say so in the Angle line.',
+  },
+  {
+    key: 'proof',
+    label: 'Reviews & proof',
+    count: 3,
+    ask: 'Every script is built on proof: their star rating and review count, years in business, a real review line or a real job they did. Make the owner sound like a neighbour telling a true story, not an ad. No invented reviews or numbers: use what is in the brief or leave it out.',
+  },
+  {
+    key: 'emergency',
+    label: 'Emergency / repair',
+    count: 3,
+    ask: 'Every script speaks to someone whose system just broke today: no heat, no AC, a leak, a backup, no hot water. Short and calm: how fast they come, what happens on the visit, what it costs to come out, and the one thing to do before the tech arrives. The CTA is call now.',
+  },
+  {
+    key: 'maintenance',
+    label: 'Maintenance plan',
+    count: 3,
+    ask: 'Every script sells the tune-up or maintenance plan: what is included, the price if known, and the one problem it prevents at this time of year. Speak to the homeowner whose system is working fine today and who sees no reason to call.',
+  },
+  {
+    key: 'objection',
+    label: 'Top objection',
+    count: 3,
+    ask: 'Every script meets their top objection head on (price, trust, being upsold, a bad past experience, not knowing if they need a repair or a replacement). The owner names the worry in the first line, then answers it with how they actually work. One objection per script; use the one from the brief first.',
+  },
+  {
+    key: 'story',
+    label: 'Owner story',
+    count: 3,
+    ask: 'Every script is the owner on camera talking about why they do this: how the business started, what they refuse to do, a job that stuck with them, what the team is like. Plain, warm, first person. Still ends with a clear offer and CTA.',
+  },
+]
+
+export const scriptAngle = (key) => SCRIPT_ANGLES.find((a) => a.key === key) || SCRIPT_ANGLES[0]
+
+/**
  * The message the Refill button sends. The chat already carries the client's
  * brief (intake, website, ad results, memory), so this only adds the time of
  * year and the exact layout the scripts come back in.
  */
-export function buildRefillPrompt({ client, intake, today, count = 5 }) {
+export function buildRefillPrompt({ client, intake, today, count, angle = 'season' }) {
+  const a = scriptAngle(angle)
+  const n = count || a.count
   const i = intake || {}
   const name = i.business_name || client?.name || 'this client'
   const industry = i.industry_trade || client?.industry || ''
@@ -254,14 +305,19 @@ export function buildRefillPrompt({ client, intake, today, count = 5 }) {
   const climateLine =
     ctx.climate === 'hot' ? ' Their market runs hot, so summer lasts longer there than the calendar says.' : ''
 
-  return `${REFILL_MARKER} ${count} new owner video scripts for ${name}, ${ctx.seasonLabel}.
+  const headline = a.key === 'season' ? `${n} new owner video scripts for ${name}, ${ctx.seasonLabel}.` : `${n} new owner video scripts for ${name}: ${a.label.toLowerCase()}.`
+  const angleAsk = a.key === 'season'
+    ? 'Mix the angles: the season right now, what is coming up, their proof, their offer, and their top objection. If an angle needs an offer they do not have, pick another angle rather than inventing one.'
+    : a.ask
+
+  return `${REFILL_MARKER} ${headline}
 
 Today is ${ctx.dateLabel}. For a ${TRADE_WORDS[ctx.trade]} business${where}, that is ${ctx.seasonLabel}.${climateLine} What homeowners there are thinking about right now: ${ctx.focus}.
 Coming up: ${moments}.
 
 Use everything you know about them: the intake, their website, their offers, reviews and guarantees, what is running in the ad account and what has won or lost. Use their real offer, real proof and real town names. Do not reuse a hook from an ad already running or from a script you already wrote in this chat.
 
-Mix the angles: the season right now, what is coming up, their proof, their offer, and their top objection. If an angle needs an offer they do not have, pick another angle rather than inventing one.
+${angleAsk}
 
 Write every script exactly like this, as plain text with no markdown, no asterisks and no brackets:
 
