@@ -566,7 +566,7 @@ export default function ClientChatPanel({
               type="button"
               onClick={() => scripts(a.key)}
               disabled={sending}
-              title={a.key === 'season' ? '5 fresh owner video scripts for this time of year, from everything the chat knows about them' : `${a.count} owner video scripts on this angle`}
+              title={a.key === 'season' ? '3 fresh owner video scripts for this time of year, from everything the chat knows about them' : `${a.count} owner video scripts on this angle`}
               className={`rounded-full px-2.5 py-1 text-xs font-medium transition disabled:opacity-50 ${a.tone === 'orange' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'border border-slate-300 bg-white text-slate-700 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-800'}`}
             >
               {a.key === 'season' ? '↻ ' : ''}

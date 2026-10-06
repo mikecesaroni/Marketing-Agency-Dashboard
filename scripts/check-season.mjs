@@ -43,8 +43,8 @@ check('late September is fall up north and still summer in Florida',
 }
 
 {
-  const p = buildRefillPrompt({ client: { name: 'Horizon HVAC' }, intake: { industry_trade: 'HVAC', service_area: 'Rhode Island' }, today: '2026-09-29', count: 5 })
-  check('the prompt opens with a short label the chat can show', [isRefillPrompt(p), refillLabel(p)], [true, '5 new owner video scripts for Horizon HVAC, early fall.'])
+  const p = buildRefillPrompt({ client: { name: 'Horizon HVAC' }, intake: { industry_trade: 'HVAC', service_area: 'Rhode Island' }, today: '2026-09-29' })
+  check('the prompt opens with a short label the chat can show, and the season button asks for 3', [isRefillPrompt(p), refillLabel(p)], [true, '3 new owner video scripts for Horizon HVAC, early fall.'])
   check('the prompt carries the season, the market and the layout',
     [/Rhode Island/.test(p), /Halloween/.test(p), /HOOK \(0-3s\)/.test(p), /\[|\]|—/.test(p)], [true, true, true, false])
   check('the client row fills in for a missing intake', /Belk/.test(buildRefillPrompt({ client: { name: 'Belk', industry: 'HVAC', market: 'Austin' }, today: '2026-09-29' })), true)

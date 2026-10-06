@@ -244,7 +244,7 @@ export const REFILL_MARKER = 'REFILL:'
  * the cards render.
  */
 export const SCRIPT_ANGLES = [
-  { key: 'season', label: '5 for the season', short: 'Refill', count: 5, tone: 'orange', ask: '' },
+  { key: 'season', label: '3 for the season', short: 'Refill', count: 3, tone: 'orange', ask: '' },
   {
     key: 'offer',
     label: 'Offer',
