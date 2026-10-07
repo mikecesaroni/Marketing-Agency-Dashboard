@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchLandingPages } from '../lib/landingPagesStore'
-import { pageTitle, pagesForMetaLink, purposeMeta } from '../lib/landingPages'
+import { defaultMetaLink, pageTitle, pagesForMetaLink, purposeMeta } from '../lib/landingPages'
 import ZoomImage from './ui/ZoomImage'
 import LocationPicker from './LocationPicker'
 import LeadFormPicker from './LeadFormPicker'
@@ -652,6 +652,9 @@ export default function PublishToMetaPanel({
 
   const [cta, setCta] = useState('LEARN_MORE')
   const [linkUrl, setLinkUrl] = useState(() => websiteFromIntake(intake, client))
+  // What the CRM put in the link box on its own (the website default, then
+  // the saved landing page). A link somebody typed is never replaced.
+  const autoLink = useRef(websiteFromIntake(intake, client))
   // Landing pages saved on the client, offered as one-click choices below.
   const [savedPages, setSavedPages] = useState([])
   useEffect(() => {
@@ -796,6 +799,23 @@ export default function PublishToMetaPanel({
   useEffect(() => {
     if (!chosenObjective?.needsForm) setLeadForm(null)
   }, [chosenObjective?.needsForm])
+
+  // Website leads or traffic: the ad sends people somewhere, so the saved
+  // landing page (Landing pages panel, Meta ads) goes in the box on its own.
+  // Only over a link the CRM filled in itself; a typed one stays.
+  useEffect(() => {
+    const pick = defaultMetaLink(savedPages, { needsLink: Boolean(chosenObjective?.needsLink) })
+    if (!pick) return
+    // The website default can be re-applied when the intake arrives, with or
+    // without a trailing slash, so "did the CRM fill this" compares loosely.
+    const same = (a, b) => String(a || '').trim().replace(/\/$/, '') === String(b || '').trim().replace(/\/$/, '')
+    setLinkUrl((cur) => {
+      const ours = !cur.trim() || same(cur, autoLink.current) || same(cur, websiteFromIntake(intake, client))
+      if (!ours) return cur
+      autoLink.current = pick
+      return pick
+    })
+  }, [chosenObjective?.needsLink, savedPages, intake, client])
 
   // Lazily: this is a live call to Meta, not worth making unless the existing
   // campaigns are actually being looked at.
@@ -1305,11 +1325,13 @@ export default function PublishToMetaPanel({
             hint={
               chosenObjective?.needsForm
                 ? 'Nobody follows it — the form opens in place. Meta rejects lead ads that link to a Facebook Page.'
-                : client.website_url
-                  ? 'from the client'
-                  : intake?.website
-                    ? 'from the intake form'
-                    : 'not set on the client'
+                : savedPages.some((p) => p.url === linkUrl.trim())
+                  ? `from the client's saved landing pages (${purposeMeta(savedPages.find((p) => p.url === linkUrl.trim())?.purpose).label})`
+                  : client.website_url
+                    ? 'from the client'
+                    : intake?.website
+                      ? 'from the intake form'
+                      : 'not set on the client'
             }
           />
           {/* The pages saved on the client (Landing pages panel): one click

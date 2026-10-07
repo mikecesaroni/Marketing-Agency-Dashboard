@@ -1,5 +1,5 @@
 // Self-check for the landing pages arithmetic. Run: node scripts/check-landing-pages.mjs
-import { guessPurpose, labelFromUrl, landingPagesBlock, normalizeUrl, pagesForMetaLink, pagesText, pageTitle, shortUrl, sortPages } from '../src/lib/landingPages.js'
+import { defaultMetaLink, guessPurpose, labelFromUrl, landingPagesBlock, normalizeUrl, pagesForMetaLink, pagesText, pageTitle, shortUrl, sortPages } from '../src/lib/landingPages.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -32,6 +32,10 @@ check('copy-all with nothing says so', pagesText('X', []), 'X: no landing pages 
 check('the brief block names each page by purpose', landingPagesBlock(pages.slice(1, 3)).split('\n'), ['=== LANDING PAGES (where the ads send people) ===', 'Meta ads: https://x.com/meta-b', 'Google Ads: https://x.com/google-lp (Search page). AW tag on it'])
 check('no pages, no block', landingPagesBlock([]), '')
 check('Meta link choices: Meta pages first, booking left out', pagesForMetaLink(pages).map((p) => p.id), ['4', '3', '5', '2'])
+check('website leads pulls the saved Meta page', defaultMetaLink(pages, { needsLink: true }), 'https://x.com/meta-a')
+check('with no Meta page the website page stands in', defaultMetaLink(pages.filter((p) => p.purpose !== 'meta'), { needsLink: true }), 'https://x.com/')
+check('an instant-form objective leaves the box alone', defaultMetaLink(pages, { needsLink: false }), '')
+check('nothing saved, nothing pulled', defaultMetaLink([], { needsLink: true }), '')
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

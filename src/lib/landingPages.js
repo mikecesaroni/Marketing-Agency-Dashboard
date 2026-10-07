@@ -97,6 +97,18 @@ export function landingPagesBlock(pages = []) {
   return ['=== LANDING PAGES (where the ads send people) ===', ...rows.map((p) => `${purposeMeta(p.purpose).label}: ${p.url}${p.label ? ` (${p.label})` : ''}${p.notes ? `. ${p.notes}` : ''}`)].join('\n')
 }
 
+/**
+ * The address a Meta ad should send people to when the objective needs a
+ * link (Leads (website), Traffic): the saved Meta ads page first, then the
+ * website page, then anything but a booking page. '' when the objective
+ * takes an instant form instead, or nothing is saved: the website default
+ * stands then.
+ */
+export function defaultMetaLink(pages = [], { needsLink = false } = {}) {
+  if (!needsLink) return ''
+  return pagesForMetaLink(pages)[0]?.url || ''
+}
+
 /** The pages worth offering as a Meta ad's link: Meta first, then website, then the rest except booking. */
 export function pagesForMetaLink(pages = []) {
   const order = { meta: 0, site: 1, other: 2, google: 3 }
