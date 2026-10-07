@@ -271,7 +271,7 @@ async function graphPost(
  * Supabase bucket staying public forever; an image_hash is a copy that lives in
  * the ad account and cannot break later.
  */
-async function uploadImage(accountId: string, imageUrl: string, token: string): Promise<string> {
+async function uploadImage(accountId: string, imageUrl: string, token: string, filename = 'ad.png'): Promise<string> {
   const res = await fetch(imageUrl)
   if (!res.ok) {
     throw new GraphError(
@@ -282,7 +282,9 @@ async function uploadImage(accountId: string, imageUrl: string, token: string): 
   const blob = await res.blob()
 
   const form = new FormData()
-  form.append('source', blob, 'ad.png')
+  // The filename is what the Media Library shows, so a sent set is findable
+  // by client and date rather than being one more "ad.png".
+  form.append('source', blob, filename)
   form.append('access_token', token)
 
   const upload = await fetch(`${GRAPH}/${accountId}/adimages`, { method: 'POST', body: form })
@@ -1398,6 +1400,67 @@ Deno.serve(async (req) => {
     // Pause one ad. The Ad Doctor's kill verdicts land here when somebody
     // clicks them. Spend-reducing and reversible - the safe direction.
     // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // SEND TO LIBRARY. Puts a saved set's sizes into the ad account's image
+    // library (Ads Manager, Media library) without making an ad, so the team
+    // can build by hand in Ads Manager from the CRM's artwork. This is the
+    // low-risk path for a young account: three image uploads, paced, and no
+    // campaign structure appearing from nowhere.
+    //
+    //   { action: 'send_to_library', client_id, stamp, images: { square: path, feed: path, story: path } }
+    //
+    // The hashes come back and are kept on the saved_ads row so the gallery
+    // can say "in the library since ...".
+    // -----------------------------------------------------------------------
+    if (action === 'send_to_library') {
+      const stamp = String(body.stamp || '').trim()
+      const images: Record<string, string> = body.images && typeof body.images === 'object' ? body.images : {}
+      const entries = Object.entries(images).filter(([, p]) => typeof p === 'string' && p)
+      if (!stamp || entries.length === 0) return json({ error: 'stamp and at least one image path are required.' }, 400)
+
+      // Nothing goes into an account Meta has restricted.
+      let status: number | null = null
+      try {
+        const acct = await graphGet(account, { fields: 'account_status' }, token)
+        status = acct?.account_status ?? null
+      } catch {
+        status = null
+      }
+      if (status !== null && Number(status) !== 1) {
+        return json(
+          { error: `Meta reports ${client.name}'s ad account as not active (status ${status}). Nothing can be sent to it until it is active again.`, code: 'account_not_active' },
+          409
+        )
+      }
+
+      const safeName = String(client.name).replace(/[^\w.-]+/g, '_').slice(0, 40)
+      const day = new Date(Number(stamp) || Date.now()).toISOString().slice(0, 10)
+      const hashes: Record<string, string> = {}
+      for (const [key, path] of entries) {
+        hashes[key] = await uploadImage(account, bucketUrl(supabaseUrl, String(path)), token, `${safeName}-${day}-${key}.png`)
+        // One upload, one breath. A burst of writes is the pattern Meta flags.
+        await new Promise((r) => setTimeout(r, 1200))
+      }
+
+      const sentAt = new Date().toISOString()
+      await fetch(
+        `${supabaseUrl}/rest/v1/saved_ads?client_id=eq.${encodeURIComponent(clientId)}&stamp=eq.${encodeURIComponent(stamp)}`,
+        {
+          method: 'PATCH',
+          headers: { ...dbHeaders, Prefer: 'return=minimal' },
+          body: JSON.stringify({ meta_image_hashes: hashes, meta_library_at: sentAt }),
+        }
+      ).catch(() => {})
+
+      return json({
+        ok: true,
+        hashes,
+        sent_at: sentAt,
+        ads_manager_url: `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${account.replace('act_', '')}`,
+        note: 'The images are in the ad account now. In Ads Manager, open the left menu, All tools, Media library, and they are there under today\'s date. No ad was made.',
+      })
+    }
+
     if (action === 'pause_ad') {
       const adId = String(body.ad_id || '').trim()
       if (!adId) return json({ error: 'ad_id is required.' }, 400)

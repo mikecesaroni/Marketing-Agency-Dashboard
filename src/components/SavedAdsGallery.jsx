@@ -7,6 +7,8 @@ import { approvalStatusLine, onePerSet, sizesAvailable } from '../lib/adApproval
 import { createApprovalLink, fetchApprovalLinks } from '../lib/adApprovalStore'
 import { actionableChanges, describeApplied } from '../lib/adRevise'
 import { reviseSavedAd } from '../lib/adRevisionStore'
+import { sendSetToLibrary } from '../lib/metaPublish'
+import { libraryLine, libraryStatus } from '../lib/metaLibrary'
 import Button from './ui/Button'
 import ZoomImage from './ui/ZoomImage'
 
@@ -39,6 +41,24 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
   // Applying an owner's note: which one is running, and what each one did.
   const [applying, setApplying] = useState('')
   const [appliedNotes, setAppliedNotes] = useState({})
+  // Sending a set into the ad account's image library: which one, and what
+  // the last send said.
+  const [sending, setSending] = useState('')
+  const [sentNote, setSentNote] = useState({})
+
+  const sendToLibrary = async (set) => {
+    setSending(set.stamp)
+    setError('')
+    try {
+      const r = await sendSetToLibrary(clientId, set)
+      setSentNote((prev) => ({ ...prev, [set.stamp]: r?.note || 'Sent.' }))
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSending('')
+    }
+  }
 
   const load = () =>
     fetchSavedAds(clientId)
@@ -407,6 +427,16 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
                   Publish
                 </button>
               )}
+              {/* The low-risk path: the three sizes go into the ad account's
+                  Media library and the ad is built by hand in Ads Manager. */}
+              <button
+                onClick={() => sendToLibrary(set)}
+                disabled={sending === set.stamp}
+                title={libraryStatus(set.recipe).sent ? `${libraryLine(set.recipe)}. Sends the current sizes again.` : "Upload all sizes to the client's Meta ad account image library (Ads Manager, Media library). No ad is made."}
+                className={`px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-50 ${libraryStatus(set.recipe).sent ? 'border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'}`}
+              >
+                {sending === set.stamp ? 'Sending…' : libraryStatus(set.recipe).sent ? '✓ In Meta library' : 'Send to Meta library'}
+              </button>
               {set.recipe ? (
                 <button
                   onClick={() => onEdit?.(set)}
@@ -440,6 +470,12 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
               </button>
               </div>
             </div>
+
+            {(sentNote[set.stamp] || libraryStatus(set.recipe).sent) && (
+              <p className="mb-2 text-[11px] text-emerald-800" data-library-note>
+                {sentNote[set.stamp] || `${libraryLine(set.recipe)}. In Ads Manager: left menu, All tools, Media library.`}
+              </p>
+            )}
 
             <div className="flex gap-3 overflow-x-auto pb-1">
               {set.ordered.map(({ size, file }) => {

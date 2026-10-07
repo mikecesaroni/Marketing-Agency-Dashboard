@@ -511,6 +511,15 @@ export async function createLeadForm({
  * to an existing Meta object in the whole CRM: spend-reducing, reversible in
  * Ads Manager, and always behind a human click - never a schedule.
  */
+/**
+ * Puts a saved set's sizes into the client's ad account image library, no ad
+ * made. Returns { hashes, sent_at, ads_manager_url, note }.
+ */
+export async function sendSetToLibrary(clientId, set) {
+  const images = Object.fromEntries((set?.ordered || []).filter((x) => x?.file?.storage_path).map(({ size, file }) => [size.key, file.storage_path]))
+  return await callFunction({ action: 'send_to_library', client_id: clientId, stamp: String(set.stamp), images })
+}
+
 export async function pauseAd(clientId, adId) {
   return callFunction({ action: 'pause_ad', client_id: clientId, ad_id: adId })
 }

@@ -513,7 +513,7 @@ export const LOOKUPS = [
   },
   {
     need: 'Ads that have already been designed',
-    where: 'The client page → Ad Studio → "Saved ads"',
+    where: 'The client page → Ad Studio → "Saved ads". Each set also has "Send to Meta library": the sizes go into the client\'s ad account image library (Ads Manager, All tools, Media library) with no ad made, paced one upload at a time, so the team can build by hand in Ads Manager from the CRM\'s artwork. The button turns green ("In Meta library") once sent; a restricted account is refused.',
     how: 'Every saved design, in each size it was made in.',
   },
   {

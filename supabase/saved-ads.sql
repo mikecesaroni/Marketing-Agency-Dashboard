@@ -42,3 +42,6 @@ alter table saved_ads disable row level security;
 
 -- Added after the table shipped; safe on a fresh install too.
 alter table saved_ads add column if not exists hook_plate boolean default false;
+-- "Send to Meta library": the image hashes Meta gave back per size, and when.
+alter table saved_ads add column if not exists meta_image_hashes jsonb;
+alter table saved_ads add column if not exists meta_library_at timestamptz;
