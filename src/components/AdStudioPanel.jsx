@@ -10,6 +10,7 @@ import LeadFormStudio from './LeadFormStudio'
 import ResearchPanel from './ResearchPanel'
 import PublishToMetaPanel from './PublishToMetaPanel'
 import { fetchPublishedAds } from '../lib/metaPublish'
+import { cacheBust, keys } from '../lib/pageCache'
 import { overwriteSavedAd, recipeToContent, saveAdRecipe } from '../lib/savedAds'
 import { creativeWarnings } from '../lib/creativeChecks'
 import AdImagePicker from './AdImagePicker'
@@ -507,7 +508,24 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // without a page reload.
   const [driveFolderId, setDriveFolderId] = useState(client.drive_folder_id || '')
   const [backgroundPath, setBackgroundPath] = useState('')
-  const [logoPath, setLogoPath] = useState('')
+  // The logo the CRM remembers for this client (clients.logo_path). A new ad
+  // starts with it, so nobody picks the same logo every time. Picking or
+  // uploading a logo updates it; Forget clears it.
+  const [rememberedLogo, setRememberedLogo] = useState(client.logo_path || '')
+  const [logoPath, setLogoPath] = useState(client.logo_path || '')
+  const rememberLogo = async (path) => {
+    setRememberedLogo(path || '')
+    const { error: err } = await supabase.from('clients').update({ logo_path: path || null }).eq('id', client.id)
+    if (err) setError(`The logo was used but not remembered: ${err.message}`)
+    // The client list and page cache carry the client row.
+    cacheBust(keys.client(client.id))
+    cacheBust(keys.clients())
+  }
+  // A logo picked or uploaded on purpose becomes the remembered one.
+  const chooseLogo = (path) => {
+    setLogoPath(path)
+    if (path && path !== rememberedLogo) rememberLogo(path)
+  }
   // The client's colours where the intake captured them, ours where it did
   // not. Stated colours are treated as a decision, which is why the logo
   // sampling below leaves them alone.
@@ -1199,24 +1217,59 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           driveFolderId={driveFolderId}
           onFolderSaved={setDriveFolderId}
         />
-        <AdImagePicker
-          label="Logo"
-          client={client}
-          files={files}
-          value={logoPath}
-          onChange={(p) => {
-            logoChosen.current = true
-            return pick(setLogoPath)(p)
-          }}
-          onUpload={(f) => {
-            logoChosen.current = true
-            return upload(f, setLogoPath)
-          }}
-          onRefresh={loadFiles}
-          converting={converting}
-          driveFolderId={driveFolderId}
-          onFolderSaved={setDriveFolderId}
-        />
+        <div>
+          <AdImagePicker
+            label="Logo"
+            client={client}
+            files={files}
+            value={logoPath}
+            onChange={(p) => {
+              logoChosen.current = true
+              // Clearing the pick does not forget the logo; Forget does.
+              return p ? pick(chooseLogo)(p) : setLogoPath('')
+            }}
+            onUpload={(f) => {
+              logoChosen.current = true
+              return upload(f, chooseLogo)
+            }}
+            onRefresh={loadFiles}
+            converting={converting}
+            driveFolderId={driveFolderId}
+            onFolderSaved={setDriveFolderId}
+          />
+          {/* What the CRM remembers, so the next ad starts with the right logo. */}
+          <p className="mt-1 text-[11px] text-slate-500" aria-live="polite">
+            {rememberedLogo && logoPath === rememberedLogo ? (
+              <>
+                <span className="text-green-700">✓ Remembered for {client.name}.</span> New ads start with this logo.{' '}
+                <button type="button" onClick={() => rememberLogo('')} className="text-slate-500 underline hover:text-slate-800">
+                  Forget
+                </button>
+              </>
+            ) : rememberedLogo ? (
+              <>
+                A different logo is remembered for {client.name}.{' '}
+                <button type="button" onClick={() => { logoChosen.current = true; setLogoPath(rememberedLogo) }} className="text-blue-700 underline hover:text-blue-900">
+                  Use the remembered one
+                </button>
+                {logoPath && (
+                  <>
+                    {' · '}
+                    <button type="button" onClick={() => rememberLogo(logoPath)} className="text-blue-700 underline hover:text-blue-900">
+                      Remember this one instead
+                    </button>
+                  </>
+                )}
+              </>
+            ) : logoPath ? (
+              <button type="button" onClick={() => rememberLogo(logoPath)} className="text-blue-700 underline hover:text-blue-900">
+                Remember this as {client.name}&apos;s logo
+              </button>
+            ) : (
+              <>No logo remembered yet. Pick or upload one and the CRM keeps it for next time.</>
+            )}
+          </p>
+        </div>
       </div>
 
       <div className="space-y-2">

@@ -200,3 +200,5 @@ create policy "Authenticated users can do everything with client_files"
 -- done and not the other.
 -- ---------------------------------------------------------------------------
 alter table clients add column if not exists gbp_optimized boolean not null default false;
+-- The logo the Ad Studio starts a new ad with: a client-files storage path or a drive: path.
+alter table clients add column if not exists logo_path text;
