@@ -16,6 +16,7 @@ import AdDoctorPanel from '../components/AdDoctorPanel'
 import FunnelPanel from '../components/FunnelPanel'
 import GoogleSearchPanel from '../components/GoogleSearchPanel'
 import LandingPagesPanel from '../components/LandingPagesPanel'
+import { accountStatusLabel, accountStatusOk } from '../lib/adHealth'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
 import LogKPIsForm from '../components/LogKPIsForm'
@@ -485,6 +486,16 @@ export default function ClientDetailPage() {
             website up front, then five numbers from the rest of the CRM.
             (The Industry / Market / Meta-day / LSA-day card that sat here
             showed typed-in budgets; these are the real numbers.) */}
+        {/* The Meta ad account is not active: say so at the top, the moment
+            the nightly check (or a funnel build) sees it, not when somebody
+            opens Ads Manager. */}
+        {client.meta_ad_account_id && !accountStatusOk(client.meta_account_status) && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+            <strong>Meta reports this ad account as {accountStatusLabel(client.meta_account_status)}.</strong> Nothing delivers and nothing
+            can be built until it is active. Open Meta Business Support Home, pick the account, read &ldquo;Why this happened&rdquo; and
+            request a review; finish the identity step within 30 days or the restriction becomes permanent.
+          </div>
+        )}
         <ClientSnapshot client={client} intake={intake} tasks={tasks} showMoney={isAdmin(role)} />
 
         {/* CLIENT FORMS — what they have sent back, and how to chase the rest.

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createFunnel, createStandardAudiences, listAudiences } from '../lib/metaFunnel'
+import { createFunnel, createStandardAudiences, inspectAccount, listAudiences } from '../lib/metaFunnel'
+import { buildGuards } from '../lib/funnelGuards'
 import { ROLES, describePlan, funnelPlan, guessRoles, planGaps, roleList } from '../lib/funnelPlan'
 
 /**
@@ -92,6 +93,11 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
   const [destination, setDestination] = useState(client.meta_pixel_id ? 'website' : 'form')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // The account as Meta sees it and what the CRM already built today, from
+  // inspect. Null until read; a failed read does not block the build.
+  const [account, setAccount] = useState(null)
+  const [builtToday, setBuiltToday] = useState([])
+  const [acknowledged, setAcknowledged] = useState({ fresh: false, duplicate: false })
   // The per-audience report from creating the standard four. Kept on screen
   // after the list reloads, because "skipped: no pixel" is the thing the
   // person needs to read, and it would otherwise vanish the moment the two
@@ -102,8 +108,13 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
   const load = useCallback(async () => {
     setError('')
     try {
-      const found = await listAudiences(client.id)
+      const [found, seen] = await Promise.all([
+        listAudiences(client.id),
+        inspectAccount(client.id).catch(() => null),
+      ])
       setAudiences(found)
+      setAccount(seen?.account || null)
+      setBuiltToday(seen?.built_today || [])
       // Filled in, never applied. A guess that assigned itself is how a
       // lookalike ends up excluded from prospecting.
       setRoles(guessRoles(found))
@@ -147,7 +158,8 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
   const cents = (v) => Math.round(Number(v || 0) * 100)
   const budgetCents = { tof: cents(tofBudget), retarget: cents(retargetBudget) }
 
-  const blockers = []
+  const guards = buildGuards({ account, builtToday, acknowledged })
+  const blockers = [...guards.blockers]
   if (locations.length === 0) blockers.push('pick where the ads run')
   if (destination === 'website' && !client.meta_pixel_id) blockers.push('the client has no pixel, so choose Instant form')
   if (destination === 'form' && !client.meta_page_id) blockers.push('the client has no Facebook Page connected')
@@ -168,7 +180,11 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
         budgetCents,
         optimizationGoal: destination === 'form' ? 'LEAD_GENERATION' : 'OFFSITE_CONVERSIONS',
         specialAdCategories: specialCategory ? [specialCategory] : [],
+        acknowledgeFresh: acknowledged.fresh,
+        allowDuplicate: acknowledged.duplicate,
       })
+      // Re-read, so a second click sees today's build and is refused.
+      setBuiltToday((prev) => [...prev, ...(result?.campaigns || []).map((c) => c.name)])
       onBuilt?.(result)
     } catch (err) {
       setError(err.message)
@@ -357,6 +373,33 @@ export default function FunnelBuilder({ client, locations, ageMin, ageMax, speci
           ))}
         </ul>
       </div>
+
+      {/* THE ACCOUNT GUARDS. A restricted account cannot be built on at all;
+          a never-spent, no-card account and a second build today each need
+          a deliberate tick. */}
+      {account && account.status !== null && account.status !== 1 && (
+        <p className="rounded border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-800" data-guard="status">
+          {guards.blockers.find((b) => b.startsWith('Meta reports'))} Open Meta Business Support Home, pick this ad account and read &ldquo;Why this happened&rdquo;.
+        </p>
+      )}
+      {account && Number(account.amount_spent || 0) === 0 && account.has_funding === false && (
+        <label className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900" data-guard="fresh">
+          <input type="checkbox" className="mt-0.5" checked={acknowledged.fresh} onChange={(e) => setAcknowledged((a) => ({ ...a, fresh: e.target.checked }))} />
+          <span>
+            <strong>This ad account has never spent and has no payment method on file.</strong> Meta closes new accounts that get a burst of
+            activity before any ad has run. Add a card and run one small ad first. Tick to build anyway.
+          </span>
+        </label>
+      )}
+      {builtToday.length > 0 && (
+        <label className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900" data-guard="duplicate">
+          <input type="checkbox" className="mt-0.5" checked={acknowledged.duplicate} onChange={(e) => setAcknowledged((a) => ({ ...a, duplicate: e.target.checked }))} />
+          <span>
+            <strong>Already built today:</strong> {builtToday.join(', ')}. Building again makes a second copy of every campaign and ad set.
+            Tick to build a second set on purpose.
+          </span>
+        </label>
+      )}
 
       {error && (
         <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-800">{error}</p>

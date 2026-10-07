@@ -106,6 +106,7 @@ export function metaClientReport({ clients, rows, since, until }) {
       name: c.name,
       paused: Boolean(c.paused_at),
       pixelId: String(c.meta_pixel_id || ''),
+      accountStatus: c.meta_account_status ?? null,
       pixel: pixelState(c),
       ...k,
       ads: ads.size,

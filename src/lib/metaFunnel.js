@@ -66,9 +66,13 @@ export async function createFunnel({
   optimizationGoal,
   specialAdCategories = [],
   nameSuffix,
+  acknowledgeFresh = false,
+  allowDuplicate = false,
 }) {
   return await call({
     action: 'create_funnel',
+    acknowledge_fresh: acknowledgeFresh,
+    allow_duplicate: allowDuplicate,
     client_id: clientId,
     adsets: plan.adsets.map((a) => ({
       key: a.key,

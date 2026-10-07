@@ -54,6 +54,61 @@ const CORS = {
 // budget typed in dollars where cents were meant.
 const MIN_DAILY_BUDGET_CENTS = 100
 
+// A breath between writes. Meta's enforcement is about the PATTERN of API
+// writes, not the ads: a burst no human could produce by hand is what gets
+// an account flagged. Found the hard way on 2026-10-07, when a one-month-old
+// account that had never spent got a whole funnel created twice inside 30
+// seconds and went to pending closure the same day. Every write below waits
+// this long before the next one.
+const PACE_MS = 1500
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * The ad account as Meta sees it right now: status, whether it has ever
+ * spent, whether a payment method is on file. The create path refuses to
+ * build on anything but an active account, and warns on one that looks
+ * like a throwaway (never spent, no card), because that is the account Meta
+ * closes when a burst of activity arrives.
+ */
+async function readAccountHealth(account: string, token: string) {
+  let base: any = {}
+  try {
+    base = await graphGet(account, { fields: 'account_status,disable_reason,amount_spent,created_time,currency' }, token)
+  } catch (err) {
+    return { status: null, disable_reason: null, amount_spent: null, has_funding: null, created_time: null, error: String(err instanceof Error ? err.message : err) }
+  }
+  // funding_source_details needs more permission than the rest; a refusal
+  // means "unknown", not "none".
+  let hasFunding: boolean | null = null
+  try {
+    const f = await graphGet(account, { fields: 'funding_source_details' }, token)
+    hasFunding = Boolean(f?.funding_source_details?.id || f?.funding_source_details?.display_string)
+  } catch {
+    hasFunding = null
+  }
+  return {
+    status: base.account_status ?? null,
+    disable_reason: base.disable_reason ?? null,
+    amount_spent: base.amount_spent ?? null,
+    currency: base.currency ?? null,
+    has_funding: hasFunding,
+    created_time: base.created_time ?? null,
+    error: null,
+  }
+}
+
+const ACCOUNT_STATUS_WORDS: Record<number, string> = {
+  1: 'active',
+  2: 'disabled by Meta',
+  3: 'unsettled (unpaid balance)',
+  7: 'pending risk review',
+  8: 'pending settlement',
+  9: 'in grace period',
+  100: 'pending closure',
+  101: 'closed',
+}
+const statusWords = (n: unknown) => ACCOUNT_STATUS_WORDS[Number(n)] || `status ${n}`
+
 // The agency prefix on every campaign and ad set name. Same rule as
 // src/lib/adNaming.js and meta-manage; applied once, never stacked.
 const WC_PREFIX = 'WC_'
@@ -487,6 +542,7 @@ Deno.serve(async (req) => {
             `create ${w.name}`
           )
           results.push({ name: w.name, status: 'created', id: String(made.id) })
+          await pause(PACE_MS)
         } catch (err) {
           let reason = String(err instanceof Error ? err.message : err)
           // Seen on Reliable and Perfect Breeze: the Page reads fine, its
@@ -521,6 +577,7 @@ Deno.serve(async (req) => {
     // against.
     // -----------------------------------------------------------------------
     if (action === 'inspect') {
+      const health = await readAccountHealth(account, token)
       const [campaigns, adsets, auds] = await Promise.all([
         graphGet(
           `${account}/campaigns`,
@@ -555,8 +612,14 @@ Deno.serve(async (req) => {
           name: audName[String(x.id)] || '(not on this account)',
         }))
 
+      const todayIso = new Date().toISOString().slice(0, 10)
+      const builtToday = (campaigns.data || [])
+        .filter((c: any) => String(c.name || '').startsWith(WC_PREFIX) && String(c.created_time || '').slice(0, 10) === todayIso)
+        .map((c: any) => c.name)
       return json({
         client: client.name,
+        account: health,
+        built_today: builtToday,
         campaigns: (campaigns.data || []).map((c: any) => ({
           id: c.id,
           name: c.name,
@@ -667,9 +730,57 @@ Deno.serve(async (req) => {
         }
       }
 
+      // THE ACCOUNT ITSELF. Nothing is built on an account Meta has already
+      // restricted, and nothing is built on a never-spent, no-card account
+      // unless the person said they understand the risk (acknowledge_fresh).
+      const health = await readAccountHealth(account, token)
+      if (health.status !== null && Number(health.status) !== 1) {
+        return json(
+          {
+            error: `Meta reports ${client.name}'s ad account as ${statusWords(health.status)}. Nothing can be built until it is active again. Check Account Quality in Meta Business Support Home.`,
+            code: 'account_not_active',
+            account: health,
+          },
+          409
+        )
+      }
+      const fresh = Number(health.amount_spent || 0) === 0 && health.has_funding === false
+      if (fresh && !body.acknowledge_fresh) {
+        return json(
+          {
+            error: `${client.name}'s ad account has never spent and has no payment method on file. Meta closes new accounts that get a burst of activity before any ad has run. Add a card and run one small ad first, or tick "build anyway" to go ahead.`,
+            code: 'fresh_account',
+            account: health,
+          },
+          409
+        )
+      }
+
+      // NO SECOND COPY. A build takes ten seconds or so, and a second click
+      // while it runs used to create the whole structure twice. If the CRM
+      // already made campaigns with today's suffix, stop here unless the
+      // person asked for another set on purpose (allow_duplicate).
+      if (!body.allow_duplicate) {
+        const existing = await graphGet(`${account}/campaigns`, { fields: 'id,name,created_time', limit: '200' }, token)
+        const dupes = (existing.data || [])
+          .map((c: any) => String(c.name || ''))
+          .filter((n: string) => n.startsWith(WC_PREFIX) && n.endsWith(`— ${suffix}`))
+        if (dupes.length > 0) {
+          return json(
+            {
+              error: `This funnel was already built today for ${client.name}: ${dupes.join(', ')}. Building again would make a second copy of every campaign and ad set. Open Ads Manager to use the ones that exist, or tick "build a second set" if that is really wanted.`,
+              code: 'already_built',
+              existing: dupes,
+            },
+            409
+          )
+        }
+      }
+
       const stageBudget = (stage: string) => Math.round(Number(budgets[stage]) || 0)
 
-      // Campaigns first, one per distinct stage in the plan.
+      // Campaigns first, one per distinct stage in the plan. One write, one
+      // pause, so the account never sees a burst.
       const campaigns: Record<string, { id: string; name: string }> = {}
       const created: any[] = []
 
@@ -698,6 +809,7 @@ Deno.serve(async (req) => {
         )
         campaigns[stage] = { id: String(campaign.id), name }
         created.push({ kind: 'campaign', stage, id: String(campaign.id), name })
+        await pause(PACE_MS)
       }
 
       // Then the ad sets.
@@ -758,6 +870,7 @@ Deno.serve(async (req) => {
           exclude,
           advantage_audience: advantage,
         })
+        await pause(PACE_MS)
       }
 
       return json({

@@ -10,6 +10,7 @@ import { isLive, money } from '../lib/queries'
 import { LOWER_IS_BETTER, buildDailySeries, daysAgo, pctChange } from '../lib/dailySeries'
 import { adsToActOn, inRange, metaCampaignReport, metaClientReport, metaConnection, metaKpis, platformSplit } from '../lib/metaReport'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
+import { accountStatusLabel, accountStatusOk } from '../lib/adHealth'
 
 /**
  * Meta across every client, on a page of its own. The Reports hub shows
@@ -302,6 +303,11 @@ export default function MetaReportPage() {
                       <DTd className="whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5">
                           <Pill tone={st.tone}>{st.label}</Pill>
+                          {!accountStatusOk(r.accountStatus) && (
+                            <Pill tone="danger" title="Meta's status for the ad account itself, from the nightly check">
+                              account {accountStatusLabel(r.accountStatus)}
+                            </Pill>
+                          )}
                           {PIXEL[r.pixel] && (
                             <Pill tone={PIXEL[r.pixel].tone} title={r.pixelId ? `Pixel ${r.pixelId}` : 'The ad account has no pixel Meta can see yet'}>
                               {PIXEL[r.pixel].label}{r.pixelId ? ` …${r.pixelId.slice(-4)}` : ''}
