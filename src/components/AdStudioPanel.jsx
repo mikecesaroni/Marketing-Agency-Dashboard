@@ -12,6 +12,7 @@ import PublishToMetaPanel from './PublishToMetaPanel'
 import { fetchPublishedAds } from '../lib/metaPublish'
 import { cacheBust, keys } from '../lib/pageCache'
 import { overwriteSavedAd, recipeToContent, saveAdRecipe } from '../lib/savedAds'
+import { AD_SEASONS, guessAdSeason } from '../lib/adSeason'
 import { creativeWarnings } from '../lib/creativeChecks'
 import AdImagePicker from './AdImagePicker'
 import { resolveImageSrc } from '../lib/driveAssets'
@@ -581,6 +582,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // strictest of the placements, so it is the default: a CTA hidden behind the
   // caption row is worse than one sitting higher up the frame.
   const [safeMode, setSafeMode] = useState('reels')
+  // The season label the saved ad gets. '' means guess from the copy and the
+  // date at save time; the gallery can change it afterwards.
+  const [season, setSeason] = useState('')
   const [guides, setGuides] = useState(false)
   const [swatches, setSwatches] = useState([])
   // Set once the colours came from the logo, so a later logo change can replace
@@ -893,6 +897,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     setBackgroundPath(r.backgroundPath)
     setLogoPath(r.logoPath)
     setSafeMode(r.safeMode)
+    setSeason(r.season || '')
     setSaved('')
     setError('')
     setTab('design')
@@ -927,7 +932,17 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
 
   // Saves all three sizes back into the same public bucket. Public is exactly
   // what Meta's image uploader needs: it fetches the bytes with no auth.
+  // The label a save writes: the pick, or a guess from the words and the date.
+  const seasonGuess = () =>
+    guessAdSeason({
+      content: { badge, hook, offerAmount, offerDetail, subhead, proof, primaryText, headline: metaHeadline, description: metaDescription },
+      savedAt: Date.now(),
+      market: intake?.service_area || client.market || '',
+    })
+  const seasonToSave = () => season || seasonGuess().season
+
   const contentNow = () => ({
+    season: seasonToSave(),
     badge,
     hook,
     offerAmount,
@@ -1010,6 +1025,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           clientId: client.id,
           stamp,
           content: {
+            season: seasonToSave(),
             badge,
             hook,
             offerAmount,
@@ -1557,6 +1573,23 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       )}
 
       <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-3">
+        {/* SEASON LABEL. Saved with the ad so it is findable next year. */}
+        <label className="flex items-center gap-1.5 text-xs text-slate-300" title="Spring, summer, fall, winter, holiday or year-round. Leave on Auto and the Studio reads it off the copy and the date.">
+          Season
+          <select
+            value={season}
+            onChange={(e) => setSeason(e.target.value)}
+            className="rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-xs text-white"
+            aria-label="Season label"
+          >
+            <option value="">Auto ({AD_SEASONS.find((x) => x.key === seasonGuess().season)?.label || 'Year-round'})</option>
+            {AD_SEASONS.map((x) => (
+              <option key={x.key} value={x.key}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           onClick={editing ? saveOver : saveAll}
           disabled={saving}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { copyText } from '../lib/intakeSummary'
-import { deleteSavedAd, fetchSavedAds } from '../lib/savedAds'
+import { deleteSavedAd, fetchSavedAds, setSavedAdSeason } from '../lib/savedAds'
+import { AD_SEASONS, filterBySeason, seasonCounts, seasonMeta } from '../lib/adSeason'
 import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
 import { SIZES } from '../lib/adCanvas'
 import { approvalStatusLine, onePerSet, sizesAvailable } from '../lib/adApproval'
@@ -19,6 +20,15 @@ function when(date) {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+const SEASON_TONES = {
+  slate: 'border-slate-300 bg-slate-50 text-slate-700',
+  green: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  amber: 'border-amber-300 bg-amber-50 text-amber-800',
+  orange: 'border-orange-300 bg-orange-50 text-orange-800',
+  blue: 'border-sky-300 bg-sky-50 text-sky-800',
+  red: 'border-rose-300 bg-rose-50 text-rose-800',
 }
 
 // Everything saved out of the Studio, grouped back into the three-size sets it
@@ -45,6 +55,22 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
   // the last send said.
   const [sending, setSending] = useState('')
   const [sentNote, setSentNote] = useState({})
+  // Season filter for the list, and which set's label is being changed.
+  const [seasonFilter, setSeasonFilter] = useState('')
+  const [relabelling, setRelabelling] = useState('')
+
+  const relabel = async (set, key) => {
+    setRelabelling(set.stamp)
+    setError('')
+    try {
+      await setSavedAdSeason(clientId, set.stamp, key)
+      setSets((prev) => (prev || []).map((x) => (x.stamp === set.stamp ? { ...x, recipe: { ...(x.recipe || {}), season: key } } : x)))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRelabelling('')
+    }
+  }
 
   const sendToLibrary = async (set) => {
     setSending(set.stamp)
@@ -242,11 +268,39 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
 
   if (sets === null) return <p className="text-sm text-slate-500">Loading saved ads...</p>
 
+  const counts = seasonCounts(sets)
+  const visible = filterBySeason(sets, seasonFilter)
+
   return (
     <div className="space-y-4">
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {sets.length > 0 && (
+        /* BY SEASON. Every saved ad carries a label (guessed at save time,
+           changeable on the set), so next summer's AC ads are one click away. */
+        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Season">
+          <span className="mr-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">Season</span>
+          {[{ key: '', label: 'All' }, ...AD_SEASONS].map((x) => {
+            const n = x.key ? counts[x.key] : counts.any
+            if (x.key && n === 0) return null
+            const on = seasonFilter === x.key
+            return (
+              <button
+                key={x.key || 'any'}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setSeasonFilter(x.key)}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${on ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+              >
+                {x.label} <span className={on ? 'text-slate-300' : 'text-slate-400'}>{n}</span>
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -393,7 +447,7 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
           </p>
         </div>
       ) : (
-        sets.map((set) => (
+        visible.map((set) => (
           <div key={set.stamp} className="border border-slate-200 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2 gap-2">
               <p className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-600">
@@ -417,6 +471,24 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
                   </span>
                 )}
               </p>
+              {set.recipe && (
+                /* The label, as a chip that is also the picker. */
+                <select
+                  value={set.recipe.season || ''}
+                  onChange={(e) => relabel(set, e.target.value)}
+                  disabled={relabelling === set.stamp}
+                  aria-label="Season for this ad"
+                  title="Which season this ad is for. Change it any time."
+                  className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SEASON_TONES[seasonMeta(set.recipe.season)?.tone] || 'border-slate-300 bg-white text-slate-600'}`}
+                >
+                  <option value="">No season</option>
+                  {AD_SEASONS.map((x) => (
+                    <option key={x.key} value={x.key}>
+                      {x.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               <div className="flex items-center gap-3 flex-shrink-0">
               {onPublish && (
                 <button

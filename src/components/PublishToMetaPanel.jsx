@@ -8,6 +8,7 @@ import { publishedNote, rememberQuietly } from '../lib/memory'
 import FunnelBuilder from './FunnelBuilder'
 import VideoAdPicker from './VideoAdPicker'
 import { fetchSavedAds } from '../lib/savedAds'
+import { seasonMeta } from '../lib/adSeason'
 import { wcName } from '../lib/adNaming'
 import { ago } from '../lib/contentHub'
 import {
@@ -535,6 +536,9 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
             {copy.ad_name || set.recipe?.hook || new Date(Number(set.stamp)).toLocaleString()}
           </p>
           <p className="text-[11px] text-slate-500">
+            {seasonMeta(set.recipe?.season) && (
+              <span className="mr-1.5 rounded-full border border-slate-300 bg-slate-50 px-1.5 text-[10px] font-medium text-slate-700">{seasonMeta(set.recipe.season).label}</span>
+            )}
             {sizes.length} size{sizes.length === 1 ? '' : 's'} — {sizes.join(', ')}
             {sizes.length > 1 && ' — one ad, split by placement'}
           </p>

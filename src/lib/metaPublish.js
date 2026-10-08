@@ -517,7 +517,7 @@ export async function createLeadForm({
  */
 export async function sendSetToLibrary(clientId, set) {
   const images = Object.fromEntries((set?.ordered || []).filter((x) => x?.file?.storage_path).map(({ size, file }) => [size.key, file.storage_path]))
-  return await callFunction({ action: 'send_to_library', client_id: clientId, stamp: String(set.stamp), images })
+  return await callFunction({ action: 'send_to_library', client_id: clientId, stamp: String(set.stamp), images, season: set?.recipe?.season || '' })
 }
 
 export async function pauseAd(clientId, adId) {

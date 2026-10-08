@@ -73,7 +73,16 @@ function recipeColumns(content, backgroundPath, logoPath, safeMode) {
     description: content.description || null,
     background_path: backgroundPath || null,
     logo_path: logoPath || null,
+    // Season label (src/lib/adSeason.js): spring, summer, fall, winter,
+    // holiday or all. Guessed at save time, changeable in the gallery.
+    season: content.season || null,
   }
+}
+
+/** Changes the season label on one saved ad. */
+export async function setSavedAdSeason(clientId, stamp, season) {
+  const { error } = await supabase.from('saved_ads').update({ season: season || null }).eq('client_id', clientId).eq('stamp', String(stamp))
+  if (error) throw error
 }
 
 export async function saveAdRecipe({ clientId, stamp, content, backgroundPath, logoPath, safeMode }) {
@@ -160,6 +169,7 @@ export function recipeToContent(row) {
     backgroundPath: row.background_path || '',
     logoPath: row.logo_path || '',
     safeMode: row.safe_mode || 'reels',
+    season: row.season || '',
   }
 }
 

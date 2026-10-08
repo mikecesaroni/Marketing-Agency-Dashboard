@@ -1435,9 +1435,12 @@ Deno.serve(async (req) => {
 
       const safeName = String(client.name).replace(/[^\w.-]+/g, '_').slice(0, 40)
       const day = new Date(Number(stamp) || Date.now()).toISOString().slice(0, 10)
+      // The season label rides along in the filename, so the Media Library
+      // can be searched for "summer" next year.
+      const season = String(body.season || '').replace(/[^a-z]/gi, '').slice(0, 12)
       const hashes: Record<string, string> = {}
       for (const [key, path] of entries) {
-        hashes[key] = await uploadImage(account, bucketUrl(supabaseUrl, String(path)), token, `${safeName}-${day}-${key}.png`)
+        hashes[key] = await uploadImage(account, bucketUrl(supabaseUrl, String(path)), token, `${safeName}-${day}${season ? `-${season}` : ''}-${key}.png`)
         // One upload, one breath. A burst of writes is the pattern Meta flags.
         await new Promise((r) => setTimeout(r, 1200))
       }
