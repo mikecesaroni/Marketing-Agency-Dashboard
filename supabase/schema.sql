@@ -202,3 +202,6 @@ create policy "Authenticated users can do everything with client_files"
 alter table clients add column if not exists gbp_optimized boolean not null default false;
 -- The logo the Ad Studio starts a new ad with: a client-files storage path or a drive: path.
 alter table clients add column if not exists logo_path text;
+-- Weekly client report: where it goes (else the intake's contact email) and whether it goes. See weekly-reports.sql.
+alter table clients add column if not exists report_email text;
+alter table clients add column if not exists weekly_report_enabled boolean not null default true;

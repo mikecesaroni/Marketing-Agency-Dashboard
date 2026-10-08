@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
 import UnmappedAccountsPanel from '../components/UnmappedAccountsPanel'
 import MonthlyReportsPanel from '../components/MonthlyReportsPanel'
+import WeeklyReportsPanel from '../components/WeeklyReportsPanel'
 import { fetchAdRowsForRange, formatDate, getMonday, isLive, money } from '../lib/queries'
 import { buildDailySeries, daysAgo, pctChange, totals as sumSeries } from '../lib/dailySeries'
 import ChannelDailyChart from '../components/reports/ChannelDailyChart'
@@ -454,8 +455,9 @@ export default function ReportsPage() {
 
           {/* HOUSEKEEPING: things to act on, not numbers. */}
           <section>
-            <SectionTitle title="Housekeeping" sub="Unclaimed ad accounts and the monthly client report log" />
+            <SectionTitle title="Housekeeping" sub="Unclaimed ad accounts, the weekly client reports and the monthly report log" />
             <UnmappedAccountsPanel />
+            <WeeklyReportsPanel />
             <MonthlyReportsPanel />
           </section>
         </div>

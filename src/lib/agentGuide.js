@@ -231,6 +231,7 @@ export const ROUTES = [
       'Leads by day (switchable to spend) with Meta and Google stacked, so each day shows which channel carried it. LSA is weekly, so it is on its card only.',
       'Every client: a channel split bar, Meta, Google and LSA spend, total, leads and cost per lead, biggest first. Clicking a client opens their ad page (/reports/client/<id>) on the channel that spent the most, with a Meta / Google Ads switch at the top. The agency\'s own businesses are kept separate from client work.',
       'Ad accounts the sync found that no client claims, sorted by spend.',
+      'Weekly client reports (Housekeeping): one row per client with a Meta or Google account: the address the report goes to (the onboarding form\'s contact email, click to set another), On/Off, this week\'s status (Sent, Built but not emailed, Skipped with the reason, Failed), the client\'s answer (jobs and dollars from the web copy), and Preview, Send now, Copy link. "Run this week now" does what Monday morning does for everyone. The arrows move to an earlier week. A banner says when email is not set up (RESEND_API_KEY and REPORT_FROM in Supabase); reports are still built and the link can be copied.',
       'The monthly client report log: who was sent one, who was skipped and why.',
     ],
     actions: [
@@ -357,6 +358,18 @@ export const ROUTES = [
     purpose: 'This page. Also available as plain text at /llms.txt, which needs no JavaScript.',
     contains: ['Everything in this document.'],
     actions: ['A button copies the whole guide as plain text.'],
+  },
+  {
+    path: '/report/:token',
+    name: 'Weekly client report',
+    nav: null,
+    purpose:
+      'NOT part of the CRM. The web copy of the weekly report a client opens from their Monday email, from a private token in the link. Last week\'s spend, leads, cost per lead, impressions and click rate with plain sentences on what they mean, the best ad, why the return on the leads matters more than cost per lead, a four-line glossary, and one short form: how many of the leads became jobs and roughly what they were worth. Read through weekly_report_load, answered through weekly_report_answer; the table itself is not readable with the anon key.',
+    contains: [
+      'The same numbers and words as the email, laid out for a phone.',
+      'The form: leads that became jobs, roughly what they were worth, an optional note. The answer shows in the next week\'s report as dollars back per dollar spent, and on the Reports page under "They told us".',
+    ],
+    actions: ['The client answers the form; nobody on the agency side should answer it for them.'],
   },
   {
     path: '/approve/:token',

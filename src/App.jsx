@@ -5,6 +5,7 @@ import ClientDetailPage from './pages/ClientDetailPage'
 import DeliverablesPage from './pages/DeliverablesPage'
 import TasksPage from './pages/TasksPage'
 import ContentPage from './pages/ContentPage'
+import WeeklyReportPage from './pages/WeeklyReportPage'
 import DrivePhotosPage from './pages/DrivePhotosPage'
 import PublishVideoPage from './pages/PublishVideoPage'
 import FunnelPage from './pages/FunnelPage'
@@ -33,6 +34,9 @@ export default function App() {
       {/* Public, like the onboarding link: the token is the credential, and
           the page reads through ad_approval_load rather than the tables. */}
       <Route path="/approve/:token" element={<AdApprovalPage />} />
+      {/* Public, like the approval link: the weekly report a client opens from
+          their email, read by token through weekly_report_load. */}
+      <Route path="/report/:token" element={<WeeklyReportPage />} />
       <Route path="/login" element={<LoginPage />} />
       {/* Everything else needs a login. RequireAuth also turns a VA away from
           the admin-only paths (see src/lib/access.js), so /payments and /team
