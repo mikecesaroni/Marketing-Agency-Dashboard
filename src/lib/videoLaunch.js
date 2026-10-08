@@ -11,7 +11,8 @@
 // Nothing in the CRM answered "who has not had one this week", so the team
 // answered it from memory. This does.
 
-import { wcName } from './adNaming.js'
+import { metaAdName, wcName } from './adNaming.js'
+import { guessAdSeason, seasonNow } from './adSeason.js'
 
 export const WEEK_MS = 7 * 86400000
 // A client with no new ad for this long is flagged. Ten days, not seven:
@@ -320,10 +321,13 @@ const stem = (fileName) =>
  * angle is the copy version's name when one was picked, the file's stem
  * otherwise, so two clips on the same day still read differently.
  */
-export function videoAdName({ clientName, angle, fileName, date = new Date() }) {
-  const day = typeof date === 'string' ? date : date.toISOString().slice(0, 10)
+export function videoAdName({ angle, fileName, date = new Date(), season, market = '' }) {
   const tail = String(angle || '').trim() || stem(fileName) || 'video'
-  return wcName(`${String(clientName || '').trim()} · ${day} · ${tail}`).slice(0, 100)
+  // The season: the one asked for, else what the angle's words say, else the
+  // season it is right now where the client is (a weekly clip is about now).
+  const guessed = guessAdSeason({ content: { hook: angle } })
+  const key = season || (guessed.from === 'copy' ? guessed.season : seasonNow(market, typeof date === 'string' ? new Date(`${date}T12:00:00Z`) : date))
+  return metaAdName({ season: key, date, kind: 'Video', hook: tail })
 }
 
 /**

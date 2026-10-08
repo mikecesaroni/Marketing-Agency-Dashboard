@@ -162,10 +162,12 @@ check('low resolution warns', clipChecks({ width: 540, height: 960 }).some((c) =
 check('untranscribed says nothing about speech', clipChecks({ width: 1080, height: 1920 }).length, 1)
 
 // Names.
-check('ad name: client, day, angle, WC_ prefix', videoAdName({ clientName: 'Belk Heating', angle: 'The offer', date: '2026-09-24' }), 'WC_Belk Heating · 2026-09-24 · The offer')
-check('ad name: file stem when no angle', videoAdName({ clientName: 'Belk', fileName: 'IMG_1234_furnace-tune_up.MOV', date: '2026-09-24' }), 'WC_Belk · 2026-09-24 · IMG 1234 furnace tune up')
-check('ad name: never over 100', videoAdName({ clientName: 'x'.repeat(120), date: '2026-09-24' }).length, 100)
-check('ad name: nothing known', videoAdName({ clientName: 'Belk', date: '2026-09-24' }), 'WC_Belk · 2026-09-24 · video')
+check('ad name: season, day, Video, angle, WC_ prefix, no company name', videoAdName({ angle: 'The offer', date: '2026-09-24', market: 'Raleigh, NC' }), 'WC_Fall | 2026-09-24 | Video | The offer')
+check('ad name: the angle can name the season', videoAdName({ angle: 'No heat tonight?', date: '2026-09-24', market: 'Raleigh, NC' }), 'WC_Winter | 2026-09-24 | Video | No heat tonight?')
+check('ad name: a hot market in late September is still summer', videoAdName({ angle: 'The offer', date: '2026-09-24', market: 'Austin, TX' }), 'WC_Summer | 2026-09-24 | Video | The offer')
+check('ad name: file stem when no angle', videoAdName({ fileName: 'IMG_1234_furnace-tune_up.MOV', date: '2026-09-24', market: 'Raleigh, NC' }), 'WC_Fall | 2026-09-24 | Video | IMG 1234 furnace tune up')
+check('ad name: never over 100', videoAdName({ angle: 'x'.repeat(120), date: '2026-09-24' }).length <= 100, true)
+check('ad name: nothing known', videoAdName({ date: '2026-09-24', market: 'Raleigh, NC' }), 'WC_Fall | 2026-09-24 | Video | video')
 
 // Memory.
 const snap = launchSnapshot({

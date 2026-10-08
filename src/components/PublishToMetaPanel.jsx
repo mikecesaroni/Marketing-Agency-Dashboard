@@ -8,8 +8,8 @@ import { publishedNote, rememberQuietly } from '../lib/memory'
 import FunnelBuilder from './FunnelBuilder'
 import VideoAdPicker from './VideoAdPicker'
 import { fetchSavedAds } from '../lib/savedAds'
-import { seasonMeta } from '../lib/adSeason'
-import { wcName } from '../lib/adNaming'
+import { guessAdSeason, seasonMeta } from '../lib/adSeason'
+import { metaAdName, wcName } from '../lib/adNaming'
 import { ago } from '../lib/contentHub'
 import {
   describeLaunch,
@@ -765,7 +765,8 @@ export default function PublishToMetaPanel({
           primary_text: r.primary_text || '',
           headline: r.headline || r.hook || '',
           description: r.description || '',
-          ad_name: wcName(`${client.name} — ${r.hook || 'ad'}`).slice(0, 100),
+          // Season | date | hook. No company name: it is their account.
+          ad_name: metaAdName({ season: r.season, hook: r.hook }),
         }
       }
       return next
@@ -1019,7 +1020,7 @@ export default function PublishToMetaPanel({
           description: c.description?.trim() || undefined,
           // Always sent, always prefixed. Left blank, the function would name
           // the ad itself, without the prefix.
-          ad_name: wcName(c.ad_name?.trim() || `${client.name} — ${today}`),
+          ad_name: wcName(c.ad_name?.trim() || metaAdName({ season: s.recipe?.season, date: today, hook: s.recipe?.hook })),
           cta,
           link_url: linkUrl.trim() || undefined,
           lead_form_id: leadForm?.id,
@@ -1038,7 +1039,15 @@ export default function PublishToMetaPanel({
           primary_text: c.primary_text?.trim(),
           headline: c.headline?.trim() || undefined,
           description: c.description?.trim() || undefined,
-          ad_name: wcName(c.ad_name?.trim() || `${client.name} — ${today}`),
+          ad_name: wcName(
+            c.ad_name?.trim() ||
+              metaAdName({
+                season: guessAdSeason({ content: { hook: c.headline, primaryText: c.primary_text } }).season,
+                date: today,
+                kind: 'Video',
+                hook: c.headline,
+              })
+          ),
           cta,
           link_url: linkUrl.trim() || undefined,
           lead_form_id: leadForm?.id,

@@ -8,7 +8,7 @@
 // and checks they carry the same rule, because they cannot import it.
 
 import { readFileSync } from 'node:fs'
-import { WC_PREFIX, isWcName, wcName } from '../src/lib/adNaming.js'
+import { WC_PREFIX, isWcName, metaAdName, wcName } from '../src/lib/adNaming.js'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -30,6 +30,14 @@ check('undefined is an empty name too', wcName(undefined), '')
 check('isWcName agrees with wcName', isWcName(wcName('x')), true)
 check('isWcName rejects a name without it', isWcName('Horizon HVAC — 2026'), false)
 check('isWcName rejects a prefix in the middle', isWcName('Old WC_ campaign'), false)
+
+// ------------------------------------------------- how an ad is named in Meta
+check('ad name: season | date | hook, WC_ in front, no company name', metaAdName({ season: 'summer', date: '2026-10-08', hook: 'AC died? Same-day cooling repair' }), 'WC_Summer | 2026-10-08 | AC died? Same-day cooling repair')
+check('ad name: a video says so', metaAdName({ season: 'winter', date: '2026-10-08', kind: 'Video', hook: 'The offer' }), 'WC_Winter | 2026-10-08 | Video | The offer')
+check('ad name: no season is year-round', metaAdName({ date: '2026-10-08', hook: 'Call the owner' }), 'WC_Year-round | 2026-10-08 | Call the owner')
+check('ad name: no hook still names the ad', metaAdName({ season: 'all', date: '2026-10-08' }), 'WC_Year-round | 2026-10-08 | ad')
+check('ad name: the hook is what gets cut at 100', [metaAdName({ season: 'summer', date: '2026-10-08', hook: 'x'.repeat(200) }).length, metaAdName({ season: 'summer', date: '2026-10-08', hook: 'x'.repeat(200) }).startsWith('WC_Summer | 2026-10-08 | ')], [100, true])
+check('ad name: a date object works', metaAdName({ season: 'fall', date: new Date('2026-10-08T15:00:00Z'), hook: 'h' }), 'WC_Fall | 2026-10-08 | h')
 
 // ------------------------------------------- the edge functions carry it too
 //

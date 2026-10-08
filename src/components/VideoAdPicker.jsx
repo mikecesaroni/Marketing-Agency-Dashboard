@@ -295,14 +295,14 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
       onCopy(v.storage_path, {
         meta_video_id: v.meta_video_id,
         thumb_url: v.thumb_url,
-        ...(c?.ad_name?.trim() ? {} : { ad_name: videoAdName({ clientName: client.name, fileName: v.file_name }) }),
+        ...(c?.ad_name?.trim() ? {} : { ad_name: videoAdName({ fileName: v.file_name, market: client.market }) }),
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videos, picked])
 
   const nameFor = (video, angle) =>
-    videoAdName({ clientName: client.name, angle, fileName: video?.file_name })
+    videoAdName({ angle, fileName: video?.file_name, market: client.market })
 
   const pickVersion = (path, index) => {
     const v = versions[path]?.variations?.[index]

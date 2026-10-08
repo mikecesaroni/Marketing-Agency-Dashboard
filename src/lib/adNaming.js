@@ -33,6 +33,31 @@ export function wcName(name) {
   return `${WC_PREFIX}${clean}`
 }
 
+/**
+ * How an ad is named in Meta: the season, the date, the kind when it is a
+ * video, and the hook, with " | " between. No company name: the ad lives
+ * inside the client's own account, so the name only ever has to tell the
+ * client's ads apart from each other. Same shape as the Meta library
+ * filenames, so a set and its ad match up by eye.
+ *
+ *   WC_Summer | 2026-10-08 | AC died? Same-day cooling repair
+ *   WC_Winter | 2026-10-08 | Video | The offer
+ *
+ * Meta caps ad names at 100 characters, so the hook is what gets cut.
+ */
+const SEASON_WORDS = { all: 'Year-round', spring: 'Spring', summer: 'Summer', fall: 'Fall', winter: 'Winter', holiday: 'Holiday' }
+export function metaAdName({ season, date = new Date(), hook, kind } = {}) {
+  const day = typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 10)
+  const seasonWord = SEASON_WORDS[String(season || '').toLowerCase()] || SEASON_WORDS.all
+  const words = String(hook || '').replace(/\s+/g, ' ').trim() || 'ad'
+  const head = [seasonWord, day, kind ? String(kind).trim() : ''].filter(Boolean).join(' | ')
+  const full = wcName(`${head} | ${words}`)
+  if (full.length <= 100) return full
+  // Cut the hook, never the parts that sort and filter.
+  const room = 100 - (full.length - words.length)
+  return wcName(`${head} | ${words.slice(0, Math.max(1, room)).trimEnd()}`)
+}
+
 /** True when a Meta object's name follows the rule. Used to tell ours apart. */
 export function isWcName(name) {
   return String(name ?? '').trim().toUpperCase().startsWith(WC_PREFIX)
