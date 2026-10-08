@@ -1433,14 +1433,25 @@ Deno.serve(async (req) => {
         )
       }
 
-      const safeName = String(client.name).replace(/[^\w.-]+/g, '_').slice(0, 40)
-      const day = new Date(Number(stamp) || Date.now()).toISOString().slice(0, 10)
-      // The season label rides along in the filename, so the Media Library
-      // can be searched for "summer" next year.
+      // The filename is what the Media Library shows. No company name: the
+      // library is inside the client's own account, so it only ever holds
+      // their ads. Season first (so "summer" finds them next year), the date,
+      // then the hook so two sets from one day are told apart; with no hook,
+      // the time of the save does that job.
+      const when = new Date(Number(stamp) || Date.now())
+      const day = when.toISOString().slice(0, 10)
       const season = String(body.season || '').replace(/[^a-z]/gi, '').slice(0, 12)
+      const slug = String(body.hook || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 32)
+        .replace(/-+$/g, '')
+      const hhmm = `${String(when.getUTCHours()).padStart(2, '0')}${String(when.getUTCMinutes()).padStart(2, '0')}`
+      const stem = [season, day, slug || hhmm].filter(Boolean).join('-')
       const hashes: Record<string, string> = {}
       for (const [key, path] of entries) {
-        hashes[key] = await uploadImage(account, bucketUrl(supabaseUrl, String(path)), token, `${safeName}-${day}${season ? `-${season}` : ''}-${key}.png`)
+        hashes[key] = await uploadImage(account, bucketUrl(supabaseUrl, String(path)), token, `${stem}-${key}.png`)
         // One upload, one breath. A burst of writes is the pattern Meta flags.
         await new Promise((r) => setTimeout(r, 1200))
       }
