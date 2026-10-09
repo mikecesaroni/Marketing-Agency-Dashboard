@@ -174,12 +174,15 @@ export default function Layout({ title, subtitle, actions, children, tone = 'lig
     <div className={`min-h-screen ${dark ? 'bg-[#070b14]' : 'bg-slate-50'}`}>
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 bg-slate-950 text-white">
-        <div className="px-4 pb-3 pt-4">
-          {/* The agency's logo. Dark on off-white by design, so it sits on its
-              own plate against the dark sidebar rather than being recoloured.
-              Clicking it goes home. */}
-          <NavLink to="/" className="block rounded-xl bg-[#f8f7f5] p-3 transition hover:brightness-95" aria-label="The Working Class, home">
-            <img src="/brand/wc-logo.jpg" alt="The Working Class" className="mx-auto w-full max-w-[168px]" data-brand-logo />
+        <div className="px-5 py-5">
+          {/* The WC mark at icon size, with the name as text beside it. The
+              mark is dark on off-white by design, so it keeps its own small
+              plate against the dark sidebar. Clicking it goes home. */}
+          <NavLink to="/" className="flex items-center gap-2.5 transition hover:opacity-90" aria-label="The Working Class, home">
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f8f7f5]">
+              <img src="/brand/wc-mark.jpg" alt="" className="h-10 w-10 object-contain" data-brand-logo />
+            </span>
+            <span className="min-w-0 text-sm font-semibold leading-snug tracking-tight">The Working Class</span>
           </NavLink>
         </div>
 

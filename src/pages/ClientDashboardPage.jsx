@@ -306,7 +306,7 @@ export default function ClientDashboardPage() {
             {/* The agency's mark. Dark on off-white by design, so it sits on
                 its own plate rather than being recoloured for the dark page. */}
             <div className="mb-4 inline-block rounded-xl bg-[#f8f7f5] px-3 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.8)]">
-              <img src="/brand/wc-logo.jpg" alt="The Working Class" className="h-20 w-auto" data-brand-logo />
+              <img src="/brand/wc-logo.jpg" alt="The Working Class" className="h-16 w-auto" data-brand-logo />
             </div>
             <Eyebrow>Your ads dashboard</Eyebrow>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white md:text-4xl">{data.client?.name}</h1>
