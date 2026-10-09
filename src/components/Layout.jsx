@@ -182,7 +182,7 @@ export default function Layout({ title, subtitle, actions, children, tone = 'lig
             <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f8f7f5]">
               <img src="/brand/wc-mark.jpg" alt="" className="h-10 w-10 object-contain" data-brand-logo />
             </span>
-            <span className="min-w-0 text-sm font-semibold leading-snug tracking-tight">The Working Class</span>
+            <span className="min-w-0 text-sm font-semibold leading-snug tracking-tight text-balance">The Working Class Agency CRM</span>
           </NavLink>
         </div>
 

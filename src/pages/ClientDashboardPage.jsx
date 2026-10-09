@@ -303,10 +303,14 @@ export default function ClientDashboardPage() {
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            {/* The agency's mark. Dark on off-white by design, so it sits on
-                its own plate rather than being recoloured for the dark page. */}
-            <div className="mb-4 inline-block rounded-xl bg-[#f8f7f5] px-3 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.8)]">
-              <img src="/brand/wc-logo.jpg" alt="The Working Class" className="h-16 w-auto" data-brand-logo />
+            {/* The WC mark at icon size with the agency's name beside it. The
+                mark is dark on off-white by design, so it keeps its own small
+                plate against the dark page. */}
+            <div className="mb-4 flex items-center gap-2.5">
+              <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f8f7f5]">
+                <img src="/brand/wc-mark.jpg" alt="The Working Class" className="h-10 w-10 object-contain" data-brand-logo />
+              </span>
+              <span className="text-sm font-semibold tracking-tight text-slate-200">The Working Class Marketing KPIs</span>
             </div>
             <Eyebrow>Your ads dashboard</Eyebrow>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white md:text-4xl">{data.client?.name}</h1>
