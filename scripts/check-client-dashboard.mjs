@@ -10,7 +10,9 @@ import {
   adsFor,
   between,
   cleanAdName,
+  dailyRows,
   dailySeries,
+  dayLabel,
   dashboardLink,
   guideFor,
   latestReport,
@@ -18,6 +20,7 @@ import {
   mondayOf,
   newToken,
   pctChange,
+  perDay,
   previewFrame,
   rates,
   returnStory,
@@ -60,6 +63,13 @@ check('daily series fills the gaps', series, [
   { date: '2026-10-02', meta: 2, google: 0, total: 2 },
 ])
 check('daily series for spend', dailySeries(days, '2026-10-01', '2026-10-01', 'spend')[0].total, 150)
+check('spend per day on average', [perDay(900, 30), perDay(100, 7), perDay(0, 0)], [30, 14.29, 0])
+check('the day table: newest first, each channel, quiet days kept', dailyRows(days, '2026-09-30', '2026-10-02'), [
+  { date: '2026-10-02', meta: 100, google: 0, spend: 100, leads: 2 },
+  { date: '2026-10-01', meta: 100, google: 50, spend: 150, leads: 3 },
+  { date: '2026-09-30', meta: 0, google: 0, spend: 0, leads: 0 },
+])
+check('a day reads like a day', dayLabel('2026-10-09'), 'Fri, Oct 9')
 
 // ------------------------------------------------------------------- the ads
 check('ad names lose the WC_ bits', [cleanAdName('WC_Summer | 2026-10-08 | AC died? Same-day'), cleanAdName('Plain name'), cleanAdName('')], ['AC died? Same-day', 'Plain name', 'Untitled ad'])

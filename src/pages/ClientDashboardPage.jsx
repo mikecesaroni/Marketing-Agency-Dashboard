@@ -4,7 +4,7 @@ import ChannelDailyChart from '../components/reports/ChannelDailyChart'
 import { ChannelDot, DTd, DTh, DTr, Delta, Eyebrow, MixBar, Panel, Pill, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
 import { cn } from '../components/ui/cn'
 import { CHANNELS, channelMix, compactMoney, rangeLabel } from '../lib/channels'
-import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailySeries, guideFor, latestReport, lsaFor, money, pctChange, previewFrame, returnStory, sumDays, windowFor } from '../lib/clientDashboard'
+import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailyRows, dailySeries, dayLabel, guideFor, latestReport, lsaFor, money, pctChange, perDay, previewFrame, returnStory, sumDays, windowFor } from '../lib/clientDashboard'
 import { supabase } from '../lib/supabaseClient'
 
 /**
@@ -343,6 +343,9 @@ export default function ClientDashboardPage() {
                     <Eyebrow>Ad spend</Eyebrow>
                     <p className="mt-2 text-3xl font-semibold text-white">{money(all.spend)}</p>
                     <Delta value={pctChange(all.spend, allBefore.spend)} align="right" neutral />
+                    <p className="mt-0.5 text-[11px] text-slate-500" data-per-day>
+                      {money(perDay(all.spend, days))} a day on average
+                    </p>
                   </div>
                   <div>
                     <Eyebrow>Cost per lead</Eyebrow>
@@ -416,8 +419,9 @@ export default function ClientDashboardPage() {
                     <ChannelDot channel={c.key} size="md" />
                     {CHANNELS[c.key].long}
                   </span>
-                  <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="mt-4 grid grid-cols-4 gap-2">
                     <Stat label="Spend" value={money(c.spend)} />
+                    <Stat label="Per day" value={money(perDay(c.spend, days))} />
                     <Stat label="Leads" value={fmtLeads(Math.round(c.leads * 10) / 10)} />
                     <Stat label="Cost per lead" value={cplText(c.cpl)} />
                   </div>
@@ -430,6 +434,56 @@ export default function ClientDashboardPage() {
               ))}
             </div>
           )}
+
+          {/* EVERY DAY'S SPEND, PER CHANNEL. The chart above shows the shape; this
+              is the exact number for any day, newest first. */}
+          <section data-daily-spend>
+            <SectionTitle title="Spend by day, per channel" sub={`What each channel spent each day, newest first. ${money(perDay(all.spend, days))} a day on average over these ${days} days.`} />
+            <Panel>
+              <div className="max-h-96 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-[#0f1626]">
+                    <tr>
+                      <DTh>Day</DTh>
+                      <DTh numeric>
+                        <span className="inline-flex items-center gap-1.5">
+                          <ChannelDot channel="meta" />
+                          Meta
+                        </span>
+                      </DTh>
+                      <DTh numeric>
+                        <span className="inline-flex items-center gap-1.5">
+                          <ChannelDot channel="google" />
+                          Google
+                        </span>
+                      </DTh>
+                      <DTh numeric>Total</DTh>
+                      <DTh numeric>Leads</DTh>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyRows(rows, win.from, win.to).map((r) => (
+                      <DTr key={r.date} data-day={r.date}>
+                        <DTd className="whitespace-nowrap">{dayLabel(r.date)}</DTd>
+                        <DTd numeric muted={!r.meta}>
+                          {money(r.meta)}
+                        </DTd>
+                        <DTd numeric muted={!r.google}>
+                          {money(r.google)}
+                        </DTd>
+                        <DTd numeric className="font-semibold text-white">
+                          {money(r.spend)}
+                        </DTd>
+                        <DTd numeric muted={!r.leads}>
+                          {fmtLeads(r.leads)}
+                        </DTd>
+                      </DTr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          </section>
 
           {/* THE ADS THEMSELVES: the creative, whether it is working, the numbers. */}
           <section data-ads>
