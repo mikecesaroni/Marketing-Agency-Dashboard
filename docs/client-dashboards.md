@@ -71,6 +71,23 @@ checks the walls: the public pages import no CRM shell and link to no CRM
 page, the router has the client-facing mode, every client link goes
 through the public base, and search engines are told to stay out.
 
+## What a message app shows for the link
+
+A dashboard link pasted into iMessage, WhatsApp, Slack or an email
+previews as "KPI Dashboard for <business name>", a one-line description
+and a dark card image; a report link as "Weekly ads report for <business
+name>". A message app fetches the page without running JavaScript, so the
+app's one HTML file would otherwise show the CRM's title. A Netlify edge
+function (`netlify/edge-functions/client-preview.ts`, words and rewrite in
+`preview.js`) runs in front of `/dashboard/*` and `/report/*`, looks the
+token up through `client_link_name` (returns the business name and
+nothing else) and rewrites the head. Anything else, and any error, passes
+through untouched. The card images are `public/og-kpi-dashboard.png` and
+`public/og-weekly-report.png`. Checked by `scripts/check-link-preview.mjs`.
+
+Message apps cache previews, so a link that was shared before this went
+live keeps its old preview in that thread; a fresh paste gets the new one.
+
 ## How it is wired
 
 `supabase/client-dashboard.sql` adds `clients.dashboard_token` (every

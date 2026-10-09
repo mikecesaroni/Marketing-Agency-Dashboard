@@ -104,6 +104,25 @@ $$;
 revoke all on function client_dashboard_load(text) from public;
 grant execute on function client_dashboard_load(text) to anon, authenticated;
 
+-- 2b. The business name behind a link, for the preview a message app shows
+--     ("KPI Dashboard for Belk Heating and Cooling"). Returns the name and
+--     nothing else; see netlify/edge-functions/client-preview.ts.
+create or replace function client_link_name(p_kind text, p_token text)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when p_kind = 'dashboard' then (select name from clients where dashboard_token = p_token and archived = false and length(p_token) >= 20 limit 1)
+    when p_kind = 'report' then (select c.name from weekly_reports w join clients c on c.id = w.client_id where w.token = p_token and length(p_token) >= 20 limit 1)
+    else null
+  end;
+$$;
+revoke all on function client_link_name(text, text) from public;
+grant execute on function client_link_name(text, text) to anon, authenticated;
+
 -- 3. The weekly report page links to the dashboard, so its loader carries
 --    the token too. A return-type change cannot be done in place: the old
 --    function is renamed out of the way, the new one created, the old one

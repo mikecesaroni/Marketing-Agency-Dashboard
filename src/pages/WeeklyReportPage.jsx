@@ -42,7 +42,7 @@ export default function WeeklyReportPage() {
   // The tab is named for the client, not the CRM.
   useEffect(() => {
     const title = document.title
-    document.title = row?.client_name ? `${row.client_name} · Your week in ads` : 'Your week in ads'
+    document.title = row?.client_name ? `Weekly ads report for ${row.client_name}` : 'Weekly ads report'
     return () => {
       document.title = title
     }

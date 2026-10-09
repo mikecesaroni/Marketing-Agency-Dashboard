@@ -231,7 +231,7 @@ export default function ClientDashboardPage() {
     const was = document.body.style.background
     const title = document.title
     document.body.style.background = '#070b14'
-    document.title = data?.client?.name ? `${data.client.name} · Your ads dashboard` : 'Your ads dashboard'
+    document.title = data?.client?.name ? `KPI Dashboard for ${data.client.name}` : 'KPI Dashboard'
     return () => {
       document.body.style.background = was
       document.title = title
