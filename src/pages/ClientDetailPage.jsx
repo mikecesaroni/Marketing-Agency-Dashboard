@@ -386,6 +386,17 @@ export default function ClientDetailPage() {
       >
         Ask about {client.name}
       </Button>
+      {client.dashboard_token && (
+        <a
+          href={`/dashboard/${client.dashboard_token}`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 md:w-auto"
+          title="The client's own dashboard: every number, what it means, why return matters. Send them this link."
+        >
+          Client dashboard
+        </a>
+      )}
     </div>
   )
 

@@ -255,13 +255,17 @@ export function Pill({ tone = 'neutral', children, title }) {
   )
 }
 
-/** A delta against the previous window, coloured by whether it is good. */
-export function Delta({ value, lowerIsBetter = false, align = 'left', compact = false }) {
+/**
+ * A delta against the previous window, coloured by whether it is good.
+ * `neutral` keeps it grey either way, for a number like spend where a rise
+ * is just a fact.
+ */
+export function Delta({ value, lowerIsBetter = false, align = 'left', compact = false, neutral = false }) {
   const has = value != null && Number.isFinite(value)
   if (!has) return <p className={`mt-1 text-xs text-slate-500 ${align === 'right' ? 'text-right' : ''}`}>{compact ? '' : 'No earlier period'}</p>
   const up = value > 0
   const flat = Math.abs(value) < 0.5
-  const good = flat ? null : lowerIsBetter ? !up : up
+  const good = flat || neutral ? null : lowerIsBetter ? !up : up
   const cls = good === null ? 'text-slate-400' : good ? 'text-emerald-300' : 'text-rose-300'
   return (
     <p className={`mt-1 text-xs tabular-nums ${cls} ${align === 'right' ? 'text-right' : ''}`}>

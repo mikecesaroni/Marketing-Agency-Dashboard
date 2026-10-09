@@ -230,6 +230,7 @@ export const ROUTES = [
       'One card per channel with spend, leads, cost per lead and a daily sparkline. The Meta card opens its own full page (/reports/meta) and the Google Ads card opens its own (/reports/google-search).',
       'Leads by day (switchable to spend) with Meta and Google stacked, so each day shows which channel carried it. LSA is weekly, so it is on its card only.',
       'Every client: a channel split bar, Meta, Google and LSA spend, total, leads and cost per lead, biggest first. Clicking a client opens their ad page (/reports/client/<id>) on the channel that spent the most, with a Meta / Google Ads switch at the top. The agency\'s own businesses are kept separate from client work.',
+      'Client dashboards: one card per client with their private dashboard link (/dashboard/<token>), the channels they have, and Open, Copy link and New link (the old link stops working). The same link is in the client page header as "Client dashboard" and at the bottom of every weekly report email.',
       'Ad accounts the sync found that no client claims, sorted by spend.',
       'Weekly client reports (Housekeeping): one row per client with a Meta or Google account: the address the report goes to (the onboarding form\'s contact email, click to set another), On/Off, this week\'s status (Sent, Built but not emailed, Skipped with the reason, Failed), the client\'s answer (jobs and dollars from the web copy), and Preview, Send now, Copy link. "Run this week now" does what Monday morning does for everyone. The arrows move to an earlier week. A banner says when email is not set up (RESEND_API_KEY and REPORT_FROM in Supabase); reports are still built and the link can be copied.',
       'The monthly client report log: who was sent one, who was skipped and why.',
@@ -370,6 +371,25 @@ export const ROUTES = [
       'The form: leads that became jobs, roughly what they were worth, an optional note. The answer shows in the next week\'s report as dollars back per dollar spent, and on the Reports page under "They told us".',
     ],
     actions: ['The client answers the form; nobody on the agency side should answer it for them.'],
+  },
+  {
+    path: '/dashboard/:token',
+    name: 'Client dashboard',
+    nav: null,
+    purpose:
+      'NOT part of the CRM. A client\'s own dashboard, from the private token in their link (Reports page, "Client dashboards"; the client page header; the bottom of every weekly report email). The same dark surface as the Reports page, cut down to what an owner needs, with the reason every number matters one click away. Read through client_dashboard_load; nothing on the page can change anything.',
+    contains: [
+      'Leads, ad spend and cost per lead for the last 7, 30 or 90 days against the same length of time before, with leads and spend split by channel.',
+      'Six tiles: spend, leads, cost per lead, impressions, clicks, click rate. Clicking one opens what it is, why it matters, what good looks like and what we do with it.',
+      'Leads or spend by day with Meta and Google stacked; a card per channel (Meta, Google, LSA when logged).',
+      'Your ads: every ad that ran in the range as a card with its picture (or the video\'s opening frame and a play button), a verdict judged against the client\'s own average cost per lead for the range (Working, Fair, Costly, No leads yet, Too early), and leads, spend, cost per lead and click rate. Tapping a card opens the picture full size or plays the video. Pictures and videos come from Meta at the moment the page opens (the client-dashboard function), never stored, because Meta\'s links expire; Google Search ads are words, so they show no picture.',
+      '"The number that matters most": dollars back per dollar spent from the weeks the client answered, with a table of those weeks; or, before any answer, the argument for return over cost per lead with a worked example from their average job value.',
+      'A glossary of every term, each one click to open.',
+    ],
+    actions: [
+      'The range chips: 7, 30 or 90 days (kept in the address as ?days=).',
+      '"Tell us how last week\'s leads did" opens the newest weekly report\'s answer form.',
+    ],
   },
   {
     path: '/approve/:token',

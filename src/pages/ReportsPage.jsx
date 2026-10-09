@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import UnmappedAccountsPanel from '../components/UnmappedAccountsPanel'
 import MonthlyReportsPanel from '../components/MonthlyReportsPanel'
 import WeeklyReportsPanel from '../components/WeeklyReportsPanel'
+import ClientDashboardsPanel from '../components/ClientDashboardsPanel'
 import { fetchAdRowsForRange, formatDate, getMonday, isLive, money } from '../lib/queries'
 import { buildDailySeries, daysAgo, pctChange, totals as sumSeries } from '../lib/dailySeries'
 import ChannelDailyChart from '../components/reports/ChannelDailyChart'
@@ -452,6 +453,9 @@ export default function ReportsPage() {
               </DTable>
             </section>
           )}
+
+          {/* EACH CLIENT'S OWN DASHBOARD: the link to send them. */}
+          <ClientDashboardsPanel />
 
           {/* HOUSEKEEPING: things to act on, not numbers. */}
           <section>

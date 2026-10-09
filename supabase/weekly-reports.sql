@@ -49,6 +49,10 @@ revoke all on weekly_reports from anon;
 grant select, insert, update on weekly_reports to authenticated;
 
 -- The web copy of one report, by its token. The token is the credential.
+-- (dashboard_token came later, with supabase/client-dashboard.sql, so the
+-- report page can link to the client's dashboard. On a project that already
+-- has the older function, run client-dashboard.sql instead: a return-type
+-- change needs the old one moved out of the way first.)
 create or replace function weekly_report_load(p_token text)
 returns table (
   client_name text,
@@ -58,13 +62,14 @@ returns table (
   jobs_booked integer,
   revenue numeric,
   client_note text,
-  answered_at timestamptz
+  answered_at timestamptz,
+  dashboard_token text
 )
 language sql
 security definer
 set search_path = public
 as $$
-  select c.name, w.week_start, w.week_end, w.model, w.jobs_booked, w.revenue, w.client_note, w.answered_at
+  select c.name, w.week_start, w.week_end, w.model, w.jobs_booked, w.revenue, w.client_note, w.answered_at, c.dashboard_token
   from weekly_reports w join clients c on c.id = w.client_id
   where w.token = p_token and length(p_token) >= 20
   limit 1;

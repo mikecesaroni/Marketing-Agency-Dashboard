@@ -93,6 +93,11 @@ export default function WeeklyReportPage() {
           <h1 className="mt-1 text-2xl font-bold">{row.client_name}</h1>
           <p className="text-sm text-slate-500">{m.week?.label}</p>
           <p className="mt-3 text-[15px] leading-relaxed">{summary.join(' ')}</p>
+          {row.dashboard_token && (
+            <a href={`/dashboard/${row.dashboard_token}`} className="mt-3 inline-block text-sm font-semibold text-orange-700 hover:text-orange-800" data-dashboard-link>
+              See every number, any day, on your dashboard
+            </a>
+          )}
         </header>
 
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-5">

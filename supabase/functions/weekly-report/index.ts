@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     const rowFilter = onlyId ? `&client_id=eq.${encodeURIComponent(onlyId)}` : ''
 
     const [clients, intakes, metaRows, googleRows, existing, answers] = await Promise.all([
-      get(`clients?archived=eq.false&select=id,name,archived,is_internal,report_email,weekly_report_enabled,meta_ad_account_id,google_ads_customer_id${clientFilter}`),
+      get(`clients?archived=eq.false&select=id,name,archived,is_internal,report_email,weekly_report_enabled,meta_ad_account_id,google_ads_customer_id,dashboard_token${clientFilter}`),
       get(`onboarding_intake?select=client_id,contact_email,average_job_value${rowFilter}`),
       get(`ad_daily?date=gte.${prev.from}&date=lte.${week.to}&select=client_id,ad_id,ad_name,date,spend,leads,impressions,clicks,effective_status${rowFilter}`),
       get(`google_campaign_daily?date=gte.${prev.from}&date=lte.${week.to}&select=client_id,campaign_id,campaign_name,date,cost,conversions,impressions,clicks${rowFilter}`),
@@ -155,6 +155,9 @@ Deno.serve(async (req) => {
         lastAnswer,
       })
 
+      // The client's own dashboard, linked from every report.
+      const dashboardUrl = client.dashboard_token ? `${appUrl}/dashboard/${client.dashboard_token}` : ''
+
       if (preview) {
         const token = existingBy.get(client.id)?.token || ''
         const reportUrl = token ? `${appUrl}/report/${token}` : ''
@@ -166,10 +169,11 @@ Deno.serve(async (req) => {
           recipient: check.ok ? check.email : null,
           email_set_up: canEmail,
           subject: renderWeeklySubject(model),
-          html: renderWeeklyHtml(model, { agencyName, reportUrl }),
-          text: renderWeeklyText(model, { reportUrl }),
+          html: renderWeeklyHtml(model, { agencyName, reportUrl, dashboardUrl }),
+          text: renderWeeklyText(model, { reportUrl, dashboardUrl }),
           model,
           url: reportUrl || null,
+          dashboard_url: dashboardUrl || null,
         })
       }
 
@@ -196,7 +200,7 @@ Deno.serve(async (req) => {
       const saved = await record(client.id, { status: 'ready', reason: canEmail ? null : 'email not set up: add RESEND_API_KEY and REPORT_FROM in Supabase', recipient: check.email, subject, model })
       const token = saved?.token || was?.token || ''
       const reportUrl = token ? `${appUrl}/report/${token}` : ''
-      const html = renderWeeklyHtml(model, { agencyName, reportUrl })
+      const html = renderWeeklyHtml(model, { agencyName, reportUrl, dashboardUrl })
       await record(client.id, { html })
 
       if (!canEmail) {
@@ -213,7 +217,7 @@ Deno.serve(async (req) => {
             to: [check.email],
             subject,
             html,
-            text: renderWeeklyText(model, { reportUrl }),
+            text: renderWeeklyText(model, { reportUrl, dashboardUrl }),
             ...(Deno.env.get('REPORT_REPLY_TO') ? { reply_to: Deno.env.get('REPORT_REPLY_TO') } : {}),
             ...(Deno.env.get('REPORT_BCC') ? { bcc: [Deno.env.get('REPORT_BCC')] } : {}),
           }),

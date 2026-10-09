@@ -205,3 +205,5 @@ alter table clients add column if not exists logo_path text;
 -- Weekly client report: where it goes (else the intake's contact email) and whether it goes. See weekly-reports.sql.
 alter table clients add column if not exists report_email text;
 alter table clients add column if not exists weekly_report_enabled boolean not null default true;
+-- Client dashboard: the private token in the client's own dashboard link (/dashboard/<token>). See client-dashboard.sql.
+alter table clients add column if not exists dashboard_token text;

@@ -364,7 +364,7 @@ export function renderWeeklySubject(model) {
  * The email. Tables and inline styles only, so it survives Gmail, Outlook
  * and the Mail app on a phone.
  */
-export function renderWeeklyHtml(model, { agencyName = 'The Working Class Marketing', reportUrl = '' } = {}) {
+export function renderWeeklyHtml(model, { agencyName = 'The Working Class Marketing', reportUrl = '', dashboardUrl = '' } = {}) {
   const { client, week, totals, deltas, channels, topAd, summary, returnNote: rn } = model
   const d = deltas || {}
   const first = client.name
@@ -424,6 +424,11 @@ ${
       <div style="font-size:11px;color:${MUTED};padding-top:6px;">Takes 20 seconds. Or just reply to this email with a number.</div></div>`
       : `<div style="font-size:13px;color:${INK};">Reply to this email with how many of the leads booked, and roughly what they were worth.</div>`
   }
+  ${
+    dashboardUrl
+      ? `<div style="font-size:12px;color:${MUTED};padding-top:12px;">Every number, any day, with what each one means: <a href="${esc(dashboardUrl)}" style="color:${BRAND};font-weight:700;text-decoration:none;">open your dashboard</a></div>`
+      : ''
+  }
 </td></tr>
 
 <tr><td style="padding:22px 28px 0;">
@@ -447,7 +452,7 @@ ${
 }
 
 /** The same report as plain text, for a text message or a Slack paste. */
-export function renderWeeklyText(model, { reportUrl = '' } = {}) {
+export function renderWeeklyText(model, { reportUrl = '', dashboardUrl = '' } = {}) {
   const { client, week, totals, topAd, summary, returnNote: rn } = model
   const lines = [
     `${client.name}: your week in ads, ${week.label}`,
@@ -463,5 +468,6 @@ export function renderWeeklyText(model, { reportUrl = '' } = {}) {
   if (topAd) lines.push('', `Best ad: ${topAd.name} (${fmtLeads(topAd.leads)} ${plural(topAd.leads, 'lead', 'leads')} for ${money(topAd.spend)})`)
   lines.push('', 'The number that matters most', ...WHY_RETURN, ...rn)
   if (reportUrl) lines.push('', `Tell us how the leads did: ${reportUrl}`)
+  if (dashboardUrl) lines.push(`Your dashboard, every number any day: ${dashboardUrl}`)
   return lines.join('\n')
 }
