@@ -4,12 +4,14 @@
 // email, the app fetches the page without running any JavaScript and
 // shows whatever the HTML head says. The app is one HTML file for every
 // address, so that would be the CRM's own title. The edge function in
-// client-preview.ts runs in front of those two paths, looks the token up
+// client-preview.ts (next door, in edge-functions) runs in front of those two paths, looks the token up
 // (client_link_name, which returns a business name and nothing else), and
 // rewrites the head: "KPI Dashboard for Belk Heating and Cooling", a
 // sentence, and a card image. Nothing else about the page changes.
 //
-// Plain JavaScript so scripts/check-link-preview.mjs can load it in Node.
+// Kept outside netlify/edge-functions on purpose: every file in that folder
+// is treated as an edge function entry point, and this one has no default
+// export. Plain JavaScript so scripts/check-link-preview.mjs can load it in Node.
 
 export const KINDS = {
   dashboard: {

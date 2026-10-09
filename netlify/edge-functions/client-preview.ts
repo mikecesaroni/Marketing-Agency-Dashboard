@@ -10,7 +10,7 @@
 // Needs the site's VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, which the
 // build already has. The lookup is one read-only call that returns a name.
 
-import { lookupName, matchClientPath, previewMeta, rewriteHtml } from './preview.js'
+import { lookupName, matchClientPath, previewMeta, rewriteHtml } from '../lib/preview.js'
 
 declare const Netlify: { env: { get(key: string): string | undefined } }
 

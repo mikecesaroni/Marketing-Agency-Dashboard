@@ -79,7 +79,7 @@ and a dark card image; a report link as "Weekly ads report for <business
 name>". A message app fetches the page without running JavaScript, so the
 app's one HTML file would otherwise show the CRM's title. A Netlify edge
 function (`netlify/edge-functions/client-preview.ts`, words and rewrite in
-`preview.js`) runs in front of `/dashboard/*` and `/report/*`, looks the
+`netlify/lib/preview.js`) runs in front of `/dashboard/*` and `/report/*`, looks the
 token up through `client_link_name` (returns the business name and
 nothing else) and rewrites the head. Anything else, and any error, passes
 through untouched. The card images are `public/og-kpi-dashboard.png` and

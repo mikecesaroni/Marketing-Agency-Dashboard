@@ -1,7 +1,7 @@
 // Self-check for the link previews a message app shows for a client link.
 // Run: node scripts/check-link-preview.mjs
 import { existsSync, readFileSync } from 'node:fs'
-import { KINDS, lookupName, matchClientPath, previewMeta, rewriteHtml } from '../netlify/edge-functions/preview.js'
+import { KINDS, lookupName, matchClientPath, previewMeta, rewriteHtml } from '../netlify/lib/preview.js'
 
 let failures = 0
 const check = (name, got, want) => {
