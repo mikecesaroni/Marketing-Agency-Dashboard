@@ -39,6 +39,15 @@ export default function WeeklyReportPage() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
+  // The tab is named for the client, not the CRM.
+  useEffect(() => {
+    const title = document.title
+    document.title = row?.client_name ? `${row.client_name} · Your week in ads` : 'Your week in ads'
+    return () => {
+      document.title = title
+    }
+  }, [row])
+
   useEffect(() => {
     loadWeeklyReport(token)
       .then((r) => {

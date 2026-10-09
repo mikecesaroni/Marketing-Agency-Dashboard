@@ -225,14 +225,18 @@ export default function ClientDashboardPage() {
     }
   }, [lightbox, token])
 
-  // The page is dark to the edges, including the overscroll on a phone.
+  // The page is dark to the edges, including the overscroll on a phone, and
+  // the tab is named for the client, not the CRM.
   useEffect(() => {
     const was = document.body.style.background
+    const title = document.title
     document.body.style.background = '#070b14'
+    document.title = data?.client?.name ? `${data.client.name} · Your ads dashboard` : 'Your ads dashboard'
     return () => {
       document.body.style.background = was
+      document.title = title
     }
-  }, [])
+  }, [data])
 
   const win = useMemo(() => windowFor(days), [days])
   const rows = useMemo(() => data?.days || [], [data])
