@@ -200,6 +200,15 @@ export default function ClientDashboardPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [lightbox])
 
+  // The page is dark to the edges, including the overscroll on a phone.
+  useEffect(() => {
+    const was = document.body.style.background
+    document.body.style.background = '#070b14'
+    return () => {
+      document.body.style.background = was
+    }
+  }, [])
+
   const win = useMemo(() => windowFor(days), [days])
   const rows = data?.days || []
   const now = useMemo(() => sumDays(between(rows, win.from, win.to)), [rows, win])
