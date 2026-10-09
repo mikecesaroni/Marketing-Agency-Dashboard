@@ -210,7 +210,7 @@ export default function ClientDashboardPage() {
   }, [])
 
   const win = useMemo(() => windowFor(days), [days])
-  const rows = data?.days || []
+  const rows = useMemo(() => data?.days || [], [data])
   const now = useMemo(() => sumDays(between(rows, win.from, win.to)), [rows, win])
   const before = useMemo(() => sumDays(between(rows, win.prevFrom, win.prevTo)), [rows, win])
   const lsa = useMemo(() => lsaFor(data?.lsa, win.from, win.to), [data, win])
