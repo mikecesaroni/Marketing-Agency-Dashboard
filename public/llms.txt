@@ -336,7 +336,8 @@ NOT part of the CRM. A client's own dashboard, from the private token in their l
 What is on it:
   - Leads, ad spend and cost per lead for the last 7, 30 or 90 days against the same length of time before, with leads and spend split by channel.
   - Six tiles: spend, leads, cost per lead, impressions, clicks, click rate. Clicking one opens what it is, why it matters, what good looks like and what we do with it.
-  - Leads or spend by day with Meta and Google stacked; a card per channel (Meta, Google, LSA when logged) with spend, spend per day, leads and cost per lead; and a day-by-day table of what Meta and Google each spent, newest first, with the average per day.
+  - An "Average daily ad spend" card beside the headline: Meta and Google each as dollars a day, averaged over the range, with the all-channels figure under them.
+  - Leads or spend by day with Meta and Google stacked; a card per channel (Meta, Google, LSA when logged).
   - Your ads: every ad that ran in the range as a card with its picture (or the video's opening frame and a play button), a verdict judged against the client's own average cost per lead for the range (Working, Fair, Costly, No leads yet, Too early), and leads, spend, cost per lead and click rate. Tapping a card opens the picture full size or plays the video. Pictures and videos come from Meta at the moment the page opens (the client-dashboard function), never stored, because Meta's links expire; Google Search ads are words, so they show no picture.
   - "The number that matters most": dollars back per dollar spent from the weeks the client answered, with a table of those weeks; or, before any answer, the argument for return over cost per lead with a worked example from their average job value.
   - A glossary of every term, each one click to open.

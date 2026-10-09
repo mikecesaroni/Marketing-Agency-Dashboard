@@ -111,27 +111,6 @@ export function perDay(spend, days) {
   return r2(num(spend) / n)
 }
 
-/** "Thu, Oct 9" for a table of days. */
-export function dayLabel(iso) {
-  return fromIso(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-}
-
-/**
- * One row per day in the range, newest first: what each channel spent and
- * the leads that day. Days with nothing are kept, so a quiet day is seen.
- */
-export function dailyRows(rows, from, to) {
-  const by = new Map((rows || []).map((r) => [r.date, r]))
-  const out = []
-  for (let d = from; d <= to; d = daysAgo(-1, d)) {
-    const r = by.get(d) || {}
-    const meta = r2(num(r.meta_spend))
-    const google = r2(num(r.google_spend))
-    out.push({ date: d, meta, google, spend: r2(meta + google), leads: Math.round((num(r.meta_leads) + num(r.google_leads)) * 10) / 10 })
-  }
-  return out.reverse()
-}
-
 /** "WC_Summer | 2026-10-08 | AC died? Same-day" shows as "AC died? Same-day". */
 export function cleanAdName(name) {
   const s = String(name || '').replace(/^wc_/i, '')

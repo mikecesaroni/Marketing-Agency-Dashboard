@@ -4,7 +4,7 @@ import ChannelDailyChart from '../components/reports/ChannelDailyChart'
 import { ChannelDot, DTd, DTh, DTr, Delta, Eyebrow, MixBar, Panel, Pill, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
 import { cn } from '../components/ui/cn'
 import { CHANNELS, channelMix, compactMoney, rangeLabel } from '../lib/channels'
-import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailyRows, dailySeries, dayLabel, guideFor, latestReport, lsaFor, money, pctChange, perDay, previewFrame, returnStory, sumDays, windowFor } from '../lib/clientDashboard'
+import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailySeries, guideFor, latestReport, lsaFor, money, pctChange, perDay, previewFrame, returnStory, sumDays, windowFor } from '../lib/clientDashboard'
 import { supabase } from '../lib/supabaseClient'
 
 /**
@@ -291,6 +291,10 @@ export default function ClientDashboardPage() {
     (data.lsa || []).length > 0 ? { key: 'lsa', spend: lsa.spend, leads: lsa.leads, cpl: lsa.cpl, delta: pctChange(lsa.spend, lsaBefore.spend), spark: null, note: 'Logged by the week' } : null,
   ].filter(Boolean)
 
+  const dailyChannels = [
+    data.channels?.meta || now.meta.spend > 0 ? { key: 'meta', spend: now.meta.spend } : null,
+    data.channels?.google || now.google.spend > 0 ? { key: 'google', spend: now.google.spend } : null,
+  ].filter(Boolean)
   const leadMix = channelMix({ meta: now.meta.leads, google: now.google.leads, lsa: lsa.leads })
   const spendMix = channelMix({ meta: now.meta.spend, google: now.google.spend, lsa: lsa.spend })
   const stackMetric = STACK_METRICS.find((m) => m.value === stackKey)
@@ -326,8 +330,9 @@ export default function ClientDashboardPage() {
         )}
 
         <div className="mt-6 space-y-6">
-          {/* THE HEADLINE: leads, then what they cost. */}
-          <div className="grid gap-4 lg:grid-cols-3">
+          {/* THE HEADLINE: leads, what they cost, how it splits, and the
+              daily spend per channel. */}
+          <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-4">
             <Panel className="p-5 lg:col-span-2">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -343,9 +348,6 @@ export default function ClientDashboardPage() {
                     <Eyebrow>Ad spend</Eyebrow>
                     <p className="mt-2 text-3xl font-semibold text-white">{money(all.spend)}</p>
                     <Delta value={pctChange(all.spend, allBefore.spend)} align="right" neutral />
-                    <p className="mt-0.5 text-[11px] text-slate-500" data-per-day>
-                      {money(perDay(all.spend, days))} a day on average
-                    </p>
                   </div>
                   <div>
                     <Eyebrow>Cost per lead</Eyebrow>
@@ -373,6 +375,33 @@ export default function ClientDashboardPage() {
                 {story.answered > 0
                   ? `Over the ${story.answered} ${plural(story.answered, 'week', 'weeks')} you have told us about, that spend came back ${money(story.back)} for every $1.`
                   : 'Tell us how the leads do each week and this line shows your return on the ads.'}
+              </p>
+            </Panel>
+
+            {/* AVERAGE DAILY AD SPEND, per channel: the number an owner has in
+                their head when they think about the budget. */}
+            <Panel className="p-5 lg:col-span-3 xl:col-span-1" data-daily-spend>
+              <Eyebrow>Average daily ad spend</Eyebrow>
+              {dailyChannels.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-500">No ad spend in this range.</p>
+              ) : (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  {dailyChannels.map((c) => (
+                    <div key={c.key} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3" data-daily-channel={c.key}>
+                      <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <ChannelDot channel={c.key} />
+                        {CHANNELS[c.key].long}
+                      </span>
+                      <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
+                        {money(perDay(c.spend, days))}
+                        <span className="ml-1 text-xs font-normal text-slate-500">a day</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="mt-3 text-xs text-slate-500">
+                {money(perDay(all.spend, days))} a day across everything, averaged over the last {days} days.
               </p>
             </Panel>
           </div>
@@ -419,9 +448,8 @@ export default function ClientDashboardPage() {
                     <ChannelDot channel={c.key} size="md" />
                     {CHANNELS[c.key].long}
                   </span>
-                  <div className="mt-4 grid grid-cols-4 gap-2">
+                  <div className="mt-4 grid grid-cols-3 gap-2">
                     <Stat label="Spend" value={money(c.spend)} />
-                    <Stat label="Per day" value={money(perDay(c.spend, days))} />
                     <Stat label="Leads" value={fmtLeads(Math.round(c.leads * 10) / 10)} />
                     <Stat label="Cost per lead" value={cplText(c.cpl)} />
                   </div>
@@ -434,56 +462,6 @@ export default function ClientDashboardPage() {
               ))}
             </div>
           )}
-
-          {/* EVERY DAY'S SPEND, PER CHANNEL. The chart above shows the shape; this
-              is the exact number for any day, newest first. */}
-          <section data-daily-spend>
-            <SectionTitle title="Spend by day, per channel" sub={`What each channel spent each day, newest first. ${money(perDay(all.spend, days))} a day on average over these ${days} days.`} />
-            <Panel>
-              <div className="max-h-96 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-[#0f1626]">
-                    <tr>
-                      <DTh>Day</DTh>
-                      <DTh numeric>
-                        <span className="inline-flex items-center gap-1.5">
-                          <ChannelDot channel="meta" />
-                          Meta
-                        </span>
-                      </DTh>
-                      <DTh numeric>
-                        <span className="inline-flex items-center gap-1.5">
-                          <ChannelDot channel="google" />
-                          Google
-                        </span>
-                      </DTh>
-                      <DTh numeric>Total</DTh>
-                      <DTh numeric>Leads</DTh>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dailyRows(rows, win.from, win.to).map((r) => (
-                      <DTr key={r.date} data-day={r.date}>
-                        <DTd className="whitespace-nowrap">{dayLabel(r.date)}</DTd>
-                        <DTd numeric muted={!r.meta}>
-                          {money(r.meta)}
-                        </DTd>
-                        <DTd numeric muted={!r.google}>
-                          {money(r.google)}
-                        </DTd>
-                        <DTd numeric className="font-semibold text-white">
-                          {money(r.spend)}
-                        </DTd>
-                        <DTd numeric muted={!r.leads}>
-                          {fmtLeads(r.leads)}
-                        </DTd>
-                      </DTr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Panel>
-          </section>
 
           {/* THE ADS THEMSELVES: the creative, whether it is working, the numbers. */}
           <section data-ads>
