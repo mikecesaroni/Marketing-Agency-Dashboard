@@ -18,20 +18,20 @@ check('not the CRM dashboard, not a short token, not anything else', [matchClien
 
 // ---------------------------------------------------------------- the words
 const meta = previewMeta({ kind: 'dashboard', name: 'Belk Heating and Cooling', origin: 'https://x.netlify.app', pathname: '/dashboard/tok' })
-check('KPI Dashboard for the business', meta.title, 'KPI Dashboard for Belk Heating and Cooling')
+check('Live KPI Dashboard for the business', meta.title, 'Live KPI Dashboard for Belk Heating and Cooling')
 check('with a sentence, a card image and the address', [meta.description.length > 20, meta.image, meta.url], [true, 'https://x.netlify.app/og-kpi-dashboard.png', 'https://x.netlify.app/dashboard/tok'])
-check('no name, still a title', previewMeta({ kind: 'dashboard', name: '', origin: 'https://x', pathname: '/d' }).title, 'KPI Dashboard')
+check('no name, still a title', previewMeta({ kind: 'dashboard', name: '', origin: 'https://x', pathname: '/d' }).title, 'Live KPI Dashboard')
 check('the report has its own words', previewMeta({ kind: 'report', name: 'Belk', origin: 'https://x', pathname: '/r' }).title, 'Weekly ads report for Belk')
 check('no em dashes in the preview words', /[—–]/.test(Object.values(KINDS).map((k) => `${k.title('X')} ${k.description}`).join(' ')), false)
 
 // -------------------------------------------------------------- the rewrite
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
 const out = rewriteHtml(html, meta)
-check('the title is replaced', out.includes('<title>KPI Dashboard for Belk Heating and Cooling</title>') && !out.includes('<title>The Working Class Marketing CRM</title>'), true)
+check('the title is replaced', out.includes('<title>Live KPI Dashboard for Belk Heating and Cooling</title>') && !out.includes('<title>The Working Class Marketing CRM</title>'), true)
 check('the open graph tags are in the head', ['og:title', 'og:description', 'og:image', 'og:url', 'twitter:card'].every((p) => out.includes(p)) && out.indexOf('og:title') < out.indexOf('</head>'), true)
 check('the body is untouched', out.slice(out.indexOf('<body')), html.slice(html.indexOf('<body')))
-check('names are escaped', rewriteHtml('<html><head><title>x</title></head><body></body></html>', previewMeta({ kind: 'dashboard', name: 'A & B "Heating" <Co>', origin: 'https://x', pathname: '/d' })).includes('KPI Dashboard for A &amp; B &quot;Heating&quot; &lt;Co&gt;'), true)
-check('a page with no title gets one', rewriteHtml('<html><head></head><body></body></html>', meta).includes('<title>KPI Dashboard for Belk Heating and Cooling</title>'), true)
+check('names are escaped', rewriteHtml('<html><head><title>x</title></head><body></body></html>', previewMeta({ kind: 'dashboard', name: 'A & B "Heating" <Co>', origin: 'https://x', pathname: '/d' })).includes('Live KPI Dashboard for A &amp; B &quot;Heating&quot; &lt;Co&gt;'), true)
+check('a page with no title gets one', rewriteHtml('<html><head></head><body></body></html>', meta).includes('<title>Live KPI Dashboard for Belk Heating and Cooling</title>'), true)
 
 // --------------------------------------------------------------- the lookup
 const fakeFetch = (url, init) => {

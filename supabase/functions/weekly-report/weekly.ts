@@ -426,7 +426,7 @@ ${
   }
   ${
     dashboardUrl
-      ? `<div style="font-size:12px;color:${MUTED};padding-top:12px;">Every number, any day, with what each one means: <a href="${esc(dashboardUrl)}" style="color:${BRAND};font-weight:700;text-decoration:none;">open your dashboard</a></div>`
+      ? `<div style="font-size:12px;color:${MUTED};padding-top:12px;">Every number, any day, with what each one means: <a href="${esc(dashboardUrl)}" style="color:${BRAND};font-weight:700;text-decoration:none;">open your live KPI dashboard</a></div>`
       : ''
   }
 </td></tr>
@@ -468,6 +468,6 @@ export function renderWeeklyText(model, { reportUrl = '', dashboardUrl = '' } = 
   if (topAd) lines.push('', `Best ad: ${topAd.name} (${fmtLeads(topAd.leads)} ${plural(topAd.leads, 'lead', 'leads')} for ${money(topAd.spend)})`)
   lines.push('', 'The number that matters most', ...WHY_RETURN, ...rn)
   if (reportUrl) lines.push('', `Tell us how the leads did: ${reportUrl}`)
-  if (dashboardUrl) lines.push(`Your dashboard, every number any day: ${dashboardUrl}`)
+  if (dashboardUrl) lines.push(`Your live KPI dashboard, every number any day: ${dashboardUrl}`)
   return lines.join('\n')
 }

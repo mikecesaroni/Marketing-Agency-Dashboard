@@ -104,7 +104,7 @@ export default function WeeklyReportPage() {
           <p className="mt-3 text-[15px] leading-relaxed">{summary.join(' ')}</p>
           {row.dashboard_token && (
             <a href={`/dashboard/${row.dashboard_token}`} className="mt-3 inline-block text-sm font-semibold text-orange-700 hover:text-orange-800" data-dashboard-link>
-              See every number, any day, on your dashboard
+              See every number, any day, on your live KPI dashboard
             </a>
           )}
         </header>

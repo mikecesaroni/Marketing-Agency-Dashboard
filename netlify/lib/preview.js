@@ -16,8 +16,8 @@
 export const KINDS = {
   dashboard: {
     prefix: '/dashboard/',
-    title: (name) => (name ? `KPI Dashboard for ${name}` : 'KPI Dashboard'),
-    description: 'Leads, spend, cost per lead and what each number means. Updated every morning.',
+    title: (name) => (name ? `Live KPI Dashboard for ${name}` : 'Live KPI Dashboard'),
+    description: 'Live numbers: leads, spend, cost per lead and what each one means. Updated every morning.',
     image: '/og-kpi-dashboard.png',
   },
   report: {

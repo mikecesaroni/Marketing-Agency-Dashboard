@@ -111,8 +111,8 @@ check('no em dashes in the guide', /[—–]/.test(copy), false)
 const week = weekFrom('2026-09-28')
 const model = buildWeeklyModel({ client: { name: 'Belk' }, intake: {}, week, metaRows: [{ ad_id: 'a', ad_name: 'x', date: '2026-09-29', spend: 100, leads: 2, impressions: 1000, clicks: 20 }] })
 const html = renderWeeklyHtml(model, { reportUrl: 'https://x/report/r', dashboardUrl: 'https://x/dashboard/d' })
-check('the email links to the dashboard', html.includes('open your dashboard') && html.includes('https://x/dashboard/d'), true)
-check('no dashboard, no link', renderWeeklyHtml(model, { reportUrl: 'https://x/report/r' }).includes('open your dashboard'), false)
+check('the email links to the dashboard', html.includes('open your live KPI dashboard') && html.includes('https://x/dashboard/d'), true)
+check('no dashboard, no link', renderWeeklyHtml(model, { reportUrl: 'https://x/report/r' }).includes('open your live KPI dashboard'), false)
 check('the text version carries it too', renderWeeklyText(model, { reportUrl: 'https://x/report/r', dashboardUrl: 'https://x/dashboard/d' }).includes('https://x/dashboard/d'), true)
 
 // The page and the panel load the one module.
