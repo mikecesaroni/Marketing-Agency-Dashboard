@@ -185,7 +185,8 @@ export function returnStory(weeks) {
 export function previewFrame(html) {
   const s = String(html || '')
   const src = s.match(/src="([^"]+)"/)?.[1]
-  if (!src || !/^https:\/\/(www\.)?facebook\.com\//.test(src.replace(/&amp;/g, '&'))) return null
+  // Meta serves these from www. or business.facebook.com; only facebook.com itself is trusted.
+  if (!src || !/^https:\/\/([a-z0-9-]+\.)*facebook\.com\//i.test(src.replace(/&amp;/g, '&'))) return null
   const width = Number(s.match(/width="(\d+)"/)?.[1]) || 320
   const height = Number(s.match(/height="(\d+)"/)?.[1]) || 640
   return { src: src.replace(/&amp;/g, '&'), width, height }

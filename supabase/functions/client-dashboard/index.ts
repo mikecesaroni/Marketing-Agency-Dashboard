@@ -66,6 +66,31 @@ async function graphGet(path: string, params: Record<string, string>, token: str
   return body
 }
 
+// Up to fifty reads in one round trip. The `?ids=` shortcut is deprecated,
+// so this is the batch endpoint proper: each entry comes back with its own
+// status, and one bad id costs that one entry, not the batch.
+async function graphBatch(relativeUrls: string[], token: string): Promise<(any | null)[]> {
+  const res = await fetch(`${GRAPH}/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      access_token: token,
+      include_headers: 'false',
+      batch: JSON.stringify(relativeUrls.map((relative_url) => ({ method: 'GET', relative_url }))),
+    }),
+  })
+  const body = await res.json()
+  if (!res.ok || !Array.isArray(body)) throw new Error(body?.error?.message || `Meta returned ${res.status} on batch`)
+  return body.map((entry: any) => {
+    if (!entry || entry.code !== 200 || !entry.body) return null
+    try {
+      return JSON.parse(entry.body)
+    } catch {
+      return null
+    }
+  })
+}
+
 const pad = (n: number) => String(n).padStart(2, '0')
 function isoDaysAgo(n: number) {
   const d = new Date()
@@ -195,15 +220,18 @@ Deno.serve(async (req) => {
     for (let i = 0; i < ids.length; i += 50) {
       const chunk = ids.slice(i, i + 50)
       try {
-        const batch = await graphGet('', { ids: chunk.join(','), fields: CREATIVE_FIELDS }, metaToken)
-        for (const id of chunk) {
-          const c = fromAd(id, batch?.[id])
+        const batch = await graphBatch(
+          chunk.map((id) => `${encodeURIComponent(id)}?fields=${encodeURIComponent(CREATIVE_FIELDS)}`),
+          metaToken
+        )
+        chunk.forEach((id, k) => {
+          const c = fromAd(id, batch[k])
           if (c) creatives.push(c)
-        }
+        })
       } catch (err) {
-        // One bad id fails the whole batch, so fall back to one at a time
-        // for the first thirty. An ad this token cannot read simply has
-        // no preview; the card still shows its name and numbers.
+        // The batch itself failed, so fall back to one at a time for the
+        // first thirty. An ad this token cannot read simply has no
+        // preview; the card still shows its name and numbers.
         note('creatives', err)
         for (const id of chunk.slice(0, 30)) {
           try {
@@ -245,9 +273,16 @@ Deno.serve(async (req) => {
     for (let i = 0; i < videoIds.length; i += 50) {
       const chunk = videoIds.slice(i, i + 50)
       try {
-        const batch = await graphGet('', { ids: chunk.join(','), fields: 'id,source,picture' }, metaToken)
+        const batch = await graphBatch(
+          chunk.map((vid) => `${encodeURIComponent(vid)}?fields=${encodeURIComponent('id,source,picture')}`),
+          metaToken
+        )
+        const videoBy = new Map<string, any>()
+        chunk.forEach((vid, k) => {
+          if (batch[k]) videoBy.set(vid, batch[k])
+        })
         for (const c of creatives) {
-          const v = c.video_id ? batch?.[c.video_id] : null
+          const v = c.video_id ? videoBy.get(c.video_id) : null
           if (!v) continue
           c.video = v.source || null
           if (!c.image && v.picture) c.image = v.picture
