@@ -35,7 +35,7 @@ export const NAV_GROUPS = [
     label: 'Money',
     items: [
       { to: '/payments', label: 'Payments', short: 'Money', Icon: IconPayments, mobile: false },
-      { to: '/reports', label: 'Reports', short: 'Reports', Icon: IconReports, mobile: false },
+      { to: '/reports', label: 'KPI Reports', short: 'KPI Reports', Icon: IconReports, mobile: false },
     ],
   },
   {

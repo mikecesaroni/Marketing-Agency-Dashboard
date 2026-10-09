@@ -180,7 +180,7 @@ What you can do:
 
 Performance Reports   /reports
 ------------------------------
-Sidebar: Reports
+Sidebar: KPI Reports
 Ad performance across every client, over time. The place to answer "how are we doing".
 
 What is on it:
