@@ -9,6 +9,10 @@
     "browser": true,
     "es2024": true
   },
+  "ignorePatterns": [
+    ".netlify/**",
+    "dist/**"
+  ],
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": [
@@ -37,6 +41,15 @@
       ],
       "globals": {
         "Deno": "readonly"
+      }
+    },
+    {
+      "files": [
+        "netlify/**"
+      ],
+      "globals": {
+        "Deno": "readonly",
+        "Netlify": "readonly"
       }
     }
   ]

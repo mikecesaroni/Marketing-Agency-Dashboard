@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Netlify's build cache and CLI state (generated edge-function bundles live
+# in here; the linter ignores it too, see .oxlintrc.json)
+.netlify
+
 # Environment variables (your Supabase keys live here — never commit this)
 .env
 .env.*

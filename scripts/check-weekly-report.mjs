@@ -12,7 +12,6 @@ import {
   renderWeeklySubject,
   renderWeeklyText,
   reportWeek,
-  summarySentences,
   weekFrom,
 } from '../supabase/functions/weekly-report/weekly.ts'
 
