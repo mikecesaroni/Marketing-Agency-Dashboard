@@ -22,6 +22,7 @@ export {
 
 import { supabase } from './supabaseClient'
 import { readFunctionError } from './functionError'
+import { publicLink } from './publicSite'
 
 async function call(body) {
   const { data, error } = await supabase.functions.invoke('weekly-report', { body })
@@ -83,4 +84,4 @@ export async function answerWeeklyReport(token, { jobs, revenue, note }) {
 }
 
 /** The public link for a saved report. */
-export const reportLink = (token) => `${window.location.origin}/report/${token}`
+export const reportLink = (token) => publicLink(`/report/${token}`)

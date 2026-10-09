@@ -11,6 +11,42 @@
   to = "/privacy.html"
   status = 200
 
+# THE CLIENT-FACING SITE, enforced at the edge.
+#
+# Clients get token links (dashboard, weekly report, ad approval, onboarding
+# form). Serve those from their own address and nothing else exists there:
+# a client who edits the link gets the dead-end page, not the CRM. The app
+# does the same in src/lib/publicSite.js; these rules make Netlify refuse
+# first, before any JavaScript runs.
+#
+# To switch on: add the client domain to this site in Netlify (Domain
+# management), put its host in the four rules below in place of
+# clients.example.com, set VITE_PUBLIC_HOST and VITE_PUBLIC_APP_URL in the
+# site's environment to the same host, set the weekly-report function's
+# APP_URL secret to https://<that host>, and redeploy. Domain-level rules
+# must sit above the catch-all below; first match wins.
+#
+# [[redirects]]
+#   from = "https://clients.example.com/dashboard/*"
+#   to = "/index.html"
+#   status = 200
+# [[redirects]]
+#   from = "https://clients.example.com/report/*"
+#   to = "/index.html"
+#   status = 200
+# [[redirects]]
+#   from = "https://clients.example.com/approve/*"
+#   to = "/index.html"
+#   status = 200
+# [[redirects]]
+#   from = "https://clients.example.com/onboarding/*"
+#   to = "/index.html"
+#   status = 200
+# [[redirects]]
+#   from = "https://clients.example.com/*"
+#   to = "/nothing-here.html"
+#   status = 404
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

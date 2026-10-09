@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabaseClient'
 import { Button, Card } from './ui'
 import { copyText } from '../lib/intakeSummary'
 import { driveServiceAccount } from '../lib/driveAssets'
+import { publicLink } from '../lib/publicSite'
 import {
   COPY_BLOCKS,
   callProgress,
@@ -69,7 +70,7 @@ export default function OnboardingCallPanel({ client, intake }) {
       intake,
       link,
       ghl,
-      onboardingUrl: link?.token ? `${window.location.origin}/onboarding/${link.token}` : '',
+      onboardingUrl: link?.token ? publicLink(`/onboarding/${link.token}`) : '',
       driveUrl: client?.drive_folder_id ? `https://drive.google.com/drive/folders/${client.drive_folder_id}` : '',
       crmDriveEmail,
     }),
@@ -130,7 +131,7 @@ export default function OnboardingCallPanel({ client, intake }) {
     if (step.copy === 'preCallEmail') {
       try {
         const l = await ensureLink()
-        c = { ...ctx, link: l, onboardingUrl: `${window.location.origin}/onboarding/${l.token}` }
+        c = { ...ctx, link: l, onboardingUrl: publicLink(`/onboarding/${l.token}`) }
       } catch (err) {
         setError(`Could not make the onboarding link: ${err.message}`)
         return

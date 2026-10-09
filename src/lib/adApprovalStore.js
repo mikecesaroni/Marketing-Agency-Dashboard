@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import { approvalUrl } from './adApproval'
+import { publicLink } from './publicSite'
 
 /**
  * Reading and writing approval links. Everything that touches the network,
@@ -17,7 +17,7 @@ export async function createApprovalLink({ clientId, paths, note }) {
     .single()
   if (error) throw error
 
-  return { token: data.token, url: approvalUrl(window.location.origin, data.token) }
+  return { token: data.token, url: publicLink(`/approve/${data.token}`) }
 }
 
 /** The links already sent for this client, newest first, with their answers. */
@@ -43,7 +43,7 @@ export async function fetchApprovalLinks(clientId) {
 
   return (data || []).map((row) => ({
     ...row,
-    url: approvalUrl(window.location.origin, row.token),
+    url: publicLink(`/approve/${row.token}`),
     // One entry per image in the link, whether or not it has been answered,
     // so "2 of 4 waiting" is countable.
     items: row.paths.map((path) => {

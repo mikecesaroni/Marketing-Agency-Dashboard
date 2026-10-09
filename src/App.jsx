@@ -23,9 +23,26 @@ import AdApprovalPage from './pages/AdApprovalPage'
 import AgentGuidePage from './pages/AgentGuidePage'
 import LoginPage from './pages/LoginPage'
 import TeamPage from './pages/TeamPage'
+import NothingHerePage from './pages/NothingHerePage'
 import RequireAuth from './components/RequireAuth'
+import { onPublicSite } from './lib/publicSite'
 
 export default function App() {
+  // The client-facing site (VITE_PUBLIC_ONLY, or a host named in
+  // VITE_PUBLIC_HOST) serves the token pages and nothing else: there is no
+  // CRM to find by editing the address. See src/lib/publicSite.js.
+  if (onPublicSite()) {
+    return (
+      <Routes>
+        <Route path="/onboarding/:token" element={<ClientOnboardingPage />} />
+        <Route path="/approve/:token" element={<AdApprovalPage />} />
+        <Route path="/report/:token" element={<WeeklyReportPage />} />
+        <Route path="/dashboard/:token" element={<ClientDashboardPage />} />
+        <Route path="*" element={<NothingHerePage />} />
+      </Routes>
+    )
+  }
+
   return (
     <Routes>
       {/* Public, token-gated. Deliberately outside the dashboard shell: the

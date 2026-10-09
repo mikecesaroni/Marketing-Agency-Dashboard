@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { copyText } from '../lib/intakeSummary'
 import { driveServiceAccount } from '../lib/driveAssets'
+import { publicLink } from '../lib/publicSite'
 
 // Creates and shows the client's onboarding link. This is the delivery half of
 // the self-service onboarding: without a link to send, the forms are just two
@@ -88,7 +89,7 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
     }
   }
 
-  const url = link ? `${window.location.origin}/onboarding/${link.token}` : ''
+  const url = link ? publicLink(`/onboarding/${link.token}`) : ''
 
   // One token, three ways in. The bare URL keeps meaning both forms, because
   // links already sent carry no parameter and have to keep behaving the way

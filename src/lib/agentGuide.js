@@ -392,6 +392,15 @@ export const ROUTES = [
     ],
   },
   {
+    path: '*',
+    name: 'Nothing here (client-facing site only)',
+    nav: null,
+    purpose:
+      'Only on the client-facing site (the build running with VITE_PUBLIC_ONLY=true, or on a host named in VITE_PUBLIC_HOST): every address that is not one of the four client pages (/dashboard/<token>, /report/<token>, /approve/<token>, /onboarding/<token>) lands here. It says nothing about what else exists. On the CRM itself this route does not exist; the CRM has no catch-all.',
+    contains: ['One line: nothing here, open the link exactly as it was sent, or reply to the email it came in.'],
+    actions: ['None.'],
+  },
+  {
     path: '/approve/:token',
     name: 'Ad approval link',
     nav: null,
@@ -605,6 +614,10 @@ export const DOWNLOADS = [
 // The things that cost a wrong click, a wrong conclusion, or twenty minutes of
 // retrying. Every one of these has actually caught somebody out.
 export const GOTCHAS = [
+  {
+    title: 'Client links are not a way into the CRM',
+    body: 'A client gets token links only: a dashboard (/dashboard/<token>), a weekly report (/report/<token>), an ad approval (/approve/<token>), an onboarding form (/onboarding/<token>). Those pages carry no agency nav and no link into the CRM, and read through token-gated database functions rather than the tables. When the build runs as the client-facing site (VITE_PUBLIC_ONLY=true, or its host named in VITE_PUBLIC_HOST), only those four kinds of page exist and every other address is a dead end; with VITE_PUBLIC_APP_URL set, every link the CRM makes for a client points at that site, so the CRM\'s own address never reaches a client. Until that site exists the links use the CRM\'s address, and sign-in being off means the CRM is open to anyone who learns it.',
+  },
   {
     title: 'Pages remember what they showed last',
     body: 'The client list, a client page, the dashboard and the onboarding board put their last answer on screen at once and refresh it behind. So a number can change a moment after a page opens: the first paint is what was true on the last visit, the second is now. It lives for the browser tab only and is at most six hours old; a reload still asks the database every time.',

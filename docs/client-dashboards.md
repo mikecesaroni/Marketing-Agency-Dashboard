@@ -42,6 +42,35 @@ fixed text: short sentences, everyday words, no hype, no em dashes.
 - The bottom of every weekly report email, and the top of the report's web
   copy.
 
+## Keeping clients out of the CRM
+
+The dashboard page itself has no way in: no agency nav, no link to any
+CRM page, and it reads only through token-gated database functions. The
+risk is the address. While sign-in is off, anyone who learns the CRM's
+address can open it, and a link on the same address hands a client that
+address. Two walls, both in the code and ready to switch on:
+
+1. **A client-facing site.** Deploy the same build a second time (a second
+   Netlify site from the same branch, or a second domain on this one) with
+   `VITE_PUBLIC_ONLY=true`, or with its host named in `VITE_PUBLIC_HOST`.
+   That deployment serves only the four kinds of client page (dashboard,
+   report, approval, onboarding); every other address is "Nothing here".
+   The commented rules in `netlify.toml` make Netlify refuse at the edge as
+   well, before any JavaScript runs.
+2. **Links that never carry the CRM's address.** Set `VITE_PUBLIC_APP_URL`
+   on the CRM site to the client-facing address and every link the CRM
+   makes for a client (dashboard, report, approval, onboarding) points
+   there. Set the weekly-report function's `APP_URL` secret to the same so
+   emails do too.
+
+Until the client-facing site exists, client links use the CRM's address.
+The real fix for the CRM itself is sign-in: `LOGIN_REQUIRED` in
+`src/lib/access.js`, plus dropping the `anon_open_while_login_off` policies
+(the statement is in that migration's header). `scripts/check-public-site.mjs`
+checks the walls: the public pages import no CRM shell and link to no CRM
+page, the router has the client-facing mode, every client link goes
+through the public base, and search engines are told to stay out.
+
 ## How it is wired
 
 `supabase/client-dashboard.sql` adds `clients.dashboard_token` (every

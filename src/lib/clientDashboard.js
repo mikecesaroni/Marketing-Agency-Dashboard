@@ -1,6 +1,8 @@
 // The client dashboard: the ranges, the maths on what client_dashboard_load
-// returns, and the words under every number. Plain JavaScript with no
-// imports, so scripts/check-client-dashboard.mjs can load it in Node.
+// returns, and the words under every number. Plain JavaScript (the one
+// import is plain too), so scripts/check-client-dashboard.mjs can load it
+// in Node.
+import { publicLink } from './publicSite.js'
 //
 // The page is for a business owner, not for us. Same rules as the weekly
 // report: short sentences, everyday words, no hype, and the same argument
@@ -201,10 +203,13 @@ export const money = (n) => {
   return `$${v.toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 })}`
 }
 
-/** The private link for a token. */
+/**
+ * The private link for a token. On the client-facing address when one is
+ * set (VITE_PUBLIC_APP_URL), so the link never carries the CRM's own.
+ */
 export function dashboardLink(token, origin) {
-  const base = origin || (typeof window !== 'undefined' ? window.location.origin : 'https://marketing-agency-dashboard.netlify.app')
-  return `${base}/dashboard/${token}`
+  if (origin) return `${String(origin).replace(/\/+$/, '')}/dashboard/${token}`
+  return publicLink(`/dashboard/${token}`)
 }
 
 /** A fresh token, made in the browser, for "New link". */
