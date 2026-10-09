@@ -101,10 +101,12 @@ function AdCard({ ad, creative, ready, verdict, onOpen }) {
         onClick={onOpen}
         disabled={!canOpen}
         aria-label={`${creative?.kind === 'video' ? 'Play' : 'View'} ${ad.name}`}
-        className="relative block aspect-[4/5] w-full bg-white/[0.03] text-left disabled:cursor-default"
+        className="relative block aspect-[4/5] w-full bg-[#0b1220] text-left disabled:cursor-default"
       >
+        {/* The whole creative, whatever its shape: a square or a story ad
+            sits inside the frame rather than being cropped to it. */}
         {image ? (
-          <img src={image} alt="" loading="lazy" className="h-full w-full object-cover" />
+          <img src={image} alt="" loading="lazy" className="h-full w-full object-contain" />
         ) : (
           <div className={cn('flex h-full items-center justify-center px-4 text-center text-xs text-slate-500', !ready && 'animate-pulse')}>
             {!ready ? '' : ad.channel === 'google' ? 'A Google Search ad: words, no picture' : 'Preview not available'}
@@ -301,6 +303,11 @@ export default function ClientDashboardPage() {
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
+            {/* The agency's mark. Dark on off-white by design, so it sits on
+                its own plate rather than being recoloured for the dark page. */}
+            <div className="mb-4 inline-block rounded-xl bg-[#f8f7f5] px-3 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.8)]">
+              <img src="/brand/wc-logo.jpg" alt="The Working Class" className="h-20 w-auto" data-brand-logo />
+            </div>
             <Eyebrow>Your ads dashboard</Eyebrow>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white md:text-4xl">{data.client?.name}</h1>
             <p className="mt-1 text-sm text-slate-400">
@@ -565,12 +572,14 @@ export default function ClientDashboardPage() {
             {lightbox.creative?.video ? (
               <video src={lightbox.creative.video} poster={lightbox.creative.image || undefined} controls autoPlay playsInline className="max-h-[80vh] w-full rounded-xl bg-black" />
             ) : preview?.frame ? (
-              <div className="flex justify-center">
+              <div className="flex max-h-[85vh] justify-center overflow-y-auto rounded-xl">
+                {/* Meta's player at its own size; a short screen scrolls it
+                    rather than cutting it off. */}
                 <iframe
                   title={`${lightbox.ad.name} preview`}
                   src={preview.frame.src}
                   width={preview.frame.width}
-                  height={Math.min(preview.frame.height, Math.round(window.innerHeight * 0.8))}
+                  height={preview.frame.height}
                   allow="autoplay; encrypted-media; fullscreen"
                   className="max-w-full rounded-xl border-0 bg-white"
                   data-preview-frame

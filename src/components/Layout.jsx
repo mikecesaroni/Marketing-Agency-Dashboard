@@ -174,17 +174,13 @@ export default function Layout({ title, subtitle, actions, children, tone = 'lig
     <div className={`min-h-screen ${dark ? 'bg-[#070b14]' : 'bg-slate-50'}`}>
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 bg-slate-950 text-white">
-        <div className="px-5 py-5">
-          <div className="flex items-start gap-2.5">
-            {/* A mark rather than a word. It is the one spot of brand colour in
-                the chrome, which is what makes the rest read as calm. */}
-            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold">
-              W
-            </span>
-            <p className="min-w-0 text-sm font-semibold leading-snug tracking-tight text-balance">
-              The Working Class Marketing CRM
-            </p>
-          </div>
+        <div className="px-4 pb-3 pt-4">
+          {/* The agency's logo. Dark on off-white by design, so it sits on its
+              own plate against the dark sidebar rather than being recoloured.
+              Clicking it goes home. */}
+          <NavLink to="/" className="block rounded-xl bg-[#f8f7f5] p-3 transition hover:brightness-95" aria-label="The Working Class, home">
+            <img src="/brand/wc-logo.jpg" alt="The Working Class" className="mx-auto w-full max-w-[168px]" data-brand-logo />
+          </NavLink>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-5">
