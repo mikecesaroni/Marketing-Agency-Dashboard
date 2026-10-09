@@ -18,6 +18,7 @@ import {
   mondayOf,
   newToken,
   pctChange,
+  previewFrame,
   rates,
   returnStory,
   sumDays,
@@ -90,6 +91,8 @@ check('return story from the answered weeks', returnStory([{ spend: 480, revenue
 check('no answers yet', returnStory([]).answered, 0)
 check('the newest report with a link', latestReport([{ week_start: '2026-10-05', token: null }, { week_start: '2026-09-28', token: 'abc' }]).token, 'abc')
 check('the link', dashboardLink('tok', 'https://x'), 'https://x/dashboard/tok')
+check('a Meta preview snippet becomes an address and a size', previewFrame('<iframe src="https://www.facebook.com/ads/api/preview_iframe.php?d=abc&amp;t=1" width="320" height="690" scrolling="yes"></iframe>'), { src: 'https://www.facebook.com/ads/api/preview_iframe.php?d=abc&t=1', width: 320, height: 690 })
+check('a snippet from anywhere else is refused', [previewFrame('<iframe src="https://evil.example/x"></iframe>'), previewFrame('')], [null, null])
 check('a new token is 36 hex characters and never the same twice', [/^[0-9a-f]{36}$/.test(newToken()), newToken() !== newToken()], [true, true])
 
 // -------------------------------------------------------------- the words

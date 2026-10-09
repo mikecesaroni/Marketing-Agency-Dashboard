@@ -177,6 +177,20 @@ export function returnStory(weeks) {
   return { answered: answered.length, spend: r2(spend), revenue: r2(revenue), jobs, back: spend > 0 ? r2(revenue / spend) : 0 }
 }
 
+/**
+ * Meta's rendered preview arrives as an <iframe> snippet. Only its address
+ * and size are used, in an iframe the page makes itself, so nothing from
+ * the snippet is ever written into the page as markup.
+ */
+export function previewFrame(html) {
+  const s = String(html || '')
+  const src = s.match(/src="([^"]+)"/)?.[1]
+  if (!src || !/^https:\/\/(www\.)?facebook\.com\//.test(src.replace(/&amp;/g, '&'))) return null
+  const width = Number(s.match(/width="(\d+)"/)?.[1]) || 320
+  const height = Number(s.match(/height="(\d+)"/)?.[1]) || 640
+  return { src: src.replace(/&amp;/g, '&'), width, height }
+}
+
 /** The newest weekly report with a link, for "tell us how the leads did". */
 export const latestReport = (weeks) => (weeks || []).find((w) => w.token) || null
 

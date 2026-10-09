@@ -17,7 +17,12 @@
 //
 // Body:  { token }
 // Reply: { creatives: [{ ad_id, kind: 'image' | 'video' | 'unknown',
-//                        image, thumb, video, video_id }] }
+//                        image, thumb, video, video_id }], problems: [] }
+//
+// Body:  { token, action: 'preview', ad_id }
+// Reply: { ad_id, iframe }   Meta's own rendered preview of one ad (an
+//         <iframe> snippet), for playing a video whose file could not be
+//         read. Only for an ad on this client's dashboard.
 
 const META_API_VERSION = 'v21.0'
 const GRAPH = `https://graph.facebook.com/${META_API_VERSION}`
@@ -34,6 +39,14 @@ type Creative = {
   thumb: string | null
   video: string | null
   video_id: string | null
+  // Internal: the ad image's hash when Meta gave no URL, resolved below.
+  image_hash?: string | null
+}
+
+// One ad account id, however it is spelled.
+const actId = (v: unknown) => {
+  const s = String(v || '').trim()
+  return s.startsWith('act_') ? s : `act_${s}`
 }
 
 function json(body: unknown, status = 200) {
@@ -62,11 +75,15 @@ function isoDaysAgo(n: number) {
 
 // Every shape a creative's picture and video can hide in: a plain image ad,
 // a video ad (video_data), a link ad (link_data), and the dynamic
-// asset_feed_spec that Advantage+ creatives use.
+// asset_feed_spec that Advantage+ creatives use. An ad published from the
+// Studio carries its image as a hash with no URL at all, so the hash is
+// asked for too and looked up on the account afterwards. The thumbnail is
+// asked for at 1080px: Meta renders one for every creative, video posters
+// included, so there is always a picture to show.
 const CREATIVE_FIELDS =
-  'id,creative{id,thumbnail_url,image_url,video_id,' +
-  'object_story_spec{video_data{video_id,image_url},link_data{picture}},' +
-  'asset_feed_spec{videos{video_id,thumbnail_url},images{url}}}'
+  'id,creative.thumbnail_width(1080).thumbnail_height(1080){id,thumbnail_url,image_url,image_hash,video_id,' +
+  'object_story_spec{video_data{video_id,image_url,image_hash},link_data{picture,image_hash}},' +
+  'asset_feed_spec{videos{video_id,thumbnail_url},images{url,hash}}}'
 
 function fromAd(id: string, ad: any): Creative | null {
   const c = ad?.creative
@@ -79,6 +96,13 @@ function fromAd(id: string, ad: any): Creative | null {
     c.object_story_spec?.link_data?.picture ||
     c.asset_feed_spec?.images?.[0]?.url ||
     c.asset_feed_spec?.videos?.[0]?.thumbnail_url ||
+    c.thumbnail_url ||
+    null
+  const hash =
+    c.image_hash ||
+    c.object_story_spec?.link_data?.image_hash ||
+    c.object_story_spec?.video_data?.image_hash ||
+    c.asset_feed_spec?.images?.[0]?.hash ||
     null
   return {
     ad_id: id,
@@ -87,6 +111,7 @@ function fromAd(id: string, ad: any): Creative | null {
     thumb: c.thumbnail_url || null,
     video: null,
     video_id: videoId ? String(videoId) : null,
+    image_hash: !videoId && !c.image_url && hash ? String(hash) : null,
   }
 }
 
@@ -99,7 +124,7 @@ Deno.serve(async (req) => {
   const metaToken = Deno.env.get('META_ACCESS_TOKEN') || ''
   const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }
 
-  let body: { token?: string } = {}
+  let body: { token?: string; action?: string; ad_id?: string } = {}
   try {
     body = await req.json()
   } catch {
@@ -108,6 +133,13 @@ Deno.serve(async (req) => {
   const dashToken = String(body.token || '').trim()
   if (dashToken.length < 20) return json({ error: 'token is required.' }, 400)
 
+  // What went wrong on the way, in words, so a blank card can be explained
+  // from the CRM without guessing. Never a secret: Meta's own messages.
+  const problems: string[] = []
+  const note = (step: string, err: unknown) => {
+    if (problems.length < 6) problems.push(`${step}: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
   try {
     const clientRes = await fetch(
       `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id&archived=eq.false&dashboard_token=eq.${encodeURIComponent(dashToken)}`,
@@ -115,7 +147,31 @@ Deno.serve(async (req) => {
     )
     const client = ((await clientRes.json()) || [])[0]
     if (!client) return json({ error: 'This link is not valid.' }, 404)
-    if (!client.meta_ad_account_id || !metaToken) return json({ creatives: [] })
+    if (!client.meta_ad_account_id || !metaToken) return json({ creatives: [], problems: [] })
+    const account = actId(client.meta_ad_account_id)
+
+    // -------------------------------------------------------------------
+    // PREVIEW: Meta draws the ad as it appears in the feed, video player
+    // and all. Asked for when a video's own file cannot be read. The ad
+    // has to be one of this client's, from their own daily rows.
+    // -------------------------------------------------------------------
+    if (body.action === 'preview') {
+      const adId = String(body.ad_id || '').trim()
+      if (!/^\d{5,}$/.test(adId)) return json({ error: 'ad_id is required.' }, 400)
+      const own = await fetch(
+        `${supabaseUrl}/rest/v1/ad_daily?select=ad_id&client_id=eq.${encodeURIComponent(client.id)}&ad_id=eq.${encodeURIComponent(adId)}&limit=1`,
+        { headers }
+      )
+      if (!(((await own.json()) || []) as unknown[]).length) return json({ error: 'That ad is not on this dashboard.' }, 404)
+      try {
+        const res = await graphGet(`${encodeURIComponent(adId)}/previews`, { ad_format: 'MOBILE_FEED_STANDARD' }, metaToken)
+        const iframe = (res?.data || [])[0]?.body || null
+        return json({ ad_id: adId, iframe, problems })
+      } catch (err) {
+        note('preview', err)
+        return json({ ad_id: adId, iframe: null, problems })
+      }
+    }
 
     // The ads that ran in the last 90 days, biggest first, at most 100.
     const rowsRes = await fetch(
@@ -133,7 +189,7 @@ Deno.serve(async (req) => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 100)
       .map(([id]) => id)
-    if (!ids.length) return json({ creatives: [] })
+    if (!ids.length) return json({ creatives: [], problems })
 
     const creatives: Creative[] = []
     for (let i = 0; i < ids.length; i += 50) {
@@ -144,23 +200,47 @@ Deno.serve(async (req) => {
           const c = fromAd(id, batch?.[id])
           if (c) creatives.push(c)
         }
-      } catch {
+      } catch (err) {
         // One bad id fails the whole batch, so fall back to one at a time
         // for the first thirty. An ad this token cannot read simply has
         // no preview; the card still shows its name and numbers.
+        note('creatives', err)
         for (const id of chunk.slice(0, 30)) {
           try {
             const c = fromAd(id, await graphGet(encodeURIComponent(id), { fields: CREATIVE_FIELDS }, metaToken))
             if (c) creatives.push(c)
-          } catch {
-            // no preview for this one
+          } catch (e) {
+            note(`creative ${id}`, e)
           }
         }
       }
     }
 
+    // Images the Studio published are stored on the account by hash, with
+    // no URL on the creative. The account's image library has the file.
+    const hashes = [...new Set(creatives.map((c) => c.image_hash).filter(Boolean))] as string[]
+    for (let i = 0; i < hashes.length; i += 50) {
+      const chunk = hashes.slice(i, i + 50)
+      try {
+        const res = await graphGet(`${account}/adimages`, { hashes: JSON.stringify(chunk), fields: 'hash,url' }, metaToken)
+        const urlBy = new Map<string, string>()
+        for (const img of res?.data || []) if (img?.hash && img?.url) urlBy.set(String(img.hash), String(img.url))
+        for (const c of creatives) {
+          const url = c.image_hash ? urlBy.get(c.image_hash) : null
+          if (url) {
+            c.image = url
+            c.kind = c.kind === 'unknown' ? 'image' : c.kind
+          }
+        }
+      } catch (err) {
+        note('images', err)
+      }
+    }
+
     // The playable file behind each video ad. `source` is a signed URL that
-    // expires, which is fine: the page uses it straight away.
+    // expires, which is fine: the page uses it straight away. When Meta will
+    // not hand it over (a video owned by the Page rather than the account),
+    // the page asks for the rendered preview instead.
     const videoIds = [...new Set(creatives.map((c) => c.video_id).filter(Boolean))] as string[]
     for (let i = 0; i < videoIds.length; i += 50) {
       const chunk = videoIds.slice(i, i + 50)
@@ -172,7 +252,8 @@ Deno.serve(async (req) => {
           c.video = v.source || null
           if (!c.image && v.picture) c.image = v.picture
         }
-      } catch {
+      } catch (err) {
+        note('videos', err)
         for (const vid of chunk.slice(0, 30)) {
           try {
             const v = await graphGet(encodeURIComponent(vid), { fields: 'id,source,picture' }, metaToken)
@@ -181,14 +262,15 @@ Deno.serve(async (req) => {
               c.video = v.source || null
               if (!c.image && v.picture) c.image = v.picture
             }
-          } catch {
-            // the picture from the creative still stands in
+          } catch (e) {
+            note(`video ${vid}`, e)
           }
         }
       }
     }
 
-    return json({ creatives })
+    for (const c of creatives) delete c.image_hash
+    return json({ creatives, problems })
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }

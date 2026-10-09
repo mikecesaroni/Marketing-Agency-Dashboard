@@ -4,7 +4,7 @@ import ChannelDailyChart from '../components/reports/ChannelDailyChart'
 import { ChannelDot, DTd, DTh, DTr, Delta, Eyebrow, MixBar, Panel, Pill, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
 import { cn } from '../components/ui/cn'
 import { CHANNELS, channelMix, compactMoney, rangeLabel } from '../lib/channels'
-import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailySeries, guideFor, latestReport, lsaFor, money, pctChange, returnStory, sumDays, windowFor } from '../lib/clientDashboard'
+import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailySeries, guideFor, latestReport, lsaFor, money, pctChange, previewFrame, returnStory, sumDays, windowFor } from '../lib/clientDashboard'
 import { supabase } from '../lib/supabaseClient'
 
 /**
@@ -156,6 +156,9 @@ export default function ClientDashboardPage() {
   const [creatives, setCreatives] = useState(new Map())
   const [creativesReady, setCreativesReady] = useState(false)
   const [lightbox, setLightbox] = useState(null)
+  // Meta's rendered preview, asked for when a video's own file is not
+  // readable: { adId, frame | null, loading }.
+  const [preview, setPreview] = useState(null)
 
   useEffect(() => {
     supabase
@@ -199,6 +202,28 @@ export default function ClientDashboardPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [lightbox])
+
+  useEffect(() => {
+    const c = lightbox?.creative
+    if (!lightbox || c?.kind !== 'video' || c?.video) {
+      setPreview(null)
+      return
+    }
+    const adId = String(lightbox.ad.key)
+    let alive = true
+    setPreview({ adId, frame: null, loading: true })
+    supabase.functions
+      .invoke('client-dashboard', { body: { token, action: 'preview', ad_id: adId } })
+      .then(({ data: res }) => {
+        if (alive) setPreview({ adId, frame: previewFrame(res?.iframe), loading: false })
+      })
+      .catch(() => {
+        if (alive) setPreview({ adId, frame: null, loading: false })
+      })
+    return () => {
+      alive = false
+    }
+  }, [lightbox, token])
 
   // The page is dark to the edges, including the overscroll on a phone.
   useEffect(() => {
@@ -535,10 +560,25 @@ export default function ClientDashboardPage() {
             </div>
             {lightbox.creative?.video ? (
               <video src={lightbox.creative.video} poster={lightbox.creative.image || undefined} controls autoPlay playsInline className="max-h-[80vh] w-full rounded-xl bg-black" />
+            ) : preview?.frame ? (
+              <div className="flex justify-center">
+                <iframe
+                  title={`${lightbox.ad.name} preview`}
+                  src={preview.frame.src}
+                  width={preview.frame.width}
+                  height={Math.min(preview.frame.height, Math.round(window.innerHeight * 0.8))}
+                  allow="autoplay; encrypted-media; fullscreen"
+                  className="max-w-full rounded-xl border-0 bg-white"
+                  data-preview-frame
+                />
+              </div>
             ) : (
               <img src={lightbox.creative?.image || lightbox.creative?.thumb} alt={lightbox.ad.name} className="max-h-[80vh] w-full rounded-xl object-contain" />
             )}
-            {lightbox.creative?.kind === 'video' && !lightbox.creative?.video && (
+            {lightbox.creative?.kind === 'video' && !lightbox.creative?.video && preview?.loading && (
+              <p className="mt-2 text-xs text-slate-400">Loading the player…</p>
+            )}
+            {lightbox.creative?.kind === 'video' && !lightbox.creative?.video && preview && !preview.loading && !preview.frame && (
               <p className="mt-2 text-xs text-slate-400">The video could not be fetched just now. This is its opening frame.</p>
             )}
           </div>
