@@ -222,7 +222,7 @@ export const ROUTES = [
   {
     path: '/reports',
     name: 'Performance Reports',
-    nav: 'KPI Reports',
+    nav: 'Live KPIs',
     purpose: 'Ad performance across every client, over time. The place to answer "how are we doing".',
     contains: [
       'A dark analytics page, each channel in its own colour everywhere it appears: Meta blue, Google aqua, LSA orange.',

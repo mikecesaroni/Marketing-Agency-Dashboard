@@ -77,7 +77,7 @@ const PATH_NAMES = {
   ...Object.fromEntries(NAV_GROUPS.flatMap((g) => g.items).map((i) => [i.to, i.label])),
   '/dashboard': 'Dashboard',
   '/content/drive': 'Drive photos',
-  '/reports': 'KPI Reports',
+  '/reports': 'Live KPIs',
   '/reports/google-search': 'Google Ads',
   '/reports/meta': 'Meta Ads',
 }
