@@ -120,6 +120,17 @@ function makeCtx(supabaseUrl: string, serviceKey: string) {
   }
   const rest = (path: string) => `${supabaseUrl}/rest/v1/${path}`
 
+  // One retry on a 401 or a 5xx. Seen live: a cold start answered one read
+  // with "JWT issued at future" (clock skew on the gateway) and the next
+  // identical read was fine; without this that would have marked a job
+  // failed for nothing.
+  async function fetchDb(url: string, init?: RequestInit): Promise<Response> {
+    const r = await fetch(url, init)
+    if (r.status !== 401 && r.status < 500) return r
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    return fetch(url, init)
+  }
+
   async function readRows(r: Response, what: string): Promise<Row[]> {
     const text = await r.text()
     if (!r.ok) throw new Fail(`${what} failed (${r.status}): ${text.slice(0, 300)}`)
@@ -134,13 +145,13 @@ function makeCtx(supabaseUrl: string, serviceKey: string) {
   const ctx = {
     supabaseUrl,
     async select(table: string, query: string): Promise<Row[]> {
-      return readRows(await fetch(rest(`${table}?${query}`), { headers: dbHeaders }), `Reading ${table}`)
+      return readRows(await fetchDb(rest(`${table}?${query}`), { headers: dbHeaders }), `Reading ${table}`)
     },
     async one(table: string, query: string): Promise<Row | null> {
       return (await ctx.select(table, `${query}&limit=1`))[0] || null
     },
     async insert(table: string, row: Row): Promise<Row> {
-      const r = await fetch(rest(table), {
+      const r = await fetchDb(rest(table), {
         method: 'POST',
         headers: { ...dbHeaders, Prefer: 'return=representation' },
         body: JSON.stringify(row),
@@ -148,7 +159,7 @@ function makeCtx(supabaseUrl: string, serviceKey: string) {
       return (await readRows(r, `Writing ${table}`))[0]
     },
     async upsert(table: string, row: Row, onConflict: string): Promise<Row> {
-      const r = await fetch(rest(`${table}?on_conflict=${onConflict}`), {
+      const r = await fetchDb(rest(`${table}?on_conflict=${onConflict}`), {
         method: 'POST',
         headers: { ...dbHeaders, Prefer: 'resolution=merge-duplicates,return=representation' },
         body: JSON.stringify(row),
@@ -156,7 +167,7 @@ function makeCtx(supabaseUrl: string, serviceKey: string) {
       return (await readRows(r, `Writing ${table}`))[0]
     },
     async patch(table: string, query: string, fields: Row): Promise<Row[]> {
-      const r = await fetch(rest(`${table}?${query}`), {
+      const r = await fetchDb(rest(`${table}?${query}`), {
         method: 'PATCH',
         headers: { ...dbHeaders, Prefer: 'return=representation' },
         body: JSON.stringify(fields),
@@ -169,7 +180,7 @@ function makeCtx(supabaseUrl: string, serviceKey: string) {
     },
     async upload(path: string, bytes: Uint8Array, contentType: string) {
       const encoded = String(path).split('/').map(enc).join('/')
-      const r = await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${encoded}`, {
+      const r = await fetchDb(`${supabaseUrl}/storage/v1/object/${BUCKET}/${encoded}`, {
         method: 'POST',
         headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': contentType, 'x-upsert': 'true' },
         body: bytes,
