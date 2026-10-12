@@ -16,6 +16,7 @@ import AdDoctorPanel from '../components/AdDoctorPanel'
 import FunnelPanel from '../components/FunnelPanel'
 import GoogleSearchPanel from '../components/GoogleSearchPanel'
 import LandingPagesPanel from '../components/LandingPagesPanel'
+import AiVideoPanel from '../components/AiVideoPanel'
 import { accountStatusLabel, accountStatusOk } from '../lib/adHealth'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
@@ -612,6 +613,13 @@ export default function ClientDetailPage() {
             because that is what the pages are for. */}
         <div className="mt-6 scroll-mt-4 md:mt-8">
           <LandingPagesPanel client={client} />
+        </div>
+
+        {/* AI VIDEOS: the owner's voice and base clip, set up once, and the
+            videos made from script cards in the chat since. Next to Files
+            because a finished one lands there. */}
+        <div id="ai-videos" className="mt-6 scroll-mt-4 md:mt-8">
+          <AiVideoPanel client={client} />
         </div>
 
         {/* CLIENT FILES */}

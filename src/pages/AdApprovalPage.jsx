@@ -4,6 +4,7 @@ import { decideApproval, loadApproval } from '../lib/adApprovalStore'
 import { approvalSummary } from '../lib/adApproval'
 import { publicUrl } from '../lib/savedAds'
 import { versioned } from '../lib/adRevise'
+import { isVideoFile } from '../lib/adVideos'
 
 /**
  * The page a business owner opens to approve creatives before they run.
@@ -126,15 +127,29 @@ export default function AdApprovalPage() {
                 )}
               </div>
 
-              {/* Opens full size in a new tab: on a phone the small print on a
-                  1080px creative is unreadable at page width. */}
-              <a href={url} target="_blank" rel="noreferrer">
-                <img
+              {isVideoFile(item.storage_path) ? (
+                /* A video ad (an uploaded clip or one the CRM made) plays in
+                   place, inline so a phone does not take it full screen
+                   before the buttons have been seen. */
+                <video
                   src={url}
-                  alt={`Ad ${i + 1}`}
-                  className="w-full rounded-lg border border-slate-100 bg-slate-50"
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full rounded-lg border border-slate-100 bg-black"
+                  data-approval-video
                 />
-              </a>
+              ) : (
+                /* Opens full size in a new tab: on a phone the small print on a
+                    1080px creative is unreadable at page width. */
+                <a href={url} target="_blank" rel="noreferrer">
+                  <img
+                    src={url}
+                    alt={`Ad ${i + 1}`}
+                    className="w-full rounded-lg border border-slate-100 bg-slate-50"
+                  />
+                </a>
+              )}
 
               {revised && (
                 <p className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5 text-sm text-blue-900">

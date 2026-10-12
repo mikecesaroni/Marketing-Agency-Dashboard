@@ -22,7 +22,12 @@ import { copyText } from '../lib/intakeSummary'
 import { extractTasksFromChat, taskTrigger } from '../lib/clientTasks'
 import { SCRIPT_ANGLES, buildRefillPrompt, isRefillPrompt, outsideScripts, refillLabel, splitScripts, spokenScript, spokenScripts } from '../lib/season'
 import { today as todayIso } from '../lib/queries'
+import { createAiVideo, fetchAiSetup } from '../lib/aiVideoStore'
+import { setupReady } from '../lib/aiVideo'
 import WebsiteMemory from './WebsiteMemory'
+
+// Tells the AI videos panel on the client page that a job was added here.
+const AI_VIDEO_EVENT = 'ai-video-changed'
 
 // The website fields the brief reads, kept locally so a fresh read reaches
 // the very next message without reloading the client.
@@ -90,7 +95,7 @@ function RefillAsk({ text }) {
 // copy button, so each goes to the owner or a notes app on its own. Copy
 // hands over only the words to say: the Angle, Length, caption and filming
 // notes stay on the card, for us.
-function ScriptCards({ scripts }) {
+function ScriptCards({ scripts, onMakeVideo, videoNotes = {} }) {
   const [copied, setCopied] = useState(null)
   const copy = async (key, value) => {
     const ok = await copyText(value)
@@ -117,16 +122,39 @@ function ScriptCards({ scripts }) {
               <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-orange-100 text-[11px] font-bold text-orange-700">{sc.n}</span>
               {sc.title || `Script ${sc.n}`}
             </p>
-            <button
-              type="button"
-              onClick={() => copy(sc.n, spokenScript(sc.text))}
-              aria-label={`Copy script ${sc.n}`}
-              title="Copies just the words to say"
-              className="flex-shrink-0 rounded px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-slate-300 hover:bg-slate-50"
-            >
-              {copied === sc.n ? '✓ Copied' : 'Copy'}
-            </button>
+            <div className="flex flex-shrink-0 items-center gap-1.5">
+              {/* The owner records once; this reads the script in their
+                  cloned voice, lip-syncs their base clip and cuts the ad.
+                  The panel on the client page shows it cooking. */}
+              {onMakeVideo && (
+                <button
+                  type="button"
+                  onClick={() => onMakeVideo(sc)}
+                  disabled={videoNotes[sc.n]?.busy}
+                  aria-label={`Make AI video from script ${sc.n}`}
+                  title="Reads the script in the owner's cloned voice, lip-syncs their base clip and cuts the ad"
+                  className="rounded bg-orange-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                  data-make-ai-video
+                >
+                  {videoNotes[sc.n]?.busy ? 'Starting…' : '🎬 Make AI video'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => copy(sc.n, spokenScript(sc.text))}
+                aria-label={`Copy script ${sc.n}`}
+                title="Copies just the words to say"
+                className="rounded px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-slate-300 hover:bg-slate-50"
+              >
+                {copied === sc.n ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
           </div>
+          {videoNotes[sc.n]?.text && (
+            <p className={`mb-2 rounded px-2 py-1 text-[11px] ${videoNotes[sc.n].tone === 'bad' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-800'}`} data-ai-video-note>
+              {videoNotes[sc.n].text}
+            </p>
+          )}
           <dl className="space-y-1">
             {scriptLines(sc.text).map((l, i) =>
               l.label ? (
@@ -158,7 +186,7 @@ function scriptLines(text) {
     })
 }
 
-function Bubble({ role, text, images, onUseSet }) {
+function Bubble({ role, text, images, onUseSet, onMakeVideo, videoNotes }) {
   const mine = role === 'user'
   const sets = useMemo(() => (mine ? null : extractCreativeSets(text)), [mine, text])
   const scripts = useMemo(() => (mine ? [] : splitScripts(text)), [mine, text])
@@ -187,7 +215,7 @@ function Bubble({ role, text, images, onUseSet }) {
         {mine && isRefillPrompt(text) ? <RefillAsk text={text} /> : scripts.length >= 2 ? (
           <>
             {outsideScripts(text) && <p className="mb-2">{outsideScripts(text)}</p>}
-            <ScriptCards scripts={scripts} />
+            <ScriptCards scripts={scripts} onMakeVideo={onMakeVideo} videoNotes={videoNotes} />
           </>
         ) : (
           text
@@ -271,6 +299,38 @@ export default function ClientChatPanel({
     () => buildBrief({ client: briefClient, intake, ads, learnings, pages }),
     [briefClient, intake, ads, learnings, pages]
   )
+
+  // MAKE AI VIDEO, from a script card. The owner's voice has to be set up on
+  // the client page first; until it is, the button says so instead of
+  // failing in the function. Notes are kept per message and script number so
+  // two replies with a "script 1" each do not share one.
+  const [aiSetup, setAiSetup] = useState(null)
+  const [videoNotes, setVideoNotes] = useState({})
+  useEffect(() => {
+    let cancelled = false
+    fetchAiSetup(client?.id)
+      .then((row) => !cancelled && setAiSetup(row))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [client?.id])
+  const noteFor = (i, n, note) =>
+    setVideoNotes((prev) => ({ ...prev, [i]: { ...(prev[i] || {}), [n]: note } }))
+  const makeVideo = async (i, sc) => {
+    if (!setupReady(aiSetup)) {
+      noteFor(i, sc.n, { tone: 'bad', text: 'Set up the owner’s voice first: AI videos, on the client page under Landing pages.' })
+      return
+    }
+    noteFor(i, sc.n, { busy: true })
+    try {
+      await createAiVideo({ clientId: client.id, title: sc.title || `Script ${sc.n}`, script: sc.text })
+      window.dispatchEvent(new CustomEvent(AI_VIDEO_EVENT))
+      noteFor(i, sc.n, { tone: 'good', text: 'Making it. Watch it cook under AI videos on the client page; a few minutes.' })
+    } catch (err) {
+      noteFor(i, sc.n, { tone: 'bad', text: err.message })
+    }
+  }
 
   useEffect(() => {
     fetchChatHistory(client.id)
@@ -546,6 +606,8 @@ export default function ClientChatPanel({
             text={m.text}
             images={m.images}
             onUseSet={onUseCreativeSet}
+            onMakeVideo={(sc) => makeVideo(i, sc)}
+            videoNotes={videoNotes[i]}
           />
         ))}
 

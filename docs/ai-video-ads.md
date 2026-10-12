@@ -118,7 +118,24 @@ Never: synthetic customers, invented claims, unlabelled synthetic presenters.
 - Success: hook rate (3 second views over impressions) within 10 percent of the client's real videos, CPL within 20 percent, average watch at or above 5 seconds. Beat or tie and we scale to every client that signs the release.
 - Guardrails: every AI ad goes through the approval link; campaigns start paused; Meta AI disclosure on for Tier C.
 
-## What building it in the CRM would look like
+## What is built (Tier A, 2026-10-12)
+
+Live in the CRM:
+
+- `supabase/ai-video.sql`: `client_ai_voice` (one row per client: base clip, reference photos, consent, ElevenLabs voice id) and `ai_videos` (one row per job, a status machine: queued, generating, rendering, done, failed). Applied to the live project.
+- `supabase/functions/ai-video` (`index.ts` plus the pure `plan.js`): actions `setup`, `setup_status`, `create`, `run`, `retry`, `tick`. One call moves one job one step. The page polls `run`; the cron `ai-video-tick` runs every minute so jobs finish with the page closed.
+- The chain per video: ElevenLabs text to speech with timestamps (the owner's cloned voice; the OFFER line's start time places the card) → Sync.so lip-sync of the owner's base clip, cut to the audio → Higgsfield Kling 3.0 B-roll (image to video from the client's photos, else text to video from the trade; muted; never over the hook or the ask) → Shotstack cut: owner full length, cutaways, word captions off the owner's audio, offer card with the business name, logo top right, 1080 x 1920, poster frame → the MP4 into `client-files` with a `client_files` row, so it is in Files, the publish video list and the approval link.
+- `src/components/AiVideoPanel.jsx` on the client page (below Landing pages): setup form (base clip from the client's videos or Drive, reference photos from Drive, consent in writing, Prepare the voice) and the job list (stage dots, player, Send for approval, Download, Retry, Delete).
+- "Make AI video" on every script card in the client chat (`ClientChatPanel.jsx`); the approval page plays video ads (`AdApprovalPage.jsx`).
+- `scripts/check-ai-video.mjs` checks the parsing, timing, windows, prompts and the edit.
+
+Secrets to add in Supabase (Project Settings > Edge Functions > Secrets): `ELEVENLABS_API_KEY`, `SYNC_API_KEY`, `SHOTSTACK_API_KEY`, and for B-roll `HIGGSFIELD_API_KEY_ID` and `HIGGSFIELD_API_KEY_SECRET` (from console.higgsfield.ai). Optional: `SHOTSTACK_ENV=stage` for the free watermarked sandbox while testing, `ELEVENLABS_MODEL`, `SYNC_MODEL`, `SYNC_MODE`, `HIGGSFIELD_I2V`, `HIGGSFIELD_T2V`. Without the Higgsfield keys the video is the owner only, and the job says so.
+
+Rough cost per 30 second video at list prices: ElevenLabs a few cents, Sync.so about $1.50, three Kling 3.0 shots about $1 to $2, Shotstack a few cents. The owner's time: one recording a month.
+
+Limits worth knowing: the finished MP4 must stay under 50MB (the bucket's ceiling on this plan; a 30 second 1080p cut is well under). An uploaded base clip must also be under 50MB; a Drive clip has no limit. The base clip should start with the owner talking straight to camera, mouth visible, head fairly still, for at least 45 seconds: the lip-sync is cut from its start.
+
+## What building it in the CRM would look like (the original plan)
 
 - A "Make AI video" button on each script card in the client chat. It creates a job row (client, script, tier, base clip, status) and calls a new edge function.
 - The edge function runs the chain above against Higgsfield, ElevenLabs, the lip-sync vendor and the render service, polling or taking webhooks, and stores the finished MP4 in Supabase storage.
