@@ -20,7 +20,7 @@ import {
 } from '../lib/chatImages'
 import { copyText } from '../lib/intakeSummary'
 import { extractTasksFromChat, taskTrigger } from '../lib/clientTasks'
-import { SCRIPT_ANGLES, buildRefillPrompt, isRefillPrompt, outsideScripts, refillLabel, splitScripts } from '../lib/season'
+import { SCRIPT_ANGLES, buildRefillPrompt, isRefillPrompt, outsideScripts, refillLabel, splitScripts, spokenScript, spokenScripts } from '../lib/season'
 import { today as todayIso } from '../lib/queries'
 import WebsiteMemory from './WebsiteMemory'
 
@@ -87,7 +87,9 @@ function RefillAsk({ text }) {
 }
 
 // A reply made of scripts reads as cards, one per script, each with its own
-// copy button, so each goes to the owner or a notes app on its own.
+// copy button, so each goes to the owner or a notes app on its own. Copy
+// hands over only the words to say: the Angle, Length, caption and filming
+// notes stay on the card, for us.
 function ScriptCards({ scripts }) {
   const [copied, setCopied] = useState(null)
   const copy = async (key, value) => {
@@ -102,7 +104,7 @@ function ScriptCards({ scripts }) {
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{scripts.length} video scripts</p>
         <button
           type="button"
-          onClick={() => copy('all', scripts.map((sc) => sc.text).join('\n\n----------\n\n'))}
+          onClick={() => copy('all', spokenScripts(scripts))}
           className="rounded bg-slate-800 px-2 py-1 text-[11px] font-medium text-white hover:bg-slate-900"
         >
           {copied === 'all' ? '✓ Copied' : 'Copy all'}
@@ -117,8 +119,9 @@ function ScriptCards({ scripts }) {
             </p>
             <button
               type="button"
-              onClick={() => copy(sc.n, sc.text)}
+              onClick={() => copy(sc.n, spokenScript(sc.text))}
               aria-label={`Copy script ${sc.n}`}
+              title="Copies just the words to say"
               className="flex-shrink-0 rounded px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-slate-300 hover:bg-slate-50"
             >
               {copied === sc.n ? '✓ Copied' : 'Copy'}

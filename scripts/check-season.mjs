@@ -2,7 +2,7 @@
 // market, and pulling scripts back out of a reply.
 // Run: node scripts/check-season.mjs
 
-import { SCRIPT_ANGLES, scriptAngle, outsideScripts, buildRefillPrompt, climateOf, isRefillPrompt, refillLabel, seasonContext, seasonOf, splitScripts, tradeOf, upcomingMoments } from '../src/lib/season.js'
+import { SCRIPT_ANGLES, scriptAngle, outsideScripts, buildRefillPrompt, climateOf, isRefillPrompt, refillLabel, seasonContext, seasonOf, splitScripts, spokenScript, spokenScripts, tradeOf, upcomingMoments } from '../src/lib/season.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -76,6 +76,22 @@ SCRIPT 3: No hook here`
   check('a reply with no scripts gives none', splitScripts('Sure, what season?'), [])
   check('a note outside the scripts is kept for showing above the cards',
     outsideScripts(`Two of these lean on the tune-up offer.\n\n${reply}\n----\nWant Spanish versions?`), 'Two of these lean on the tune-up offer.\n\nWant Spanish versions?')
+
+  // Copy hands over the words to say and nothing else.
+  const full = `SCRIPT 1: Heat check
+Angle: the first cold night is days away
+Length: about 30 seconds
+HOOK (0-3s): Has your heat run since March?
+PROBLEM: The first cold night is when it fails. Always at 9pm.
+PROOF: Licensed and insured, 14 years in Burnet.
+OFFER: $89 heat check this week.
+CTA: Call the number on screen.
+On screen text: Heat check, $89
+Film it: in the truck, window light`
+  check('copy is just the spoken lines, no labels, no angle, no notes', spokenScript(full), 'Has your heat run since March?\nThe first cold night is when it fails. Always at 9pm.\nLicensed and insured, 14 years in Burnet.\n$89 heat check this week.\nCall the number on screen.')
+  check('a script that lost the layout still drops the notes', spokenScript('SCRIPT 2: Loose\nAngle: whatever\nJust say this.\nFilm it: outside'), 'Just say this.')
+  check('copy all puts a one-line title over each', spokenScripts(s).split('\n\n----------\n\n').map((x) => x.split('\n')[0]), ['1. First cold night', '2. Burning smell'])
+  check('the prompt forbids licence, registration and insurance numbers', /Never put a licence number, registration number, insurance policy number/.test(buildRefillPrompt({ client: { name: 'X' }, today: '2026-10-12', angle: 'story' })), true)
 }
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)

@@ -315,7 +315,7 @@ export function buildRefillPrompt({ client, intake, today, count, angle = 'seaso
 Today is ${ctx.dateLabel}. For a ${TRADE_WORDS[ctx.trade]} business${where}, that is ${ctx.seasonLabel}.${climateLine} What homeowners there are thinking about right now: ${ctx.focus}.
 Coming up: ${moments}.
 
-Use everything you know about them: the intake, their website, their offers, reviews and guarantees, what is running in the ad account and what has won or lost. Use their real offer, real proof and real town names. Do not reuse a hook from an ad already running or from a script you already wrote in this chat.
+Use everything you know about them: the intake, their website, their offers, reviews and guarantees, what is running in the ad account and what has won or lost. Use their real offer, real proof and real town names. Do not reuse a hook from an ad already running or from a script you already wrote in this chat. Never put a licence number, registration number, insurance policy number or any other ID number in a script; "licensed and insured" is as far as it goes, and only if that is true of them.
 
 ${angleAsk}
 
@@ -384,4 +384,37 @@ export function splitScripts(text) {
 /** Whatever the reply said outside its scripts (a note, a question), or ''. */
 export function outsideScripts(text) {
   return parseScripts(text).extra
+}
+
+// The lines the owner actually says, in the order they say them. Everything
+// else in a script card (the title, Angle, Length, the caption, where to
+// stand) is for us, not for the person reading it into a phone.
+const SPOKEN = ['HOOK', 'PROBLEM', 'PROOF', 'OFFER', 'CTA']
+const NOTES = /^(angle|length|on screen text|film it)\b/i
+
+/**
+ * Just the words to say, one line each, no labels: what "Copy" hands to an
+ * owner. Falls back to the whole script minus the notes when a reply did
+ * not keep the layout.
+ */
+export function spokenScript(text) {
+  const lines = String(text || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .filter((l) => !/^\s*SCRIPT\s+\d+/i.test(l))
+  const spoken = []
+  for (const line of lines) {
+    const m = line.match(/^([A-Za-z][A-Za-z ]{1,24})(?:\([^)]*\))?\s*:\s*(.*)$/)
+    if (!m) continue
+    const label = m[1].trim().toUpperCase()
+    if (SPOKEN.includes(label) && m[2].trim()) spoken.push(m[2].trim())
+  }
+  if (spoken.length) return spoken.join('\n')
+  return lines.filter((l) => !NOTES.test(l)).join('\n')
+}
+
+/** Every script's spoken lines, each under a one-line title, for "Copy all". */
+export function spokenScripts(scripts) {
+  return (scripts || []).map((sc) => `${sc.n}. ${sc.title || `Script ${sc.n}`}\n${spokenScript(sc.text)}`).join('\n\n----------\n\n')
 }
