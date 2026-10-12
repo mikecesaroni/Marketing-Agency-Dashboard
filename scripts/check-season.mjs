@@ -92,6 +92,8 @@ Film it: in the truck, window light`
   check('a script that lost the layout still drops the notes', spokenScript('SCRIPT 2: Loose\nAngle: whatever\nJust say this.\nFilm it: outside'), 'Just say this.')
   check('copy all puts a one-line title over each', spokenScripts(s).split('\n\n----------\n\n').map((x) => x.split('\n')[0]), ['1. First cold night', '2. Burning smell'])
   check('the prompt forbids licence, registration and insurance numbers', /Never put a licence number, registration number, insurance policy number/.test(buildRefillPrompt({ client: { name: 'X' }, today: '2026-10-12', angle: 'story' })), true)
+  const storyPrompt = buildRefillPrompt({ client: { name: 'Belk Heating' }, today: '2026-10-12', angle: 'story' })
+  check('the prompt makes the lines first person, the owner talking, and directions say you', storyPrompt.includes('in the first person, the owner talking') && storyPrompt.includes('"Belk Heating has"') && storyPrompt.includes('speaks to the owner as "you" and "your"'), true)
 }
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)

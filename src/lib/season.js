@@ -319,6 +319,8 @@ Use everything you know about them: the intake, their website, their offers, rev
 
 ${angleAsk}
 
+The script goes straight to the owner, who reads it into a phone. So every spoken line (HOOK, PROBLEM, PROOF, OFFER, CTA) is in the first person, the owner talking: "I", "we", "my crew", "our trucks". Never about the owner in the third person ("he", "his", "the owner", "${name} has"). Anything that is a direction rather than a line (Film it, On screen text) speaks to the owner as "you" and "your".
+
 Write every script exactly like this, as plain text with no markdown, no asterisks and no brackets:
 
 SCRIPT 1: short title
