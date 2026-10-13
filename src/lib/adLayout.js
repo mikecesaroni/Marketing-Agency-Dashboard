@@ -1,10 +1,22 @@
-// The card layout's placement math, kept pure so scripts/check-ad-layout.mjs
+// The placement math behind every look, kept pure so scripts/check-ad-layout.mjs
 // can import it in Node. adCanvas.js re-exports everything here.
 
+// The looks. The first is the default. Each one is a different composition
+// of the same words, so a set of ads for one client stops looking like one
+// template with the headline swapped.
 export const LAYOUTS = [
-  { key: 'cover', label: 'Photo fills the frame', hint: 'the default' },
-  { key: 'card', label: 'Photo on a colour', hint: 'drag it where you want it' },
+  { key: 'cover', label: 'Classic', hint: 'photo fills the frame, headline up top, offer block down the bottom' },
+  { key: 'stack', label: 'Headline stack', hint: 'one giant accent word over the photo, with a white offer card' },
+  { key: 'plate', label: 'Bottom plate', hint: 'photo on top, the words on a brand-colour plate below' },
+  { key: 'split', label: 'Split panel', hint: 'brand-colour panel with the words beside the photo' },
+  { key: 'card', label: 'Photo on a colour', hint: 'flat background, the photo placed where you drag it' },
+  { key: 'ai', label: 'AI concept', hint: 'a finished ad made by AI from your brief, used as is' },
 ]
+// Looks that paint the words themselves (an AI concept carries its own).
+export const TEXT_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'card']
+// Looks where dragging the artboard moves the photo's focal point.
+export const FOCUS_LAYOUTS = ['cover', 'stack', 'plate', 'split']
+
 export const DEFAULT_BG = '#0F172A'
 // Fractions: x across the frame, y down the FREE BAND (the room between the
 // headline and the offer block), width as a share of frame width.
@@ -106,4 +118,83 @@ export function dragFocus(focus, dx, dy, w, h, img) {
   const nx = dw > w + 0.5 ? clamp(fx - (dx * w) / dw, hx, 1 - hx) : fx
   const ny = dh > h + 0.5 ? clamp(fy - (dy * h) / dh, hy, 1 - hy) : fy
   return { x: nx, y: ny }
+}
+
+/**
+ * Where a photo sits when it is fitted INSIDE a frame rather than cropped to
+ * it: the largest size that shows the whole image, centred. The AI concept
+ * look uses this, with a blurred copy of the same image filling the rest, so
+ * a 4:5 concept becomes a square or a Story without losing its headline.
+ */
+export function containRect(w, h, img) {
+  const iw = img && img.width > 0 ? img.width : w
+  const ih = img && img.height > 0 ? img.height : h
+  const scale = Math.min(w / iw, h / ih)
+  const dw = iw * scale
+  const dh = ih * scale
+  return { x: Math.round((w - dw) / 2), y: Math.round((h - dh) / 2), w: Math.round(dw), h: Math.round(dh) }
+}
+
+/**
+ * The bottom plate look: the photo takes the top of the frame and a
+ * brand-colour plate takes the bottom. The plate holds the words, so it gets
+ * a fixed share of the room between the safe margins: enough for a three
+ * line headline, the offer pill and the proof, on every frame.
+ *
+ * Returns the two rectangles. The plate starts above the photo's bottom edge
+ * by `overlap`, so its rounded top corners read as a card laid over the
+ * picture rather than a hard horizontal cut.
+ */
+export function plateRects(w, h, { safeTop = 0, safeBottom = 0, share = 0.46, overlap = 36 } = {}) {
+  const usable = h - safeTop - safeBottom
+  const plateH = Math.round(usable * share) + safeBottom
+  const plateTop = h - plateH
+  return {
+    photo: { x: 0, y: 0, w, h: plateTop + overlap },
+    plate: { x: 0, y: plateTop, w, h: plateH },
+  }
+}
+
+/**
+ * The split look: a colour panel and the photo side by side on the wide
+ * frames, stacked on the tall one. The panel always holds the words.
+ */
+export function splitRects(w, h, { safeTop = 0, safeBottom = 0, panelShare = 0.47 } = {}) {
+  const tall = h / w >= 1.6
+  if (tall) {
+    const usable = h - safeTop - safeBottom
+    const panelH = Math.round(usable * 0.5) + safeTop
+    return {
+      stacked: true,
+      panel: { x: 0, y: 0, w, h: panelH },
+      photo: { x: 0, y: panelH, w, h: h - panelH },
+    }
+  }
+  const panelW = Math.round(w * panelShare)
+  return {
+    stacked: false,
+    panel: { x: 0, y: 0, w: panelW, h },
+    photo: { x: panelW, y: 0, w: w - panelW, h },
+  }
+}
+
+/**
+ * The accent word for the headline stack: the one word painted giant in the
+ * brand colour. A word wrapped in asterisks wins ("*Free* second opinion");
+ * otherwise the first word, when it is short enough to be a shout: FREE,
+ * $89, SAVE, NEW. A long first word is left in the sentence.
+ */
+export function accentWord(hook) {
+  const text = String(hook || '').trim()
+  if (!text) return { accent: '', rest: '' }
+  const marked = text.match(/\*([^*]{1,14})\*/)
+  if (marked) {
+    return { accent: marked[1].trim(), rest: text.replace(marked[0], '').replace(/\s{2,}/g, ' ').trim() }
+  }
+  const [first, ...others] = text.split(/\s+/)
+  const bare = first.replace(/[^\w$%]/g, '')
+  if (bare.length >= 2 && bare.length <= 8 && others.length > 0) {
+    return { accent: first.replace(/[,:!.]+$/, ''), rest: others.join(' ') }
+  }
+  return { accent: '', rest: text }
 }

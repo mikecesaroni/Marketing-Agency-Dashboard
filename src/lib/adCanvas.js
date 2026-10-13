@@ -51,7 +51,7 @@ import { readableTextOn } from './logoColours'
 // be dragged and resized on the artboard. It exists for a product shot, a
 // logo-heavy layout or a photo whose edges are not worth showing, and it is
 // never chosen for someone.
-export { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, LAYOUTS, coverRect, dragFocus, dragPhoto, photoRect } from './adLayout'
+export { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, TEXT_LAYOUTS, accentWord, containRect, coverRect, dragFocus, dragPhoto, photoRect } from './adLayout'
 import { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, coverRect, photoRect } from './adLayout'
 
 export const DEFAULT_ACCENT = '#C81E1E' // offer block
@@ -85,16 +85,17 @@ export function brandColours(intake) {
   }
 }
 
-// Every artboard is 1080 wide, so type is sized in absolute pixels and is the
-// same physical size in all three.
-const FONT = '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
-const PAD = 60
+// The type helpers (font stack, measuring, wrapping, fit-to-width, rounded
+// boxes) live in adText.js so the looks in adLooks.js draw with the same type.
+import { PAD, fitText, roundRect, setFont, typographic } from './adText'
+import { hasLook, renderLook } from './adLooks'
 
 // Inter is loaded from the stylesheet, but a font declared in CSS is only
 // fetched once something on the page uses it. Canvas text does not count as a
 // use, so without this the first paint measures with a fallback face and wraps
-// on different words than the export does.
-const WEIGHTS = ['500 27px', '700 23px', '700 32px', '800 21px', '800 22px', '800 44px', '800 60px']
+// on different words than the export does. The 900 weights are the giant
+// accent word and the offer amount in the newer looks.
+const WEIGHTS = ['500 27px', '600 22px', '700 23px', '700 32px', '800 21px', '800 22px', '800 44px', '800 60px', '900 64px', '900 150px']
 export async function ensureFonts() {
   if (!document.fonts) return
   try {
@@ -118,68 +119,6 @@ export function loadImage(src) {
     img.onerror = () => reject(new Error(`Could not load image: ${src}`))
     img.src = src
   })
-}
-
-// ctx.letterSpacing is ignored rather than fatal where it is unsupported, so
-// this is safe to set unconditionally. It only ever has to be reset to '0px'.
-function setFont(ctx, weight, px, tracking = 0) {
-  ctx.font = `${weight} ${px}px ${FONT}`
-  ctx.letterSpacing = `${tracking}px`
-}
-
-// Display type wants a real apostrophe. A straight quote in a 60px headline
-// reads as a typo, which is not the impression a $30 offer should make.
-function typographic(text) {
-  return String(text || '').replace(/(\w)'/g, '$1\u2019')
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  const rad = Math.min(r, h / 2, w / 2)
-  ctx.beginPath()
-  ctx.moveTo(x + rad, y)
-  ctx.arcTo(x + w, y, x + w, y + h, rad)
-  ctx.arcTo(x + w, y + h, x, y + h, rad)
-  ctx.arcTo(x, y + h, x, y, rad)
-  ctx.arcTo(x, y, x + w, y, rad)
-  ctx.closePath()
-}
-
-function wrapText(ctx, text, maxWidth) {
-  const words = String(text || '').trim().split(/\s+/).filter(Boolean)
-  if (words.length === 0) return []
-
-  const lines = []
-  let line = ''
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line)
-      line = word
-    } else {
-      line = test
-    }
-  }
-  if (line) lines.push(line)
-  return lines
-}
-
-// Shrinks text until it fits the lines allowed. A long hook that silently
-// overflows the frame is worse than a slightly smaller one.
-function fitText(ctx, text, maxWidth, maxLines, startPx, minPx, weight, tracking = 0, budget) {
-  const { maxHeight = Infinity, lineRatio = 1.2 } = budget || {}
-  let px = startPx
-  let lines = []
-  while (px >= minPx) {
-    setFont(ctx, weight, px, tracking)
-    lines = wrapText(ctx, text, maxWidth)
-    if (lines.length <= maxLines && lines.length * px * lineRatio <= maxHeight) break
-    px -= 3
-  }
-  // Still too tall at the smallest size: drop lines rather than run the
-  // headline down through the offer block.
-  const fits = Math.max(1, Math.floor(maxHeight / (px * lineRatio)))
-  if (lines.length > fits) lines = lines.slice(0, fits)
-  return { px, lines }
 }
 
 // Draws a cover-fit image, cropping the overflow rather than distorting it.
@@ -249,6 +188,19 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     focus = DEFAULT_FOCUS,
   } = content
   const { background, logo } = assets || {}
+
+  // The newer looks paint themselves (adLooks.js) against the same safe
+  // margins; this function keeps the classic composition and the card.
+  if (hasLook(layout)) {
+    canvas.width = w
+    canvas.height = h
+    const lctx = canvas.getContext('2d')
+    lctx.letterSpacing = '0px'
+    const out = renderLook(lctx, size, { ...content, layout, accent, badgeColor, focus }, assets, { safeMode })
+    if (opts.guides) drawGuides(lctx, w, h, safeTop, safeBottom, safeSide, safeOn)
+    lctx.letterSpacing = '0px'
+    return { canvas, band: out.band }
+  }
 
   // On the card layout the text sits on the chosen colour, not on a scrimmed
   // photo, so it has to flip to dark on a pale background.

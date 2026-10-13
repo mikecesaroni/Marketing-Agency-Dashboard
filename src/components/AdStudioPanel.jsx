@@ -16,6 +16,7 @@ import { AD_SEASONS, guessAdSeason } from '../lib/adSeason'
 import { creativeWarnings } from '../lib/creativeChecks'
 import AdImagePicker from './AdImagePicker'
 import { resolveImageSrc } from '../lib/driveAssets'
+import { conceptUrl, createConcepts, deleteConcept, fetchConcepts, refreshConcept } from '../lib/adConceptsStore'
 import { heicToJpegBlob, isHeic, jpegName, jpegPath, toUploadable } from '../lib/imageUpload'
 import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
 import {
@@ -24,6 +25,7 @@ import {
   DEFAULT_BG,
   DEFAULT_FOCUS,
   DEFAULT_PHOTO,
+  FOCUS_LAYOUTS,
   LAYOUTS,
   dragFocus,
   dragPhoto,
@@ -494,6 +496,150 @@ function SeedBanner({ seed }) {
 }
 
 // The proof strip is a fact about the client, not something to retype per ad.
+/**
+ * AI concepts: whole ads made by Higgsfield from the brief on this screen,
+ * four at a time, each a different scene and arrangement of the same words.
+ * A pick becomes the background under the "AI concept" look and is saved
+ * like any other ad. The batches persist per client, so a good one from
+ * last week is still here.
+ */
+function ConceptsPanel({ client, brief, refPaths, hasLogo, onPick, picked }) {
+  const [batches, setBatches] = useState(null)
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState('')
+
+  useEffect(() => {
+    let live = true
+    fetchConcepts(client.id)
+      .then((rows) => live && setBatches(rows))
+      .catch((err) => live && setProblem(err.message))
+    return () => {
+      live = false
+    }
+  }, [client.id])
+
+  // A working batch is asked about every few seconds until it is done.
+  useEffect(() => {
+    const working = (batches || []).filter((b) => b.status === 'working' || b.status === 'queued')
+    if (working.length === 0) return undefined
+    let live = true
+    const timer = setTimeout(async () => {
+      for (const b of working) {
+        try {
+          const next = await refreshConcept(b.id)
+          if (live && next) setBatches((prev) => (prev || []).map((x) => (x.id === next.id ? next : x)))
+        } catch {
+          /* the next tick asks again */
+        }
+      }
+    }, 5000)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [batches])
+
+  const make = async () => {
+    setBusy(true)
+    setProblem('')
+    try {
+      const row = await createConcepts({ clientId: client.id, brief: { ...brief, notes: note }, refPaths, hasLogo })
+      setBatches((prev) => [row, ...(prev || [])])
+    } catch (err) {
+      setProblem(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (b) => {
+    if (!confirm('Delete this batch of concepts?')) return
+    try {
+      await deleteConcept(b)
+      setBatches((prev) => (prev || []).filter((x) => x.id !== b.id))
+    } catch (err) {
+      setProblem(err.message)
+    }
+  }
+
+  const ready = Boolean(brief.hook?.trim() || brief.offerAmount?.trim() || brief.offerDetail?.trim())
+
+  return (
+    <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50/60 p-3" data-concepts>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-violet-900">✨ AI concepts</span>
+        <span className="text-[11px] text-violet-800/80">
+          Four finished ads from these words, the brand colours, the logo and the photo, each a different scene. Pick one and it becomes the AI concept look.
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Direction, optional: owner at the front door, the van in shot, snow on the ground…"
+          className="min-w-[16rem] flex-1 rounded border border-violet-200 bg-white px-2 py-1.5 text-xs"
+          data-concept-note
+        />
+        <button
+          onClick={make}
+          disabled={busy || !ready}
+          title={ready ? 'About a minute, roughly 35 cents for four' : 'Type a hook or an offer first'}
+          className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50"
+          data-make-concepts
+        >
+          {busy ? 'Sending the brief…' : 'Make 4 concepts'}
+        </button>
+        <span className="text-[11px] text-violet-800/70">
+          {refPaths.length > 0 ? `${refPaths.length} reference ${refPaths.length === 1 ? 'image' : 'images'} go with it` : 'No logo or photo picked, so it invents a technician'}
+        </span>
+      </div>
+      {problem && <p className="text-xs text-red-700">{problem}</p>}
+      {batches === null ? null : batches.length === 0 ? null : (
+        <div className="space-y-2">
+          {batches.map((b) => (
+            <div key={b.id} className="rounded border border-violet-100 bg-white p-2" data-concept-batch data-status={b.status}>
+              <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                <span className="font-semibold text-slate-800">{new Date(b.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                {b.status === 'done' ? (
+                  <span className="rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-green-800">{(b.paths || []).length} concepts</span>
+                ) : b.status === 'failed' ? (
+                  <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-red-700" title={b.error || ''}>
+                    Failed{b.error ? `: ${b.error}` : ''}
+                  </span>
+                ) : (
+                  <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-amber-800 animate-pulse">Making {b.batch} concepts… about a minute</span>
+                )}
+                <span className="truncate text-slate-400">{b.brief?.hook}</span>
+                <button onClick={() => remove(b)} className="ml-auto text-slate-400 hover:text-red-600">
+                  Delete
+                </button>
+              </div>
+              {b.status === 'done' && (
+                <div className="grid grid-cols-4 gap-2">
+                  {(b.paths || []).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => onPick(p)}
+                      title="Use this concept as the ad"
+                      className={`relative aspect-[4/5] overflow-hidden rounded border-2 transition ${picked === p ? 'border-violet-600 ring-2 ring-violet-200' : 'border-transparent hover:border-violet-300'}`}
+                      data-concept-pick
+                    >
+                      <img src={conceptUrl(p)} alt="AI concept" className="h-full w-full object-cover" />
+                      {picked === p && <span className="absolute right-1 top-1 rounded-full bg-violet-600 px-1.5 text-[10px] font-semibold text-white">in use</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function proofFromIntake(intake) {
   const rating = intake?.reviews_star_rating
   if (!rating) return ''
@@ -1413,14 +1559,15 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         </div>
       </details>
 
-      <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
-        <span className="text-xs font-medium text-slate-600">Photo</span>
-        <div className="flex gap-1">
+      <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg" data-look-row>
+        <span className="text-xs font-medium text-slate-600">Look</span>
+        <div className="flex flex-wrap gap-1">
           {LAYOUTS.map((l) => (
             <button
               key={l.key}
               onClick={() => setLayout(l.key)}
               title={l.hint}
+              data-look={l.key}
               className={`px-2.5 py-1 rounded text-xs font-medium transition ${
                 layout === l.key
                   ? 'bg-slate-900 text-white'
@@ -1430,17 +1577,37 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
               {l.label}
             </button>
           ))}
+          {/* The same words in another composition, one click. Skips the AI
+              look, which needs a concept picked first. */}
+          <button
+            onClick={() => {
+              const keys = LAYOUTS.map((l) => l.key).filter((k) => k !== 'ai')
+              setLayout(keys[(keys.indexOf(layout) + 1) % keys.length])
+            }}
+            title="Cycle through the looks with the words as they are"
+            className="px-2.5 py-1 rounded text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 hover:bg-orange-100"
+            data-next-look
+          >
+            ↻ Next look
+          </button>
         </div>
-        {layout === 'cover' && (
+        {FOCUS_LAYOUTS.includes(layout) && (
           <>
             <button onClick={() => setFocus(DEFAULT_FOCUS)} className="text-[11px] text-slate-400 hover:text-slate-700">
               Recentre
             </button>
             <p className="text-[11px] text-slate-500 basis-full">
-              Drag the photo on any artboard to choose what the crop keeps: pull it down until both faces
-              show, and the other two sizes follow the same spot.
+              {LAYOUTS.find((l) => l.key === layout)?.hint}. Drag the photo on any artboard to choose what the
+              crop keeps; the other two sizes follow the same spot.
+              {layout === 'stack' && ' Wrap a word in asterisks (*Free* second opinion) to choose the giant word; otherwise a short first word is used.'}
             </p>
           </>
+        )}
+        {layout === 'ai' && (
+          <p className="text-[11px] text-slate-500 basis-full">
+            A finished ad made by AI from this brief, used whole; the words on it are its own. Pick one from the
+            concepts below. On the square and the Story the concept sits on a blurred copy of itself.
+          </p>
         )}
         {layout === 'card' && (
           <>
@@ -1466,6 +1633,18 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           </>
         )}
       </div>
+
+      <ConceptsPanel
+        client={client}
+        brief={{ badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, industry: client.industry, market: client.market }}
+        refPaths={[logoPath, backgroundPath].filter((p, i, all) => p && !p.startsWith('drive:') && !p.startsWith('concepts/') && all.indexOf(p) === i)}
+        hasLogo={Boolean(logoPath && !logoPath.startsWith('drive:'))}
+        picked={layout === 'ai' ? backgroundPath : ''}
+        onPick={(path) => {
+          setBackgroundPath(path)
+          setLayout('ai')
+        }}
+      />
 
       <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
         <span className="text-xs font-medium text-slate-600">9:16 safe area</span>

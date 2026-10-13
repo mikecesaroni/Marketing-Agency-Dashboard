@@ -7,7 +7,7 @@
 // photo over the offer block on Stories. Everything resolves through
 // photoRect, so the 216px preview and the 1080px export agree.
 
-import { DEFAULT_FOCUS, DEFAULT_PHOTO, LAYOUTS, coverRect, dragFocus, dragPhoto, photoRect } from '../src/lib/adLayout.js'
+import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, TEXT_LAYOUTS, accentWord, containRect, coverRect, dragFocus, dragPhoto, photoRect, plateRects, splitRects } from '../src/lib/adLayout.js'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -18,7 +18,35 @@ function check(name, actual, expected) {
 }
 
 check('cover is first and therefore the default', LAYOUTS[0].key, 'cover')
-check('card is the only other layout', LAYOUTS.map((l) => l.key), ['cover', 'card'])
+check('the six looks, classic first', LAYOUTS.map((l) => l.key), ['cover', 'stack', 'plate', 'split', 'card', 'ai'])
+check('every look but the AI concept paints the words', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'card'])
+check('dragging moves the focal point on the photo looks', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'split'])
+
+// The headline stack's giant word.
+check('a short first word is the shout', accentWord('FREE second opinion on any quote'), { accent: 'FREE', rest: 'second opinion on any quote' })
+check('a price works as the shout', accentWord('$89 furnace tune-up this week'), { accent: '$89', rest: 'furnace tune-up this week' })
+check('asterisks pick the word, anywhere', accentWord('Get a *free* second opinion'), { accent: 'free', rest: 'Get a second opinion' })
+check('a long first word stays in the sentence', accentWord('Homeowners in Austin: is your AC ready?'), { accent: '', rest: 'Homeowners in Austin: is your AC ready?' })
+check('a one-word hook has no shout', accentWord('Financing'), { accent: '', rest: 'Financing' })
+
+// The bottom plate: the photo on top, the words on a plate that always has
+// room for them, on every frame.
+const sq = plateRects(1080, 1080)
+check('square: the plate takes the lower part of the frame', [sq.plate.y, sq.plate.h], [583, 497])
+check('square: the photo overlaps the plate seam by 36', sq.photo.h - sq.plate.y, 36)
+const st = plateRects(1080, 1920, { safeTop: 269, safeBottom: 672 })
+check('story: the plate sits above the Reels band, inside the usable room', [st.plate.y + st.plate.h, st.plate.y > 269], [1920, true])
+check('story: the plate still holds its share of the usable room', st.plate.h - 672, Math.round((1920 - 269 - 672) * 0.46))
+
+// The split: side by side on the wide frames, stacked on the tall one.
+const side = splitRects(1080, 1350)
+check('feed: panel on the left, photo on the right', [side.stacked, side.panel.w, side.photo.x], [false, 508, 508])
+const stacked = splitRects(1080, 1920, { safeTop: 269, safeBottom: 672 })
+check('story: panel on top, photo below', [stacked.stacked, stacked.panel.h, stacked.photo.y], [true, Math.round(979 * 0.5) + 269, Math.round(979 * 0.5) + 269])
+
+// Fitting a whole concept into a frame.
+check('a 4:5 concept fits a square by width', containRect(1080, 1080, { width: 1024, height: 1280 }), { x: 108, y: 0, w: 864, h: 1080 })
+check('a 4:5 concept fits a Story by width', containRect(1080, 1920, { width: 1024, height: 1280 }), { x: 0, y: 285, w: 1080, h: 1350 })
 check('default photo sits centred in the band at 72% width', DEFAULT_PHOTO, { x: 0.5, y: 0.5, scale: 0.72 })
 
 const landscape = { width: 1600, height: 900 }
