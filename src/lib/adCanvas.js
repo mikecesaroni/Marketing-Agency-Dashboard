@@ -182,6 +182,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     accent = DEFAULT_ACCENT,
     badgeColor = DEFAULT_BADGE,
     hookPlate = false,
+    subheadPlate = false,
     layout = 'cover',
     bgColor = DEFAULT_BG,
     photo = DEFAULT_PHOTO,
@@ -404,6 +405,21 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
       bottomBaseline + bottomPx * 0.24 + padPlateY - (topBaseline - topPx * 0.78 - padPlateY),
       14
     )
+    ctx.fill()
+  }
+
+  // Or just behind the subhead: the hook reads fine over the scrim and only
+  // the smaller line is fighting the photo.
+  if (subheadPlate && !hookPlate && deck && deckBaselines.length) {
+    setFont(ctx, '500', deck.px, 0)
+    let widest = 0
+    for (const line of deck.lines) widest = Math.max(widest, ctx.measureText(line).width)
+    const padPlateX = 20
+    const padPlateY = 14
+    const top = deckBaselines[0] - deck.px * 0.78 - padPlateY
+    const bottom = deckBaselines[deckBaselines.length - 1] + deck.px * 0.24 + padPlateY
+    ctx.fillStyle = plateFill
+    roundRect(ctx, padX - padPlateX, top, Math.min(widest + padPlateX * 2, w - (padX - padPlateX) * 2), bottom - top, 12)
     ctx.fill()
   }
 

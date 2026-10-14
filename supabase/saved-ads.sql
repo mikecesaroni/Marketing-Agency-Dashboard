@@ -47,3 +47,6 @@ alter table saved_ads add column if not exists meta_image_hashes jsonb;
 alter table saved_ads add column if not exists meta_library_at timestamptz;
 -- Season label: spring, summer, fall, winter, holiday or all (src/lib/adSeason.js).
 alter table saved_ads add column if not exists season text;
+
+-- 2026-10-14: a panel behind the subhead only (the Studio's "Panel" choice).
+alter table saved_ads add column if not exists subhead_plate boolean default false;

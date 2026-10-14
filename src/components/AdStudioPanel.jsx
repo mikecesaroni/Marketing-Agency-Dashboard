@@ -797,6 +797,14 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // Off by default: the scrim handles most photos, and a plate on a clean
   // background is just a box.
   const [hookPlate, setHookPlate] = useState(false)
+  // Or a smaller one behind the subhead only, when the hook reads fine and
+  // the small line is the one fighting the photo. One or the other.
+  const [subheadPlate, setSubheadPlate] = useState(false)
+  const panel = hookPlate ? 'hook' : subheadPlate ? 'subhead' : 'none'
+  const choosePanel = (key) => {
+    setHookPlate(key === 'hook')
+    setSubheadPlate(key === 'subhead')
+  }
   // Photo layout. 'cover' unless somebody switches it; see LAYOUTS in adCanvas.
   const [layout, setLayout] = useState('cover')
   const [bgColor, setBgColor] = useState(DEFAULT_BG)
@@ -1138,7 +1146,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // first paint measures with a fallback face and wraps differently.
   useEffect(() => {
     let cancelled = false
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo, focus }
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus }
     ensureFonts().then(() => {
       if (cancelled) return
       SIZES.forEach((size, i) => {
@@ -1149,12 +1157,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     return () => {
       cancelled = true
     }
-  }, [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo, focus, assets, safeMode, guides])
+  }, [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, assets, safeMode, guides])
 
   // Guides are a preview aid. Repaint clean, export, then put them back, so a
   // saved PNG can never carry the red bands into the ad account.
   const withoutGuides = (fn) => async (...args) => {
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, layout, bgColor, photo, focus }
+    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus }
     const repaint = (g) =>
       SIZES.forEach((size, i) => {
         const c = refs.current[i]
@@ -1193,6 +1201,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     if (r.accent) setAccent(r.accent)
     if (r.badgeColor) setBadgeColor(r.badgeColor)
     setHookPlate(Boolean(r.hookPlate))
+    setSubheadPlate(Boolean(r.subheadPlate))
     setLayout(r.layout || 'cover')
     setBgColor(r.bgColor || DEFAULT_BG)
     setPhoto(r.photo || DEFAULT_PHOTO)
@@ -1257,6 +1266,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     accent,
     badgeColor,
     hookPlate,
+    subheadPlate,
     layout,
     bgColor,
     photo,
@@ -1340,6 +1350,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
             accent,
             badgeColor,
             hookPlate,
+            subheadPlate,
             layout,
             bgColor,
             photo,
@@ -1399,6 +1410,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           accent: set.accent || accent,
           badgeColor: set.badgeColor || badgeColor,
           hookPlate,
+          subheadPlate,
           layout: set.layout || 'cover',
           bgColor,
           photo,
@@ -1494,7 +1506,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       looks: LAYOUTS.map((l) => l.key),
       words: { badge, hook, offerAmount, offerDetail, subhead, proof, primaryText, headline: metaHeadline, description: metaDescription },
       colours: { accent, badgeColor },
-      panel_behind_hook: hookPlate,
+      panel: panel === 'none' ? 'none' : panel === 'hook' ? 'behind hook and subhead' : 'behind subhead only',
       photo: backgroundPath || 'none picked',
       logo: logoPath ? 'set' : 'none',
       photos_available: files.map((f) => f.file_name),
@@ -1523,7 +1535,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
             description: { type: 'string' },
             accent: { type: 'string' },
             badgeColor: { type: 'string' },
-            panel_behind_hook: { type: 'boolean' },
+            panel: { type: 'string', enum: ['none', 'hook', 'subhead'], description: 'A card behind the words: none, behind the hook and subhead, or behind the subhead only' },
           },
         },
         run: (i) => {
@@ -1534,7 +1546,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           }
           if (typeof i.accent === 'string' && /^#[0-9a-f]{6}$/i.test(i.accent)) { setAccent(i.accent); setFromLogo(false); changed.push('accent') }
           if (typeof i.badgeColor === 'string' && /^#[0-9a-f]{6}$/i.test(i.badgeColor)) { setBadgeColor(i.badgeColor); setFromLogo(false); changed.push('badgeColor') }
-          if (typeof i.panel_behind_hook === 'boolean') { setHookPlate(i.panel_behind_hook); changed.push('panel') }
+          if (['none', 'hook', 'subhead'].includes(i.panel)) { choosePanel(i.panel); changed.push('panel') }
           return { ok: true, changed }
         },
       },
@@ -2046,18 +2058,31 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
             the switch would be a lie there; it says so instead of doing nothing. */}
         {['plate', 'split', 'ai'].includes(layout) ? (
           <span className="text-xs text-slate-400" data-hook-plate title="On this look the words already sit on a solid panel">
-            Panel behind the hook: built into this look
+            Panel: built into this look
           </span>
         ) : (
-          <label className="flex items-center gap-1.5 text-xs text-slate-600" data-hook-plate title={layout === 'stack' ? 'A white card behind the big word, the headline and the subhead, for a photo too busy to read over' : 'A dark plate behind the headline and subhead'}>
-            <input
-              type="checkbox"
-              checked={hookPlate}
-              onChange={(e) => setHookPlate(e.target.checked)}
-              className="rounded"
-            />
-            Panel behind the hook
-          </label>
+          <div className="flex flex-wrap items-center gap-1 text-xs text-slate-600" data-hook-plate>
+            <span className="mr-0.5">Panel</span>
+            {[
+              ['none', 'None', 'No panel; the scrim or haze does the work'],
+              ['hook', 'Behind hook + subhead', layout === 'stack' ? 'A white card behind the big word, the headline and the subhead' : 'A plate behind the headline and the subhead'],
+              ['subhead', 'Behind subhead only', 'A smaller card behind the subhead alone, when the headline reads fine and the small line does not'],
+            ].map(([key, label, hint]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => choosePanel(key)}
+                title={hint}
+                aria-pressed={panel === key}
+                data-panel={key}
+                className={`px-2 py-1 rounded text-[11px] font-medium transition ${
+                  panel === key ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         )}
         <label className="flex items-center gap-1.5 text-xs text-slate-600">
           <input

@@ -57,6 +57,7 @@ function recipeColumns(content, backgroundPath, logoPath, safeMode) {
     accent: content.accent,
     badge_color: content.badgeColor,
     hook_plate: Boolean(content.hookPlate),
+    subhead_plate: Boolean(content.subheadPlate),
     safe_mode: safeMode,
     // The card layout and where the photo sits on it. 'cover' with no
     // colour and no position is exactly what every ad before this was.
@@ -159,6 +160,7 @@ export function recipeToContent(row) {
     accent: row.accent,
     badgeColor: row.badge_color,
     hookPlate: Boolean(row.hook_plate),
+    subheadPlate: Boolean(row.subhead_plate),
     layout: row.layout || 'cover',
     bgColor: row.bg_color || null,
     photo: row.layout === 'card' ? row.photo_pos || null : null,

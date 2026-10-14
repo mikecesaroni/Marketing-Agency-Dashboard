@@ -175,7 +175,7 @@ function drawOfferCard(ctx, card, x, y, { align = 'left' } = {}) {
 function renderStack(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, contentBottom, maxWidth } = m
-  const { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, focus, hookPlate } = content
+  const { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, focus, hookPlate, subheadPlate } = content
   const { background, logo } = assets || {}
 
   // The photo first. The haze comes after the stack is measured, because it
@@ -210,10 +210,10 @@ function renderStack(ctx, size, content, assets, opts) {
   const deck = subhead?.trim()
     ? fitText(ctx, typographic(subhead), colW, 2, 30, 22, '600', 0, { lineRatio: 1.3 })
     : null
-  const stackH =
-    (wordFit ? wordFit.px * 0.98 + 6 : 0) +
-    (restFit ? restFit.lines.length * restFit.px * 1.02 + 8 : 0) +
-    (deck ? deck.lines.length * deck.px * 1.3 + 10 : 0)
+  const wordH = wordFit ? wordFit.px * 0.98 + 6 : 0
+  const restH = restFit ? restFit.lines.length * restFit.px * 1.02 + 8 : 0
+  const deckH = deck ? deck.lines.length * deck.px * 1.3 + 10 : 0
+  const stackH = wordH + restH + deckH
   const stackBottom = stackTop + stackH
 
   // The haze: white, strong under every line of the stack, gone a little
@@ -250,6 +250,20 @@ function renderStack(ctx, size, content, assets, opts) {
     const plateX = Math.max(padX - pad, right - widest - pad)
     ctx.fillStyle = 'rgba(255,255,255,0.9)'
     roundRect(ctx, plateX, stackTop - 22, right + pad - plateX, stackH + 30, 18)
+    ctx.fill()
+  }
+
+  // Or just behind the subhead: the giant word and the headline read over
+  // the haze, and only the small line needs the help.
+  if (subheadPlate && !hookPlate && deck) {
+    setFont(ctx, '600', deck.px, 0)
+    let widest = 0
+    for (const line of deck.lines) widest = Math.max(widest, ctx.measureText(line).width)
+    const pad = 18
+    const deckTop = stackTop + wordH + restH
+    const plateX = Math.max(padX - pad, right - widest - pad)
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'
+    roundRect(ctx, plateX, deckTop - 6, right + pad - plateX, (deck.lines.length - 1) * deck.px * 1.3 + deck.px * 1.12 + 16, 12)
     ctx.fill()
   }
 
