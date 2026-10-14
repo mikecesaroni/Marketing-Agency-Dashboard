@@ -217,7 +217,7 @@ export async function fetchChatHistory(clientId) {
   return { chatId, messages: data || [] }
 }
 
-export async function sendChatMessage({ clientId, chatId, system, message, images }) {
+export async function sendChatMessage({ clientId, chatId, system, message, images, transient = false }) {
   const { data, error } = await supabase.functions.invoke('client-chat', {
     body: {
       client_id: clientId,
@@ -225,8 +225,11 @@ export async function sendChatMessage({ clientId, chatId, system, message, image
       system,
       message,
       // [{ url, media_type }] for any screenshots attached to this turn. Sent
-      // as URLs so the stored history stays small enough to replay.
+      // as URLs so the stored history stays small enough to replay. A
+      // transient turn may send { data, media_type } (base64) instead, since
+      // nothing of it is stored.
       images: images?.length ? images : undefined,
+      transient: transient || undefined,
     },
   })
 

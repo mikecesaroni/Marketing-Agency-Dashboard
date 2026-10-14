@@ -20,6 +20,10 @@
 // client_id is NOT a tool parameter. It is fixed to the client whose chat this
 // is and injected server-side, so no amount of conversation can point a tool at
 // a different client's ad account.
+//
+// `transient: true` makes a one-off turn: no history read, nothing stored, and
+// images may arrive as base64. The Studio's "Make 3 ads" uses it to show the
+// model the client's photos without leaving them in the conversation.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
 
@@ -179,7 +183,11 @@ const TOOLS = [
   },
 ]
 
-type ChatImage = { url: string; media_type?: string }
+// A URL into the public client-files bucket, which Anthropic fetches
+// directly, or base64 bytes for a one-off turn that is never stored (the
+// Studio's photo pass, which shows the model small copies of the client's
+// photos and would otherwise bloat the history with them).
+type ChatImage = { url?: string; data?: string; media_type?: string }
 
 type Incoming = {
   chat_id?: string
@@ -190,6 +198,11 @@ type Incoming = {
   // bucket, which Anthropic fetches directly; nothing is sent as base64 so the
   // stored history stays cheap to replay on every later turn.
   images?: ChatImage[]
+  // One-off: no history read, nothing stored. For a turn whose attachments
+  // or length would cost every later turn (the Studio's "Make 3 ads", which
+  // sends the client's photos). The brief still carries everything the chat
+  // knows; only the back-and-forth is absent.
+  transient?: boolean
 }
 
 function json(body: unknown, status = 200) {
@@ -232,8 +245,11 @@ Deno.serve(async (req) => {
     return json({ error: 'Expected a JSON body' }, 400)
   }
 
-  const attached = (body.images || []).filter((i) => typeof i?.url === 'string' && i.url)
+  const attached = (body.images || []).filter(
+    (i) => (typeof i?.url === 'string' && i.url) || (typeof i?.data === 'string' && i.data)
+  )
   const text = body.message?.trim() || ''
+  const transient = Boolean(body.transient)
 
   // A screenshot on its own is a real question ("what is wrong here?"), so
   // either half is enough.
@@ -241,9 +257,10 @@ Deno.serve(async (req) => {
     return json({ error: 'client_id and a message or an image are required' }, 400)
   }
 
-  // One conversation per client unless a specific chat is named.
-  let chatId = body.chat_id
-  if (!chatId) {
+  // One conversation per client unless a specific chat is named. A transient
+  // turn belongs to no conversation at all.
+  let chatId = body.chat_id || ''
+  if (!chatId && !transient) {
     const existing = await fetch(
       `${supabaseUrl}/rest/v1/client_chats?client_id=eq.${body.client_id}&order=updated_at.desc&limit=1&select=id`,
       { headers }
@@ -263,12 +280,15 @@ Deno.serve(async (req) => {
     }
   }
 
-  const historyRes = await fetch(
-    `${supabaseUrl}/rest/v1/chat_messages?chat_id=eq.${chatId}&order=created_at.asc&select=role,content`,
-    { headers }
-  )
-  const history = await historyRes.json()
-  if (!historyRes.ok) return json({ error: 'Could not read history', detail: history }, 500)
+  let history: { role: string; content: unknown }[] = []
+  if (!transient) {
+    const historyRes = await fetch(
+      `${supabaseUrl}/rest/v1/chat_messages?chat_id=eq.${chatId}&order=created_at.asc&select=role,content`,
+      { headers }
+    )
+    history = await historyRes.json()
+    if (!historyRes.ok) return json({ error: 'Could not read history', detail: history }, 500)
+  }
 
   const messages = (history || []).map((m: { role: string; content: unknown }) => ({
     role: m.role,
@@ -277,7 +297,11 @@ Deno.serve(async (req) => {
   // Images go before the text. Claude reads the picture first and then the
   // question about it, which is the order that gets the better answer.
   const userContent: unknown[] = [
-    ...attached.map((img) => ({ type: 'image', source: { type: 'url', url: img.url } })),
+    ...attached.map((img) =>
+      img.url
+        ? { type: 'image', source: { type: 'url', url: img.url } }
+        : { type: 'image', source: { type: 'base64', media_type: img.media_type || 'image/jpeg', data: img.data } }
+    ),
     ...(text ? [{ type: 'text', text }] : []),
   ]
 
@@ -393,23 +417,24 @@ Deno.serve(async (req) => {
     }
 
     // Store the full content blocks, not just text. Tool calls and results have
-    // to be replayed to the API verbatim on the next turn.
-    const rows = newRows
+    // to be replayed to the API verbatim on the next turn. A transient turn
+    // stores nothing.
+    if (!transient) {
+      await fetch(`${supabaseUrl}/rest/v1/chat_messages`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify(newRows),
+      })
 
-    await fetch(`${supabaseUrl}/rest/v1/chat_messages`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify(rows),
-    })
-
-    await fetch(`${supabaseUrl}/rest/v1/client_chats?id=eq.${chatId}`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({ updated_at: new Date().toISOString() }),
-    })
+      await fetch(`${supabaseUrl}/rest/v1/client_chats?id=eq.${chatId}`, {
+        method: 'PATCH',
+        headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ updated_at: new Date().toISOString() }),
+      })
+    }
 
     return json({
-      chat_id: chatId,
+      chat_id: transient ? null : chatId,
       content: reply!.content,
       stop_reason: reply!.stop_reason,
       usage: {

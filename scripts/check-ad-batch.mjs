@@ -3,7 +3,7 @@
 // upload, and edits survive a switch between sets.
 // Run: node scripts/check-ad-batch.mjs
 
-import { BATCH_LOOKS, assignLooks, batchReady, lookName, makeAdsPrompt, pickBackground, setTitle, snapshotSet } from '../src/lib/adBatch.js'
+import { BATCH_LOOKS, BATCH_PHOTO_MAX, assignLooks, assignPhotos, batchReady, lookName, makeAdsPrompt, photoPool, pickBackground, setTitle, snapshotSet } from '../src/lib/adBatch.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -43,6 +43,38 @@ check('the newest real photo, not an ad, a concept, the logo or a PDF', pickBack
 check('Drive when nothing is uploaded', pickBackground({ files: [files[0]], drive: [{ id: 'd1', name: 'logo.png', mime_type: 'image/png' }, { id: 'd2', name: 'crew.jpg', mime_type: 'image/jpeg' }] }), 'drive:d2')
 check('nothing when there is nothing', pickBackground({ files: [], drive: [] }), '')
 check('tolerates missing lists', pickBackground({}), '')
+
+// The photo pass.
+check('the prompt tells the chat to leave the colours to the logo', /Leave offer_colour and badge_colour empty/.test(p), true)
+check('no photos, no photo paragraph', /Attached are/.test(p), false)
+const pp = makeAdsPrompt({ count: 3, clientName: 'Prime', photos: [{ name: 'owner.jpg' }, { name: 'van.jpg' }] })
+check('photos are numbered in the prompt', /Attached are 2 photos of this business, numbered in this order: 1 owner.jpg, 2 van.jpg/.test(pp), true)
+check('and the JSON is asked for a photo number', /each with its "photo" number/.test(pp), true)
+const pool = photoPool({
+  files: [
+    { file_name: 'logo.png', storage_path: 'c1/logo.png', date_uploaded: '2026-10-01' },
+    { file_name: 'van.jpg', storage_path: 'c1/100-van.jpg', date_uploaded: '2026-09-02' },
+    { file_name: 'ad-1-square.png', storage_path: 'ads/c1/1-square.png', date_uploaded: '2026-10-09' },
+    { file_name: 'owner.HEIC', storage_path: 'c1/200-owner.HEIC', date_uploaded: '2026-09-20' },
+  ],
+  drive: [
+    { id: 'd1', name: 'crew.jpg', mime_type: 'image/jpeg', created_time: '2026-10-05T00:00:00Z' },
+    { id: 'd2', name: 'logo-white.png', mime_type: 'image/png', created_time: '2026-10-06T00:00:00Z' },
+    { id: 'd3', name: 'clip.mp4', mime_type: 'video/mp4', created_time: '2026-10-07T00:00:00Z' },
+    { id: 'd4', name: 'house.jpg', mime_type: 'image/jpeg', modified_time: '2026-08-01T00:00:00Z' },
+  ],
+})
+check('the pool is uploads and Drive together, newest first, no logos, ads or clips', pool.map((x) => x.path), ['drive:d1', 'c1/200-owner.HEIC', 'c1/100-van.jpg', 'drive:d4'])
+check('names travel with the pool', pool.map((x) => x.name), ['crew.jpg', 'owner.HEIC', 'van.jpg', 'house.jpg'])
+check('eight photos at most are shown', BATCH_PHOTO_MAX, 8)
+const three = [{ hook: 'a' }, { hook: 'b' }, { hook: 'c' }]
+check('the picks are honoured', assignPhotos(three, { pool, shown: pool.slice(0, 3), picks: [3, 1, 2] }).map((s) => s.backgroundPath), ['c1/100-van.jpg', 'drive:d1', 'c1/200-owner.HEIC'])
+check('no picks: a different photo each, newest first', assignPhotos(three, { pool, shown: pool, picks: [] }).map((s) => s.backgroundPath), ['drive:d1', 'c1/200-owner.HEIC', 'c1/100-van.jpg'])
+check('a repeated pick moves on to an unused photo', assignPhotos(three, { pool, shown: pool, picks: [1, 1, 1] }).map((s) => s.backgroundPath), ['drive:d1', 'c1/200-owner.HEIC', 'c1/100-van.jpg'])
+check('an out-of-range pick falls back', assignPhotos([{ hook: 'a' }], { pool, shown: pool.slice(0, 2), picks: [9] })[0].backgroundPath, 'drive:d1')
+check('more ads than photos reuses the newest', assignPhotos([1, 2, 3].map((n) => ({ hook: String(n) })), { pool: pool.slice(0, 2), shown: pool.slice(0, 2), picks: [] }).map((s) => s.backgroundPath), ['drive:d1', 'c1/200-owner.HEIC', 'drive:d1'])
+check('a set that brought its own photo keeps it', assignPhotos([{ hook: 'a', backgroundPath: 'c1/mine.jpg' }], { pool, shown: pool, picks: [1] })[0].backgroundPath, 'c1/mine.jpg')
+check('an empty pool leaves the photo empty', assignPhotos(three, { pool: [], shown: [], picks: [1] }).map((s) => s.backgroundPath), ['', '', ''])
 
 // The chips and the round trip.
 check('the chip names the angle', setTitle({ hookAngle: 'Current offer', hook: 'FREE second opinion on any quote' }, 0), '1 · Current offer')

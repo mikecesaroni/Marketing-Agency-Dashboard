@@ -262,7 +262,9 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   const deckH = deck ? deck.lines.length * deck.px * 1.34 : 0
   const deckGap = deck ? 22 : 0
 
-  const footer = measureFooter(ctx, { offerAmount, offerDetail, proof }, maxWidth)
+  // The offer block and the proof are measured against the width left beside
+  // the logo, so a wide offer reflows instead of running under it.
+  const footer = measureFooter(ctx, { offerAmount, offerDetail, proof }, maxWidth - (logoBox ? logoBox.w + 30 : 0))
   const footerTop = contentBottom - footer.height
 
   // The hook: the largest element on the frame, and the only one allowed to
@@ -487,8 +489,10 @@ function measureFooter(ctx, { offerAmount, offerDetail, proof }, maxWidth) {
   const parts = { height: 0 }
 
   if (proof?.trim()) {
-    parts.proof = { text: proof.trim(), px: 23 }
-    parts.height += 23 + 22
+    // One line, shrunk to the width beside the logo rather than drawn under it.
+    const fit = fitText(ctx, proof.trim(), maxWidth, 1, 23, 15, '700', 0, { lineRatio: 1 })
+    parts.proof = { text: fit.lines?.[0] || proof.trim(), px: fit.px || 23 }
+    parts.height += parts.proof.px + 22
   }
 
   const amount = offerAmount?.trim()

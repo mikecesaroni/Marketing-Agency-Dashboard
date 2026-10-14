@@ -515,7 +515,7 @@ function BatchStrip({ batch, client, count, saving, onShow, onSave, onRetry, onD
           <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-orange-300 border-t-orange-700" />
           <span>
             <span className="font-semibold">Making {count} ads for {client.name}.</span> Reading the brief, the offer, the reviews and
-            what has worked, then writing {count} angles. About half a minute.
+            what has worked, looking through their photos (uploads and Drive), then writing {count} angles. About half a minute.
           </span>
         </div>
       )}

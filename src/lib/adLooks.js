@@ -338,11 +338,15 @@ function renderPlate(ctx, size, content, assets, opts) {
   ctx.fillRect(padX, plate.y + 34, 110, 8)
 
   // Words on the plate: hook, subhead, offer pill, proof; logo bottom-right.
-  const logoBox = logoFit(logo, 150)
+  // The logo lives beside the bottom stack (the pill and the proof) and
+  // never rises above it, and the pill and the proof keep clear of its
+  // column, so no word on the plate can run under it.
+  const logoRoom = logoFit(logo, 150)
   const textW = maxWidth
+  const besideLogo = textW - (logoRoom ? logoRoom.w + 30 : 0)
   let y = plate.y + 34 + 8 + 30
   const bottom = contentBottom
-  const proofFit = proof?.trim() ? fitText(ctx, typographic(proof), textW - (logoBox ? logoBox.w + 30 : 0), 2, 22, 17, '600', 0, { lineRatio: 1.3 }) : null
+  const proofFit = proof?.trim() ? fitText(ctx, typographic(proof), besideLogo, 2, 22, 17, '600', 0, { lineRatio: 1.3 }) : null
   const proofH = proofFit ? proofFit.lines.length * proofFit.px * 1.3 : 0
   const amount = offerAmount?.trim() || ''
   const detail = offerDetail?.trim().toUpperCase() || ''
@@ -351,12 +355,14 @@ function renderPlate(ctx, size, content, assets, opts) {
     const padP = 26
     setFont(ctx, '900', 40, -0.5)
     const amountW = amount ? ctx.measureText(amount).width : 0
-    const fit = detail ? fitText(ctx, detail, textW - padP * 2 - (amount ? amountW + 18 : 0), 2, 22, 16, '800', 1, { lineRatio: 1.25 }) : null
+    const fit = detail ? fitText(ctx, detail, besideLogo - padP * 2 - (amount ? amountW + 18 : 0), 2, 22, 16, '800', 1, { lineRatio: 1.25 }) : null
     const detailW = fit ? widest(ctx, fit.lines) : 0
     const pillH = Math.max(40, fit ? fit.lines.length * fit.px * 1.25 : 0) + padP * 1.2
-    pill = { amount, amountW, fit, padP, w: Math.min(textW, amountW + (amount && fit ? 18 : 0) + detailW + padP * 2), h: r(pillH) }
+    pill = { amount, amountW, fit, padP, w: Math.min(besideLogo, amountW + (amount && fit ? 18 : 0) + detailW + padP * 2), h: r(pillH) }
   }
   const stackBottomH = (pill ? pill.h + 22 : 0) + proofH
+  // No taller than the stack it sits beside, so it cannot reach the subhead.
+  const logoBox = logoRoom ? logoFit(logo, Math.min(150, Math.max(64, stackBottomH))) : null
   const deck = subhead?.trim() ? fitText(ctx, typographic(subhead), textW, 2, 30, 22, '500', 0, { lineRatio: 1.32 }) : null
   const deckH = deck ? deck.lines.length * deck.px * 1.32 + 16 : 0
   const hookRoom = bottom - y - stackBottomH - deckH - 24
@@ -443,8 +449,16 @@ function renderSplit(ctx, size, content, assets, opts) {
   const px = padX
   const textW = (stacked ? w : panel.w) - px - (stacked ? px : 34)
   let y = contentTop
-  const badgeH = drawBadge(ctx, badge, px, y, textW, badgeColor === panelColor ? accent : badgeColor)
+  // On the stacked frame the logo pill shares the badge row, top-right, so
+  // the badge may not run under it and the headline starts below it: a
+  // square logo makes a pill taller than the badge, and a hook laid out from
+  // the badge's height ran its last word under the pill.
+  const pillFit = stacked ? logoFit(logo, 120) : null
+  const pillW = pillFit ? pillFit.w + 28 : 0
+  const pillH = pillFit ? pillFit.h + 28 : 0
+  const badgeH = drawBadge(ctx, badge, px, y, textW - (pillW ? pillW + 16 : 0), badgeColor === panelColor ? accent : badgeColor)
   if (badgeH) y += badgeH + 26
+  if (pillH) y = Math.max(y, contentTop + pillH + 22)
   const bottom = stacked ? panel.h - 40 : contentBottom
   const logoBox = stacked ? logoFit(logo, 130) : logoFit(logo, 140)
   const proofFit = proof?.trim() ? fitText(ctx, typographic(proof), textW, 2, 21, 16, '600', 0, { lineRatio: 1.3 }) : null
