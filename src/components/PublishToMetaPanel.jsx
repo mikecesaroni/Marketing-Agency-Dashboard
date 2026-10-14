@@ -510,11 +510,13 @@ function PartialWarning({ partial }) {
  * would defeat the point of running them against each other.
  */
 function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, open, onOpen }) {
-  const thumb = set.ordered[0]?.file?.url
+  // The feed crop is the one people recognise; the square is the fallback.
+  const preview = set.ordered.find((o) => o.size.key === 'feed') || set.ordered[0]
+  const thumb = preview?.file?.url
   const sizes = set.ordered.map((o) => o.size.key)
 
   return (
-    <li className={`border rounded-lg transition ${checked ? 'border-orange-400 bg-orange-50/40' : 'border-slate-200'}`}>
+    <li className={`border rounded-lg transition ${checked ? 'border-orange-400 bg-orange-50/40' : 'border-slate-200'}`} data-static-row>
       <div className="flex items-start gap-3 p-2">
         <input
           type="checkbox"
@@ -526,21 +528,24 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
           <ZoomImage
             src={thumb}
             alt=""
-            caption={set.recipe?.hook || set.ordered[0]?.size?.label}
+            caption={set.recipe?.hook || preview?.size?.label}
             loading="lazy"
-            className="w-12 h-12 object-cover rounded border border-slate-300 flex-shrink-0"
+            className="w-24 h-24 object-cover rounded border border-slate-300 flex-shrink-0 bg-slate-900"
           />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-slate-800 truncate">
+          <p className="text-sm font-medium text-slate-900 truncate">
             {copy.ad_name || set.recipe?.hook || new Date(Number(set.stamp)).toLocaleString()}
           </p>
           <p className="text-[11px] text-slate-500">
+            saved {ago(set.savedAt)}
             {seasonMeta(set.recipe?.season) && (
-              <span className="mr-1.5 rounded-full border border-slate-300 bg-slate-50 px-1.5 text-[10px] font-medium text-slate-700">{seasonMeta(set.recipe.season).label}</span>
+              <span className="ml-1.5 rounded-full border border-slate-300 bg-slate-50 px-1.5 text-[10px] font-medium text-slate-700">{seasonMeta(set.recipe.season).label}</span>
             )}
-            {sizes.length} size{sizes.length === 1 ? '' : 's'} — {sizes.join(', ')}
-            {sizes.length > 1 && ' — one ad, split by placement'}
+          </p>
+          <p className="text-[11px] text-slate-500">
+            {sizes.length} size{sizes.length === 1 ? '' : 's'}, {sizes.join(', ')}
+            {sizes.length > 1 && ', one ad split by placement'}
           </p>
           {publishedBefore > 0 && (
             <p className="text-[11px] text-amber-700">
@@ -628,8 +633,6 @@ export default function PublishToMetaPanel({
   client,
   set = null,
   initialVideo = '',
-  // The publish-a-video page: no image ads section, and the steps renumber.
-  videoOnly = false,
   // Pixels of sticky header above this panel (the page's Layout header), so
   // the launch strip sticks below it rather than under it.
   stickyTop = 0,
@@ -642,6 +645,16 @@ export default function PublishToMetaPanel({
   // the one that starts ticked.
   const [sets, setSets] = useState(set ? [set] : [])
   const [picked, setPicked] = useState(set ? [String(set.stamp)] : [])
+  // Videos or statics on the creative step. Starts on the kind that opened
+  // the panel (a saved static from the gallery, otherwise the clips), and
+  // moves to statics on its own when the client has no clips but has statics.
+  const [creativeKind, setCreativeKind] = useState(set ? 'image' : 'video')
+  const [videoCount, setVideoCount] = useState(null)
+  const kindTouched = useRef(false)
+  const chooseKind = (k) => {
+    kindTouched.current = true
+    setCreativeKind(k)
+  }
   const [copies, setCopies] = useState({})
   const [openCopy, setOpenCopy] = useState(set ? String(set.stamp) : '')
 
@@ -744,13 +757,20 @@ export default function PublishToMetaPanel({
   // The rest of the client's saved ads. Best effort — the set that opened the
   // panel is already here, so a failure costs the extra choices, not the page.
   useEffect(() => {
-    if (videoOnly) return
     fetchSavedAds(client.id)
       .then((all) => {
         if (all.length > 0) setSets(all)
       })
       .catch(() => {})
-  }, [client.id, videoOnly])
+  }, [client.id])
+
+  // A client with statics and no clips opens on the statics, unless a clip
+  // was asked for in the URL or somebody has already clicked the selector.
+  useEffect(() => {
+    if (kindTouched.current || videoCount !== 0 || sets.length === 0) return
+    const wantsVideo = Array.isArray(initialVideo) ? initialVideo.length > 0 : Boolean(initialVideo)
+    if (!wantsVideo) setCreativeKind('image')
+  }, [videoCount, sets.length, initialVideo])
 
   // Seed each creative's copy from its own saved recipe. Only for stamps not
   // already edited, so re-running this never overwrites typing.
@@ -1192,9 +1212,9 @@ export default function PublishToMetaPanel({
   }
 
   const step = (n) => (chosenObjective?.needsForm ? n : n - 1)
-  // Section numbers: the image ads section is 2 and goes away in video-only
-  // mode, so everything after it moves up one.
-  const num = (n) => String(videoOnly && n > 2 ? n - 1 : n)
+  // Section numbers: videos and statics used to be sections 1 and 2 and are
+  // now one creative step, so everything after it moves up one.
+  const num = (n) => String(n > 2 ? n - 1 : n)
 
   // The strip at the top: derived from the same state the sections edit.
   const withCopy =
@@ -1246,68 +1266,125 @@ export default function PublishToMetaPanel({
       <Section
         step="1"
         id="launch-videos"
-        title="Videos"
-        hint="Drop the week's clips. Each one goes to Meta straight away, gets transcribed, and gets three versions of its copy written. Tick a clip, pick a version, done."
+        title="Creative"
+        hint="Videos and saved statics, newest first. Tick what goes out, from either list or both. Everything ticked lands in the same ad set, which is the only way testing them against each other means anything."
       >
-        <VideoAdPicker
-          client={client}
-          intake={intake}
-          picked={pickedVideos}
-          onPicked={setPickedVideos}
-          copies={videoCopies}
-          onCopy={(path, patch) =>
-            setVideoCopies((prev) => ({ ...prev, [path]: { ...prev[path], ...patch } }))
-          }
-        />
-      </Section>
+        {/* THE SELECTOR. Two lists, one in view at a time, each with its count
+            and how many are ticked, so a static ticked on the other list is
+            never a surprise at the bottom. Both stay mounted: switching must
+            not drop an upload or a transcript that is in progress. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-xl bg-slate-100 p-1 text-sm" role="tablist" aria-label="Videos or statics">
+            {[
+              { key: 'video', label: '🎬 Videos', count: videoCount, ticked: pickedVideos.length },
+              { key: 'image', label: '🖼️ Statics', count: sets.length, ticked: pickedSets.length },
+            ].map((k) => {
+              const on = creativeKind === k.key
+              return (
+                <button
+                  key={k.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  data-creative-kind={k.key}
+                  onClick={() => chooseKind(k.key)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 font-medium transition ${on ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  {k.label}
+                  <span className={`rounded-full px-1.5 text-[11px] ${on ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700'}`} data-creative-count={k.key}>
+                    {k.count === null ? '…' : k.count}
+                  </span>
+                  {k.ticked > 0 && (
+                    <span className="rounded-full bg-orange-600 px-1.5 text-[10px] font-semibold text-white" data-creative-ticked={k.key}>
+                      {k.ticked} ticked
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <span className="text-[11px] text-slate-500">
+            {creativeKind === 'video'
+              ? 'Drop the week\'s clips. Each one goes to Meta straight away, gets transcribed, and gets three versions of its copy written. Tick a clip, pick a version, done.'
+              : 'Saved from the Ad Studio. Tick one and its words from the Studio are already filled in.'}
+          </span>
+        </div>
 
-      {!videoOnly && (
-      <Section
-        step="2"
-        title="Image ads"
-        hint="Optional. Tick any saved statics going out with the clips. Everything ticked lands in the same ad set, which is the only way testing them against each other means anything."
-      >
-        {sets.length === 0 && (
-          <p className="text-xs text-slate-500">
-            No saved image ads for {client.name}. A launch can be video only; design a static on the
-            Design tab if one is wanted.
-          </p>
-        )}
-        <ul className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
-          {sets.map((s) => {
-            const stamp = String(s.stamp)
-            return (
-              <CreativeRow
-                key={stamp}
-                set={s}
-                checked={picked.includes(stamp)}
-                onToggle={() => togglePick(stamp)}
-                copy={copies[stamp] || { primary_text: '', headline: '', description: '', ad_name: '' }}
-                onCopy={(patch) =>
-                  setCopies((prev) => ({ ...prev, [stamp]: { ...prev[stamp], ...patch } }))
-                }
-                publishedBefore={alreadyPublished.filter((p) => p.stamp === stamp).length}
-                open={openCopy === stamp}
-                onOpen={() => setOpenCopy(openCopy === stamp ? '' : stamp)}
-              />
-            )
-          })}
-        </ul>
-        {pickedSets.length > MAX_BATCH_ADS && (
-          <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
-            {pickedSets.length} creatives is more than one publish will take. Send{' '}
-            {MAX_BATCH_ADS} now and the rest into the same ad set afterwards.
-          </p>
-        )}
-        {maxSizes > 1 && (
-          <p className="text-[11px] text-slate-500">
-            Each creative publishes as <strong>one ad</strong> holding all {maxSizes} of its sizes —
-            the 9:16 goes to Stories and Reels, the 1:1 to right column, Marketplace and search, and
-            the 4:5 everywhere else.
-          </p>
-        )}
+        <div className={creativeKind === 'video' ? '' : 'hidden'} data-creative-list="video">
+          <VideoAdPicker
+            client={client}
+            intake={intake}
+            picked={pickedVideos}
+            onPicked={setPickedVideos}
+            copies={videoCopies}
+            onCopy={(path, patch) =>
+              setVideoCopies((prev) => ({ ...prev, [path]: { ...prev[path], ...patch } }))
+            }
+            onLoaded={(list) => setVideoCount(list.length)}
+          />
+        </div>
+
+        <div className={creativeKind === 'image' ? 'space-y-2' : 'hidden'} data-creative-list="image">
+          {sets.length === 0 && (
+            <div className="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+              <p className="text-sm font-medium text-slate-700">No saved statics for {client.name} yet</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Content, then Ad Studio, then this client makes three from their brief. Or design one on
+                the Studio&rsquo;s Design tab and save it.
+              </p>
+            </div>
+          )}
+          {sets.length > 0 && (
+            <div className="flex items-center gap-2 text-[11px] text-slate-500">
+              <span>
+                {sets.length} static{sets.length === 1 ? '' : 's'}, newest first
+              </span>
+              {sets.length > 1 && pickedSets.length < Math.min(sets.length, MAX_BATCH_ADS) && (
+                <button
+                  type="button"
+                  onClick={() => setPicked(sets.slice(0, MAX_BATCH_ADS).map((s) => String(s.stamp)))}
+                  className="text-blue-700 hover:underline"
+                >
+                  tick the newest {Math.min(sets.length, MAX_BATCH_ADS)}
+                </button>
+              )}
+            </div>
+          )}
+          <ul className="space-y-1.5 max-h-[32rem] overflow-y-auto pr-1">
+            {sets.map((s) => {
+              const stamp = String(s.stamp)
+              return (
+                <CreativeRow
+                  key={stamp}
+                  set={s}
+                  checked={picked.includes(stamp)}
+                  onToggle={() => togglePick(stamp)}
+                  copy={copies[stamp] || { primary_text: '', headline: '', description: '', ad_name: '' }}
+                  onCopy={(patch) =>
+                    setCopies((prev) => ({ ...prev, [stamp]: { ...prev[stamp], ...patch } }))
+                  }
+                  publishedBefore={alreadyPublished.filter((p) => p.stamp === stamp).length}
+                  open={openCopy === stamp}
+                  onOpen={() => setOpenCopy(openCopy === stamp ? '' : stamp)}
+                />
+              )
+            })}
+          </ul>
+          {pickedSets.length > MAX_BATCH_ADS && (
+            <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+              {pickedSets.length} creatives is more than one publish will take. Send{' '}
+              {MAX_BATCH_ADS} now and the rest into the same ad set afterwards.
+            </p>
+          )}
+          {maxSizes > 1 && (
+            <p className="text-[11px] text-slate-500">
+              Each creative publishes as <strong>one ad</strong> holding all {maxSizes} of its sizes:
+              the 9:16 goes to Stories and Reels, the 1:1 to right column, Marketplace and search, and
+              the 4:5 everywhere else.
+            </p>
+          )}
+        </div>
       </Section>
-      )}
 
       <Section step={num(3)} title="Button and destination" hint="Shared by every ad in this publish.">
         <div className="grid md:grid-cols-2 gap-2">

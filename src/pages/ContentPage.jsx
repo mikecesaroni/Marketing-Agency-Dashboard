@@ -78,7 +78,7 @@ const DOORS = [
   {
     key: 'publish',
     title: 'Publish',
-    blurb: 'A fresh video ad per client per week. Drop the clip, pick the words, send it into the funnel.',
+    blurb: 'Videos and saved statics out the door. Pick the client, tick the creative, pick the words, send it into the funnel.',
     cta: 'See who is 10+ days without a new ad',
     tone: 'from-emerald-600 to-teal-400',
     ring: 'group-hover:ring-emerald-300',
@@ -375,16 +375,13 @@ const SECTION_META = {
   },
   publish: {
     title: 'Publish',
-    hint: 'Video, image or the funnel, then the client. A video gets its own publish page, the funnel its own builder page; image ads publish from the Studio.',
+    hint: 'Pick the client. Their publish page has the videos and the saved statics side by side, newest first, then the words, where it goes and the button. Everything is created paused. "Build a funnel" on a card opens the funnel builder instead.',
   },
 }
 
 export default function ContentPage() {
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') || ''
-  // Behind the Publish door: video or image first, then the client. Video
-  // is its own page (/publish/:id); image ads publish from the Studio.
-  const kind = tab === 'publish' ? params.get('kind') || '' : ''
   const [data, setData] = useState(null)
   const [drops, setDrops] = useState(null)
   // The raw client rows, for the drop zone: it needs the Meta account id,
@@ -441,7 +438,7 @@ export default function ContentPage() {
 
   const stats = useMemo(() => (data ? { ...hubStats(data), drops: drops ? dropStats(drops) : null } : null), [data, drops])
   const rows = useMemo(() => (data ? searchClients(data, q) : []), [data, q])
-  const openTab = (key, k = '') => setParams(key ? (k ? { tab: key, kind: k } : { tab: key }) : {})
+  const openTab = (key) => setParams(key ? { tab: key } : {})
   const meta = SECTION_META[tab]
 
   return (
@@ -494,62 +491,16 @@ export default function ContentPage() {
             </div>
           </div>
 
-          {tab === 'publish' && !kind && (
-            /* VIDEO, IMAGE OR THE FUNNEL. Three big choices, then the client list. */
-            <div className="grid gap-4 md:grid-cols-3">
-              <button
-                type="button"
-                onClick={() => openTab('publish', 'video')}
-                className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-400 p-6 text-left text-white shadow-lg ring-4 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl group-hover:ring-emerald-300"
-              >
-                <span className="text-3xl">🎬</span>
-                <h3 className="mt-3 text-2xl font-bold tracking-tight">Video</h3>
-                <p className="mt-1 max-w-xs text-sm text-white/85">
-                  This week&rsquo;s clip. Pick the client and land on their publish page with the video flow and nothing else.
-                </p>
-                <span className="mt-auto pt-4 text-xs font-medium text-white/80">Pick a client →</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => openTab('publish', 'image')}
-                className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-slate-800 to-slate-600 p-6 text-left text-white shadow-lg ring-4 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl"
-              >
-                <span className="text-3xl">🖼️</span>
-                <h3 className="mt-3 text-2xl font-bold tracking-tight">Image ads</h3>
-                <p className="mt-1 max-w-xs text-sm text-white/85">
-                  Statics saved in the Ad Studio. Opens the client&rsquo;s Studio on the Publish tab.
-                </p>
-                <span className="mt-auto pt-4 text-xs font-medium text-white/80">Pick a client →</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => openTab('publish', 'funnel')}
-                className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-orange-600 to-rose-500 p-6 text-left text-white shadow-lg ring-4 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl"
-              >
-                <span className="text-3xl">🔻</span>
-                <h3 className="mt-3 text-2xl font-bold tracking-tight">Build a funnel</h3>
-                <p className="mt-1 max-w-xs text-sm text-white/85">
-                  Top of funnel and Retargeting, built in Meta for you: one finds new people, one follows up with people who showed interest. Paused, no ads needed yet.
-                </p>
-                <span className="mt-auto pt-4 text-xs font-medium text-white/80">Pick a client →</span>
-              </button>
-            </div>
+          {/* THE WEEK'S BOARD, then every client. One click on a client is
+              their publish page with the clips and the saved statics; the
+              funnel builder is the small link on the card. */}
+          {tab === 'publish' && !q && <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} onReset={resetDrops} />}
+
+          {tab === 'publish' && (
+            <p className="text-xs font-medium text-slate-700">Publish: pick the client</p>
           )}
 
-          {tab === 'publish' && !kind && !q && <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} onReset={resetDrops} />}
-
-          {tab === 'publish' && kind && (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <button type="button" onClick={() => openTab('publish')} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 hover:bg-slate-50">
-                ← Video or image
-              </button>
-              <span className="font-medium text-slate-700">
-                {kind === 'video' ? 'Video ad: pick the client' : kind === 'funnel' ? 'Build a funnel: pick the client' : 'Image ads: pick the client'}
-              </span>
-            </div>
-          )}
-
-          {tab === 'publish' && !kind && !q ? null : data === null ? (
+          {data === null ? (
             <p className="text-sm text-slate-500">Loading…</p>
           ) : rows.length === 0 ? (
             <Card padding="lg" className="text-center text-sm text-slate-500">
@@ -576,17 +527,13 @@ export default function ContentPage() {
                 <ClientCard
                   key={r.id}
                   row={r}
-                  href={
+                  href={tab === 'studio' ? `/client/${r.id}?open=studio&make=3` : `/publish/${r.id}`}
+                  primary={tab === 'studio' ? 'Make 3 ads →' : 'Publish videos and statics →'}
+                  secondary={
                     tab === 'studio'
-                      ? `/client/${r.id}?open=studio&make=3`
-                      : kind === 'video'
-                        ? `/publish/${r.id}`
-                        : kind === 'funnel'
-                          ? `/funnel/${r.id}`
-                          : `/client/${r.id}?open=publish`
+                      ? { href: `/client/${r.id}?open=studio`, label: 'Open empty' }
+                      : { href: `/funnel/${r.id}`, label: 'Build a funnel' }
                   }
-                  primary={tab === 'studio' ? 'Make 3 ads →' : kind === 'video' ? 'Publish a video →' : kind === 'funnel' ? 'Build the funnel →' : 'Open Publish →'}
-                  secondary={tab === 'studio' ? { href: `/client/${r.id}?open=studio`, label: 'Open empty' } : undefined}
                   lines={
                     tab === 'studio' ? (
                       <>

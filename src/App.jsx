@@ -8,7 +8,7 @@ import ContentPage from './pages/ContentPage'
 import WeeklyReportPage from './pages/WeeklyReportPage'
 import ClientDashboardPage from './pages/ClientDashboardPage'
 import DrivePhotosPage from './pages/DrivePhotosPage'
-import PublishVideoPage from './pages/PublishVideoPage'
+import PublishPage from './pages/PublishPage'
 import FunnelPage from './pages/FunnelPage'
 import PaymentsPage from './pages/PaymentsPage'
 import ReportsPage from './pages/ReportsPage'
@@ -66,7 +66,7 @@ export default function App() {
         <Route path="/clients" element={<ClientsPage />} />
         <Route path="/content" element={<ContentPage />} />
         <Route path="/content/drive/:clientId" element={<DrivePhotosPage />} />
-        <Route path="/publish/:clientId" element={<PublishVideoPage />} />
+        <Route path="/publish/:clientId" element={<PublishPage />} />
         <Route path="/funnel/:clientId" element={<FunnelPage />} />
         <Route path="/client/:clientId" element={<ClientDetailPage />} />
         <Route path="/deliverables" element={<DeliverablesPage />} />

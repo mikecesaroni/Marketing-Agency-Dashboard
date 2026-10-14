@@ -36,7 +36,7 @@ const TILES = {
 
 // One extra tile that is not a nav item: the week's job, straight in.
 const PUBLISH_TILE = {
-  to: '/content?tab=publish&kind=video',
+  to: '/content?tab=publish',
   label: 'Publish a video',
   blurb: 'Drop the clip, pick the words, send it into the funnel.',
   tone: 'from-emerald-600 to-teal-400',

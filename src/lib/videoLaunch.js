@@ -405,9 +405,9 @@ export function launchSteps({ picked = 0, ready = 0, withCopy = 0, destination =
   return [
     {
       key: 'videos',
-      label: 'Videos',
+      label: 'Creative',
       done: picked > 0,
-      detail: picked > 0 ? `${picked} picked` : ready > 0 ? `${ready} ready` : 'drop a clip',
+      detail: picked > 0 ? `${picked} picked` : ready > 0 ? `${ready} ready` : 'a clip or a static',
     },
     {
       key: 'words',

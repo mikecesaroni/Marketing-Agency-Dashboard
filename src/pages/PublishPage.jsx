@@ -9,22 +9,23 @@ import { ago } from '../lib/contentHub'
 import { isVideoAd } from '../lib/videoLaunch'
 
 /**
- * Publish a video: its own page.
+ * Publish: one client's page for getting creative out the door.
  *
- *   Content → Publish → Video → client → here.
+ *   Content → Publish → client → here.
  *
  * The publish flow used to live five clicks deep inside the Ad Studio, which
  * is a design tool, inside the client page, which is everything else. A
- * teammate whose whole job this week is "get the clips out" should land on
- * a page that is only that: the client at the top, the clips, the words,
- * where it goes, the button. Nothing else on the screen.
+ * teammate whose whole job this afternoon is "get this week's creative out"
+ * should land on a page that is only that: the client at the top, the clips
+ * and the saved statics side by side, the words, where it goes, the button.
+ * Nothing else on the screen.
  *
  * /publish/:clientId, with ?video=<storage path> to land with a clip
  * already ticked (the board's "click to publish"). The panel underneath is
- * the same PublishToMetaPanel the Studio uses, in video-only mode, so the
- * two never drift.
+ * the same PublishToMetaPanel the Studio's Publish tab uses, so the two never
+ * drift.
  */
-export default function PublishVideoPage() {
+export default function PublishPage() {
   const { clientId } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
@@ -73,13 +74,14 @@ export default function PublishVideoPage() {
     }
   }, [clientId])
 
-  const lastVideo = published.filter(isVideoAd).map((r) => r.created_at).sort().pop() || null
-  const videoCount = published.filter(isVideoAd).length
+  const videos = published.filter(isVideoAd)
+  const statics = published.filter((r) => !isVideoAd(r))
+  const last = (rows) => rows.map((r) => r.created_at).sort().pop() || null
 
   return (
     <Layout
-      title="Publish a video"
-      subtitle={client ? `${client.name}: drop the clip, pick the words, send it into the funnel.` : 'Loading…'}
+      title="Publish"
+      subtitle={client ? `${client.name}: tick the clips or the statics, pick the words, send them into the funnel.` : 'Loading…'}
       actions={
         <>
           <Link to="/content?tab=publish" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
@@ -107,13 +109,15 @@ export default function PublishVideoPage() {
             <div className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
             <div className="relative flex flex-wrap items-end justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-100">Video ad for</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-100">Publishing for</p>
                 <h2 className="mt-1 truncate text-2xl font-bold tracking-tight md:text-3xl">{client.name}</h2>
-                <p className="mt-1 text-sm text-emerald-50/90">
+                <p className="mt-1 text-sm text-emerald-50/90" data-publish-stats>
                   {client.industry || 'Client'}
                   {' · '}
-                  {lastVideo ? `last video ad ${ago(lastVideo)}` : 'no video ad yet'}
-                  {videoCount > 0 ? ` · ${videoCount} so far` : ''}
+                  {last(videos) ? `last video ad ${ago(last(videos))}` : 'no video ad yet'}
+                  {' · '}
+                  {last(statics) ? `last static ${ago(last(statics))}` : 'no static yet'}
+                  {published.length > 0 ? ` · ${published.length} published so far` : ''}
                   {!client.meta_ad_account_id && ' · no Meta ad account connected'}
                 </p>
               </div>
@@ -141,7 +145,6 @@ export default function PublishVideoPage() {
               client={client}
               intake={intake}
               initialVideo={initialVideo}
-              videoOnly
               stickyTop={headerHeight}
               alreadyPublished={published}
               onPublished={() =>

@@ -118,7 +118,11 @@ function Checks({ checks }) {
   )
 }
 
-export default function VideoAdPicker({ client, intake, picked, onPicked, copies, onCopy }) {
+export default function VideoAdPicker({ client, intake, picked, onPicked, copies, onCopy, onLoaded }) {
+  // Told what loaded (the panel above shows the count on its selector). Held
+  // in a ref so an inline arrow from the parent does not restart `load`.
+  const onLoadedRef = useRef(onLoaded)
+  onLoadedRef.current = onLoaded
   // Which video's copy is being written, what the model said it did, and the
   // options it returned so "another angle" can walk them without paying for a
   // second request.
@@ -158,7 +162,9 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
 
   const load = useCallback(async () => {
     try {
-      setVideos(await fetchClientVideos(client.id, account))
+      const list = await fetchClientVideos(client.id, account)
+      setVideos(list)
+      onLoadedRef.current?.(list)
     } catch (err) {
       setError(err.message)
     }
