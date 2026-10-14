@@ -175,32 +175,26 @@ function drawOfferCard(ctx, card, x, y, { align = 'left' } = {}) {
 function renderStack(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, contentBottom, maxWidth } = m
-  const { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, focus } = content
+  const { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, focus, hookPlate } = content
   const { background, logo } = assets || {}
 
-  // The photo, then a light haze on the text side so navy type reads on any
-  // sky, and a dark lift along the bottom for the logo.
+  // The photo first. The haze comes after the stack is measured, because it
+  // has to reach under the last line of the subhead rather than stop at a
+  // fixed height: a subhead that landed on the bare photo was the one line
+  // on the frame nobody could read.
   ctx.fillStyle = SLATE
   ctx.fillRect(0, 0, w, h)
   if (background) drawCoverIn(ctx, background, { x: 0, y: 0, w, h }, focus)
   const ink = SLATE
   const colW = r(maxWidth * 0.62)
   const colX = w - padX - colW
-  scrim(ctx, 0, 0, w, h * 0.62, [
-    [0, 'rgba(255,255,255,0.78)'],
-    [0.45, 'rgba(255,255,255,0.46)'],
-    [1, 'rgba(255,255,255,0)'],
-  ])
-  scrim(ctx, 0, h * 0.7, w, h * 0.3, [
-    [0, 'rgba(2,6,23,0)'],
-    [1, 'rgba(2,6,23,0.55)'],
-  ])
 
   // Measure the stack: accent word, the rest of the hook, the subhead.
   const { accent: word, rest } = accentWord(hook)
   let y = contentTop
-  const badgeH = drawBadge(ctx, badge, padX, y, maxWidth, badgeColor)
+  const badgeH = badge ? 52 : 0
   if (badgeH) y += badgeH + 28
+  const stackTop = y
 
   const room = contentBottom - y - 40
   let wordFit = null
@@ -216,9 +210,49 @@ function renderStack(ctx, size, content, assets, opts) {
   const deck = subhead?.trim()
     ? fitText(ctx, typographic(subhead), colW, 2, 30, 22, '600', 0, { lineRatio: 1.3 })
     : null
+  const stackH =
+    (wordFit ? wordFit.px * 0.98 + 6 : 0) +
+    (restFit ? restFit.lines.length * restFit.px * 1.02 + 8 : 0) +
+    (deck ? deck.lines.length * deck.px * 1.3 + 10 : 0)
+  const stackBottom = stackTop + stackH
+
+  // The haze: white, strong under every line of the stack, gone a little
+  // below it; and a dark lift along the bottom for the logo.
+  const hazeTo = Math.min(h, stackBottom + 70)
+  scrim(ctx, 0, 0, w, hazeTo, [
+    [0, 'rgba(255,255,255,0.86)'],
+    [0.72, 'rgba(255,255,255,0.66)'],
+    [1, 'rgba(255,255,255,0)'],
+  ])
+  scrim(ctx, 0, h * 0.7, w, h * 0.3, [
+    [0, 'rgba(2,6,23,0)'],
+    [1, 'rgba(2,6,23,0.55)'],
+  ])
+  drawBadge(ctx, badge, padX, contentTop, maxWidth, badgeColor)
 
   // Draw the stack, right-aligned to the column.
   const right = colX + colW
+
+  // "Panel behind the hook": a white card behind the whole stack, sized to
+  // its widest line, for a photo too busy for any haze. Same switch as on
+  // the classic look, so it does what it says on this one too.
+  if (hookPlate && (wordFit || restFit || deck)) {
+    let widest = 0
+    const measure = (fit, weight, spacing) => {
+      if (!fit) return
+      setFont(ctx, weight, fit.px, spacing)
+      for (const line of fit.lines) widest = Math.max(widest, ctx.measureText(line).width)
+    }
+    measure(wordFit, '900', -6)
+    measure(restFit, '900', -2)
+    measure(deck, '600', 0)
+    const pad = 28
+    const plateX = Math.max(padX - pad, right - widest - pad)
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'
+    roundRect(ctx, plateX, stackTop - 22, right + pad - plateX, stackH + 30, 18)
+    ctx.fill()
+  }
+
   if (wordFit) {
     setFont(ctx, '900', wordFit.px, -6)
     ctx.fillStyle = accent

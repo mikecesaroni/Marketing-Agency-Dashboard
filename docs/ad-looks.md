@@ -15,7 +15,7 @@ Pick one on the Design tab (the "Look" row), or press "Next look" to cycle throu
 | Photo on a colour | Flat background, the photo placed where you drag it | Product shots, logos, a photo whose edges are not worth showing |
 | AI concept | A finished ad made by AI, used whole; on the square and the Story it sits on a blurred copy of itself | When a concept batch has a winner |
 
-The giant word on the headline stack is the first word of the hook when it is short (FREE, $89, SAVE, NEW), or any word wrapped in asterisks (`*Free* second opinion on any quote`). A long first word stays in the sentence.
+The giant word on the headline stack is the first word of the hook when it is short (FREE, $89, SAVE, NEW), or any word wrapped in asterisks (`*Free* second opinion on any quote`). A long first word stays in the sentence. The white haze behind the stack reaches under the last line of the subhead, whatever the photo, and "Panel behind the hook" puts a white card behind the whole stack for a photo too busy for a haze (the same switch as on the Classic look; on the plate, split and AI looks the words already sit on a panel, and the switch says so).
 
 Dragging the artboard still moves the photo's focal point on the photo looks, and the other two sizes follow the same spot. Saved ads remember their look (`saved_ads.layout`), so Edit and the owner's revision notes re-render in the same look.
 

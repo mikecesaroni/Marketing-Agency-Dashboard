@@ -1911,15 +1911,23 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
             </button>
           ))}
         </div>
-        <label className="flex items-center gap-1.5 text-xs text-slate-600">
-          <input
-            type="checkbox"
-            checked={hookPlate}
-            onChange={(e) => setHookPlate(e.target.checked)}
-            className="rounded"
-          />
-          Panel behind the hook
-        </label>
+        {/* The plate, split and AI looks already put the words on a panel, so
+            the switch would be a lie there; it says so instead of doing nothing. */}
+        {['plate', 'split', 'ai'].includes(layout) ? (
+          <span className="text-xs text-slate-400" data-hook-plate title="On this look the words already sit on a solid panel">
+            Panel behind the hook: built into this look
+          </span>
+        ) : (
+          <label className="flex items-center gap-1.5 text-xs text-slate-600" data-hook-plate title={layout === 'stack' ? 'A white card behind the big word, the headline and the subhead, for a photo too busy to read over' : 'A dark plate behind the headline and subhead'}>
+            <input
+              type="checkbox"
+              checked={hookPlate}
+              onChange={(e) => setHookPlate(e.target.checked)}
+              className="rounded"
+            />
+            Panel behind the hook
+          </label>
+        )}
         <label className="flex items-center gap-1.5 text-xs text-slate-600">
           <input
             type="checkbox"
