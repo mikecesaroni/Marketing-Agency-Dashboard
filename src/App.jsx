@@ -25,6 +25,7 @@ import LoginPage from './pages/LoginPage'
 import TeamPage from './pages/TeamPage'
 import NothingHerePage from './pages/NothingHerePage'
 import RequireAuth from './components/RequireAuth'
+import HelpChat from './components/HelpChat'
 import { onPublicSite } from './lib/publicSite'
 
 export default function App() {
@@ -44,6 +45,10 @@ export default function App() {
   }
 
   return (
+    <>
+    {/* The help chat sits outside the routes so a conversation survives the
+        page changes it causes itself. It hides on the public token pages. */}
+    <HelpChat />
     <Routes>
       {/* Public, token-gated. Deliberately outside the dashboard shell: the
           person opening it is a client, not a CRM user, and must never see the
@@ -87,5 +92,6 @@ export default function App() {
         <Route path="/guide" element={<AgentGuidePage />} />
       </Route>
     </Routes>
+    </>
   )
 }

@@ -20,6 +20,7 @@ import AiVideoPanel from '../components/AiVideoPanel'
 import { accountStatusLabel, accountStatusOk } from '../lib/adHealth'
 import ClientChatPanel from '../components/ClientChatPanel'
 import AdStudioPanel from '../components/AdStudioPanel'
+import { useHelpActions } from '../lib/useHelpActions'
 import LogKPIsForm from '../components/LogKPIsForm'
 import ClientFilesSection from '../components/ClientFilesSection'
 import PaymentTracker from '../components/PaymentTracker'
@@ -304,6 +305,56 @@ export default function ClientDetailPage() {
     setStudioFromChat(false)
     setShowStudioModal(true)
   }
+  // What the help chat can do from this page: open the Studio (empty or
+  // writing N ads), the Publish tab, or the client's own chat.
+  useHelpActions('client', {
+    label: `Client page for ${client?.name || ''}`,
+    state: () => ({
+      client: client ? { name: client.name, industry: client.industry, market: client.market, meta_account: Boolean(client.meta_ad_account_id) } : 'still loading',
+      intake: intake ? 'filled in' : 'not filled in',
+      studio_open: showStudioModal,
+      chat_open: showChatModal,
+    }),
+    tools: [
+      {
+        name: 'client_open_studio',
+        description: "Open this client's Ad Studio on the Design tab, empty.",
+        input_schema: { type: 'object', properties: {} },
+        run: () => {
+          openStudio('design')
+          return { ok: true }
+        },
+      },
+      {
+        name: 'client_make_ads',
+        description: "Open this client's Ad Studio already writing N ads from their brief (\"Make 3 ads\").",
+        input_schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 6 } } },
+        run: ({ count }) => {
+          openStudio('design', '', Math.max(1, Math.min(6, Number(count) || 3)))
+          return { ok: true, note: 'Writing them now; about half a minute. Call page_state to see them.' }
+        },
+      },
+      {
+        name: 'client_open_publish',
+        description: "Open this client's Studio on its Publish tab (the same as their publish page).",
+        input_schema: { type: 'object', properties: {} },
+        run: () => {
+          openStudio('publish')
+          return { ok: true }
+        },
+      },
+      {
+        name: 'client_open_chat',
+        description: "Open the client's own chat: scripts, creative sets, their Meta account.",
+        input_schema: { type: 'object', properties: {} },
+        run: () => {
+          setShowChatModal(true)
+          return { ok: true }
+        },
+      },
+    ],
+  })
+
   const handleNextAction = (step) => {
     switch (step?.action?.kind) {
       case 'payments':

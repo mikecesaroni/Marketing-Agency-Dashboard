@@ -12,6 +12,9 @@ import { guessAdSeason, seasonMeta } from '../lib/adSeason'
 import { metaAdName, wcName } from '../lib/adNaming'
 import { ago } from '../lib/contentHub'
 import { suggestImageFeedCopy } from '../lib/adCopy'
+import { isPublishable } from '../lib/adVideos'
+import { looseMatch } from '../lib/helpActions'
+import { useHelpActions } from '../lib/useHelpActions'
 import { feedCopyFromOptions, feedCopyInstruction, mergeWritten, needsFeedCopy, nextToWrite, staticCurrent } from '../lib/publishCopy'
 import {
   describeLaunch,
@@ -34,6 +37,10 @@ import {
   checkAdset,
   listAdsets,
   listCampaigns,
+  listLeadForms,
+  searchLocations,
+  clampRadius,
+  DEFAULT_RADIUS_MILES,
   publishAd,
   publishAdBatch,
   summarisePlan,
@@ -682,6 +689,8 @@ export default function PublishToMetaPanel({
   // moves to statics on its own when the client has no clips but has statics.
   const [creativeKind, setCreativeKind] = useState(set ? 'image' : 'video')
   const [videoCount, setVideoCount] = useState(null)
+  // The clips as the picker loaded them, for the help chat's view of the page.
+  const [videoList, setVideoList] = useState([])
   const kindTouched = useRef(false)
   const chooseKind = (k) => {
     kindTouched.current = true
@@ -923,8 +932,12 @@ export default function PublishToMetaPanel({
   // panel. list_adsets already answered account-wide when given no campaign,
   // and every row carries its own campaign_id, so one call covers the lot and
   // the campaign picker above stops mattering once ad sets are being reused.
+  //
+  // Loaded on open rather than on demand, because the first choice on the
+  // Campaign step is "add to all live ad sets" and it needs to know how many
+  // there are before anyone clicks.
   useEffect(() => {
-    if (!reuseAdset || adsets !== null) return
+    if (adsets !== null) return
     listAdsets(client.id)
       .then((found) => {
         setAdsets(found)
@@ -982,6 +995,50 @@ export default function PublishToMetaPanel({
 
   const chosenCampaign = reuseCampaign ? campaigns?.find((c) => c.id === campaignId) : null
   const chosenAdsets = reuseAdset ? (adsets || []).filter((a) => adsetIds.includes(a.id)) : []
+
+  // WHERE THE ADS GO, as one choice. "All live ad sets" is the first and the
+  // default whenever the account has any: a new creative belongs in every ad
+  // set that is delivering, paused inside each, so switching it on is a click
+  // in Ads Manager and not a rebuild. It is reuse with every live ad set
+  // ticked; untick one and it reads as a hand pick. The other two are the
+  // old choices: an existing campaign or ad sets picked by hand, or a new
+  // campaign.
+  const liveAdsets = (adsets || []).filter((a) => a.live)
+  const liveIds = liveAdsets.map((a) => a.id)
+  const sameIds = (a, b) => {
+    if (a.length !== b.length) return false
+    const sa = [...a].sort()
+    const sb = [...b].sort()
+    return sa.every((x, i) => x === sb[i])
+  }
+  const where = reuseAdset && liveIds.length > 0 && sameIds(adsetIds, liveIds) ? 'live' : reuseCampaign ? 'existing' : 'new'
+  const destinationTouched = useRef(false)
+  const chooseDestination = (d) => {
+    destinationTouched.current = true
+    if (d === 'live') {
+      setReuseCampaign(true)
+      setReuseAdset(true)
+      setAdsetIds(liveIds)
+    } else if (d === 'existing') {
+      setReuseCampaign(true)
+    } else {
+      setReuseCampaign(false)
+      setReuseAdset(false)
+    }
+  }
+  // Auto-selected once the ad sets are in, unless somebody (or "same as last
+  // time", or a funnel just built) has already chosen where these go.
+  useEffect(() => {
+    if (destinationTouched.current || adsets === null) return
+    if (adsetIds.length > 0 || reuseCampaign) return
+    const live = adsets.filter((a) => a.live).map((a) => a.id)
+    if (live.length === 0) return
+    destinationTouched.current = true
+    setReuseCampaign(true)
+    setReuseAdset(true)
+    setAdsetIds(live)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adsets])
   // Ad sets grouped under their campaign, in the order Meta listed the ad sets
   // so the newest work stays near the top. A campaign whose name has not
   // loaded yet still gets a group rather than vanishing from the list.
@@ -1262,6 +1319,193 @@ export default function PublishToMetaPanel({
     }
   }
 
+  // WHAT THE HELP CHAT CAN DO HERE. The state is the page as the model sees
+  // it; the tools are the clicks, by name. publish_go asks the person first.
+  const tickVideos = (which, on) => {
+    const q = String(which || 'newest').trim().toLowerCase()
+    const ready = videoList.filter((v) => isPublishable(v))
+    let chosen = q === 'newest' ? ready.slice(0, 1) : q === 'all' ? ready : looseMatch(videoList, q, (v) => v.file_name)
+    if (chosen.length === 0) {
+      return { error: ready.length === 0 ? 'No clip is ready in Meta yet. A clip needs "Send to Meta" and a cover frame first.' : `No clip matches "${which}". Clips: ${videoList.map((v) => v.file_name).join(', ')}.` }
+    }
+    const notReady = chosen.filter((v) => !isPublishable(v))
+    chosen = chosen.filter((v) => isPublishable(v))
+    const paths = chosen.map((v) => v.storage_path)
+    setPickedVideos((prev) => (on ? [...new Set([...prev, ...paths])] : prev.filter((p) => !paths.includes(p))))
+    return { ok: true, [on ? 'ticked' : 'unticked']: chosen.map((v) => v.file_name), ...(notReady.length ? { not_ready: notReady.map((v) => v.file_name) } : {}) }
+  }
+  const tickStatics = (which, on) => {
+    const q = String(which || 'newest').trim().toLowerCase()
+    const chosen = q === 'newest' ? sets.slice(0, 1) : q === 'all' ? sets.slice(0, MAX_BATCH_ADS) : looseMatch(sets, q, (s) => `${s.recipe?.hook || ''} ${s.stamp}`)
+    if (chosen.length === 0) return { error: sets.length === 0 ? 'No saved statics for this client.' : `No static matches "${which}". Statics: ${sets.map((s) => s.recipe?.hook || s.stamp).join('; ')}.` }
+    const stamps = chosen.map((s) => String(s.stamp))
+    setPicked((prev) => (on ? [...new Set([...prev, ...stamps])] : prev.filter((p) => !stamps.includes(p))))
+    return { ok: true, [on ? 'ticked' : 'unticked']: chosen.map((s) => s.recipe?.hook || s.stamp), note: on ? 'The words are written for a ticked static that has none; give it a few seconds.' : undefined }
+  }
+  const whichSchema = { type: 'string', description: '"newest", "all", or part of a name (a clip file name, or the hook painted on a static)' }
+  useHelpActions('publish', {
+    label: `Publish page for ${client.name}`,
+    state: () => ({
+      client: client.name,
+      showing: creativeKind === 'video' ? 'videos' : 'statics',
+      videos: videoList.map((v) => ({ name: v.file_name, status: v.status, ready: isPublishable(v), ticked: pickedVideos.includes(v.storage_path), has_copy: Boolean(videoCopies[v.storage_path]?.primary_text?.trim()) })),
+      statics: sets.map((s) => ({ hook: s.recipe?.hook || '', stamp: String(s.stamp), saved: ago(s.savedAt), ticked: picked.includes(String(s.stamp)), has_copy: Boolean(copies[String(s.stamp)]?.primary_text?.trim()), writing_copy: writingCopy === String(s.stamp) })),
+      button: cta,
+      button_options: CTA_OPTIONS.map((o) => o.value),
+      link_url: linkUrl,
+      objective,
+      objective_options: OBJECTIVES.map((o) => `${o.value} (${o.label})`),
+      instant_form: leadForm?.name || null,
+      destination: where,
+      live_ad_sets: liveAdsets.map((a) => a.name),
+      campaign: reuseCampaign ? chosenCampaign?.name || '(none picked)' : `new: ${campaignName}`,
+      campaigns_available: (campaigns || []).map((c) => c.name),
+      ad_sets: reuseAdset ? chosenAdsets.map((a) => a.name) : `new ad set, $${dailyBudget}/day, ages ${ageMin} to ${ageMax}, locations: ${locations.map((l) => l.name).join(', ') || 'none yet'}`,
+      ad_sets_available: (adsets || []).map((a) => `${a.name}${a.live ? ' (live)' : ''}`),
+      blockers,
+      publishing: publishing ? progress : false,
+      published: result ? 'done' : null,
+      error: error || '',
+    }),
+    tools: [
+      {
+        name: 'publish_tick',
+        description: 'Tick a clip or a saved static so it goes out. kind "video" or "static". A ticked static with no words gets them written on its own.',
+        input_schema: { type: 'object', properties: { kind: { type: 'string', enum: ['video', 'static'] }, which: whichSchema }, required: ['kind', 'which'] },
+        run: ({ kind, which }) => (kind === 'video' ? tickVideos(which, true) : tickStatics(which, true)),
+      },
+      {
+        name: 'publish_untick',
+        description: 'Untick a clip or a static.',
+        input_schema: { type: 'object', properties: { kind: { type: 'string', enum: ['video', 'static'] }, which: whichSchema }, required: ['kind', 'which'] },
+        run: ({ kind, which }) => (kind === 'video' ? tickVideos(which, false) : tickStatics(which, false)),
+      },
+      {
+        name: 'publish_set',
+        description: 'Set the publish options. Only the fields given change. destination: "live" (every live ad set, the usual), "existing" (pick a campaign or ad sets), "new" (a new campaign). ad_set "new" makes a new ad set inside the picked campaign.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            button: { type: 'string', enum: CTA_OPTIONS.map((o) => o.value) },
+            link_url: { type: 'string' },
+            objective: { type: 'string', enum: OBJECTIVES.map((o) => o.value) },
+            destination: { type: 'string', enum: ['live', 'existing', 'new'] },
+            ad_set: { type: 'string', enum: ['new', 'reuse'] },
+            campaign_name: { type: 'string' },
+            ad_set_name: { type: 'string' },
+            daily_budget: { type: 'number', description: 'US dollars per day, for a new ad set' },
+            age_min: { type: 'integer' },
+            age_max: { type: 'integer' },
+          },
+        },
+        run: (i) => {
+          const changed = []
+          if (i.button) { setCta(i.button); changed.push('button') }
+          if (typeof i.link_url === 'string') { setLinkUrl(i.link_url); changed.push('link') }
+          if (i.objective) { setObjective(i.objective); changed.push('objective') }
+          if (i.destination) {
+            if (i.destination === 'live' && liveIds.length === 0) return { error: 'No ad set is live on this account; pick "existing" or "new".' }
+            chooseDestination(i.destination)
+            changed.push('destination')
+          }
+          if (i.ad_set) { setReuseCampaign(true); setReuseAdset(i.ad_set === 'reuse'); destinationTouched.current = true; changed.push('ad set') }
+          if (i.campaign_name) { setCampaignName(i.campaign_name); changed.push('campaign name') }
+          if (i.ad_set_name) { setAdsetName(i.ad_set_name); changed.push('ad set name') }
+          if (i.daily_budget !== undefined) { setDailyBudget(String(i.daily_budget)); changed.push('budget') }
+          if (i.age_min) { setAgeMin(Number(i.age_min)); changed.push('age min') }
+          if (i.age_max) { setAgeMax(Number(i.age_max)); changed.push('age max') }
+          return { ok: true, changed }
+        },
+      },
+      {
+        name: 'publish_pick_campaign',
+        description: 'Reuse an existing campaign, by name (loosely matched).',
+        input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+        run: async ({ name }) => {
+          const list = campaigns || (await listCampaigns(client.id))
+          if (!campaigns) setCampaigns(list)
+          const found = looseMatch(list, name, (c) => c.name)
+          if (found.length !== 1) return { error: found.length ? `Several campaigns match: ${found.map((c) => c.name).join(', ')}` : `No campaign matches "${name}". Campaigns: ${list.map((c) => c.name).join(', ') || 'none'}` }
+          destinationTouched.current = true
+          setReuseCampaign(true)
+          setCampaignId(found[0].id)
+          return { ok: true, campaign: found[0].name, objective: found[0].objective, status: found[0].effective_status || found[0].status }
+        },
+      },
+      {
+        name: 'publish_pick_adsets',
+        description: 'Put the creatives into existing ad sets, by name (loosely matched, several allowed). Replaces the current pick.',
+        input_schema: { type: 'object', properties: { names: { type: 'array', items: { type: 'string' } } }, required: ['names'] },
+        run: async ({ names }) => {
+          const list = adsets || (await listAdsets(client.id))
+          if (!adsets) setAdsets(list)
+          const ids = []
+          const picked = []
+          const missing = []
+          for (const n of names || []) {
+            const found = looseMatch(list, n, (a) => a.name)
+            if (found.length === 1) { ids.push(found[0].id); picked.push(found[0].name) } else missing.push(n)
+          }
+          if (ids.length === 0) return { error: `No ad set matched ${JSON.stringify(names)}. Ad sets: ${list.map((a) => a.name).join(', ') || 'none'}` }
+          destinationTouched.current = true
+          setReuseCampaign(true)
+          setReuseAdset(true)
+          setAdsetIds(ids)
+          return { ok: true, ad_sets: picked, ...(missing.length ? { not_found: missing } : {}) }
+        },
+      },
+      {
+        name: 'publish_pick_lead_form',
+        description: 'Pick the instant form a leads campaign sends people to, by name. With no name and one form on the account, that one.',
+        input_schema: { type: 'object', properties: { name: { type: 'string' } } },
+        run: async ({ name }) => {
+          const forms = await listLeadForms(client.id)
+          const found = name ? looseMatch(forms, name, (f) => f.name) : forms
+          if (found.length !== 1) return { error: found.length ? `Several forms: ${found.map((f) => f.name).join(', ')}. Say which.` : `No form${name ? ` matches "${name}"` : ''}. Forms: ${forms.map((f) => f.name).join(', ') || 'none; one can be built on the page'}` }
+          setLeadForm(found[0])
+          return { ok: true, form: found[0].name }
+        },
+      },
+      {
+        name: 'publish_add_location',
+        description: 'Add a targeting location for a new ad set: a city (with a radius in miles), a state or a ZIP, found through Meta. The first match is used; name the state to be safe ("Manchester, NH").',
+        input_schema: { type: 'object', properties: { query: { type: 'string' }, radius: { type: 'integer', description: 'Miles, cities only' } }, required: ['query'] },
+        run: async ({ query, radius }) => {
+          const found = await searchLocations(query)
+          if (!found.length) return { error: `Meta found nothing for "${query}".` }
+          const loc = found[0]
+          if (locations.some((p) => p.key === loc.key)) return { ok: true, already: loc.name }
+          setLocations((prev) => [...prev, { ...loc, radius: loc.type === 'city' ? clampRadius(Number(radius) || DEFAULT_RADIUS_MILES) : undefined }])
+          return { ok: true, added: `${loc.name} (${loc.type})`, other_matches: found.slice(1, 4).map((l) => l.name) }
+        },
+      },
+      {
+        name: 'publish_remove_location',
+        description: 'Remove a targeting location by name.',
+        input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+        run: ({ name }) => {
+          const found = looseMatch(locations, name, (l) => l.name)
+          if (found.length === 0) return { error: `No location matches "${name}".` }
+          setLocations((prev) => prev.filter((l) => !found.some((f) => f.key === l.key)))
+          return { ok: true, removed: found.map((l) => l.name) }
+        },
+      },
+      {
+        name: 'publish_go',
+        description: 'Press "Publish paused to Meta". Only when the person asked to publish; it asks them to confirm first. Fails while anything is still needed (see blockers in page_state).',
+        input_schema: { type: 'object', properties: {} },
+        confirm: true,
+        confirmText: `Create ${adTotal} paused ad${adTotal === 1 ? '' : 's'} in ${client.name}'s Meta account${reuseAdset && adsetIds.length > 1 ? `, in each of ${adsetIds.length} ad sets` : ''}? Nothing spends until it is switched on in Ads Manager.`,
+        run: async () => {
+          if (blockers.length) return { error: `Not ready: ${blockers.join(', ')}.` }
+          await submit()
+          await new Promise((r) => setTimeout(r, 400))
+          return { ok: true, note: 'Sent. Call page_state: "published: done" means they are in the account, paused; an error there says what Meta refused.' }
+        },
+      },
+    ],
+  })
+
   if (result) {
     const goAgain = () => {
       // Straight back into the same ad sets: the point of publishing more is
@@ -1398,7 +1642,10 @@ export default function PublishToMetaPanel({
             onCopy={(path, patch) =>
               setVideoCopies((prev) => ({ ...prev, [path]: { ...prev[path], ...patch } }))
             }
-            onLoaded={(list) => setVideoCount(list.length)}
+            onLoaded={(list) => {
+              setVideoCount(list.length)
+              setVideoList(list)
+            }}
           />
         </div>
 
@@ -1652,16 +1899,45 @@ export default function PublishToMetaPanel({
           </div>
         )}
 
-        <Toggle
-          value={reuseCampaign}
-          onChange={setReuseCampaign}
-          options={[
-            [false, 'New campaign'],
-            [true, 'Add to an existing one'],
-          ]}
-        />
+        {/* THE FIRST CHOICE: every ad set delivering right now. Then the
+            hand pick, then a new campaign. */}
+        <div className="flex flex-wrap gap-1" data-destination-row>
+          {[
+            [
+              'live',
+              liveIds.length
+                ? `Add to all live ad sets (${liveIds.length})`
+                : adsets === null
+                  ? 'Add to all live ad sets (…)'
+                  : 'Add to all live ad sets (none live)',
+            ],
+            ['existing', 'Pick a campaign or ad sets'],
+            ['new', 'New campaign'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => chooseDestination(key)}
+              disabled={key === 'live' && liveIds.length === 0}
+              aria-pressed={where === key}
+              data-destination={key}
+              className={`px-3 py-1.5 rounded text-xs font-medium transition disabled:opacity-50 ${
+                where === key ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {where === 'live' && (
+          <p className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-900" data-destination-live>
+            Every creative goes into each of the {liveIds.length} ad set{liveIds.length === 1 ? '' : 's'} delivering now:{' '}
+            {liveAdsets.map((a) => a.name).join(', ')}. Each keeps its own budget and targeting; the new ads
+            arrive paused inside them. Untick any below to leave it out.
+          </p>
+        )}
 
-        {reuseCampaign ? (
+        {reuseCampaign && where !== 'live' ? (
           campaigns === null ? (
             <p className="text-xs text-slate-500">Loading campaigns from Meta…</p>
           ) : campaigns.length === 0 ? (
@@ -1697,7 +1973,7 @@ export default function PublishToMetaPanel({
               )}
             </>
           )
-        ) : (
+        ) : where === 'live' ? null : (
           <Text
             label="Campaign name"
             value={campaignName}
@@ -1716,7 +1992,7 @@ export default function PublishToMetaPanel({
             : 'Budget, who sees it, and where.'
         }
       >
-        {reuseCampaign && (
+        {reuseCampaign && where !== 'live' && (
           <Toggle
             value={reuseAdset}
             onChange={setReuseAdset}

@@ -19,6 +19,8 @@ import { resolveImageSrc } from '../lib/driveAssets'
 import { conceptUrl, createConcepts, deleteConcept, fetchConcepts, refreshConcept } from '../lib/adConceptsStore'
 import { heicToJpegBlob, isHeic, jpegName, jpegPath, toUploadable } from '../lib/imageUpload'
 import { makeAdBatch } from '../lib/adBatchStore'
+import { looseMatch } from '../lib/helpActions'
+import { useHelpActions } from '../lib/useHelpActions'
 import { BATCH_SIZE, batchReady, lookName, setTitle, snapshotSet } from '../lib/adBatch'
 import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
 import {
@@ -1009,9 +1011,10 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     setSaved('')
     setError('')
   }
-  const retryBatch = () => {
+  // Try again after a failure, or ask for a batch from the help chat.
+  const startBatch = (count = make || BATCH_SIZE) => {
     setBatch({ status: 'working', sets: [], active: 0, error: '' })
-    makeAdBatch({ client, intake, ads, count: make || BATCH_SIZE })
+    makeAdBatch({ client, intake, ads, count })
       .then((sets) => {
         batchLanded.current = true
         setBatch({ status: 'done', sets, active: 0, error: '' })
@@ -1480,6 +1483,134 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // Opens the Publish tab on one saved set. Publishing works from a saved ad
   // rather than the live artboards because Meta fetches the image bytes over
   // HTTP: the public bucket URL only exists once the ad has been saved.
+  // WHAT THE HELP CHAT CAN DO IN THE STUDIO: read the ad, change the words,
+  // switch the look, pick a photo, save, and drive a "Make N ads" batch.
+  useHelpActions('studio', {
+    label: `Ad Studio for ${client.name}`,
+    state: () => ({
+      client: client.name,
+      tab,
+      look: layout,
+      looks: LAYOUTS.map((l) => l.key),
+      words: { badge, hook, offerAmount, offerDetail, subhead, proof, primaryText, headline: metaHeadline, description: metaDescription },
+      colours: { accent, badgeColor },
+      panel_behind_hook: hookPlate,
+      photo: backgroundPath || 'none picked',
+      logo: logoPath ? 'set' : 'none',
+      photos_available: files.map((f) => f.file_name),
+      batch: batch
+        ? { status: batch.status, ads: batch.sets.map((s, i) => `${i + 1}: ${s.hook || ''} (${lookName(s.layout)})`), showing: batch.active + 1, saved: Boolean(batch.saved), error: batch.error || undefined }
+        : null,
+      editing_saved_ad: Boolean(editing),
+      last_save: saved || '',
+      error: error || '',
+    }),
+    tools: [
+      {
+        name: 'studio_set',
+        description: 'Change the words or colours of the ad on the artboards. Only the fields given change. Colours are hex.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            badge: { type: 'string' },
+            hook: { type: 'string' },
+            offerAmount: { type: 'string' },
+            offerDetail: { type: 'string' },
+            subhead: { type: 'string' },
+            proof: { type: 'string' },
+            primaryText: { type: 'string' },
+            headline: { type: 'string' },
+            description: { type: 'string' },
+            accent: { type: 'string' },
+            badgeColor: { type: 'string' },
+            panel_behind_hook: { type: 'boolean' },
+          },
+        },
+        run: (i) => {
+          const setters = { badge: setBadge, hook: setHook, offerAmount: setOfferAmount, offerDetail: setOfferDetail, subhead: setSubhead, proof: setProof, primaryText: setPrimaryText, headline: setMetaHeadline, description: setMetaDescription }
+          const changed = []
+          for (const [key, fn] of Object.entries(setters)) {
+            if (typeof i[key] === 'string') { fn(i[key]); changed.push(key) }
+          }
+          if (typeof i.accent === 'string' && /^#[0-9a-f]{6}$/i.test(i.accent)) { setAccent(i.accent); setFromLogo(false); changed.push('accent') }
+          if (typeof i.badgeColor === 'string' && /^#[0-9a-f]{6}$/i.test(i.badgeColor)) { setBadgeColor(i.badgeColor); setFromLogo(false); changed.push('badgeColor') }
+          if (typeof i.panel_behind_hook === 'boolean') { setHookPlate(i.panel_behind_hook); changed.push('panel') }
+          return { ok: true, changed }
+        },
+      },
+      {
+        name: 'studio_look',
+        description: `Switch the look: ${LAYOUTS.map((l) => `${l.key} (${l.label})`).join(', ')}.`,
+        input_schema: { type: 'object', properties: { look: { type: 'string', enum: LAYOUTS.map((l) => l.key) } }, required: ['look'] },
+        run: ({ look }) => {
+          if (!LAYOUTS.some((l) => l.key === look)) return { error: `No look called ${look}.` }
+          setLayout(look)
+          return { ok: true }
+        },
+      },
+      {
+        name: 'studio_pick_photo',
+        description: "Use one of the client's uploaded photos as the background, by file name (loosely matched).",
+        input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+        run: async ({ name }) => {
+          const found = looseMatch(files, name, (f) => f.file_name)
+          if (found.length !== 1) return { error: found.length ? `Several photos match: ${found.map((f) => f.file_name).join(', ')}` : `No photo called ${name}. Photos: ${files.map((f) => f.file_name).join(', ') || 'none uploaded'}` }
+          await pick(setBackgroundPath)(found[0].storage_path)
+          return { ok: true, photo: found[0].file_name }
+        },
+      },
+      {
+        name: 'studio_tab',
+        description: `Open a tab of the Studio: ${TABS.map((t) => `${t[0]} (${t[1]})`).join(', ')}.`,
+        input_schema: { type: 'object', properties: { tab: { type: 'string', enum: TABS.map((t) => t[0]) } }, required: ['tab'] },
+        run: ({ tab: t }) => {
+          if (!TABS.some((x) => x[0] === t)) return { error: `No tab called ${t}.` }
+          setTab(t)
+          return { ok: true }
+        },
+      },
+      {
+        name: 'studio_save',
+        description: 'Save the ad on the artboards in all three sizes to the Saved ads tab (over the saved ad being edited, if one is open).',
+        input_schema: { type: 'object', properties: {} },
+        run: async () => {
+          await (editing ? saveOver : saveAll)()
+          return { ok: true, note: 'Saved. It is on the Saved ads tab, ready for an approval link or Publish.' }
+        },
+      },
+      {
+        name: 'studio_make_ads',
+        description: 'Write N ads for this client from their brief, each in its own look, as a batch to review and save together ("Make 3 ads").',
+        input_schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 6 } } },
+        run: ({ count }) => {
+          startBatch(Math.max(1, Math.min(6, Number(count) || BATCH_SIZE)))
+          return { ok: true, note: 'Writing them now; about half a minute. Call page_state to see them, then studio_save_batch.' }
+        },
+      },
+      {
+        name: 'studio_show_set',
+        description: 'Put one ad of the batch on the artboards, by its number (1 is the first).',
+        input_schema: { type: 'object', properties: { index: { type: 'integer' } }, required: ['index'] },
+        run: ({ index }) => {
+          const i = Number(index) - 1
+          if (!batch?.sets?.[i]) return { error: 'No such ad in the batch.' }
+          showSet(i)
+          return { ok: true }
+        },
+      },
+      {
+        name: 'studio_save_batch',
+        description: 'Save every ad in the batch, three sizes each, to the Saved ads tab.',
+        input_schema: { type: 'object', properties: {} },
+        run: async () => {
+          if (!batch || batch.status !== 'done') return { error: batch?.status === 'working' ? 'The batch is still being written; call page_state in a moment.' : 'There is no finished batch to save.' }
+          await saveBatch()
+          return { ok: true, note: 'Saved all of them. They are on the Saved ads tab.' }
+        },
+      },
+    ],
+  })
+
   const startPublish = (set) => {
     setPublishing(set)
     setTab('publish')
@@ -1592,7 +1723,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           saving={saving}
           onShow={showSet}
           onSave={saveBatch}
-          onRetry={retryBatch}
+          onRetry={() => startBatch()}
           onDismiss={() => setBatch(null)}
         />
       )}

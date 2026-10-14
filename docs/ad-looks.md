@@ -1,6 +1,6 @@
 # Ad Studio looks and AI concepts
 
-Written 2026-10-13. Until now every static the Studio made was one composition: headline up top, offer block down the bottom, photo behind. A set of ads for one client looked like one template with the words swapped. This adds five more ways to paint the same words, and a route to whole ads made by AI from the brief.
+Written 2026-10-13. Until now every static the Studio made was one composition: headline up top, offer block down the bottom, photo behind. A set of ads for one client looked like one template with the words swapped. This adds more ways to paint the same words, and a route to whole ads made by AI from the brief. (2026-10-14: the "Photo on a colour" look was taken off the row; ads saved with it still open and re-render.)
 
 ## The looks
 
@@ -12,7 +12,6 @@ Pick one on the Design tab (the "Look" row), or press "Next look" to cycle throu
 | Headline stack | One giant accent word in the brand colour over the photo, the rest of the headline under it, a white offer card hanging below, logo bottom-left | A strong photo of the owner and a one-word shout: FREE, $89, SAVE |
 | Bottom plate | Photo on top, the words on a brand-colour plate below with rounded corners, offer as a pill, logo on the plate | A photo that does not want text over it; dark plates read well in feed |
 | Split panel | A brand-colour panel beside the photo (above it on the Story) with the words; big offer amount in the accent colour | Busy photos; a long headline that needs room |
-| Photo on a colour | Flat background, the photo placed where you drag it | Product shots, logos, a photo whose edges are not worth showing |
 | AI concept | A finished ad made by AI, used whole; on the square and the Story it sits on a blurred copy of itself | When a concept batch has a winner |
 
 The giant word on the headline stack is the first word of the hook when it is short (FREE, $89, SAVE, NEW), or any word wrapped in asterisks (`*Free* second opinion on any quote`). A long first word stays in the sentence. The white haze behind the stack reaches under the last line of the subhead, whatever the photo, and "Panel behind the hook" puts a white card behind the whole stack for a photo too busy for a haze (the same switch as on the Classic look; on the plate, split and AI looks the words already sit on a panel, and the switch says so).

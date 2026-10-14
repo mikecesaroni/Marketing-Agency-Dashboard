@@ -18,8 +18,8 @@ function check(name, actual, expected) {
 }
 
 check('cover is first and therefore the default', LAYOUTS[0].key, 'cover')
-check('the six looks, classic first', LAYOUTS.map((l) => l.key), ['cover', 'stack', 'plate', 'split', 'card', 'ai'])
-check('every look but the AI concept paints the words', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'card'])
+check('the five looks on offer, classic first (the card is retired from the row)', LAYOUTS.map((l) => l.key), ['cover', 'stack', 'plate', 'split', 'ai'])
+check('every look but the AI concept paints the words, the retired card included so old saved ads still edit', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'card'])
 check('dragging moves the focal point on the photo looks', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'split'])
 
 // The headline stack's giant word.

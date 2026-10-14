@@ -9,7 +9,6 @@ export const LAYOUTS = [
   { key: 'stack', label: 'Headline stack', hint: 'one giant accent word over the photo, with a white offer card' },
   { key: 'plate', label: 'Bottom plate', hint: 'photo on top, the words on a brand-colour plate below' },
   { key: 'split', label: 'Split panel', hint: 'brand-colour panel with the words beside the photo' },
-  { key: 'card', label: 'Photo on a colour', hint: 'flat background, the photo placed where you drag it' },
   { key: 'ai', label: 'AI concept', hint: 'a finished ad made by AI from your brief, used as is' },
 ]
 // Looks that paint the words themselves (an AI concept carries its own).
