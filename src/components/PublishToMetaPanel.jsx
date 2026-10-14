@@ -11,6 +11,8 @@ import { fetchSavedAds } from '../lib/savedAds'
 import { guessAdSeason, seasonMeta } from '../lib/adSeason'
 import { metaAdName, wcName } from '../lib/adNaming'
 import { ago } from '../lib/contentHub'
+import { suggestImageFeedCopy } from '../lib/adCopy'
+import { feedCopyFromOptions, feedCopyInstruction, mergeWritten, needsFeedCopy, nextToWrite, staticCurrent } from '../lib/publishCopy'
 import {
   describeLaunch,
   launchSnapshot,
@@ -509,7 +511,7 @@ function PartialWarning({ partial }) {
  * a launch are four different hooks, and making them share one primary text
  * would defeat the point of running them against each other.
  */
-function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, open, onOpen }) {
+function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, open, onOpen, writing = false, note = '', onWrite }) {
   // The feed crop is the one people recognise; the square is the fallback.
   const preview = set.ordered.find((o) => o.size.key === 'feed') || set.ordered[0]
   const thumb = preview?.file?.url
@@ -552,18 +554,48 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
               Already published {publishedBefore === 1 ? 'once' : `${publishedBefore} times`}
             </p>
           )}
-          {checked && !copy.primary_text && (
+          {checked && writing && (
+            <p className="text-[11px] text-slate-600" data-copy-writing>
+              ✨ Writing the words from the ad and the brief…
+            </p>
+          )}
+          {checked && !writing && !needsFeedCopy(copy) && (
+            <p className="text-[11px] text-slate-700" data-copy-preview>
+              <span className="font-medium">{copy.primary_text.split('\n')[0].slice(0, 110)}</span>
+              {copy.headline ? <span className="text-slate-500"> · {copy.headline}</span> : null}
+            </p>
+          )}
+          {checked && !writing && note && (
+            <p className={`text-[11px] ${needsFeedCopy(copy) ? 'text-red-700' : 'text-green-700'}`} data-copy-note>
+              {note}
+            </p>
+          )}
+          {checked && !writing && needsFeedCopy(copy) && !note && (
             <p className="text-[11px] text-red-600">Needs primary text</p>
           )}
         </div>
         {checked && (
-          <button
-            type="button"
-            onClick={onOpen}
-            className="text-[11px] text-slate-600 underline hover:text-slate-900 flex-shrink-0"
-          >
-            {open ? 'Hide copy' : 'Edit copy'}
-          </button>
+          <span className="flex flex-shrink-0 items-center gap-2">
+            {onWrite && (
+              <button
+                type="button"
+                disabled={writing}
+                onClick={onWrite}
+                title={needsFeedCopy(copy) ? 'Write the primary text, headline and description from the ad and the brief' : 'Write the three lines again from a different angle'}
+                className="text-[11px] text-slate-600 underline hover:text-slate-900 disabled:opacity-50"
+                data-copy-write
+              >
+                {writing ? 'Writing…' : needsFeedCopy(copy) ? '✨ Write the words' : '✨ Another angle'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onOpen}
+              className="text-[11px] text-slate-600 underline hover:text-slate-900"
+            >
+              {open ? 'Hide copy' : 'Edit copy'}
+            </button>
+          </span>
         )}
       </div>
 
@@ -657,6 +689,13 @@ export default function PublishToMetaPanel({
   }
   const [copies, setCopies] = useState({})
   const [openCopy, setOpenCopy] = useState(set ? String(set.stamp) : '')
+  // THE WORDS, UNASKED. A ticked static with no primary text gets its feed
+  // copy written from the painted words and the brief, once, one static at a
+  // time. `writingCopy` is the stamp in flight; `copyNotes` is what the
+  // assistant said (or why it could not), shown under the row.
+  const [writingCopy, setWritingCopy] = useState('')
+  const [copyNotes, setCopyNotes] = useState({})
+  const wroteCopy = useRef(new Set())
 
   // Videos are picked by storage path rather than stamp: they are not artboard
   // sets and have no stamp. They publish as ads in the SAME ad set as the
@@ -979,6 +1018,45 @@ export default function PublishToMetaPanel({
     setPicked((prev) =>
       prev.includes(stamp) ? prev.filter((s) => s !== stamp) : [...prev, stamp]
     )
+
+  // Writes the three feed lines for one static and fills whatever is still
+  // blank. `again` ignores the once-only guard, for the button in the row.
+  const writeFeedCopy = async (stamp, { again = false } = {}) => {
+    const s = sets.find((x) => String(x.stamp) === stamp)
+    if (!s) return
+    wroteCopy.current.add(stamp)
+    setWritingCopy(stamp)
+    setCopyNotes((prev) => ({ ...prev, [stamp]: '' }))
+    try {
+      const cur = copies[stamp] || {}
+      const { note, options } = await suggestImageFeedCopy({
+        client,
+        intake,
+        current: staticCurrent(s.recipe, again ? { ...cur, primary_text: '', headline: '', description: '' } : cur),
+        instruction: again
+          ? `${feedCopyInstruction()} Take a different angle from this: "${String(cur.primary_text || '').slice(0, 300)}".`
+          : feedCopyInstruction(),
+      })
+      const written = feedCopyFromOptions(options)
+      if (!written.primary_text) {
+        setCopyNotes((prev) => ({ ...prev, [stamp]: note || 'The copy assistant did not write a primary text. Type one, or try again.' }))
+        return
+      }
+      setCopies((prev) => ({ ...prev, [stamp]: again ? { ...prev[stamp], ...written } : mergeWritten(prev[stamp], written) }))
+      setCopyNotes((prev) => ({ ...prev, [stamp]: `Written from the ad and the brief. ${note || ''}`.trim() }))
+    } catch (err) {
+      setCopyNotes((prev) => ({ ...prev, [stamp]: err.message }))
+    } finally {
+      setWritingCopy('')
+    }
+  }
+
+  useEffect(() => {
+    if (writingCopy) return
+    const stamp = nextToWrite({ picked, copies, done: wroteCopy.current })
+    if (stamp && sets.some((s) => String(s.stamp) === stamp)) writeFeedCopy(stamp)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked, copies, sets, writingCopy])
 
   const blockers = []
   if (missing.length > 0) blockers.push('missing client details')
@@ -1366,6 +1444,9 @@ export default function PublishToMetaPanel({
                   publishedBefore={alreadyPublished.filter((p) => p.stamp === stamp).length}
                   open={openCopy === stamp}
                   onOpen={() => setOpenCopy(openCopy === stamp ? '' : stamp)}
+                  writing={writingCopy === stamp}
+                  note={copyNotes[stamp] || ''}
+                  onWrite={() => writeFeedCopy(stamp, { again: Boolean(copies[stamp]?.primary_text?.trim()) })}
                 />
               )
             })}

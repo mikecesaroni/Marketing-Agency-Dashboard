@@ -241,7 +241,9 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     }
   }, [videos, picked, transcribe])
 
-  const writeVersions = async (video) => {
+  // `auto`: written without a click, so version A goes straight into the
+  // fields and the clip can publish as it is; the other two wait on the cards.
+  const writeVersions = async (video, { auto = false } = {}) => {
     const path = video.storage_path
     setWritingVersions(path)
     setError('')
@@ -262,7 +264,11 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
         setError(out.note || 'The copy assistant did not return any versions. Try again.')
       }
       setVersions((prev) => ({ ...prev, [path]: out }))
-      setChosen((prev) => ({ ...prev, [path]: null }))
+      if (auto && out.variations[0] && !copy.primary_text?.trim()) {
+        applyVariation(path, video, out.variations[0], 0)
+      } else {
+        setChosen((prev) => ({ ...prev, [path]: null }))
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -270,24 +276,27 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     }
   }
 
-  // THE THREE VERSIONS, UNASKED. A ticked clip whose transcript has landed
-  // and whose copy is still blank gets its three versions written without a
-  // click, once. The transcript is the reason this is safe to do on its own:
-  // before it, the assistant only had the onboarding answers and every clip
-  // read the same. Nothing is applied; the three cards wait to be picked.
+  // THE THREE VERSIONS, UNASKED. A ticked clip whose copy is still blank gets
+  // its three versions written without a click, once, as soon as the
+  // transcript has landed (or transcription has given up: no speech, no key),
+  // so every clip at least gets the business's facts and the note. Version A
+  // is applied so the clip can publish without another click; the other two
+  // wait on the cards for anyone who prefers them.
   useEffect(() => {
     if (writingVersions) return
     for (const v of videos || []) {
       const path = v.storage_path
-      if (!picked.includes(path) || !v.transcript) continue
+      if (!picked.includes(path) || transcribing[path]) continue
+      const heard = v.transcript || v.transcript_error || transcriptNote[path]
+      if (!heard) continue
       if (copies[path]?.primary_text?.trim() || versions[path]) continue
       if (autoWrote.current.has(path)) continue
       autoWrote.current.add(path)
-      writeVersions(v)
+      writeVersions(v, { auto: true })
       return
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videos, picked, copies, versions, writingVersions])
+  }, [videos, picked, copies, versions, writingVersions, transcribing, transcriptNote])
 
   // A clip ticked from outside (the board's "click to publish") was picked
   // before this list existed, so its copy record has no Meta ids and no
@@ -310,10 +319,9 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
   const nameFor = (video, angle) =>
     videoAdName({ angle, fileName: video?.file_name, market: client.market })
 
-  const pickVersion = (path, index) => {
-    const v = versions[path]?.variations?.[index]
-    if (!v) return
-    const video = (videos || []).find((x) => x.storage_path === path)
+  // One version into the fields. Shared by the card's button and the
+  // automatic first pick.
+  const applyVariation = (path, video, v, index) => {
     const patch = {
       primary_text: v.primaryText || '',
       headline: v.headline || '',
@@ -326,6 +334,12 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     }
     onCopy(path, patch)
     setChosen((prev) => ({ ...prev, [path]: index }))
+  }
+
+  const pickVersion = (path, index) => {
+    const v = versions[path]?.variations?.[index]
+    if (!v) return
+    applyVariation(path, (videos || []).find((x) => x.storage_path === path), v, index)
   }
 
   const send = async (video) => {
@@ -811,7 +825,9 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                     {versions[v.storage_path]?.variations?.length > 0 && (
                       <div className="space-y-1.5">
                         <p className="text-[11px] text-slate-600">
-                          {chosen[v.storage_path] == null ? 'Pick the version that fits the clip. ' : ''}
+                          {chosen[v.storage_path] == null
+                            ? 'Pick the version that fits the clip. '
+                            : `Version ${String.fromCharCode(65 + chosen[v.storage_path])} is in the fields below; pick another if it fits the clip better. `}
                           {versions[v.storage_path].note}
                         </p>
                         <div className="grid gap-2 md:grid-cols-3">

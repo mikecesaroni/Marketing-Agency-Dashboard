@@ -107,6 +107,35 @@ export async function suggestVideoCopy({ client, intake, current, instruction, a
 }
 
 /**
+ * The feed copy for an IMAGE ad about to publish: primary text, headline and
+ * description to sit beside a static whose painted words are already final.
+ * Same facts as the video call, so the offer and the guarantee are the
+ * client's own; `current` carries the painted slots so the lines match them.
+ * Returns {note, options}; publishCopy.feedCopyFromOptions reads the first
+ * option per feed field.
+ */
+export async function suggestImageFeedCopy({ client, intake, current, instruction }) {
+  const i = intake || {}
+  return callAdCopy({
+    client_id: client?.id,
+    client_name: client?.name,
+    industry: client?.industry || i.industry_trade,
+    market: client?.market,
+    service_area: i.service_area,
+    services: i.service_want_more || i.most_profitable_service || i.services_offered,
+    offer: i.offer_headline || i.current_offers_guarantees,
+    guarantee: i.guarantee,
+    price_range: i.typical_price_range,
+    why_choose: i.why_people_choose,
+    ideal_customer: i.ideal_customer,
+    cta_label: i.cta_offering,
+    words_to_avoid: i.words_to_avoid,
+    current,
+    instruction,
+  })
+}
+
+/**
  * Three complete versions of a video ad's feed copy, written as sets so the
  * headline belongs to its primary text, from the client's facts, the note
  * typed on the clip, and what is actually said in it (the transcript).
