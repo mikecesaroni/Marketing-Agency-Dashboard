@@ -18,6 +18,8 @@ import AdImagePicker from './AdImagePicker'
 import { resolveImageSrc } from '../lib/driveAssets'
 import { conceptUrl, createConcepts, deleteConcept, fetchConcepts, refreshConcept } from '../lib/adConceptsStore'
 import { heicToJpegBlob, isHeic, jpegName, jpegPath, toUploadable } from '../lib/imageUpload'
+import { makeAdBatch } from '../lib/adBatchStore'
+import { BATCH_SIZE, batchReady, lookName, setTitle, snapshotSet } from '../lib/adBatch'
 import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
 import {
   DEFAULT_ACCENT,
@@ -455,11 +457,12 @@ function ColourField({ label, value, onChange, swatches }) {
 // When copy arrives from the chat, the parts that do NOT go on the image still
 // matter: the primary text and description are the ad copy in the feed, and the
 // design brief says what background the model had in mind.
-function SeedBanner({ seed }) {
+function SeedBanner({ seed, from = 'From chat', index }) {
+  const title = index === undefined ? `${from}: ${seed.hookAngle || 'creative set'}` : `${from} ${index + 1}: ${seed.hookAngle || 'creative set'}`
   return (
     <details className="rounded-lg border border-orange-200 bg-orange-50 p-3">
       <summary className="cursor-pointer text-sm font-medium text-orange-900">
-        From chat: {seed.hookAngle || 'creative set'}
+        {title}
       </summary>
       <div className="mt-2 space-y-2 text-xs text-slate-700">
         {seed.backgroundNote && (
@@ -492,6 +495,80 @@ function SeedBanner({ seed }) {
         )}
       </div>
     </details>
+  )
+}
+
+/**
+ * "Make 3 ads": the strip above the artboards while a batch is being written,
+ * then one chip per ad to switch between them, and the one button that saves
+ * them all. Each chip names the angle and the look. The chat wrote the words
+ * in the client's own thread, so the same three are also in the chat.
+ */
+function BatchStrip({ batch, client, count, saving, onShow, onSave, onRetry, onDismiss }) {
+  const ready = batch.status === 'done' && batchReady(batch.sets)
+  return (
+    <div className="rounded-xl border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 p-3" data-batch data-status={batch.status}>
+      {batch.status === 'working' && (
+        <div className="flex items-center gap-3 text-sm text-orange-900">
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-orange-300 border-t-orange-700" />
+          <span>
+            <span className="font-semibold">Making {count} ads for {client.name}.</span> Reading the brief, the offer, the reviews and
+            what has worked, then writing {count} angles. About half a minute.
+          </span>
+        </div>
+      )}
+      {batch.status === 'failed' && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-red-800">
+          <span>
+            <span className="font-semibold">The {count} ads did not come back.</span> {batch.error}
+          </span>
+          <button onClick={onRetry} className="rounded-lg border border-red-300 bg-white px-3 py-1 text-xs font-medium hover:bg-red-50" data-batch-retry>
+            Try again
+          </button>
+          <button onClick={onDismiss} className="text-xs text-slate-500 underline hover:text-slate-800">
+            Design by hand instead
+          </button>
+        </div>
+      )}
+      {batch.status === 'done' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-sm font-semibold text-orange-900">{batch.sets.length} ads for {client.name}</span>
+          {batch.sets.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => onShow(i)}
+              data-batch-set={i}
+              aria-pressed={i === batch.active}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                i === batch.active ? 'border-slate-900 bg-slate-900 text-white' : 'border-orange-300 bg-white text-slate-800 hover:bg-orange-100'
+              }`}
+              title={s.hook}
+            >
+              {setTitle(s, i)} <span className={i === batch.active ? 'text-slate-300' : 'text-slate-500'}>· {lookName(s.layout)}</span>
+            </button>
+          ))}
+          <span className="hidden text-[11px] text-slate-500 md:inline">Edit any of them; the words and the look stay with that ad.</span>
+          <div className="ml-auto flex items-center gap-2">
+            {batch.saved ? (
+              <span className="text-xs font-medium text-green-800">All {batch.sets.length} saved</span>
+            ) : (
+              <button
+                onClick={onSave}
+                disabled={saving || !ready}
+                data-batch-save
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                title="Every ad in three sizes, to the Saved ads tab"
+              >
+                {saving ? 'Saving…' : `Save all ${batch.sets.length} ads`}
+              </button>
+            )}
+            <button onClick={onDismiss} className="text-xs text-slate-500 underline hover:text-slate-800" title="Keep what is on the artboards, drop the strip">
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -647,8 +724,14 @@ function proofFromIntake(intake) {
   return count ? `\u2605 ${rating} on Google \u00b7 ${count} reviews` : `\u2605 ${rating} on Google`
 }
 
-export default function AdStudioPanel({ client, intake, seed, initialTab, initialVideo, onClose, onBack, backLabel }) {
+export default function AdStudioPanel({ client, intake, seed, initialTab, initialVideo, onClose, onBack, backLabel, make = 0, ads = [] }) {
   const [files, setFiles] = useState([])
+  // "Make 3 ads" from the Content tab: the chat writes three creative sets,
+  // the Studio shows them one at a time with a strip to switch, and one click
+  // saves all three. `sets` carry every edit made on them; `active` is the one
+  // on the artboards; the active set is what the Design tab is seeded with.
+  const [batch, setBatch] = useState(() => (make ? { status: 'working', sets: [], active: 0, error: '' } : null))
+  const [batchSeed, setBatchSeed] = useState(null)
   // The HEIC path being converted to JPEG right now, for the picker's label.
   const [converting, setConverting] = useState('')
   // Mirrors clients.drive_folder_id so linking a folder updates the pickers
@@ -821,8 +904,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
 
   // Prefill from intake so the first render is a real ad, not empty boxes.
   // Skipped when the chat handed us copy: that copy is the whole point.
+  // A batch that landed keeps its words even after the strip is dismissed; a
+  // batch that failed and was dismissed gets the intake prefill like any
+  // other empty Studio.
+  const batchLanded = useRef(false)
   useEffect(() => {
-    if (!intake || seed) return
+    if (!intake || seed || batch || batchLanded.current) return
     const city = (intake.target_cities || intake.service_area || '').split(/[\n,]/)[0]?.trim()
     setBadge(city || '')
     setHook(city ? `${city} homeowners: is your system ready?` : 'Is your system ready?')
@@ -835,34 +922,103 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     setOfferDetail(detail)
     setSubhead('Catch small problems before they become major breakdowns.')
     setProof(intakeProof)
-  }, [intake, seed])
+  }, [intake, seed, batch])
 
-  // Copy handed over from the chat, already mapped onto the slots.
+  // Copy handed over from the chat, already mapped onto the slots. The same
+  // path serves a batch set, which also carries a look and a photo.
+  const applied = seed || batchSeed
   useEffect(() => {
-    if (!seed) return
-    setHook(seed.hook || '')
-    setOfferAmount(seed.offerAmount || '')
-    setOfferDetail(seed.offerDetail || '')
-    setSubhead(seed.subhead || '')
-    setProof(seed.proof || '')
-    setPrimaryText(seed.primaryText || '')
-    setMetaHeadline(seed.headline || '')
-    setMetaDescription(seed.description || '')
+    if (!applied) return
+    setHook(applied.hook || '')
+    setOfferAmount(applied.offerAmount || '')
+    setOfferDetail(applied.offerDetail || '')
+    setSubhead(applied.subhead || '')
+    setProof(applied.proof || '')
+    setPrimaryText(applied.primaryText || '')
+    setMetaHeadline(applied.headline || '')
+    setMetaDescription(applied.description || '')
     // Neither the location nor the star rating belongs to a creative set, so
     // the intake stays the source for those unless the brief overrode them.
-    if (seed.badge) setBadge(seed.badge)
-    setProof(seed.proof || intakeProof)
+    if (applied.badge) setBadge(applied.badge)
+    setProof(applied.proof || intakeProof)
     // Only when the set actually named a colour. Anything else leaves the
     // studio default, or a colour already pulled off the logo, alone.
-    if (seed.accent) {
-      setAccent(seed.accent)
+    if (applied.accent) {
+      setAccent(applied.accent)
       setFromLogo(false)
     }
-    if (seed.badgeColor) {
-      setBadgeColor(seed.badgeColor)
+    if (applied.badgeColor) {
+      setBadgeColor(applied.badgeColor)
       setFromLogo(false)
     }
-  }, [seed, intakeProof])
+    if (applied.layout) setLayout(applied.layout)
+    if (applied.backgroundPath !== undefined) setBackgroundPath(applied.backgroundPath || '')
+  }, [applied, intakeProof])
+
+  // The batch itself: asked for once, on mount, when the Studio was opened
+  // with "Make N ads". The first set lands on the artboards as soon as the
+  // reply is in; the others wait on the strip.
+  useEffect(() => {
+    if (!make) return
+    let cancelled = false
+    makeAdBatch({ client, intake, ads, count: make })
+      .then((sets) => {
+        if (cancelled) return
+        batchLanded.current = true
+        setBatch({ status: 'done', sets, active: 0, error: '' })
+        setBatchSeed(sets[0])
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setBatch({ status: 'failed', sets: [], active: 0, error: err.message })
+      })
+    return () => {
+      cancelled = true
+    }
+    // Once: the client and the count are fixed for the life of this Studio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client.id, make])
+
+  // The Studio's fields as the active batch set, so switching away keeps the
+  // edits made on it, and "Save all" paints what was seen, not what came back.
+  const fieldsNow = () => ({
+    badge,
+    hook,
+    offerAmount,
+    offerDetail,
+    subhead,
+    proof,
+    primaryText,
+    headline: metaHeadline,
+    description: metaDescription,
+    accent,
+    badgeColor,
+    layout,
+    backgroundPath,
+  })
+  const batchWithEdits = () => {
+    if (!batch || batch.status !== 'done') return batch
+    const sets = batch.sets.map((s, i) => (i === batch.active ? snapshotSet(s, fieldsNow()) : s))
+    return { ...batch, sets }
+  }
+  const showSet = (i) => {
+    const cur = batchWithEdits()
+    if (!cur || !cur.sets[i]) return
+    setBatch({ ...cur, active: i })
+    setBatchSeed(cur.sets[i])
+    setSaved('')
+    setError('')
+  }
+  const retryBatch = () => {
+    setBatch({ status: 'working', sets: [], active: 0, error: '' })
+    makeAdBatch({ client, intake, ads, count: make || BATCH_SIZE })
+      .then((sets) => {
+        batchLanded.current = true
+        setBatch({ status: 'done', sets, active: 0, error: '' })
+        setBatchSeed(sets[0])
+      })
+      .catch((err) => setBatch({ status: 'failed', sets: [], active: 0, error: err.message }))
+  }
 
   // The client's uploaded images. Reloadable, because the Studio stays
   // mounted under the chat and the Files section: a photo added there, or
@@ -1206,6 +1362,83 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     }
   })
 
+  /**
+   * Saves every set in the batch, three sizes each, exactly as "Save all 3
+   * sizes" does for one: same bucket paths, same client_files rows, same
+   * recipe, so the Saved ads tab, the approval link and Publish take them
+   * from here. The set on the artboards is read back first so its edits are
+   * what gets painted; the others are painted off-screen from their fields.
+   */
+  const saveBatch = withoutGuides(async () => {
+    const cur = batchWithEdits()
+    if (!cur || cur.status !== 'done') return
+    setSaving(true)
+    setSaved('')
+    setError('')
+    try {
+      await ensureFonts()
+      const bitmap = async (path) => (path ? loadImage(await resolveImageSrc(client.id, path)) : null)
+      const logo = assets.logo || (await bitmap(logoPath))
+      const backgrounds = {}
+      let n = 0
+      for (let s = 0; s < cur.sets.length; s++) {
+        const set = cur.sets[s]
+        const bg = set.backgroundPath || ''
+        if (!(bg in backgrounds)) backgrounds[bg] = await bitmap(bg)
+        const content = {
+          season: seasonToSave(),
+          badge: set.badge || badge,
+          hook: set.hook || '',
+          offerAmount: set.offerAmount || '',
+          offerDetail: set.offerDetail || '',
+          subhead: set.subhead || '',
+          proof: set.proof || intakeProof,
+          accent: set.accent || accent,
+          badgeColor: set.badgeColor || badgeColor,
+          hookPlate,
+          layout: set.layout || 'cover',
+          bgColor,
+          photo,
+          focus,
+          primaryText: set.primaryText || '',
+          headline: set.headline || '',
+          description: set.description || '',
+        }
+        // Stamps a millisecond apart keep the three ads distinct on the Saved tab.
+        const stamp = Date.now() + s
+        for (let i = 0; i < SIZES.length; i++) {
+          const canvas = document.createElement('canvas')
+          renderAd(canvas, SIZES[i], content, { background: backgrounds[bg], logo }, { safeMode, guides: false })
+          const blob = await canvasToBlob(canvas)
+          const path = `ads/${client.id}/${stamp}-${SIZES[i].key}.png`
+          const { error: upErr } = await supabase.storage.from('client-files').upload(path, blob, { contentType: 'image/png' })
+          if (upErr) throw upErr
+          const { error: rowErr } = await supabase.from('client_files').insert({
+            client_id: client.id,
+            file_name: `ad-${stamp}-${SIZES[i].key}.png`,
+            file_type: 'image/png',
+            file_size: blob.size,
+            storage_path: path,
+          })
+          if (rowErr) throw rowErr
+        }
+        try {
+          await saveAdRecipe({ clientId: client.id, stamp, content, backgroundPath: bg, logoPath, safeMode })
+        } catch (recipeErr) {
+          console.warn('Ad saved but its recipe was not stored:', recipeErr.message)
+        }
+        n++
+      }
+      setBatch({ ...cur, saved: true })
+      setSaved(`Saved ${n} ads, three sizes each. Find them on the Saved ads tab, or send them for approval from there.`)
+      setSavedAt(Date.now())
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  })
+
   // Straight to disk, for the times you want the PNG in hand rather than in
   // the bucket.
   const download = withoutGuides(async (i) => {
@@ -1350,6 +1583,20 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       )}
 
       {seed && <SeedBanner seed={seed} />}
+
+      {batch && (
+        <BatchStrip
+          batch={batch}
+          client={client}
+          count={make || BATCH_SIZE}
+          saving={saving}
+          onShow={showSet}
+          onSave={saveBatch}
+          onRetry={retryBatch}
+          onDismiss={() => setBatch(null)}
+        />
+      )}
+      {batch?.status === 'done' && batch.sets[batch.active] && <SeedBanner seed={batch.sets[batch.active]} from="Ad" index={batch.active} />}
 
       {editing && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">

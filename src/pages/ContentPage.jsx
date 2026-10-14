@@ -31,8 +31,8 @@ const DOORS = [
   {
     key: 'studio',
     title: 'Ad Studio',
-    blurb: 'Design static ads from a client’s photos, logo and offer. Every size at once.',
-    cta: 'Pick a client to design for',
+    blurb: 'Pick a client and get 3 ads written and laid out from their brief, photos and logo. Edit, then save all three.',
+    cta: 'Make 3 ads: pick the client',
     tone: 'from-orange-500 to-amber-400',
     ring: 'group-hover:ring-orange-300',
     icon: (
@@ -132,26 +132,41 @@ function Pill({ children, tone = 'slate' }) {
   return <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${cls}`}>{children}</span>
 }
 
-/** One client, as a card that opens the right tool on the client page. */
-function ClientCard({ row, href, lines, primary }) {
+/**
+ * One client, as a card that opens the right tool on the client page. With a
+ * `secondary` link the card has two ways in: the whole card is the first, a
+ * small link in the corner is the second.
+ */
+function ClientCard({ row, href, lines, primary, secondary }) {
   return (
-    <Link
-      to={href}
-      className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-px hover:border-slate-300 hover:shadow"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate font-semibold text-slate-900">{row.name}</p>
-          <p className="truncate text-xs text-slate-500">
-            {row.industry || 'Client'}
-            {row.internal ? ' · internal' : ''}
-          </p>
+    <div className="relative">
+      <Link
+        to={href}
+        className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-px hover:border-slate-300 hover:shadow"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-slate-900">{row.name}</p>
+            <p className="truncate text-xs text-slate-500">
+              {row.industry || 'Client'}
+              {row.internal ? ' · internal' : ''}
+            </p>
+          </div>
+          <span className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-600">→</span>
         </div>
-        <span className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-600">→</span>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">{lines}</div>
-      <p className="mt-3 text-xs font-medium text-blue-700 opacity-0 transition group-hover:opacity-100">{primary}</p>
-    </Link>
+        <div className="mt-3 flex flex-wrap gap-1.5">{lines}</div>
+        <p className="mt-3 text-xs font-medium text-blue-700 opacity-0 transition group-hover:opacity-100">{primary}</p>
+      </Link>
+      {secondary && (
+        <Link
+          to={secondary.href}
+          className="absolute bottom-4 right-4 text-[11px] text-slate-400 underline-offset-2 hover:text-slate-700 hover:underline"
+          data-secondary
+        >
+          {secondary.label}
+        </Link>
+      )}
+    </div>
   )
 }
 
@@ -347,8 +362,8 @@ function PagesCard({ row, onChange }) {
 
 const SECTION_META = {
   studio: {
-    title: 'Ad Studio',
-    hint: 'Pick a client. The Studio opens on their page with their photos, logo and offer loaded.',
+    title: 'Make 3 ads',
+    hint: 'Pick a client. The Studio opens on their page and writes 3 ads from their brief, each in a different look, with their photo and logo. Edit any of them, then save all three. Or open the Studio empty to design by hand.',
   },
   drive: {
     title: 'Google Drive',
@@ -563,14 +578,15 @@ export default function ContentPage() {
                   row={r}
                   href={
                     tab === 'studio'
-                      ? `/client/${r.id}?open=studio`
+                      ? `/client/${r.id}?open=studio&make=3`
                       : kind === 'video'
                         ? `/publish/${r.id}`
                         : kind === 'funnel'
                           ? `/funnel/${r.id}`
                           : `/client/${r.id}?open=publish`
                   }
-                  primary={tab === 'studio' ? 'Open the Ad Studio →' : kind === 'video' ? 'Publish a video →' : kind === 'funnel' ? 'Build the funnel →' : 'Open Publish →'}
+                  primary={tab === 'studio' ? 'Make 3 ads →' : kind === 'video' ? 'Publish a video →' : kind === 'funnel' ? 'Build the funnel →' : 'Open Publish →'}
+                  secondary={tab === 'studio' ? { href: `/client/${r.id}?open=studio`, label: 'Open empty' } : undefined}
                   lines={
                     tab === 'studio' ? (
                       <>

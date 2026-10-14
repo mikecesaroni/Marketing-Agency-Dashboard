@@ -87,6 +87,7 @@ export default function ClientDetailPage() {
   const [briefAds, setBriefAds] = useState([])
   // Copy handed from the chat to the Ad Studio. Null means "start from intake".
   const [studioSeed, setStudioSeed] = useState(null)
+  const [studioMake, setStudioMake] = useState(0)
   // Whether the Ad Studio was reached from the chat. Only then is there a
   // conversation to go back TO, so only then is a back button honest.
   const [studioFromChat, setStudioFromChat] = useState(false)
@@ -136,7 +137,7 @@ export default function ClientDetailPage() {
     if (loading || !client) return
     const want = new URLSearchParams(pageLocation.search).get('open')
     if (!want) return
-    if (want === 'studio') openStudio('design')
+    if (want === 'studio') openStudio('design', '', Number(new URLSearchParams(pageLocation.search).get('make')) || 0)
     else if (want === 'publish') openStudio('publish', new URLSearchParams(pageLocation.search).get('video') || '')
     else if (want === 'kpis') setShowKPIsModal(true)
     else if (want === 'funnel') {
@@ -261,6 +262,7 @@ export default function ClientDetailPage() {
   // straight onto the artboards instead of being re-typed.
   const handleUseCreativeSet = (mapped) => {
     setStudioTab('design')
+    setStudioMake(0)
     setStudioSeed(mapped)
     setStudioKey((k) => k + 1)
     setStudioFromChat(true)
@@ -291,9 +293,12 @@ export default function ClientDetailPage() {
   // nextSteps() emits; anything unknown opens the Onboarding Progress board,
   // which is where the deliverables list lives now it is off this page.
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  const openStudio = (tab, video = '') => {
+  // `make` is the "Make 3 ads" door on the Content tab: the Studio opens
+  // already asking the chat for that many ads.
+  const openStudio = (tab, video = '', make = 0) => {
     setStudioTab(tab)
     setStudioVideo(video)
+    setStudioMake(make)
     setStudioSeed(null)
     setStudioKey((k) => k + 1)
     setStudioFromChat(false)
@@ -663,6 +668,8 @@ export default function ClientDetailPage() {
             client={client}
             intake={intake}
             seed={studioSeed}
+            make={studioMake}
+            ads={briefAds}
             initialTab={studioTab}
             initialVideo={studioVideo}
             onClose={() => {
