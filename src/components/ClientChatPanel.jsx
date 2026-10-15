@@ -25,6 +25,7 @@ import { today as todayIso } from '../lib/queries'
 import { createAiVideo, fetchAiSetup } from '../lib/aiVideoStore'
 import { setupReady } from '../lib/aiVideo'
 import WebsiteMemory from './WebsiteMemory'
+import { lookName } from '../lib/adBatch'
 
 // Tells the AI videos panel on the client page that a job was added here.
 const AI_VIDEO_EVENT = 'ai-video-changed'
@@ -56,6 +57,12 @@ function CreativeSetCard({ set, index, onUse }) {
             {mapped.hookAngle || `Set ${index + 1}`}
           </p>
           <p className="text-[11px] text-slate-500 truncate">{mapped.hook || '(no headline)'}</p>
+          {mapped.layout && (
+            <p className="text-[11px] text-sky-800 truncate" data-set-template={mapped.layout}>
+              Template: <span className="font-medium">{lookName(mapped.layout)}</span>
+              {mapped.templateReason ? ` · ${mapped.templateReason}` : ''}
+            </p>
+          )}
         </div>
         {mapped.isVideo ? (
           <span className="flex-shrink-0 px-2 py-1 rounded bg-slate-100 text-slate-500 text-[11px] font-medium">

@@ -16,6 +16,7 @@ import { learningsBlock } from './adLearnings'
 import { websiteBlock } from './websiteProfile'
 import { landingPagesBlock } from './landingPages'
 import { TRADE_WORDS, phaseOf, playbookText } from './seasonPlaybook'
+import { templateMenu } from './adTemplateMeta'
 
 // Below this daily budget the playbook says stay on one broad ad set. Splitting
 // a small budget across campaigns starves each of data and none exit learning.
@@ -338,7 +339,11 @@ Then, at the very end of your reply, repeat the full set as one JSON block:
       "offer_colour": "#E4572E",
       "badge_colour": "#2B2B2B",
       "background_note": "...",
-      "design_brief": "..."
+      "design_brief": "...",
+      "template": "big_number",
+      "template_reason": "one number is the whole ad",
+      "sticker": "EASY FINANCING",
+      "offers": [{"amount": "$500", "detail": "Off any new install"}, {"amount": "$0", "detail": "Down, 0% for 18 months"}]
     }
   ]
 }
@@ -362,6 +367,22 @@ not get is a slot that renders empty. Notes on the ones that catch people out:
   digits and my studio formats the star itself.
 - Colours are six-digit hex or leave them out; a colour name is ignored.
 - "background_note" describes the photo to go and find. It is not painted.
+- "template" is the Ad Studio template this ad should be painted on, one key
+  from the AD STUDIO TEMPLATES list below, chosen for the ad's words and the
+  season playbook; "template_reason" is one short line on why. Write the ad's
+  words to that template's shape (what it needs). Every static ad gets one.
+- "sticker" is two or three words for the starburst or seal (EASY FINANCING,
+  SAME DAY, 24/7), or "" when nothing fits. "offers" is a list of up to four
+  {"amount","detail"} price tiles when the brief carries more than one price
+  (the main offer first), else []. Real prices only.
+
+=== AD STUDIO TEMPLATES (pick one per static ad) ===
+Each ad is painted on one of these. Pick by the ad's words first, then by the
+season playbook's "best templates", and never the same one for two ads in one
+reply. The photo looks (cover, stack, plate, split, before) are for an ad built
+on the client's photo: stack for the owner's face with the stars, before for
+a real before-and-after pair. The templates:
+${templateMenu()}
 
 === WHAT I NEED FROM YOU ===
 You handle this client's Meta advertising: audiences, budgets, structure, copy,

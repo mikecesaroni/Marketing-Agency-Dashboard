@@ -3,7 +3,7 @@
 // upload, and edits survive a switch between sets.
 // Run: node scripts/check-ad-batch.mjs
 
-import { BATCH_LOOKS, BATCH_PHOTO_MAX, SET_FIELDS, assignLooks, assignPhotos, batchReady, cutoutFor, lookName, makeAdsPrompt, photoPool, pickBackground, setTitle, snapshotSet, tilesFrom } from '../src/lib/adBatch.js'
+import { BATCH_LOOKS, BATCH_PHOTO_MAX, SET_FIELDS, assignLooks, assignPhotos, batchReady, cutoutFor, lookName, makeAdsPrompt, photoPool, pickBackground, setTitle, snapshotSet, templateAsk, tilesFrom } from '../src/lib/adBatch.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -21,7 +21,12 @@ check('every FORMAT 2 slot', /fill every slot of FORMAT 2/.test(p), true)
 check('ends with the JSON block of exactly three', /JSON block of exactly 3 creative_sets/.test(p), true)
 check('no placeholders on the image', /No brackets, no placeholders, no phone numbers or web addresses/.test(p), true)
 check('a count of two drops the third angle', /the current offer and the time of year, one ad each/.test(makeAdsPrompt({ count: 2, today: new Date('2026-01-05') })), true)
-check('the count is clamped', /Write 6 static ads/.test(makeAdsPrompt({ count: 40 })) && /Write 1 static ads/.test(makeAdsPrompt({ count: -2 })), true)
+check('the count is clamped, and one ad reads as one ad', /Write 6 static ads/.test(makeAdsPrompt({ count: 40 })) && /Write 1 static ad for .* one ad\./.test(makeAdsPrompt({ count: -2 })), true)
+check('the ask lists the templates and wants a pick per ad', /"template" key/.test(p) && /plan_card \(Maintenance plan\)/.test(p) && /never the same one twice/.test(p), true)
+check('an ask that names a template writes to its shape instead of the menu', /"Maintenance plan" template/.test(makeAdsPrompt({ template: 'plan_card' })) && !/"template" key/.test(makeAdsPrompt({ template: 'plan_card' })), true)
+check('an unknown template falls back to the menu', /"template" key/.test(makeAdsPrompt({ template: 'nope' })), true)
+check('a subject goes in the first line', /about this: the \$89 furnace tune-up\./.test(makeAdsPrompt({ count: 1, about: 'the $89 furnace tune-up' })), true)
+check('the template ask says what the template needs', /comma-separated list/.test(templateAsk('plan_card')) && templateAsk('zzz') === '', true)
 check('a missing name still reads', /for this client to run now/.test(makeAdsPrompt({})), true)
 
 // The looks.

@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { readFunctionError } from './functionError'
+import { isLookKey } from './adTemplateMeta'
 
 // Flattens Anthropic content blocks to what the chat bubble should show.
 // Thinking blocks are dropped and tool calls are summarised rather than dumped:
@@ -193,7 +194,29 @@ export function creativeSetToStudio(set) {
     headline: set.headline || '',
     description: set.description || '',
     designBrief: brief,
+    // The template the chat picked for this ad (a key from the brief's menu,
+    // else the TEMPLATE line of the design brief), with its reason, and the
+    // template extras it wrote. An unknown key is dropped: the Studio keeps
+    // its own look rather than paint nothing.
+    layout: lookKeyOf(set.template) || lookKeyOf(briefLine(brief, 'TEMPLATE')),
+    templateReason: String(set.template_reason || '').trim(),
+    sticker: String(set.sticker || '').trim(),
+    offers: tilesOf(set.offers),
   }
+}
+
+/** A look key the Studio can paint, from a key or a "key (reason)" line; '' otherwise. */
+function lookKeyOf(value) {
+  const first = String(value || '').trim().toLowerCase().split(/[\s(,:]/)[0]
+  return isLookKey(first) ? first : ''
+}
+
+/** Up to four {amount, detail} tiles from whatever the chat wrote, blanks dropped. */
+function tilesOf(raw) {
+  return (Array.isArray(raw) ? raw : [])
+    .map((o) => ({ amount: String(o?.amount ?? o?.offer_amount ?? '').trim(), detail: String(o?.detail ?? o?.offer_detail ?? '').trim() }))
+    .filter((o) => o.amount || o.detail)
+    .slice(0, 4)
 }
 
 export async function fetchChatHistory(clientId) {

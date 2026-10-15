@@ -83,6 +83,10 @@ check('the offer ad is the financing template, the season ad the tune-up, the pr
 check('no template twice', new Set(chosen).size, 3)
 check('without a photo the proof ad gets a template too', chooseLooks(sets, { phase: fall, hasPhoto: false }).map((s) => s.layout).every((k) => k !== 'stack'), true)
 check('a set that names a look keeps it', chooseLooks([{ layout: 'cover' }], { phase: fall })[0].layout, 'cover')
+check("the chat's own pick wins when it is real and fits", chooseLooks([{ hook: 'Join the club', suggestedLayout: 'coupon' }], { phase: fall, hasPhoto: false })[0].layout, 'coupon')
+check("the chat's pick of a photo template without a photo is overruled", chooseLooks([{ hook: 'Our crew', suggestedLayout: 'photo_sale' }], { phase: fall, hasPhoto: false })[0].layout !== 'photo_sale', true)
+check("the chat's pick is not used twice", chooseLooks([{ hook: 'a', suggestedLayout: 'coupon' }, { hook: 'b', suggestedLayout: 'coupon' }], { phase: fall })[1].layout !== 'coupon', true)
+check('a before-and-after pick is left to the finder', chooseLooks([{ hook: 'See the change', suggestedLayout: 'before_sale' }], { phase: fall, hasPhoto: true })[0].layout !== 'before_sale', true)
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll season playbook checks pass')
 process.exit(failures ? 1 : 0)

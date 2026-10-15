@@ -11,7 +11,7 @@
  * Network (the chat call, the files) lives in adBatchStore.js.
  */
 
-import { TEMPLATE_LAYOUTS } from './adTemplateMeta.js'
+import { PHOTO_TEMPLATES, TEMPLATE_LAYOUTS, TEMPLATE_SHAPES, TWO_PHOTO_TEMPLATES, isLookKey, templateMenu } from './adTemplateMeta.js'
 import { pickTemplate } from './seasonPlaybook.js'
 
 // The looks a batch cycles through, in order, matched to the angles the
@@ -52,11 +52,24 @@ export function chooseLooks(sets, { phase, hasPhoto = false, pick = pickTemplate
     const angle = String(s.hookAngle || '').toLowerCase()
     const proof = /proof|trust|review|star/.test(angle) || (i === 2 && !angle)
     let layout
-    if (proof && hasPhoto && !used.includes('stack')) layout = 'stack'
+    // The chat's own pick wins when it is a real key, fits the photos there
+    // are, and nothing in the batch has it yet; the scorer is the safety net.
+    const wanted = String(s.suggestedLayout || '').trim()
+    const fits = wanted && isLookKey(wanted) && !used.includes(wanted) && !TWO_PHOTO_TEMPLATES.includes(wanted) && !(['before'].includes(wanted)) && (hasPhoto || !(PHOTO_TEMPLATES.includes(wanted) || ['cover', 'stack', 'plate', 'split'].includes(wanted)))
+    if (fits) layout = wanted
+    else if (proof && hasPhoto && !used.includes('stack')) layout = 'stack'
     else layout = pick({ phase, content: s, hasPhoto, hasAfter: false, exclude: used }).key
     used.push(layout)
     return { ...s, layout }
   })
+}
+
+/** What a template needs in words, for an ask that names one. */
+export function templateAsk(key) {
+  const t = TEMPLATE_LAYOUTS.find((x) => x.key === key)
+  if (!t) return ''
+  const s = TEMPLATE_SHAPES[key] || {}
+  return `Every ad is for the "${t.label}" template (${t.hint}). Write the words to its shape: it needs ${s.needs || 'the usual slots'}.`
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -66,13 +79,17 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
  * already uses) carries the formats and the JSON schema; this only says how
  * many, which angles, and that the JSON is the part that matters.
  */
-export function makeAdsPrompt({ count = BATCH_SIZE, clientName, today = new Date(), photos = [], playbook = '' } = {}) {
+export function makeAdsPrompt({ count = BATCH_SIZE, clientName, today = new Date(), photos = [], playbook = '', template = '', about = '' } = {}) {
   const n = Math.max(1, Math.min(6, Number(count) || BATCH_SIZE))
   const month = MONTHS[today.getMonth()]
-  const angles = n >= 3 ? 'the current offer, the time of year, and proof or trust' : 'the current offer and the time of year'
+  const angles = n >= 3 ? 'the current offer, the time of year, and proof or trust' : n === 2 ? 'the current offer and the time of year' : 'the strongest angle for right now'
+  const subject = String(about || '').trim()
   const parts = [
-    `Write ${n} static ads for ${clientName || 'this client'} to run now, in ${month}: ${angles}, one ad each, each a different hook.`,
+    subject
+      ? `Write ${n} static ad${n === 1 ? '' : 's'} for ${clientName || 'this client'} to run now, in ${month}, about this: ${subject}.${n > 1 ? ' Each a different hook.' : ''}`
+      : `Write ${n} static ad${n === 1 ? '' : 's'} for ${clientName || 'this client'} to run now, in ${month}: ${angles}, ${n === 1 ? 'one ad' : 'one ad each, each a different hook'}.`,
     ...(playbook ? [`SEASON PLAYBOOK, write to it: ${playbook}`] : []),
+    ...(template && templateAsk(template) ? [templateAsk(template)] : [`TEMPLATES: for every ad add a "template" key with the one template from this list that says it best (by the ad's words first, then the playbook; never the same one twice in a batch) and a "template_reason" line, and write the ad's words to that template's shape:\n${templateMenu()}`]),
     'For every ad fill every slot of FORMAT 2 with real words: location badge, headline on image (five to eight words, the shout first: FREE, $89, SAVE), offer badge with the price first, subhead, proof strip, background note. Also the primary text, headline and description Meta shows beside the image. Leave offer_colour and badge_colour empty: the Studio takes the colours from the logo.',
     'Two more keys on every set, for the poster templates: "sticker", two or three words for a starburst or a seal (EASY FINANCING, SAME DAY, 0% FOR 18 MONTHS; "" when nothing fits), and "offers", a list of up to two {"amount","detail"} price tiles when the brief carries more than one price (the main offer first; [] otherwise). Real prices from the brief only; never invent one.',
   ]

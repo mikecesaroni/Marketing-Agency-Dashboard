@@ -29,6 +29,48 @@ export const TEMPLATE_LAYOUTS = [
 
 export const TEMPLATE_KEYS = TEMPLATE_LAYOUTS.map((t) => t.key)
 
+/** The photo looks (adLooks.js) a chat may name for an ad, beside the templates. */
+export const PHOTO_LOOK_KEYS = ['cover', 'stack', 'plate', 'split', 'before']
+
+/** True for a key the Studio can paint: a template or a photo look. */
+export function isLookKey(key) {
+  const k = String(key || '').trim()
+  return TEMPLATE_KEYS.includes(k) || PHOTO_LOOK_KEYS.includes(k)
+}
+
+/**
+ * When each template wins and what it needs in words, so the chat can pick
+ * one per ad and write the words to its shape (a plan card wants a list,
+ * a price grid wants tiles, a big number wants one number).
+ */
+export const TEMPLATE_SHAPES = {
+  winter_shout: { wins: 'a winter offer with a dollar amount; the be-ready-for-winter poster', needs: 'a short kicker, a dollar offer, a headline of six to ten words' },
+  massive_deal: { wins: 'a loud replacement or install deal with a big price', needs: 'a kicker like MASSIVE DEALS or WINTER SALE, a dollar offer, a one-line sticker' },
+  stay_warm: { wins: 'a photo of the owner or the crew with two to four prices', needs: 'a headline, a subhead, two to four offer tiles' },
+  price_grid: { wins: 'several services with a price each (tune-up, plan, install)', needs: 'two to four offer tiles with a price and a line each, a headline' },
+  fall_special: { wins: 'a fall offer with two choices (this OR that)', needs: 'two offer tiles, a short headline, a one-line sticker' },
+  season_sale: { wins: 'a seasonal sale: the season word and SALE huge', needs: 'a kicker ending in SALE or DEALS, a dollar offer, a headline' },
+  holiday_deals: { wins: 'November and December offers, year-end deadlines', needs: 'a dollar offer, a headline with the deadline, a one-line sticker' },
+  tune_up: { wins: 'a tune-up, inspection or check-up with a price', needs: 'the service price as the offer amount, the service as the offer detail, a headline' },
+  poster: { wins: 'a clean type-only poster, the headline doing the work', needs: 'a kicker, a headline of six to ten words, a subhead of one line, a dollar offer' },
+  emergency: { wins: 'same-day, 24/7, no heat, no AC, no hot water, a burst pipe', needs: 'a headline that speaks to someone whose system just broke, the sticker 24/7 or SAME DAY, the visit price as the offer' },
+  financing: { wins: '$0 down, 0% for N months, a monthly payment', needs: '$0 down or a monthly number as the offer amount, the terms as the offer detail, a sticker like MONTHLY PAYMENTS' },
+  coupon: { wins: 'one clip-out offer: a dollar or percent off, a free item', needs: 'one offer with a price or FREE, a short headline, the fine print as the subhead' },
+  big_number: { wins: 'one number is the whole ad: $500 OFF, 50% OFF', needs: 'a short offer amount (a number with $ or %), the rest as the offer detail, a short headline' },
+  photo_sale: { wins: 'a strong photo with the offers under it', needs: 'a headline, a subhead, one to three offer tiles, a one-word sticker' },
+  before_sale: { wins: 'a real before and after pair of the same job', needs: 'a transformation headline, one or two offer tiles; the two photos come from the finder or the pickers' },
+  reveal: { wins: 'a real before and after pair where the after is the hero', needs: 'a transformation headline, a dollar offer; the two photos come from the finder or the pickers' },
+  plan_card: { wins: 'a maintenance plan, a club, a membership', needs: 'the plan name as the kicker, the price a month as the offer amount, the terms as the offer detail, and the subhead as a comma-separated list of three to five things included' },
+}
+
+/** The templates as a menu for the chat: key, name, when it wins, what it needs. */
+export function templateMenu() {
+  return TEMPLATE_LAYOUTS.map((t) => {
+    const s = TEMPLATE_SHAPES[t.key] || {}
+    return `- ${t.key} (${t.label}): wins for ${s.wins || t.hint}. Needs ${s.needs || 'the usual slots'}.`
+  }).join('\n')
+}
+
 export const PHOTO_TEMPLATES = TEMPLATE_LAYOUTS.filter((t) => t.photo).map((t) => t.key)
 
 /** The templates that take a second photo (the After picker), like the before-and-after look. */

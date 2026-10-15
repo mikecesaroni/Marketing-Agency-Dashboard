@@ -5,6 +5,7 @@ import { fetchLandingPages } from './landingPagesStore'
 import { creativeSetToStudio, extractCreativeSets, renderBlocks, sendChatMessage } from './clientChat'
 import { listDriveImages, resolveImageSrc } from './driveAssets'
 import { BATCH_PHOTO_MAX, assignPhotos, chooseLooks, makeAdsPrompt, photoPool, tilesFrom } from './adBatch'
+import { isLookKey } from './adTemplateMeta'
 import { TRADE_WORDS, phaseOf, playbookText } from './seasonPlaybook'
 
 /**
@@ -45,7 +46,7 @@ export async function smallImage(src, max = 800) {
  * `layout` and `backgroundPath` set. Throws with a plain reason when the chat
  * is not deployed, the key is missing, or no JSON came back.
  */
-export async function makeAdBatch({ client, intake, ads = [], count = 3 }) {
+export async function makeAdBatch({ client, intake, ads = [], count = 3, template = '', about = '' }) {
   const [learnings, pages, files, drive] = await Promise.all([
     fetchLearnings(client.id).catch(() => []),
     fetchLandingPages(client.id).catch(() => []),
@@ -85,7 +86,7 @@ export async function makeAdBatch({ client, intake, ads = [], count = 3 }) {
   const data = await sendChatMessage({
     clientId: client.id,
     system,
-    message: makeAdsPrompt({ count, clientName: client.name, photos: shown, playbook }),
+    message: makeAdsPrompt({ count, clientName: client.name, photos: shown, playbook, template, about }),
     images,
     transient: true,
   })
@@ -98,16 +99,24 @@ export async function makeAdBatch({ client, intake, ads = [], count = 3 }) {
   // The template extras: the sticker and the tiles the chat wrote; the
   // kicker, the painted background and the unit in the corner from the
   // playbook (all editable on the form).
-  const sets = raw.slice(0, count).map((r) => ({
-    ...creativeSetToStudio(r),
-    accent: '',
-    badgeColor: '',
-    kicker: phase.kicker || '',
-    sticker: String(r.sticker || '').trim(),
-    offers: tilesFrom(r.offers),
-    cutout: phase.cutout || '',
-    theme: phase.theme || '',
-  }))
+  const forced = isLookKey(template) ? template : ''
+  const sets = raw.slice(0, count).map((r) => {
+    const mapped = creativeSetToStudio(r)
+    return {
+      ...mapped,
+      // The chat's pick is a suggestion chooseLooks() weighs; an ask that
+      // named a template is the look, full stop.
+      layout: forced,
+      suggestedLayout: mapped.layout || '',
+      accent: '',
+      badgeColor: '',
+      kicker: phase.kicker || '',
+      sticker: String(r.sticker || '').trim(),
+      offers: tilesFrom(r.offers),
+      cutout: phase.cutout || '',
+      theme: phase.theme || '',
+    }
+  })
   const picks = raw.slice(0, count).map((r) => Number(r.photo) || 0)
   return assignPhotos(chooseLooks(sets, { phase, hasPhoto: pool.length > 0 }), { pool, shown, picks })
 }

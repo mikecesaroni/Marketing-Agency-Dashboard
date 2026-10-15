@@ -5,7 +5,7 @@
 // season gets, how the offer tiles fall back, and that every template is a
 // layout the Studio, the help chat and the saved-ad recipe all know.
 
-import { CUTOUTS, PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS, THEME_KEYS, TWO_PHOTO_TEMPLATES, isTemplate, kickerFor, offersFor, offersToStore, seasonKicker, themeFor } from '../src/lib/adTemplateMeta.js'
+import { CUTOUTS, PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS, TEMPLATE_SHAPES, THEME_KEYS, TWO_PHOTO_TEMPLATES, isLookKey, isTemplate, kickerFor, offersFor, offersToStore, seasonKicker, templateMenu, themeFor } from '../src/lib/adTemplateMeta.js'
 import { FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEXT_LAYOUTS } from '../src/lib/adLayout.js'
 import { lookName } from '../src/lib/adBatch.js'
 
@@ -56,6 +56,11 @@ check('blank tiles are dropped and four is the most', offersFor({ offers: [{ amo
 check('junk offers are ignored', offersFor({ offers: 'nope', offerAmount: '$5' }), [{ amount: '$5', detail: '' }])
 check('stored as null when empty', offersToStore([{ amount: '', detail: '' }]), null)
 check('stored trimmed', offersToStore([{ amount: ' $89 ', detail: ' Tune-up ' }]), [{ amount: '$89', detail: 'Tune-up' }])
+
+// The shapes the chat writes to.
+check('every template says when it wins and what it needs', TEMPLATE_KEYS.every((k) => TEMPLATE_SHAPES[k]?.wins && TEMPLATE_SHAPES[k]?.needs), true)
+check('the menu lists every template once', TEMPLATE_KEYS.every((k) => templateMenu().split('\n').filter((l) => l.startsWith(`- ${k} (`)).length === 1), true)
+check('a look key is a template or a photo look', [isLookKey('plan_card'), isLookKey('stack'), isLookKey(' coupon '), isLookKey('card'), isLookKey(''), isLookKey(null)], [true, true, true, false, false, false])
 
 // The equipment.
 check('six built-in cutouts', CUTOUTS.map((c) => c.key), ['ac', 'furnace', 'boiler', 'water_heater', 'mini_split', 'thermostat'])

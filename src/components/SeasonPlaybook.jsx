@@ -6,12 +6,16 @@ const label = (key) => TEMPLATE_LAYOUTS.find((t) => t.key === key)?.label || key
 /**
  * The season playbook card on the Design tab: what this trade is selling
  * right now in this market, the tactics, the offer shapes, and the
- * templates that say it best. One click applies a template; "Pick for these
- * words" scores every template against the words on the form.
+ * templates that say it best. One click applies a template. The live line
+ * says which template the words on the form call for; "Use it" applies it
+ * and "Next best" walks down the ranking. "Write one ad for right now" has
+ * the chat write an ad to the playbook (and to the template on the
+ * artboards when one is picked).
  */
-export default function SeasonPlaybook({ phase, best = [], layout, onPick, onSuggest, suggestion, market }) {
+export default function SeasonPlaybook({ phase, best = [], layout, live, onPick, onUseLive, onNextBest, onWriteOne, writing = false, market }) {
   if (!phase) return null
   const where = market ? ` in ${market}` : ''
+  const onTemplate = TEMPLATE_LAYOUTS.some((t) => t.key === layout)
   return (
     <details className="rounded-lg border border-sky-200 bg-sky-50/60 p-3" open data-season-playbook data-phase={phase.key}>
       <summary className="cursor-pointer text-xs font-semibold text-slate-800">
@@ -21,6 +25,30 @@ export default function SeasonPlaybook({ phase, best = [], layout, onPick, onSug
         </span>
       </summary>
       <div className="mt-2 space-y-2 text-xs text-slate-700">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onWriteOne('')}
+            disabled={writing}
+            title="The chat writes one ad to this playbook, picks the template that says it best, and puts it on the artboards"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50"
+            data-write-one
+          >
+            {writing ? 'Writing…' : '✨ Write one ad for right now'}
+          </button>
+          {onTemplate && (
+            <button
+              type="button"
+              onClick={() => onWriteOne(layout)}
+              disabled={writing}
+              title="The chat writes one ad shaped for the template on the artboards"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-orange-800 bg-white border border-orange-300 hover:bg-orange-50 disabled:opacity-50"
+              data-write-for
+            >
+              ✍️ Write an ad for {label(layout)}
+            </button>
+          )}
+        </div>
         <p>{phase.summary}</p>
         <ul className="list-disc space-y-0.5 pl-4">
           {phase.tactics.map((t) => (
@@ -63,20 +91,24 @@ export default function SeasonPlaybook({ phase, best = [], layout, onPick, onSug
               {label(t.key)}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={onSuggest}
-            title="Scores every template against the words on the form, the season and the photos picked, and applies the best one"
-            className="ml-1 px-2 py-1 rounded text-[11px] font-medium text-orange-700 bg-orange-50 border border-orange-200 hover:bg-orange-100"
-            data-suggest-template
-          >
-            ✨ Pick the template for these words
-          </button>
         </div>
-        {suggestion && (
-          <p className="text-[11px] text-slate-600" data-suggestion>
-            <span className="font-medium">{label(suggestion.key)}</span>: {suggestion.reason}.
-          </p>
+        {live && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-sky-200 bg-white px-2 py-1.5" data-live-pick={live.key}>
+            <span>
+              <span className="font-medium">For these words:</span> {label(live.key)}
+              <span className="text-slate-500"> · {live.reason}</span>
+            </span>
+            {layout !== live.key ? (
+              <button type="button" onClick={onUseLive} className="px-2 py-0.5 rounded text-[11px] font-medium text-white bg-slate-900 hover:bg-slate-700" data-use-live>
+                Use it
+              </button>
+            ) : (
+              <span className="text-[11px] text-green-700">on the artboards</span>
+            )}
+            <button type="button" onClick={onNextBest} title="The next template down the ranking for these words" className="px-2 py-0.5 rounded text-[11px] font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100" data-next-best>
+              Next best ↓
+            </button>
+          </div>
         )}
       </div>
     </details>

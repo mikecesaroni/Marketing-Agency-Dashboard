@@ -20,7 +20,7 @@ import TemplateGallery from './TemplateGallery'
 import SeasonPlaybook from './SeasonPlaybook'
 import { bestTemplates, phaseOf, pickTemplate } from '../lib/seasonPlaybook'
 import { findBeforeAfterPairs } from '../lib/beforeAfterStore'
-import { CUTOUTS, THEME_LAYOUTS, isTemplate, kickerFor, themeFor } from '../lib/adTemplateMeta'
+import { CUTOUTS, TEMPLATE_LAYOUTS, THEME_LAYOUTS, isTemplate, kickerFor, themeFor } from '../lib/adTemplateMeta'
 import { stockPath } from '../lib/stockLibrary'
 import { prepareLogo } from '../lib/logoCutout'
 import { resolveImageSrc } from '../lib/driveAssets'
@@ -529,8 +529,8 @@ function BatchStrip({ batch, client, count, saving, onShow, onSave, onRetry, onD
         <div className="flex items-center gap-3 text-sm text-orange-900">
           <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-orange-300 border-t-orange-700" />
           <span>
-            <span className="font-semibold">Making {count} ads for {client.name}.</span> Reading the brief, the offer, the reviews and
-            what has worked, looking through their photos (uploads and Drive), then writing {count} angles. About half a minute.
+            <span className="font-semibold">Making {count === 1 ? 'an ad' : `${count} ads`} for {client.name}.</span> Reading the brief, the offer, the reviews and
+            what has worked, the season playbook, looking through their photos (uploads and Drive), then writing {count === 1 ? 'it' : `${count} angles`}. About half a minute.
           </span>
         </div>
       )}
@@ -549,7 +549,7 @@ function BatchStrip({ batch, client, count, saving, onShow, onSave, onRetry, onD
       )}
       {batch.status === 'done' && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-sm font-semibold text-orange-900">{batch.sets.length} ads for {client.name}</span>
+          <span className="mr-1 text-sm font-semibold text-orange-900">{batch.sets.length === 1 ? 'An ad' : `${batch.sets.length} ads`} for {client.name}</span>
           {batch.sets.map((s, i) => (
             <button
               key={i}
@@ -576,7 +576,7 @@ function BatchStrip({ batch, client, count, saving, onShow, onSave, onRetry, onD
                 className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                 title="Every ad in three sizes, to the Saved ads tab"
               >
-                {saving ? 'Saving…' : `Save all ${batch.sets.length} ads`}
+                {saving ? 'Saving…' : batch.sets.length === 1 ? 'Save the ad' : `Save all ${batch.sets.length} ads`}
               </button>
             )}
             <button onClick={onDismiss} className="text-xs text-slate-500 underline hover:text-slate-800" title="Keep what is on the artboards, drop the strip">
@@ -842,7 +842,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   const [cutout, setCutout] = useState('')
   const [theme, setTheme] = useState('')
   const [stockOpen, setStockOpen] = useState(false)
-  // The season playbook's last pick for the words on the form, with its reason.
+  // The season playbook's last applied pick, for the help chat's state.
   const [suggestion, setSuggestion] = useState(null)
   // The before-and-after finder: { status: 'working' | 'done' | 'error', pairs, looked, how, error }.
   const [finder, setFinder] = useState(null)
@@ -1073,9 +1073,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     setError('')
   }
   // Try again after a failure, or ask for a batch from the help chat.
-  const startBatch = (count = make || BATCH_SIZE) => {
+  const startBatch = (count = make || BATCH_SIZE, { template = '', about = '' } = {}) => {
     setBatch({ status: 'working', sets: [], active: 0, error: '' })
-    makeAdBatch({ client, intake, ads, count })
+    makeAdBatch({ client, intake, ads, count, template, about })
       .then((sets) => {
         batchLanded.current = true
         setBatch({ status: 'done', sets, active: 0, error: '' })
@@ -1258,13 +1258,30 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     setLayout(key)
     if (!kicker && phase.kicker) setKicker(phase.kicker)
     if (!cutout && phase.cutout) setCutout(phase.cutout)
-    if (!theme && phase.climate === 'hot' && phase.theme) setTheme(phase.theme)
+    // A template with no background of its own takes the phase's, so a
+    // year-round ad in October still gets the leaves (and a hot market in
+    // January does not get snow).
+    const own = TEMPLATE_LAYOUTS.find((t) => t.key === key)?.theme
+    if (!theme && !own && phase.theme) setTheme(phase.theme)
   }
+  // The template the words on the form call for, live, and the ranking
+  // behind it for "Next best".
+  const livePick = useMemo(
+    () => pickTemplate({ phase, content: paintContent, hasPhoto: Boolean(assets.background), hasAfter: Boolean(assets.after) }),
+    [phase, paintContent, assets.background, assets.after]
+  )
   const suggestTemplate = () => {
-    const s = pickTemplate({ phase, content: paintContent, hasPhoto: Boolean(assets.background), hasAfter: Boolean(assets.after) })
-    applyTemplate(s.key)
-    setSuggestion(s)
-    return s
+    applyTemplate(livePick.key)
+    setSuggestion(livePick)
+    return livePick
+  }
+  const nextBest = () => {
+    const ranked = livePick.ranked.filter((r) => r.score > -10)
+    const at = ranked.findIndex((r) => r.key === layout)
+    const next = ranked[(at + 1) % ranked.length]
+    if (!next) return
+    applyTemplate(next.key)
+    setSuggestion({ key: next.key, reason: next.why.length ? next.why[next.why.length - 1] : 'next down the ranking' })
   }
   // Real before-and-after pairs among the uploads and the Drive photos.
   const findPairs = async () => {
@@ -1619,6 +1636,8 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         leave_out: phase.avoid,
         best_templates: bestTemplates(phase, { hasPhoto: Boolean(assets.background), hasAfter: Boolean(assets.after) }).map((t) => `${t.key}: ${t.why}`),
       },
+      template_for_these_words: `${livePick.key}: ${livePick.reason}`,
+      last_applied_pick: suggestion ? `${suggestion.key}: ${suggestion.reason}` : 'none',
       before_after_finder: finder ? { status: finder.status, pairs: (finder.pairs || []).map((p) => `${p.before.name} -> ${p.after.name} (${p.what})`), error: finder.error } : 'not run',
       template_extras: isTemplate(layout)
         ? {
@@ -1758,11 +1777,13 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       },
       {
         name: 'studio_make_ads',
-        description: 'Write N ads for this client from their brief, each in its own look, as a batch to review and save together ("Make 3 ads").',
-        input_schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 6 } } },
-        run: ({ count }) => {
-          startBatch(Math.max(1, Math.min(6, Number(count) || BATCH_SIZE)))
-          return { ok: true, note: 'Writing them now; about half a minute. Call page_state to see them, then studio_save_batch.' }
+        description: `Write N ads for this client from their brief and the season playbook, each on the template its words call for, as a batch to review and save together ("Make 3 ads"). Optional: "about" (what the ads should be about, in a sentence: "the $89 furnace tune-up", "a before and after of the Smith job") and "template" (one key: ${LAYOUTS.filter((l) => l.group === 'template').map((l) => l.key).join(', ')}) to write every ad to that template's shape.`,
+        input_schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 6 }, about: { type: 'string' }, template: { type: 'string' } } },
+        run: ({ count, about, template }) => {
+          const key = String(template || '').trim()
+          if (key && !isTemplate(key)) return { error: `No template called ${key}.` }
+          startBatch(Math.max(1, Math.min(6, Number(count) || BATCH_SIZE)), { template: key, about: String(about || '') })
+          return { ok: true, note: 'Writing now; about half a minute. Call page_state to see the result, then studio_save_batch.' }
         },
       },
       {
@@ -2276,9 +2297,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         phase={phase}
         best={bestTemplates(phase, { hasPhoto: Boolean(assets.background), hasAfter: Boolean(assets.after) })}
         layout={layout}
+        live={livePick}
         onPick={applyTemplate}
-        onSuggest={suggestTemplate}
-        suggestion={suggestion}
+        onUseLive={suggestTemplate}
+        onNextBest={nextBest}
+        onWriteOne={(template) => startBatch(1, { template })}
+        writing={batch?.status === 'working'}
         market={tradeMarket}
       />
 
