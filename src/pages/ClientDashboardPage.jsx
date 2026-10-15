@@ -124,7 +124,10 @@ function AdCard({ ad, creative, ready, verdict, onOpen }) {
         </span>
       </button>
       <div className="p-3">
-        <p className="truncate text-sm font-semibold text-white" title={ad.name}>
+        {/* The whole name, wrapped. It was one line with an ellipsis, which
+            on a phone cut "WC_Belk · Oct 14 · $99 heat check" down to the
+            prefix and left every ad reading the same. */}
+        <p className="break-words text-sm font-semibold leading-snug text-white" data-ad-name>
           {ad.name}
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500">
@@ -612,7 +615,7 @@ export default function ClientDashboardPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={() => setLightbox(null)} role="dialog" aria-modal="true" aria-label={lightbox.ad.name} data-lightbox>
           <div className="max-h-full w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-200">
-              <span className="truncate font-semibold">{lightbox.ad.name}</span>
+              <span className="break-words font-semibold">{lightbox.ad.name}</span>
               <button type="button" onClick={() => setLightbox(null)} className="rounded-lg border border-white/20 px-3 py-1 text-xs hover:bg-white/10">
                 Close
               </button>
