@@ -50,3 +50,13 @@ alter table saved_ads add column if not exists season text;
 
 -- 2026-10-14: a panel behind the subhead only (the Studio's "Panel" choice).
 alter table saved_ads add column if not exists subhead_plate boolean default false;
+
+-- 2026-10-15: the second photo of a before-and-after static, and the look itself.
+alter table saved_ads add column if not exists background_path_2 text;
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'saved_ads_layout_check') then
+    execute 'alter table saved_ads drop constraint saved_ads_layout_check';
+  end if;
+  execute 'alter table saved_ads add constraint saved_ads_layout_check check (layout = any (array[''cover'',''card'',''stack'',''plate'',''split'',''before'',''ai'']))';
+end $$;

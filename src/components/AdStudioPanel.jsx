@@ -740,6 +740,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // without a page reload.
   const [driveFolderId, setDriveFolderId] = useState(client.drive_folder_id || '')
   const [backgroundPath, setBackgroundPath] = useState('')
+  // The second photo of a before-and-after: the "After" half. Only the
+  // before look reads it; it is saved with the ad (saved_ads.background_path_2).
+  const [afterPath, setAfterPath] = useState('')
   // The logo the CRM remembers for this client (clients.logo_path). A new ad
   // starts with it, so nobody picks the same logo every time. Picking or
   // uploading a logo updates it; Forget clears it.
@@ -1107,10 +1110,10 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     // is same-origin and so cannot taint the canvas that toBlob() has to read.
     const bitmap = async (path) => (path ? loadImage(await resolveImageSrc(client.id, path)) : null)
 
-    Promise.all([bitmap(backgroundPath), bitmap(logoPath)])
-      .then(([background, logo]) => {
+    Promise.all([bitmap(backgroundPath), bitmap(logoPath), bitmap(afterPath)])
+      .then(([background, logo, after]) => {
         if (cancelled) return
-        setAssets({ background, logo })
+        setAssets({ background, logo, after })
         setError('')
 
         if (!logo) {
@@ -1140,7 +1143,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     return () => {
       cancelled = true
     }
-  }, [backgroundPath, logoPath, client.id])
+  }, [backgroundPath, logoPath, afterPath, client.id])
 
   // Repaint every artboard on any change. Fonts must be ready first or the
   // first paint measures with a fallback face and wraps differently.
@@ -1209,6 +1212,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     // Colours came from the saved ad, so a logo reload must not replace them.
     setFromLogo(false)
     setBackgroundPath(r.backgroundPath)
+    setAfterPath(r.backgroundPath2 || '')
     setLogoPath(r.logoPath)
     setSafeMode(r.safeMode)
     setSeason(r.season || '')
@@ -1294,6 +1298,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         blobs,
         content: contentNow(),
         backgroundPath,
+        backgroundPath2: afterPath,
         logoPath,
         safeMode,
         note: 'Edited in the Studio',
@@ -1360,6 +1365,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
             description: metaDescription,
           },
           backgroundPath,
+          backgroundPath2: afterPath,
           logoPath,
           safeMode,
         })
@@ -1508,6 +1514,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       colours: { accent, badgeColor },
       panel: panel === 'none' ? 'none' : panel === 'hook' ? 'behind hook and subhead' : 'behind subhead only',
       photo: backgroundPath || 'none picked',
+      after_photo: layout === 'before' ? afterPath || 'none picked (the before-and-after look needs one)' : undefined,
       logo: logoPath ? 'set' : 'none',
       photos_available: files.map((f) => f.file_name),
       batch: batch
@@ -1562,13 +1569,13 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       },
       {
         name: 'studio_pick_photo',
-        description: "Use one of the client's uploaded photos as the background, by file name (loosely matched).",
-        input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
-        run: async ({ name }) => {
+        description: "Use one of the client's uploaded photos, by file name (loosely matched): as the background (slot \"photo\", the default, which is the Before half on the before-and-after look) or as the After half (slot \"after\").",
+        input_schema: { type: 'object', properties: { name: { type: 'string' }, slot: { type: 'string', enum: ['photo', 'after'] } }, required: ['name'] },
+        run: async ({ name, slot }) => {
           const found = looseMatch(files, name, (f) => f.file_name)
           if (found.length !== 1) return { error: found.length ? `Several photos match: ${found.map((f) => f.file_name).join(', ')}` : `No photo called ${name}. Photos: ${files.map((f) => f.file_name).join(', ') || 'none uploaded'}` }
-          await pick(setBackgroundPath)(found[0].storage_path)
-          return { ok: true, photo: found[0].file_name }
+          await pick(slot === 'after' ? setAfterPath : setBackgroundPath)(found[0].storage_path)
+          return { ok: true, [slot === 'after' ? 'after_photo' : 'photo']: found[0].file_name }
         },
       },
       {
@@ -1758,7 +1765,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid md:grid-cols-2 gap-3">
         <AdImagePicker
-          label="Background photo"
+          label={layout === 'before' ? 'Before photo' : 'Background photo'}
           client={client}
           files={files}
           value={backgroundPath}
@@ -1769,6 +1776,23 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           driveFolderId={driveFolderId}
           onFolderSaved={setDriveFolderId}
         />
+        {/* The second photo, only on the before-and-after look. */}
+        {layout === 'before' && (
+          <div data-after-picker>
+            <AdImagePicker
+              label="After photo"
+              client={client}
+              files={files}
+              value={afterPath}
+              onChange={pick(setAfterPath)}
+              onUpload={(f) => upload(f, setAfterPath)}
+              onRefresh={loadFiles}
+              converting={converting}
+              driveFolderId={driveFolderId}
+              onFolderSaved={setDriveFolderId}
+            />
+          </div>
+        )}
         <div>
           <AdImagePicker
             label="Logo"

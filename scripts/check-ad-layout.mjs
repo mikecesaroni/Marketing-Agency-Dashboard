@@ -7,7 +7,7 @@
 // photo over the offer block on Stories. Everything resolves through
 // photoRect, so the 216px preview and the 1080px export agree.
 
-import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, TEXT_LAYOUTS, accentWord, containRect, coverRect, dragFocus, dragPhoto, photoRect, plateRects, splitRects } from '../src/lib/adLayout.js'
+import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, TEXT_LAYOUTS, accentWord, beforeRects, containRect, coverRect, dragFocus, dragPhoto, photoRect, plateRects, splitRects } from '../src/lib/adLayout.js'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -18,9 +18,9 @@ function check(name, actual, expected) {
 }
 
 check('cover is first and therefore the default', LAYOUTS[0].key, 'cover')
-check('the five looks on offer, classic first (the card is retired from the row)', LAYOUTS.map((l) => l.key), ['cover', 'stack', 'plate', 'split', 'ai'])
-check('every look but the AI concept paints the words, the retired card included so old saved ads still edit', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'card'])
-check('dragging moves the focal point on the photo looks', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'split'])
+check('the six looks on offer, classic first (the card is retired from the row)', LAYOUTS.map((l) => l.key), ['cover', 'stack', 'plate', 'split', 'before', 'ai'])
+check('every look but the AI concept paints the words, the retired card included so old saved ads still edit', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'before', 'card'])
+check('dragging moves the focal point on the photo looks', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'before'])
 
 // The headline stack's giant word.
 check('a short first word is the shout', accentWord('FREE second opinion on any quote'), { accent: 'FREE', rest: 'second opinion on any quote' })
@@ -129,5 +129,18 @@ check('over-drag clamps at the edge of the useful range', Math.round(over.y * 10
 check('no horizontal overflow means x does not move', dragFocus(DEFAULT_FOCUS, 0.3, 0, 1080, 1080, portrait).x, 0.5)
 check('a drag is applied on top of an existing focus', dragFocus({ x: 0.5, y: 0.4 }, 0, -0.1, 1080, 1080, portrait).y > 0.4, true)
 
+// Before and after.
+const baSq = beforeRects(1080, 1080, { safeTop: 0, safeBottom: 0 })
+check('square: side by side, a seam between, the plate below', [baSq.stacked, baSq.before, baSq.after, baSq.plate.y < 1080], [false, { x: 0, y: 0, w: 536, h: baSq.photo.h }, { x: 544, y: 0, w: 536, h: baSq.photo.h }, true])
+check('square: the halves meet the plate', baSq.before.h, baSq.plate.y + 36)
+const baSt = beforeRects(1080, 1920, { safeTop: 250, safeBottom: 670 })
+check('story: one above the other', [baSt.stacked, baSt.before.x, baSt.before.w, baSt.after.x, baSt.after.w], [true, 0, 1080, 0, 1080])
+check('story: the seam sits between the halves', baSt.after.y - (baSt.before.y + baSt.before.h), 8)
+check('story: the halves fill the photo area', baSt.after.y + baSt.after.h, baSt.photo.h)
+const baFd = beforeRects(1080, 1350)
+check('feed: side by side (1.25 is under the stacking line)', baFd.stacked, false)
+check('the plate takes less than on the plate look so both photos keep their size', beforeRects(1080, 1080).plate.h < plateRects(1080, 1080).plate.h, true)
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll layout checks pass')
+
 process.exit(failures ? 1 : 0)

@@ -33,8 +33,8 @@ export async function reviseSavedAd({ client, set, instruction, token }) {
   // Paint. Fonts first or the first frame wraps on a fallback face.
   await ensureFonts()
   const bitmap = async (path) => (path ? loadImage(await resolveImageSrc(client.id, path)) : null)
-  const [background, logo] = await Promise.all([bitmap(current.backgroundPath), bitmap(current.logoPath)])
-  const assets = { background, logo }
+  const [background, logo, after] = await Promise.all([bitmap(current.backgroundPath), bitmap(current.logoPath), bitmap(current.backgroundPath2)])
+  const assets = { background, logo, after }
 
   const blobs = {}
   for (const { size } of set.ordered || []) {
@@ -50,6 +50,7 @@ export async function reviseSavedAd({ client, set, instruction, token }) {
     blobs,
     content,
     backgroundPath: current.backgroundPath,
+    backgroundPath2: current.backgroundPath2,
     logoPath: current.logoPath,
     safeMode: current.safeMode,
     note,

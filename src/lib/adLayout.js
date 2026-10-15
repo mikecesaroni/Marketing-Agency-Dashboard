@@ -9,12 +9,13 @@ export const LAYOUTS = [
   { key: 'stack', label: 'Headline stack', hint: 'one giant accent word over the photo, with a white offer card' },
   { key: 'plate', label: 'Bottom plate', hint: 'photo on top, the words on a brand-colour plate below' },
   { key: 'split', label: 'Split panel', hint: 'brand-colour panel with the words beside the photo' },
+  { key: 'before', label: 'Before and after', hint: 'two photos side by side (one above the other on the Story), Before and After labelled, the words on a plate below' },
   { key: 'ai', label: 'AI concept', hint: 'a finished ad made by AI from your brief, used as is' },
 ]
 // Looks that paint the words themselves (an AI concept carries its own).
-export const TEXT_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'card']
+export const TEXT_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'before', 'card']
 // Looks where dragging the artboard moves the photo's focal point.
-export const FOCUS_LAYOUTS = ['cover', 'stack', 'plate', 'split']
+export const FOCUS_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'before']
 
 export const DEFAULT_BG = '#0F172A'
 // Fractions: x across the frame, y down the FREE BAND (the room between the
@@ -196,4 +197,21 @@ export function accentWord(hook) {
     return { accent: first.replace(/[,:!.]+$/, ''), rest: others.join(' ') }
   }
   return { accent: '', rest: text }
+}
+
+/**
+ * Before and after: the plate's photo area split in two, side by side on a
+ * square or a feed frame and one above the other on a Story (where a side
+ * by side pair would be two slivers), with a seam between them. The plate
+ * takes a little less than on the plate look so both photos keep their size.
+ */
+export function beforeRects(w, h, { safeTop = 0, safeBottom = 0, share = 0.4, gap = 8 } = {}) {
+  const { photo, plate } = plateRects(w, h, { safeTop, safeBottom, share })
+  const stacked = h / w >= 1.6
+  if (stacked) {
+    const half = Math.round((photo.h - gap) / 2)
+    return { stacked, photo, plate, before: { x: 0, y: 0, w, h: half }, after: { x: 0, y: half + gap, w, h: photo.h - half - gap } }
+  }
+  const half = Math.round((w - gap) / 2)
+  return { stacked, photo, plate, before: { x: 0, y: 0, w: half, h: photo.h }, after: { x: half + gap, y: 0, w: w - half - gap, h: photo.h } }
 }

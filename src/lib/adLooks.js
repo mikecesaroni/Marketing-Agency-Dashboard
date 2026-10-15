@@ -17,7 +17,7 @@
 
 import { readableTextOn } from './logoColours'
 import { PAD, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
-import { DEFAULT_BG, accentWord, containRect, coverRect, plateRects, splitRects } from './adLayout'
+import { DEFAULT_BG, accentWord, containRect, coverRect, beforeRects, plateRects, splitRects } from './adLayout'
 
 const SLATE = '#0F172A'
 const r = (n) => Math.round(n)
@@ -303,12 +303,10 @@ function renderStack(ctx, size, content, assets, opts) {
 
 function renderPlate(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
-  const { w, h, padX, contentTop, contentBottom, maxWidth, safeTop, safeBottom } = m
-  const { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, focus } = content
-  const { background, logo } = assets || {}
+  const { w, h, padX, contentTop, maxWidth, safeTop, safeBottom } = m
+  const { badge, accent, badgeColor, focus } = content
+  const { background } = assets || {}
   const plateColor = badgeColor || DEFAULT_BG
-  const ink = readableTextOn(plateColor)
-  const soft = ink === '#FFFFFF' ? 'rgba(255,255,255,0.78)' : 'rgba(15,23,42,0.7)'
 
   const { photo, plate } = plateRects(w, h, { safeTop, safeBottom })
   ctx.fillStyle = SLATE
@@ -323,6 +321,22 @@ function renderPlate(ctx, size, content, assets, opts) {
     [1, 'rgba(2,6,23,0)'],
   ])
   drawBadge(ctx, badge, padX, contentTop, maxWidth, badgeColor === plateColor ? accent : badgeColor)
+  drawPlateBody(ctx, m, content, assets, plate)
+  return { band: { top: photo.y, bottom: plate.y } }
+}
+
+/**
+ * The plate and the words on it: hook, subhead, offer pill, proof, and the
+ * logo beside the bottom stack. Shared by the plate look and the before and
+ * after look, which differ only in what sits above the plate.
+ */
+function drawPlateBody(ctx, m, content, assets, plate) {
+  const { w, padX, contentBottom, maxWidth } = m
+  const { hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor } = content
+  const { logo } = assets || {}
+  const plateColor = badgeColor || DEFAULT_BG
+  const ink = readableTextOn(plateColor)
+  const soft = ink === '#FFFFFF' ? 'rgba(255,255,255,0.78)' : 'rgba(15,23,42,0.7)'
 
   // The plate, with rounded top corners laid over the photo.
   ctx.save()
@@ -417,6 +431,70 @@ function renderPlate(ctx, size, content, assets, opts) {
   }
   if (logoBox) ctx.drawImage(logo, w - padX - logoBox.w, bottom - logoBox.h, logoBox.w, logoBox.h)
 
+}
+
+// ---------------------------------------------------------------------------
+// before and after
+// ---------------------------------------------------------------------------
+
+/**
+ * Two photos, Before and After, side by side on the square and the feed and
+ * one above the other on the Story, a seam in the accent colour between
+ * them, and the words on a plate below. A half with no photo yet says so,
+ * so the second picker is obvious.
+ */
+function renderBefore(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth, safeTop, safeBottom } = m
+  const { badge, accent, badgeColor, focus } = content
+  const { background, after } = assets || {}
+  const plateColor = badgeColor || DEFAULT_BG
+  const { stacked, before: beforeRect, after: afterRect, photo, plate } = beforeRects(w, h, { safeTop, safeBottom })
+
+  ctx.fillStyle = SLATE
+  ctx.fillRect(0, 0, w, h)
+  const half = (img, rect, label) => {
+    if (img) drawCoverIn(ctx, img, rect, focus)
+    else {
+      ctx.fillStyle = '#1E293B'
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
+      setFont(ctx, '600', 26, 0)
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(`Pick the ${label.toLowerCase()} photo`, rect.x + rect.w / 2, rect.y + rect.h / 2)
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'alphabetic'
+    }
+    // The label, top-right of its half, clear of the badge top-left and of
+    // the Story's own chrome at the top of the frame.
+    setFont(ctx, '800', 22, 1.4)
+    const text = label.toUpperCase()
+    const pw = ctx.measureText(text).width + 38
+    const px = rect.x + rect.w - 20 - pw
+    const py = Math.max(rect.y + 20, safeTop + 20)
+    ctx.fillStyle = 'rgba(2,6,23,0.72)'
+    roundRect(ctx, px, py, pw, 44, 8)
+    ctx.fill()
+    ctx.fillStyle = '#FFFFFF'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, px + 19, py + 23)
+    ctx.textBaseline = 'alphabetic'
+  }
+  half(background, beforeRect, 'Before')
+  half(after, afterRect, 'After')
+  // The seam between the two, in the accent colour.
+  ctx.fillStyle = accent
+  if (stacked) ctx.fillRect(0, beforeRect.h, w, afterRect.y - beforeRect.h)
+  else ctx.fillRect(beforeRect.w, 0, afterRect.x - beforeRect.w, photo.h)
+
+  scrim(ctx, 0, 0, w, Math.round(photo.h * 0.25), [
+    [0, 'rgba(2,6,23,0.4)'],
+    [1, 'rgba(2,6,23,0)'],
+  ])
+  drawBadge(ctx, badge, padX, contentTop, maxWidth - 220, badgeColor === plateColor ? accent : badgeColor)
+  drawPlateBody(ctx, m, content, assets, plate)
   return { band: { top: photo.y, bottom: plate.y } }
 }
 
@@ -566,7 +644,8 @@ function renderAiConcept(ctx, size, content, assets) {
   return { band: { top: fit.y, bottom: fit.y + fit.h } }
 }
 
-export const LOOKS = { stack: renderStack, plate: renderPlate, split: renderSplit, ai: renderAiConcept }
+export const LOOKS = { stack: renderStack, plate: renderPlate, split: renderSplit,
+  before: renderBefore, ai: renderAiConcept }
 
 /** True when adCanvas should hand this layout to a look in this file. */
 export function hasLook(layout) {

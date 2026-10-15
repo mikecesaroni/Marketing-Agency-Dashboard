@@ -45,7 +45,7 @@ function photoPos(content) {
   return focus ? { focus } : null
 }
 
-function recipeColumns(content, backgroundPath, logoPath, safeMode) {
+function recipeColumns(content, backgroundPath, logoPath, safeMode, backgroundPath2 = '') {
   return {
     badge: content.badge,
     hook: content.hook,
@@ -73,6 +73,8 @@ function recipeColumns(content, backgroundPath, logoPath, safeMode) {
     headline: content.headline || null,
     description: content.description || null,
     background_path: backgroundPath || null,
+    // The second photo of a before-and-after; null on every other look.
+    background_path_2: content.layout === 'before' ? backgroundPath2 || null : null,
     logo_path: logoPath || null,
     // Season label (src/lib/adSeason.js): spring, summer, fall, winter,
     // holiday or all. Guessed at save time, changeable in the gallery.
@@ -86,11 +88,11 @@ export async function setSavedAdSeason(clientId, stamp, season) {
   if (error) throw error
 }
 
-export async function saveAdRecipe({ clientId, stamp, content, backgroundPath, logoPath, safeMode }) {
+export async function saveAdRecipe({ clientId, stamp, content, backgroundPath, logoPath, safeMode, backgroundPath2 }) {
   const { error } = await supabase.from('saved_ads').insert({
     client_id: clientId,
     stamp: String(stamp),
-    ...recipeColumns(content, backgroundPath, logoPath, safeMode),
+    ...recipeColumns(content, backgroundPath, logoPath, safeMode, backgroundPath2),
   })
   if (error) throw error
 }
@@ -107,7 +109,7 @@ export async function saveAdRecipe({ clientId, stamp, content, backgroundPath, l
  * `blobs` is keyed by size (square, feed, story). A size the set never had is
  * added under the same stamp; a size with no blob is left as it was.
  */
-export async function overwriteSavedAd({ clientId, set, blobs, content, backgroundPath, logoPath, safeMode, note }) {
+export async function overwriteSavedAd({ clientId, set, blobs, content, backgroundPath, logoPath, safeMode, note, backgroundPath2 }) {
   const recipe = set?.recipe
   if (!recipe?.id) throw new Error('This ad was saved before the Studio kept its text, so there is nothing to save over.')
   const now = new Date().toISOString()
@@ -138,7 +140,7 @@ export async function overwriteSavedAd({ clientId, set, blobs, content, backgrou
   const { error } = await supabase
     .from('saved_ads')
     .update({
-      ...recipeColumns(content, backgroundPath, logoPath, safeMode),
+      ...recipeColumns(content, backgroundPath, logoPath, safeMode, backgroundPath2),
       revised_at: now,
       revision_note: note || null,
       revisions: (recipe.revisions || 0) + 1,
@@ -169,6 +171,7 @@ export function recipeToContent(row) {
     headline: row.headline || '',
     description: row.description || '',
     backgroundPath: row.background_path || '',
+    backgroundPath2: row.background_path_2 || '',
     logoPath: row.logo_path || '',
     safeMode: row.safe_mode || 'reels',
     season: row.season || '',

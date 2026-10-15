@@ -17,7 +17,7 @@
 export const BATCH_LOOKS = ['stack', 'plate', 'split']
 export const BATCH_SIZE = 3
 
-const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', split: 'Split panel', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept' }
+const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', split: 'Split panel', before: 'Before and after', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept' }
 
 export function lookName(key) {
   return LOOK_NAMES[key] || key
