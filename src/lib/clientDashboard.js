@@ -111,21 +111,21 @@ export function perDay(spend, days) {
   return r2(num(spend) / n)
 }
 
-/** "WC_Summer | 2026-10-08 | AC died? Same-day" shows as "AC died? Same-day". */
+/**
+ * The ad's name as it is in the ad account, whole. This used to keep only the
+ * last "|" part ("WC_Summer | 2026-10-08 | AC died? Same-day" became "AC
+ * died? Same-day"), which turned a video named for its angle into just
+ * "Offer led" with nothing to tell it from the next one.
+ */
 export function cleanAdName(name) {
-  const s = String(name || '').replace(/^wc_/i, '')
-  const parts = s
-    .split('|')
-    .map((x) => x.trim())
-    .filter(Boolean)
-  return (parts.length > 1 ? parts[parts.length - 1] : s.trim()) || 'Untitled ad'
+  return String(name || '').trim() || 'Untitled ad'
 }
 
 /** The ads that ran in a range, most leads first, cheapest first on a tie. */
 export function adsFor(ads, days, limit = 10) {
   return (ads || [])
     .filter((a) => Number(a.w) === Number(days) && (num(a.spend) > 0 || num(a.leads) > 0))
-    .map((a) => ({ key: a.key, channel: a.channel, name: cleanAdName(a.name), ...rates(a) }))
+    .map((a) => ({ key: a.key, channel: a.channel, name: cleanAdName(a.name), publishedOn: a.published_on || null, ...rates(a) }))
     .sort((x, y) => y.leads - x.leads || x.spend - y.spend || x.name.localeCompare(y.name))
     .slice(0, limit)
 }

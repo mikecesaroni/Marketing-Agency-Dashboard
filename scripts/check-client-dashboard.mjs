@@ -64,15 +64,16 @@ check('daily series for spend', dailySeries(days, '2026-10-01', '2026-10-01', 's
 check('spend per day on average', [perDay(900, 30), perDay(100, 7), perDay(0, 0)], [30, 14.29, 0])
 
 // ------------------------------------------------------------------- the ads
-check('ad names lose the WC_ bits', [cleanAdName('WC_Summer | 2026-10-08 | AC died? Same-day'), cleanAdName('Plain name'), cleanAdName('')], ['AC died? Same-day', 'Plain name', 'Untitled ad'])
+check('ad names are shown whole', [cleanAdName('WC_Summer | 2026-10-08 | AC died? Same-day'), cleanAdName('  WC_Pillar · Oct 9 · Offer led '), cleanAdName('')], ['WC_Summer | 2026-10-08 | AC died? Same-day', 'WC_Pillar · Oct 9 · Offer led', 'Untitled ad'])
 const ads = [
-  { key: 'a', name: 'WC_Summer | x | Hook A', channel: 'meta', w: 30, spend: 100, leads: 4, impressions: 1000, clicks: 30 },
+  { key: 'a', name: 'WC_Summer | x | Hook A', channel: 'meta', w: 30, spend: 100, leads: 4, impressions: 1000, clicks: 30, published_on: '2026-10-09' },
   { key: 'a', name: 'WC_Summer | x | Hook A', channel: 'meta', w: 7, spend: 30, leads: 1, impressions: 300, clicks: 9 },
   { key: 'g', name: 'Search', channel: 'google', w: 30, spend: 50, leads: 4, impressions: 200, clicks: 20 },
   { key: 'z', name: 'Nothing ran', channel: 'meta', w: 30, spend: 0, leads: 0, impressions: 0, clicks: 0 },
 ]
 const list = adsFor(ads, 30)
-check('ads for the range, most leads then cheapest first, nothing-ran dropped', list.map((a) => a.name), ['Search', 'Hook A'])
+check('ads for the range, most leads then cheapest first, nothing-ran dropped', list.map((a) => a.name), ['Search', 'WC_Summer | x | Hook A'])
+check('the published date travels with the ad', list.map((a) => a.publishedOn), [null, '2026-10-09'])
 check('ad rates', [list[0].cpl, list[0].ctr, list[1].cpl], [12.5, 10, 25])
 check('ads for 7 days', adsFor(ads, 7).map((a) => a.leads), [1])
 

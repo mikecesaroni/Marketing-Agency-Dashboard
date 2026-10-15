@@ -64,9 +64,24 @@ as $$
     from google_campaign_daily
     where client_id = (select id from c) and date >= current_date - 89
   ),
+  -- The first day each ad delivered, over all time rather than the window,
+  -- so an ad that has run for months does not read as new in every window.
+  first as (
+    select ad_id as key, 'meta' as channel, min(date) as first_day
+    from ad_daily where client_id = (select id from c) group by ad_id
+    union all
+    select campaign_id, 'google', min(date)
+    from google_campaign_daily where client_id = (select id from c) group by campaign_id
+  ),
   ads as (
     select r.key, max(r.name) as name, r.channel, win.w,
-      sum(r.spend) as spend, sum(r.leads) as leads, sum(r.impressions) as impressions, sum(r.clicks) as clicks
+      sum(r.spend) as spend, sum(r.leads) as leads, sum(r.impressions) as impressions, sum(r.clicks) as clicks,
+      -- When it was published: the day the CRM created it in Meta when it
+      -- did, else the first day it delivered.
+      coalesce(
+        (select min(p.created_at)::date from published_ads p where p.client_id = (select id from c) and p.ad_id = r.key),
+        (select f.first_day from first f where f.key = r.key and f.channel = r.channel limit 1)
+      ) as published_on
     from r cross join (values (7), (30), (90)) as win(w)
     where r.date >= current_date - (win.w - 1)
     group by r.key, r.channel, win.w

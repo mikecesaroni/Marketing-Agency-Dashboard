@@ -24,6 +24,14 @@ const STACK_METRICS = [
 ]
 
 const fmtLeads = (n) => (Number.isInteger(Number(n)) ? String(n) : Number(n).toFixed(1))
+
+/** "Oct 9", or "Oct 9, 2025" once it is not this year. A date-only string is read as a date, not midnight UTC. */
+function publishedLabel(iso) {
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00` : iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) })
+}
 const fmtInt = (n) => Number(n || 0).toLocaleString('en-US')
 const cplText = (v) => (v > 0 ? money(v) : 'n/a')
 const plural = (n, one, many) => (Number(n) === 1 ? one : many)
@@ -130,10 +138,15 @@ function AdCard({ ad, creative, ready, verdict, onOpen }) {
         <p className="break-words text-sm font-semibold leading-snug text-white" data-ad-name>
           {ad.name}
         </p>
-        <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-slate-500">
           <ChannelDot channel={ad.channel} />
           {CHANNELS[ad.channel]?.long}
           {kind ? ` · ${kind}` : ''}
+          {ad.publishedOn && (
+            <span data-ad-published>
+              {' · '}Published {publishedLabel(ad.publishedOn)}
+            </span>
+          )}
         </p>
         <div className="mt-3 grid grid-cols-4 gap-1">
           <MiniStat label="Leads" value={fmtLeads(ad.leads)} />
