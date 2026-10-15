@@ -19,13 +19,18 @@
  *            photo in the stock library; '' for none
  *   theme    the painted background; '' means the one for the season
  *
+ * The logo sits on the theme with no box (logoCutout.js knocks the white out
+ * and reverses a dark mark on a dark surface), and the footer that holds it
+ * is measured before anything else is drawn, so no words can run into it.
+ *
  * No phone numbers and no painted buttons: Meta draws the real button under
  * the creative, and the number belongs on the landing page.
  */
 
 import { readableTextOn } from './logoColours'
 import { CONDENSED, SCRIPT, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
-import { SLATE, drawBadge, drawCoverIn, drawLogoPill, frameMargins, logoFit } from './adLooks'
+import { SLATE, drawBadge, drawCoverIn, frameMargins } from './adLooks'
+import { logoFor } from './logoCutout'
 import { CUTOUTS, PHOTO_TEMPLATES, TEMPLATE_KEYS, THEME_KEYS, THEME_LAYOUTS, kickerFor, offersFor, seasonKicker, themeFor } from './adTemplateMeta'
 
 export { CUTOUTS, PHOTO_TEMPLATES, TEMPLATE_KEYS, THEME_KEYS, kickerFor, offersFor, seasonKicker, themeFor }
@@ -612,6 +617,7 @@ function body(ctx, text, x, y, maxW, { px = 30, minPx = 20, lines = 3, weight = 
 /** Five gold stars and the proof line beside them. Returns the height. */
 function starsLine(ctx, proof, x, y, maxW, { ink = SLATE, align = 'left', px = 24 } = {}) {
   const t = String(proof || '').trim()
+  if (!t) return 0
   const starW = px * 1.05
   const starsW = starW * 5
   setFont(ctx, '700', px, 0)
@@ -765,15 +771,118 @@ function tiles(ctx, offers, rect, { fill = '#DC2626', ink = WHITE, amountInk, co
   return rect.h
 }
 
-/** The logo flat on a light background, or on a white pill on a dark one. Returns the box drawn, or null. */
-function logoAt(ctx, logo, x, y, box, { align = 'left', bottom = false, pill = false } = {}) {
-  if (!logo) return null
-  if (pill) return drawLogoPill(ctx, logo, x, y, box, { align, bottom })
-  const fit = logoFit(logo, box)
+/** The logo fitted inside a width and a height. */
+function logoFitBox(logo, maxW, maxH) {
+  if (!logo || !logo.width || !logo.height) return null
+  const scale = Math.min(maxW / logo.width, maxH / logo.height)
+  return { w: logo.width * scale, h: logo.height * scale }
+}
+
+/**
+ * The logo for the surface (reversed to white on a dark one when its own
+ * colours would sink; see logoCutout.js), fitted inside maxW by maxH and
+ * drawn at the anchor. Returns the box drawn, or null.
+ */
+function logoAt(ctx, assets, onDark, x, y, { maxW = 300, maxH = 100, align = 'left', bottom = false } = {}) {
+  const logo = logoFor(assets, onDark)
+  const fit = logoFitBox(logo, maxW, maxH)
+  if (!fit) return null
   const lx = align === 'right' ? x - fit.w : align === 'center' ? x - fit.w / 2 : x
   const ly = bottom ? y - fit.h : y
   ctx.drawImage(logo, lx, ly, fit.w, fit.h)
   return { x: lx, y: ly, w: fit.w, h: fit.h }
+}
+
+/**
+ * THE FOOTER: the logo in one bottom corner and the stars in the other, or
+ * the logo centred over the stars. Measured before anything else is drawn,
+ * so every template stops its words, its stickers and its unit at `top`,
+ * and nothing can ever run into the logo. Drawn last.
+ */
+function footer(ctx, m, content, assets, { onDark = false, ink = SLATE, logo = 'right', maxW = 300, maxH = 90, starsPx = 24, bottom, left, right } = {}) {
+  const { w, padX, contentBottom } = m
+  const floor = bottom ?? contentBottom
+  const x0 = left ?? padX
+  const x1 = right ?? w - padX
+  const width = x1 - x0
+  const img = logo === 'none' ? null : logoFor(assets, onDark)
+  const fit = logoFitBox(img, maxW, maxH)
+  const proof = String(content.proof || '').trim()
+  const starsH = proof ? starsPx * 1.2 : 0
+  const stacked = logo === 'center'
+  const height = stacked ? (fit ? fit.h + (starsH ? 14 : 0) : 0) + starsH : Math.max(fit ? fit.h : 0, starsH)
+  const top = floor - height
+  const draw = () => {
+    if (stacked) {
+      if (fit) ctx.drawImage(img, (x0 + x1) / 2 - fit.w / 2, floor - starsH - (starsH ? 14 : 0) - fit.h, fit.w, fit.h)
+      if (starsH) starsLine(ctx, proof, (x0 + x1) / 2, floor - starsH, width, { ink, align: 'center', px: starsPx })
+      return
+    }
+    if (fit) ctx.drawImage(img, logo === 'right' ? x1 - fit.w : x0, floor - fit.h, fit.w, fit.h)
+    if (!starsH) return
+    const sw = width - (fit ? fit.w + 30 : 0)
+    const sy = fit && fit.h > starsH ? floor - fit.h / 2 - starsH / 2 : floor - starsH
+    if (logo === 'right') starsLine(ctx, proof, x0, sy, sw, { ink, align: 'left', px: starsPx })
+    else starsLine(ctx, proof, x1, sy, sw, { ink, align: 'right', px: starsPx })
+  }
+  return { top, height, fit, draw }
+}
+
+/** A small condensed label pill: BEFORE, AFTER. Returns its size. */
+function tag(ctx, text, x, y, { fill = SLATE, ink = WHITE, px = 30, align = 'left' } = {}) {
+  setFont(ctx, '400', px, 2, CONDENSED)
+  const tw = ctx.measureText(text).width + 28
+  const th = px * 1.5
+  const tx = align === 'right' ? x - tw : x
+  ctx.fillStyle = fill
+  roundRect(ctx, tx, y, tw, th, 6)
+  ctx.fill()
+  ctx.fillStyle = ink
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, tx + 14, y + th / 2 + 1)
+  ctx.textBaseline = 'alphabetic'
+  return { x: tx, y, w: tw, h: th }
+}
+
+const CENTRE = { x: 0.5, y: 0.5 }
+
+/** A photo in a rectangle, or a plain box asking for one. */
+function photoIn(ctx, img, rect, label, focus) {
+  if (img) {
+    drawCoverIn(ctx, img, rect, focus || CENTRE)
+    return
+  }
+  ctx.fillStyle = 'rgba(15,23,42,0.35)'
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
+  setFont(ctx, '600', Math.min(26, rect.w / 12), 0)
+  ctx.fillStyle = WHITE
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(`Pick the ${label.toLowerCase()} photo`, rect.x + rect.w / 2, rect.y + rect.h / 2)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+/**
+ * The Before and After pair in an area: side by side, or one above the
+ * other when the area is taller than it is wide (the Story), a seam in the
+ * accent colour between, each half tagged. The first picker's photo is the
+ * Before, the After picker's the After.
+ */
+function drawPair(ctx, assets, content, area, accent, gap = 8) {
+  const stacked = area.h > area.w * 1.1
+  const before = stacked ? { x: area.x, y: area.y, w: area.w, h: (area.h - gap) / 2 } : { x: area.x, y: area.y, w: (area.w - gap) / 2, h: area.h }
+  const after = stacked
+    ? { x: area.x, y: area.y + before.h + gap, w: area.w, h: area.h - before.h - gap }
+    : { x: area.x + before.w + gap, y: area.y, w: area.w - before.w - gap, h: area.h }
+  photoIn(ctx, assets?.background, before, 'Before', content.focus)
+  photoIn(ctx, assets?.after, after, 'After', CENTRE)
+  ctx.fillStyle = accent
+  if (stacked) ctx.fillRect(area.x, before.y + before.h, area.w, gap)
+  else ctx.fillRect(before.x + before.w, area.y, gap, area.h)
+  tag(ctx, 'BEFORE', before.x + 14, before.y + 14, { fill: SLATE })
+  tag(ctx, 'AFTER', after.x + 14, after.y + 14, { fill: accent, ink: readableTextOn(accent) })
 }
 
 /** A dark band across the bottom of the frame, for proof and the logo. Returns its top. */
@@ -791,82 +900,95 @@ function kickerWords(content) {
   return kickerFor(content)
 }
 
+function amountWords(content) {
+  return String(content?.offerAmount || '').trim()
+}
+
 // ---------------------------------------------------------------------------
 // the templates
+//
+// Every one of them: paint the theme, measure the footer, then flow the
+// words down with a height budget to the footer's top (B). The unit stands
+// in whatever is left beside the words and stops at B too.
 // ---------------------------------------------------------------------------
 
 /** 1. Winter shout: the Horizon winter poster. Logo up top, a giant outlined offer, the unit in the snow. */
 function winterShout(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
-  const { w, h, padX, contentTop, contentBottom, maxWidth } = m
-  const { accent, badgeColor, logo } = { ...content, logo: assets?.logo }
-  const theme = paintTheme(ctx, w, h, content)
-  const dark = theme.ink === 'dark'
-  const navy = dark ? badgeColor || SLATE : WHITE
-  const outline = dark ? WHITE : badgeColor || SLATE
-  let y = contentTop
-  const lb = logoAt(ctx, logo, w / 2, y, 170, { align: 'center', pill: !dark })
-  if (lb) y += lb.h + 26
-  y += shout(ctx, kickerWords(content), w / 2, y, maxWidth, { px: 96, minPx: 48, lines: 1, fill: navy, stroke: outline, strokeW: 10, align: 'center' }) + 4
-  const amount = String(content.offerAmount || '').trim()
-  if (amount) y += shout(ctx, amount, w / 2, y, maxWidth, { px: 230, minPx: 100, lines: 1, fill: WHITE, stroke: badgeColor || SLATE, strokeW: 16, align: 'center', tracking: 2 })
-  y += shout(ctx, content.offerDetail, w / 2, y, maxWidth, { px: 84, minPx: 40, lines: 2, fill: WHITE, stroke: badgeColor || SLATE, strokeW: 10, align: 'center' }) + 10
-  // The headline beside the unit, the unit in the drift.
-  const cutW = hasCutout(content, assets) ? Math.min(maxWidth * 0.46, 520) : 0
+  const { w, padX, contentTop, contentBottom, maxWidth } = m
+  const { accent, badgeColor } = content
+  const theme = paintTheme(ctx, w, m.h, content)
+  const onDark = theme.ink === 'light'
+  const brand = badgeColor || SLATE
+  const navy = onDark ? WHITE : brand
+  const outline = onDark ? 'rgba(2,6,23,0.6)' : WHITE
+  const cutOn = hasCutout(content, assets)
+  const cutW = cutOn ? Math.min(maxWidth * 0.46, 520) : 0
   const textW = maxWidth - (cutW ? cutW + 30 : 0)
-  const bottomRoom = contentBottom - y
-  y += shout(ctx, content.hook, padX, y, textW, { px: 70, minPx: 36, lines: 4, fill: WHITE, stroke: badgeColor || SLATE, strokeW: 8, maxHeight: bottomRoom * 0.55 }) + 14
-  body(ctx, content.subhead, padX, y, textW, { px: 30, minPx: 20, lines: 3, weight: '700', fill: navy, maxHeight: contentBottom - 70 - y })
-  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: Math.max(y - 20, contentBottom - cutW * 1.1), w: cutW, h: Math.min(cutW * 1.1, contentBottom - Math.max(y - 20, contentBottom - cutW * 1.1)) })
-  starsLine(ctx, content.proof, padX, contentBottom - 30, textW, { ink: navy })
-  drawBadge(ctx, content.badge, padX, contentTop, 400, accent)
-  return { band: { top: y, bottom: contentBottom } }
+  const foot = footer(ctx, m, content, assets, { onDark, ink: navy, logo: 'none', right: padX + textW })
+  const B = foot.top - 14
+  let y = contentTop
+  const lb = logoAt(ctx, assets, onDark, w / 2, y, { maxW: 320, maxH: 110, align: 'center' })
+  if (lb) y += lb.h + 18
+  const badgeH = drawBadge(ctx, content.badge, padX, y, 400, accent)
+  if (badgeH) y += badgeH + 14
+  y += shout(ctx, kickerWords(content), w / 2, y, maxWidth, { px: 96, minPx: 48, lines: 1, fill: navy, stroke: outline, strokeW: 10, align: 'center', maxHeight: (B - y) * 0.2 }) + 4
+  const amount = amountWords(content)
+  if (amount) y += shout(ctx, amount, w / 2, y, maxWidth, { px: 230, minPx: 100, lines: 1, fill: WHITE, stroke: brand, strokeW: 16, align: 'center', tracking: 2, maxHeight: (B - y) * 0.4 })
+  y += shout(ctx, content.offerDetail, w / 2, y, maxWidth, { px: 84, minPx: 40, lines: 2, fill: WHITE, stroke: brand, strokeW: 10, align: 'center', maxHeight: (B - y) * 0.35 }) + 10
+  // The unit stands beside the headline column, from under the offer down.
+  const cutTop = y
+  y += shout(ctx, content.hook, padX, y, textW, { px: 70, minPx: 36, lines: 4, fill: WHITE, stroke: brand, strokeW: 8, maxHeight: (B - y) * 0.6 }) + 14
+  body(ctx, content.subhead, padX, y, textW, { px: 30, minPx: 20, lines: 3, weight: '700', fill: navy, maxHeight: B - y })
+  if (cutW) {
+    const top = Math.max(cutTop, contentBottom - cutW * 1.2)
+    drawCutout(ctx, content, assets, { x: w - padX - cutW, y: top, w: cutW, h: contentBottom - top })
+  }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
 }
 
 /** 2. Massive deal: the boiler poster. Two-tone shout, a price that fills the frame, a seal and a star. */
 function massiveDeal(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
-  const { w, h, padX, contentTop, contentBottom, maxWidth } = m
+  const { w, padX, contentTop, maxWidth } = m
   const { accent, badgeColor } = content
-  const theme = paintTheme(ctx, w, h, content)
-  const dark = theme.ink === 'dark'
-  const ink = dark ? SLATE : WHITE
-  const brand = dark ? badgeColor || SLATE : WHITE
+  const theme = paintTheme(ctx, w, m.h, content)
+  const onDark = theme.ink === 'light'
+  const ink = onDark ? WHITE : SLATE
+  const brand = onDark ? WHITE : badgeColor || SLATE
+  const foot = footer(ctx, m, content, assets, { onDark, ink, logo: 'center', maxW: 320, maxH: 90 })
+  const B = foot.top - 16
   let y = contentTop
   const badgeH = drawBadge(ctx, content.badge, padX, y, 400, accent)
   if (badgeH) y += badgeH + 16
-  y += shout(ctx, kickerWords(content), w / 2, y, maxWidth, { px: 150, minPx: 64, lines: 1, fill: brand, align: 'center', tracking: 6 })
-  y += shout(ctx, content.hook, w / 2, y, maxWidth, { px: 118, minPx: 48, lines: 2, fill: ink, align: 'center', tracking: 2 }) + 20
+  y += shout(ctx, kickerWords(content), w / 2, y, maxWidth, { px: 150, minPx: 64, lines: 1, fill: brand, align: 'center', tracking: 6, maxHeight: (B - y) * 0.25 })
+  y += shout(ctx, content.hook, w / 2, y, maxWidth, { px: 118, minPx: 48, lines: 2, fill: ink, align: 'center', tracking: 2, maxHeight: (B - y) * 0.3 }) + 20
   // Left: the unit. Right: the price.
   const cutOn = hasCutout(content, assets)
   const colW = cutOn ? maxWidth * 0.52 : maxWidth
   const align = cutOn ? 'right' : 'center'
   const ax = cutOn ? w - padX : w / 2
   let py = y
-  py += body(ctx, content.subhead, ax, py, colW, { px: 40, minPx: 24, lines: 2, weight: '800', fill: ink, align })
-  const amount = String(content.offerAmount || '').trim()
-  if (amount) py += shout(ctx, amount, ax, py, colW, { px: 240, minPx: 90, lines: 1, fill: accent, stroke: WHITE, strokeW: 14, align, tracking: 2 })
-  py += shout(ctx, content.offerDetail, ax, py, colW, { px: 70, minPx: 36, lines: 2, fill: brand, align })
+  py += body(ctx, content.subhead, ax, py, colW, { px: 40, minPx: 24, lines: 2, weight: '800', fill: ink, align, maxHeight: (B - py) * 0.25 })
+  const amount = amountWords(content)
+  if (amount) py += shout(ctx, amount, ax, py, colW, { px: 240, minPx: 90, lines: 1, fill: accent, stroke: WHITE, strokeW: 14, align, tracking: 2, maxHeight: (B - py) * 0.5 })
+  py += shout(ctx, content.offerDetail, ax, py, colW, { px: 70, minPx: 36, lines: 2, fill: brand, align, maxHeight: (B - py) * 0.5 })
   const st = stickerWords(content)
-  // The logo and the stars take the last 170px; the stickers fit above them
-  // or shrink, and go without when the frame has no room (a Reels-safe Story).
-  const stickerRoom = contentBottom - 170 - py
-  if (st && stickerRoom > 140) {
+  const stickerRoom = B - py
+  if (st && stickerRoom > 150) {
     const rad = Math.min(130, colW * 0.25, (stickerRoom - 40) / 2)
-    seal(ctx, ax - (cutOn ? rad : -rad * 1.2) - (cutOn ? 10 : 0), py + rad + 20, rad, st, { fill: brand, ink: dark ? WHITE : badgeColor || SLATE, ring: WHITE })
+    seal(ctx, ax - (cutOn ? rad : -rad * 1.2) - (cutOn ? 10 : 0), py + rad + 20, rad, st, { fill: brand, ink: onDark ? badgeColor || SLATE : WHITE, ring: WHITE })
     starburst(ctx, ax - (cutOn ? rad * 3.2 : -rad * 3.4), py + rad + 40, rad * 0.95, 'SALE', { fill: GOLD, ink: SLATE })
     py += rad * 2 + 40
   }
   if (cutOn) {
-    const cx = padX
     const cw = maxWidth - colW - 30
-    const ch = Math.min(contentBottom - 200 - y, cw * 1.35)
-    drawCutout(ctx, content, assets, { x: cx, y: Math.max(y, contentBottom - 200 - ch), w: cw, h: ch })
+    const top = Math.max(y, B - cw * 1.35)
+    drawCutout(ctx, content, assets, { x: padX, y: top, w: cw, h: B - top })
   }
-  // Bottom: the logo big, then stars and proof.
-  const lb = logoAt(ctx, assets?.logo, w / 2, contentBottom - 60, 260, { align: 'center', bottom: true, pill: !dark })
-  starsLine(ctx, content.proof, w / 2, contentBottom - 28, maxWidth, { ink, align: 'center' })
-  return { band: { top: py, bottom: lb ? lb.y : contentBottom } }
+  foot.draw()
+  return { band: { top: py, bottom: B } }
 }
 
 /** 3. Stay warm: photo on the right under a diagonal, headline stack on the left, a band of offers. */
@@ -875,8 +997,11 @@ function stayWarm(ctx, size, content, assets, opts) {
   const { w, h, padX, contentTop, contentBottom, maxWidth } = m
   const { accent, badgeColor, focus } = content
   const tall = h / w >= 1.6
-  const bandH = r(Math.min(h * 0.22, 300))
+  const bandH = r(Math.min(h * 0.24, 320))
   const bandTop = contentBottom - bandH + 20
+  const bandFill = badgeColor || SLATE
+  const onBandDark = readableTextOn(bandFill) === WHITE
+  const bandInk = onBandDark ? WHITE : SLATE
   // The photo: the right half (the top half on a Story), the diagonal in the accent colour over its edge.
   ctx.fillStyle = '#F8FAFC'
   ctx.fillRect(0, 0, w, h)
@@ -906,26 +1031,26 @@ function stayWarm(ctx, size, content, assets, opts) {
   // The stack.
   let y = tall ? photoRect.h + 140 : contentTop
   const textW = tall ? maxWidth : photoRect.x - 110 - padX
+  const colB = bandTop - 30
   const badgeH = drawBadge(ctx, content.badge, padX, y, textW, badgeColor)
   if (badgeH) y += badgeH + 20
-  y += shout(ctx, kickerWords(content), padX, y, textW, { px: 120, minPx: 48, lines: 2, fill: accent })
-  y += shout(ctx, content.hook, padX, y, textW, { px: 110, minPx: 44, lines: 4, fill: SLATE, maxHeight: (bandTop - y) * 0.5 }) + 12
-  y += body(ctx, content.subhead, padX, y, textW, { px: 34, minPx: 22, lines: 4, weight: '600', fill: '#334155' })
+  y += shout(ctx, kickerWords(content), padX, y, textW, { px: 120, minPx: 48, lines: 2, fill: accent, maxHeight: (colB - y) * 0.3 })
+  y += shout(ctx, content.hook, padX, y, textW, { px: 110, minPx: 44, lines: 4, fill: SLATE, maxHeight: (colB - y) * 0.5 }) + 12
+  y += body(ctx, content.subhead, padX, y, textW, { px: 34, minPx: 22, lines: 4, weight: '600', fill: '#334155', maxHeight: (colB - y) * 0.6 })
   // The sticker at the foot of the column when there is room for it.
   const st = stickerWords(content)
   if (st) {
     const rad = Math.min(130, textW * 0.42)
-    if (bandTop - 40 - y > rad * 2 + 20) starburst(ctx, padX + rad + 6, bandTop - 40 - rad, rad, st, { fill: GOLD, ink: SLATE })
+    if (colB - y > rad * 2 + 20) starburst(ctx, padX + rad + 6, colB - rad, rad, st, { fill: GOLD, ink: SLATE })
   }
-  // The band of offers.
-  ctx.fillStyle = badgeColor || SLATE
+  // The band of offers, the logo and the stars in its last row.
+  ctx.fillStyle = bandFill
   ctx.fillRect(0, bandTop, w, h - bandTop)
+  const foot = footer(ctx, m, content, assets, { onDark: onBandDark, ink: bandInk, logo: 'left', maxW: 220, maxH: 56, starsPx: 20, bottom: contentBottom - 8 })
   const offers = offersFor(content)
-  const inner = { x: padX, y: bandTop + 22, w: maxWidth, h: bandH - 44 - 30 }
-  tiles(ctx, offers, inner, { fill: 'rgba(255,255,255,0.08)', ink: WHITE, amountInk: WHITE, columns: Math.min(4, Math.max(1, offers.length)), gap: 10, radius: 8 })
-  // Logo pill and the stars under the band's top edge.
-  const lb = logoAt(ctx, assets?.logo, padX, inner.y + inner.h + 10, 72, { pill: true })
-  starsLine(ctx, content.proof, w - padX, inner.y + inner.h + 10 + (lb ? lb.h / 2 - 12 : 0), maxWidth - (lb ? lb.w + 30 : 0), { ink: WHITE, align: 'right', px: 20 })
+  const inner = { x: padX, y: bandTop + 22, w: maxWidth, h: foot.top - 16 - (bandTop + 22) }
+  if (inner.h > 70) tiles(ctx, offers, inner, { fill: 'rgba(255,255,255,0.1)', ink: bandInk, amountInk: bandInk, columns: Math.min(4, Math.max(1, offers.length)), gap: 10, radius: 8 })
+  foot.draw()
   return { band: { top: y, bottom: bandTop } }
 }
 
@@ -951,30 +1076,31 @@ function priceGrid(ctx, size, content, assets, opts) {
   ctx.bezierCurveTo(w * 0.7, h - 120, w * 0.3, h + 10, 0, h - 50)
   ctx.closePath()
   ctx.fill()
+  const foot = footer(ctx, m, content, assets, { onDark: false, ink: SLATE, logo: 'left', maxW: 280, maxH: 90, starsPx: 28, bottom: contentBottom - 10 })
+  const B = foot.top - 16
   let y = contentTop + 30
-  y += script(ctx, kickerWords(content), w / 2, y, maxWidth, { px: 96, minPx: 48, fill: SLATE, align: 'center' }) - 10
-  y += shout(ctx, content.hook, w / 2, y, maxWidth, { px: 124, minPx: 52, lines: 2, fill: badgeColor || '#0369A1', align: 'center', tracking: 3 }) + 20
+  const badgeH = drawBadge(ctx, content.badge, padX, contentTop + 50, 380, badgeColor)
+  y += script(ctx, kickerWords(content), w / 2, y, maxWidth - (badgeH ? 460 : 0), { px: 96, minPx: 48, fill: SLATE, align: 'center' }) - 10
+  y += shout(ctx, content.hook, w / 2, y, maxWidth, { px: 124, minPx: 52, lines: 2, fill: badgeColor || '#0369A1', align: 'center', tracking: 3, maxHeight: (B - y) * 0.35 }) + 20
   const offers = offersFor(content)
   const cutOn = hasCutout(content, assets)
   const gridW = cutOn ? maxWidth * 0.52 : maxWidth
-  const gridH = Math.max(160, Math.min(contentBottom - y - 270, offers.length > 2 ? 560 : offers.length === 2 ? 400 : 300))
+  const gridH = Math.max(140, Math.min(B - y - 120, offers.length > 2 ? 560 : offers.length === 2 ? 400 : 300))
   tiles(ctx, offers, { x: padX, y, w: gridW, h: gridH }, { fill: '#FFFFFF', ink: badgeColor || '#0369A1', amountInk: accent, columns: 2, gap: 16, radius: 6, border: accent })
-  if (cutOn) drawCutout(ctx, content, assets, { x: padX + gridW + 24, y: y - 10, w: maxWidth - gridW - 24, h: gridH + 40 })
+  if (cutOn) drawCutout(ctx, content, assets, { x: padX + gridW + 24, y: y - 10, w: maxWidth - gridW - 24, h: Math.min(gridH + 40, B - (y - 10)) })
   y += gridH + 26
-  y += body(ctx, content.subhead, padX, y, maxWidth, { px: 30, minPx: 18, lines: 2, weight: '600', fill: '#334155', maxHeight: contentBottom - 130 - y })
+  y += body(ctx, content.subhead, padX, y, maxWidth, { px: 30, minPx: 18, lines: 2, weight: '600', fill: '#334155', maxHeight: B - y })
   const st = stickerWords(content)
   if (st) {
-    const room = contentBottom - 130 - y
+    const room = B - y
     const rad = Math.min(150, room / 2 - 10)
     if (rad > 70) starburst(ctx, w / 2, y + room / 2, rad, st, { fill: GOLD, ink: SLATE })
   }
-  const lb = logoAt(ctx, assets?.logo, padX, contentBottom - 70, 200, { bottom: true })
-  starsLine(ctx, content.proof, w - padX, contentBottom - 110, maxWidth - (lb ? lb.w + 30 : 0), { ink: SLATE, align: 'right', px: 30 })
-  drawBadge(ctx, content.badge, padX, contentTop - 10 + 60, 380, badgeColor)
-  return { band: { top: y, bottom: contentBottom - 80 } }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
 }
 
-/** 5. Fall special: leaves, a script "Fall", two stacked offers with OR between, a seal, the van or unit. */
+/** 5. Fall special: leaves, a script "Fall", two stacked offers with OR between, a seal, the unit. */
 function fallSpecial(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, contentBottom, maxWidth } = m
@@ -983,131 +1109,182 @@ function fallSpecial(ctx, size, content, assets, opts) {
   const ink = theme.ink === 'dark' ? SLATE : WHITE
   const bandH = 150
   const bandTop = band(ctx, w, h, bandH + (h - contentBottom), 'rgba(2,6,23,0.82)')
+  const B = bandTop - 20
   let y = contentTop
+  const badgeH = drawBadge(ctx, content.badge, padX, y, 400, badgeColor)
+  if (badgeH) y += badgeH + 10
   const kw = kickerWords(content)
   const words = kw.split(/\s+/)
   const first = words[0]
   const rest = words.slice(1).join(' ')
   y += script(ctx, first, padX, y, maxWidth * 0.5, { px: 150, minPx: 60, fill: ink }) - 20
   if (rest) y += shout(ctx, rest, padX, y, maxWidth * 0.5, { px: 70, minPx: 36, lines: 1, fill: GOLD, tracking: 6 })
-  y += shout(ctx, content.hook, padX, y + 14, maxWidth * 0.46, { px: 60, minPx: 30, lines: 4, fill: WHITE, maxHeight: 300 }) + 14
+  y += shout(ctx, content.hook, padX, y + 14, maxWidth * 0.46, { px: 60, minPx: 30, lines: 4, fill: WHITE, maxHeight: Math.max(120, (B - y) * 0.4) }) + 14
   // Offers on the right, stacked, "OR" between.
   const offers = offersFor(content)
-  const colW = maxWidth * 0.56
+  const colW = maxWidth * 0.52
   const colX = w - padX
-  let oy = contentTop
+  let oy = contentTop + (badgeH ? 0 : 0)
   offers.slice(0, 2).forEach((o, i) => {
-    if (i > 0) {
-      oy += shout(ctx, 'OR', colX, oy, colW, { px: 60, minPx: 30, lines: 1, fill: GOLD, align: 'right', tracking: 8 })
-    }
-    if (o.amount) oy += shout(ctx, o.amount, colX, oy, colW, { px: 150, minPx: 70, lines: 1, fill: WHITE, stroke: 'rgba(2,6,23,0.5)', strokeW: 8, align: 'right', tracking: 2 }) - 6
-    if (o.detail) oy += shout(ctx, o.detail, colX, oy, colW, { px: 56, minPx: 28, lines: 2, fill: ink, align: 'right' }) + 10
+    if (i > 0) oy += shout(ctx, 'OR', colX, oy, colW, { px: 60, minPx: 30, lines: 1, fill: GOLD, align: 'right', tracking: 8, maxHeight: (B - oy) * 0.3 })
+    if (o.amount) oy += shout(ctx, o.amount, colX, oy, colW, { px: 150, minPx: 70, lines: 1, fill: WHITE, stroke: 'rgba(2,6,23,0.5)', strokeW: 8, align: 'right', tracking: 2, maxHeight: (B - oy) * 0.5 }) - 6
+    if (o.detail) oy += shout(ctx, o.detail, colX, oy, colW, { px: 56, minPx: 28, lines: 2, fill: ink, align: 'right', maxHeight: (B - oy) * 0.5 }) + 10
   })
-  oy += body(ctx, content.subhead, colX, oy, colW, { px: 24, minPx: 16, lines: 3, weight: '600', fill: 'rgba(255,255,255,0.9)', align: 'right' })
-  // The seal, then the unit bottom-left.
+  oy += body(ctx, content.subhead, colX, oy, colW, { px: 24, minPx: 16, lines: 3, weight: '600', fill: 'rgba(255,255,255,0.9)', align: 'right', maxHeight: (B - oy) * 0.5 })
+  // The seal between the offers and the band, when there is room; the unit bottom-left.
   const st = stickerWords(content)
   if (st) {
-    const sealR = Math.min(110, (bandTop - 20 - oy - 20) / 2)
-    if (sealR >= 55) seal(ctx, w - padX - sealR, Math.min(bandTop - sealR - 20, Math.max(oy + sealR + 20, h * 0.6)), sealR, st, { fill: accent, ink: WHITE })
+    const sealR = Math.min(110, (B - oy - 20) / 2)
+    if (sealR >= 55) seal(ctx, w - padX - sealR, Math.min(B - sealR, Math.max(oy + sealR + 20, h * 0.6)), sealR, st, { fill: accent, ink: WHITE })
   }
   if (hasCutout(content, assets)) {
     const cw = Math.min(maxWidth * 0.5, 520)
-    const top = Math.max(y + 10, bandTop - cw * 1.05)
-    drawCutout(ctx, content, assets, { x: padX, y: top, w: cw, h: bandTop - top - 10 })
+    const top = Math.max(y + 10, B - cw * 1.05)
+    drawCutout(ctx, content, assets, { x: padX, y: top, w: cw, h: B + 10 - top })
   }
-  // The band: logo and stars.
-  const lb = logoAt(ctx, assets?.logo, padX, bandTop + bandH / 2 - 50, 100, { pill: true })
-  starsLine(ctx, content.proof, w - padX, bandTop + bandH / 2 - 14, maxWidth - (lb ? lb.w + 30 : 0), { ink: WHITE, align: 'right' })
-  drawBadge(ctx, content.badge, padX, bandTop - 70, 400, badgeColor)
+  // The band: logo left, stars right, centred in its height.
+  const foot = footer(ctx, m, content, assets, { onDark: true, ink: WHITE, logo: 'left', maxW: 260, maxH: 80, bottom: bandTop + bandH / 2 + 40 })
+  foot.draw()
   return { band: { top: oy, bottom: bandTop } }
 }
 
 /** 6. Season sale: sun, snow, leaves or fresh behind a big SALE, the offer, the unit, a starburst. */
 function seasonSale(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
-  const { w, h, padX, contentTop, contentBottom, maxWidth } = m
+  const { w, h, padX, contentTop, maxWidth } = m
   const { accent, badgeColor } = content
   const theme = paintTheme(ctx, w, h, content)
   const dark = theme.ink === 'dark'
+  const onDark = !dark
   const ink = dark ? SLATE : WHITE
   const brand = dark ? badgeColor || SLATE : WHITE
+  const foot = footer(ctx, m, content, assets, { onDark, ink, logo: 'right', maxW: 260, maxH: 90 })
+  const B = foot.top - 16
+  const st = stickerWords(content)
+  const topW = maxWidth - (st ? 250 : 0)
   let y = contentTop
-  const badgeH = drawBadge(ctx, content.badge, padX, y, maxWidth, badgeColor)
+  const badgeH = drawBadge(ctx, content.badge, padX, y, topW, badgeColor)
   if (badgeH) y += badgeH + 18
   const kw = kickerWords(content)
   const parts = kw.split(/\s+/)
   const last = parts[parts.length - 1]
   const head = parts.slice(0, -1).join(' ')
-  if (head) y += script(ctx, head, padX, y, maxWidth, { px: 110, minPx: 50, fill: dark ? accent : GOLD, stroke: dark ? '' : 'rgba(2,6,23,0.35)', strokeW: 6 }) - 16
-  y += shout(ctx, last, padX, y, maxWidth, { px: 210, minPx: 90, lines: 1, fill: brand, stroke: dark ? WHITE : 'rgba(2,6,23,0.4)', strokeW: 12, tracking: 8 })
+  if (head) y += script(ctx, head, padX, y, topW, { px: 110, minPx: 50, fill: dark ? accent : GOLD, stroke: dark ? '' : 'rgba(2,6,23,0.35)', strokeW: 6 }) - 16
+  y += shout(ctx, last, padX, y, topW, { px: 210, minPx: 90, lines: 1, fill: brand, stroke: dark ? WHITE : 'rgba(2,6,23,0.4)', strokeW: 12, tracking: 8, maxHeight: (B - y) * 0.35 })
   const cutOn = hasCutout(content, assets)
   const cutW = cutOn ? Math.min(maxWidth * 0.42, 460) : 0
   const textW = maxWidth - (cutW ? cutW + 24 : 0)
-  y += shout(ctx, content.hook, padX, y, textW, { px: 76, minPx: 36, lines: 3, fill: ink, maxHeight: (contentBottom - y) * 0.4 }) + 10
-  const amount = String(content.offerAmount || '').trim()
-  if (amount) y += shout(ctx, amount, padX, y, textW, { px: 170, minPx: 70, lines: 1, fill: accent, stroke: WHITE, strokeW: 12, tracking: 2 })
-  y += shout(ctx, content.offerDetail, padX, y, textW, { px: 56, minPx: 28, lines: 2, fill: ink }) + 10
-  y += body(ctx, content.subhead, padX, y, textW, { px: 28, minPx: 18, lines: 3, weight: '600', fill: ink, maxHeight: contentBottom - 70 - y })
-  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: Math.max(contentTop + 120, contentBottom - 90 - cutW * 1.1), w: cutW, h: Math.min(cutW * 1.1, contentBottom - 90 - Math.max(contentTop + 120, contentBottom - 90 - cutW * 1.1)) })
-  const st = stickerWords(content)
+  y += shout(ctx, content.hook, padX, y, textW, { px: 76, minPx: 36, lines: 3, fill: ink, maxHeight: (B - y) * 0.4 }) + 10
+  const amount = amountWords(content)
+  if (amount) y += shout(ctx, amount, padX, y, textW, { px: 170, minPx: 70, lines: 1, fill: accent, stroke: WHITE, strokeW: 12, tracking: 2, maxHeight: (B - y) * 0.5 })
+  y += shout(ctx, content.offerDetail, padX, y, textW, { px: 56, minPx: 28, lines: 2, fill: ink, maxHeight: (B - y) * 0.5 }) + 10
+  y += body(ctx, content.subhead, padX, y, textW, { px: 28, minPx: 18, lines: 3, weight: '600', fill: ink, maxHeight: B - y })
+  if (cutW) {
+    const top = Math.max(contentTop + 120, B - cutW * 1.1)
+    drawCutout(ctx, content, assets, { x: w - padX - cutW, y: top, w: cutW, h: B - top })
+  }
   if (st) starburst(ctx, w - padX - 120, contentTop + 160, 118, st, { fill: GOLD, ink: SLATE })
-  const lb = logoAt(ctx, assets?.logo, w - padX, contentBottom, 130, { align: 'right', bottom: true, pill: !dark })
-  starsLine(ctx, content.proof, padX, contentBottom - 30, maxWidth - (lb ? lb.w + 30 : 0), { ink })
-  return { band: { top: y, bottom: contentBottom - 60 } }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
 }
 
-/** 7. Poster: the Horizon winter post. White, condensed capitals stacked and alternating colours, logo and stars, the unit. */
+/** 7. Holiday: red and green, snow, the season sale's bones. */
+function holidayDeals(ctx, size, content, assets, opts) {
+  return seasonSale(ctx, size, { ...content, theme: themeFor(content), kicker: content.kicker || 'Holiday Deals' }, assets, opts)
+}
+
+/** 8. Tune-up: a fresh green spring board with the service price in a starburst. */
+function tuneUp(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth } = m
+  const { accent, badgeColor } = content
+  const theme = paintTheme(ctx, w, h, content)
+  const dark = theme.ink === 'dark'
+  const ink = dark ? SLATE : WHITE
+  const foot = footer(ctx, m, content, assets, { onDark: !dark, ink, logo: 'left', maxW: 260, maxH: 90 })
+  const B = foot.top - 16
+  let y = contentTop
+  const badgeH = drawBadge(ctx, content.badge, padX, y, maxWidth * 0.6, dark ? badgeColor : accent)
+  if (badgeH) y += badgeH + 18
+  y += shout(ctx, kickerWords(content), padX, y, maxWidth * 0.62, { px: 96, minPx: 44, lines: 2, fill: ink, tracking: 3, maxHeight: (B - y) * 0.3 })
+  const amount = amountWords(content)
+  const rad = Math.min(170, maxWidth * 0.19)
+  const sx = w - padX - rad
+  const sy = contentTop + rad + (badgeH ? 30 : 10)
+  if (amount) starburst(ctx, sx, sy, rad, amount, { fill: GOLD, ink: SLATE, points: 16 })
+  y = Math.max(y, sy + rad - 40)
+  y += shout(ctx, content.offerDetail, padX, y, maxWidth, { px: 76, minPx: 36, lines: 2, fill: dark ? accent : GOLD, stroke: dark ? '' : 'rgba(2,6,23,0.3)', strokeW: 6, maxHeight: (B - y) * 0.35 }) + 10
+  const cutOn = hasCutout(content, assets)
+  const cutW = cutOn ? Math.min(maxWidth * 0.38, 400) : 0
+  const textW = maxWidth - (cutW ? cutW + 24 : 0)
+  const cutTop = Math.max(y, sy + rad + 20)
+  y += shout(ctx, content.hook, padX, y, textW, { px: 64, minPx: 32, lines: 3, fill: ink, maxHeight: (B - y) * 0.5 }) + 10
+  y += body(ctx, content.subhead, padX, y, textW, { px: 28, minPx: 18, lines: 3, weight: '600', fill: ink, maxHeight: B - y })
+  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: cutTop, w: cutW, h: B - cutTop })
+  foot.draw()
+  return { band: { top: y, bottom: B } }
+}
+
+/** 9. Poster: the Horizon winter post. White, condensed capitals stacked and alternating colours, logo and stars, the unit. */
 function poster(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, contentBottom, maxWidth } = m
   const { accent, badgeColor } = content
-  paintTheme(ctx, w, h, content)
-  const navy = badgeColor || '#1E3A8A'
+  const theme = paintTheme(ctx, w, h, content)
+  const onDark = theme.ink === 'light'
+  const navy = onDark ? WHITE : badgeColor || '#1E3A8A'
+  const red = onDark ? GOLD : accent
   let y = contentTop
-  y += shout(ctx, kickerWords(content), w / 2, y, maxWidth, { px: 150, minPx: 60, lines: 2, fill: navy, align: 'center', tracking: 3 })
-  y += shout(ctx, content.hook, w / 2, y, maxWidth, { px: 120, minPx: 52, lines: 2, fill: accent, align: 'center', tracking: 3, maxHeight: (contentBottom - y) * 0.35 })
-  y += shout(ctx, content.subhead, w / 2, y, maxWidth, { px: 70, minPx: 32, lines: 3, fill: navy, align: 'center', tracking: 1, maxHeight: (contentBottom - y) * 0.35 }) + 20
+  const badgeH = drawBadge(ctx, content.badge, padX, y, 400, accent)
+  if (badgeH) y += badgeH + 10
+  y += shout(ctx, kickerWords(content), w / 2, y, maxWidth, { px: 150, minPx: 60, lines: 2, fill: navy, align: 'center', tracking: 3, maxHeight: (contentBottom - y) * 0.25 })
+  y += shout(ctx, content.hook, w / 2, y, maxWidth, { px: 120, minPx: 52, lines: 2, fill: red, align: 'center', tracking: 3, maxHeight: (contentBottom - y) * 0.3 })
+  y += shout(ctx, content.subhead, w / 2, y, maxWidth, { px: 70, minPx: 32, lines: 3, fill: navy, align: 'center', tracking: 1, maxHeight: (contentBottom - y) * 0.3 }) + 20
   // Below: logo left, stars and the offer right; the unit bottom-left.
   const cutOn = hasCutout(content, assets)
-  const lb = logoAt(ctx, assets?.logo, padX, y, 220)
+  const lb = logoAt(ctx, assets, onDark, padX, y, { maxW: 320, maxH: 120 })
   const rightX = w - padX
   const rightW = maxWidth - (lb ? lb.w + 40 : 0)
-  starsLine(ctx, content.proof, rightX, y + 10, rightW, { ink: navy, align: 'right', px: 28 })
-  let oy = y + 70
-  const amount = String(content.offerAmount || '').trim()
-  if (amount) oy += shout(ctx, amount, rightX, oy, rightW * (cutOn ? 0.9 : 1), { px: 120, minPx: 50, lines: 1, fill: accent, align: 'right' })
-  oy += shout(ctx, content.offerDetail, rightX, oy, rightW * (cutOn ? 0.9 : 1), { px: 64, minPx: 30, lines: 2, fill: navy, align: 'right' })
+  const proof = String(content.proof || '').trim()
+  if (proof) starsLine(ctx, proof, rightX, y + 10, rightW, { ink: navy, align: 'right', px: 28 })
+  let oy = y + (proof ? 70 : 10)
+  const colW = cutOn ? Math.min(rightW, maxWidth * 0.52) : rightW
+  const amount = amountWords(content)
+  if (amount) oy += shout(ctx, amount, rightX, oy, colW, { px: 120, minPx: 50, lines: 1, fill: red, align: 'right', maxHeight: (contentBottom - oy) * 0.5 })
+  oy += shout(ctx, content.offerDetail, rightX, oy, colW, { px: 64, minPx: 30, lines: 2, fill: navy, align: 'right', maxHeight: (contentBottom - oy) * 0.6 })
   if (cutOn) {
     const cw = Math.min(maxWidth * 0.45, 480)
-    const top = Math.max((lb ? lb.y + lb.h + 20 : y + 20), contentBottom - cw * 1.1)
+    const top = Math.max(lb ? lb.y + lb.h + 20 : y + 20, contentBottom - cw * 1.1)
     drawCutout(ctx, content, assets, { x: padX, y: top, w: cw, h: contentBottom - top })
   }
-  drawBadge(ctx, content.badge, padX, contentTop - 44, 400, accent)
   return { band: { top: oy, bottom: contentBottom } }
 }
 
-/** 8. Same-day: dark, urgent, a 24/7 seal, the headline huge. */
+/** 10. Same-day: dark, urgent, a 24/7 seal, the headline huge. */
 function emergency(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
-  const { w, h, padX, contentTop, contentBottom, maxWidth } = m
+  const { w, h, padX, contentTop, maxWidth } = m
   const { accent, badgeColor } = content
-  paintTheme(ctx, w, h, content)
+  const theme = paintTheme(ctx, w, h, content)
+  const onDark = theme.ink === 'light'
+  const ink = onDark ? WHITE : SLATE
+  const foot = footer(ctx, m, content, assets, { onDark, ink, logo: 'right', maxW: 260, maxH: 90 })
+  const B = foot.top - 16
   let y = contentTop
   const badgeH = drawBadge(ctx, content.badge, padX, y, maxWidth - 260, badgeColor)
   const st = stickerWords(content) || '24/7'
   seal(ctx, w - padX - 110, contentTop + 110, 110, st, { fill: accent, ink: WHITE, ring: WHITE })
   y += Math.max(badgeH + 26, 0)
-  y += shout(ctx, kickerWords(content), padX, y, maxWidth - 260, { px: 90, minPx: 40, lines: 1, fill: accent, tracking: 4 })
+  y += shout(ctx, kickerWords(content), padX, y, maxWidth - 260, { px: 90, minPx: 40, lines: 1, fill: onDark ? accent : badgeColor || accent, tracking: 4 })
   y = Math.max(y + 10, contentTop + 240)
   const cutOn = hasCutout(content, assets)
   const cutW = cutOn ? Math.min(maxWidth * 0.4, 420) : 0
-  y += shout(ctx, content.hook, padX, y, maxWidth, { px: 170, minPx: 60, lines: 3, fill: WHITE, tracking: 2, maxHeight: (contentBottom - y) * 0.5 }) + 16
+  y += shout(ctx, content.hook, padX, y, maxWidth, { px: 170, minPx: 60, lines: 3, fill: ink, tracking: 2, maxHeight: (B - y) * 0.5 }) + 16
   const cutTop = y
-  y += body(ctx, content.subhead, padX, y, maxWidth - (cutW ? cutW + 20 : 0), { px: 34, minPx: 22, lines: 3, weight: '600', fill: 'rgba(255,255,255,0.85)', maxHeight: contentBottom - 200 - y }) + 24
-  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: cutTop, w: cutW, h: contentBottom - 150 - cutTop })
-  const amount = String(content.offerAmount || '').trim()
-  if (amount || content.offerDetail) {
-    const pillH = 110
+  y += body(ctx, content.subhead, padX, y, maxWidth - (cutW ? cutW + 20 : 0), { px: 34, minPx: 22, lines: 3, weight: '600', fill: onDark ? 'rgba(255,255,255,0.85)' : '#334155', maxHeight: (B - y) * 0.5 }) + 24
+  const amount = amountWords(content)
+  if ((amount || content.offerDetail) && B - y > 70) {
+    const pillH = Math.min(110, B - y)
     const text = `${amount}${amount && content.offerDetail ? '  ' : ''}${String(content.offerDetail || '').toUpperCase()}`
     const fit = fitText(ctx, text, maxWidth - 60 - (cutW ? cutW + 20 : 0), 1, 60, 26, '400', 2, { lineRatio: 1, face: CONDENSED })
     setFont(ctx, '400', fit.px, 2, CONDENSED)
@@ -1121,67 +1298,78 @@ function emergency(ctx, size, content, assets, opts) {
     ctx.textBaseline = 'alphabetic'
     y += pillH + 20
   }
-  const lb = logoAt(ctx, assets?.logo, w - padX, contentBottom, 130, { align: 'right', bottom: true, pill: true })
-  starsLine(ctx, content.proof, padX, contentBottom - 30, maxWidth - (lb ? lb.w + 30 : 0), { ink: WHITE })
-  return { band: { top: y, bottom: contentBottom - 60 } }
+  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: cutTop, w: cutW, h: B - cutTop })
+  foot.draw()
+  return { band: { top: y, bottom: B } }
 }
 
-/** 9. Financing: $0 down, monthly payments, two price tiles, the unit. */
+/** 11. Financing: $0 down, monthly payments, two price tiles, the unit. */
 function financing(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
-  const { w, h, padX, contentTop, contentBottom, maxWidth } = m
+  const { w, h, padX, contentTop, maxWidth } = m
   const { accent, badgeColor } = content
   const theme = paintTheme(ctx, w, h, content)
   const dark = theme.ink === 'dark'
   const ink = dark ? SLATE : WHITE
+  const foot = footer(ctx, m, content, assets, { onDark: !dark, ink, logo: 'left', maxW: 260, maxH: 90 })
+  const B = foot.top - 16
   let y = contentTop
   const badgeH = drawBadge(ctx, content.badge, padX, y, maxWidth, dark ? badgeColor : accent)
   if (badgeH) y += badgeH + 20
-  y += shout(ctx, kickerWords(content), padX, y, maxWidth, { px: 80, minPx: 40, lines: 1, fill: accent, tracking: 4 })
+  y += shout(ctx, kickerWords(content), padX, y, maxWidth, { px: 80, minPx: 40, lines: 1, fill: dark ? badgeColor || accent : accent, tracking: 4, maxHeight: (B - y) * 0.2 })
   const cutOn = hasCutout(content, assets)
   const cutW = cutOn ? Math.min(maxWidth * 0.4, 440) : 0
   const textW = maxWidth - (cutW ? cutW + 24 : 0)
-  const amount = String(content.offerAmount || '').trim()
-  if (amount) y += shout(ctx, amount, padX, y, textW, { px: 250, minPx: 100, lines: 1, fill: WHITE, stroke: dark ? badgeColor || SLATE : 'rgba(2,6,23,0.35)', strokeW: 14, tracking: 2 })
-  y += shout(ctx, content.offerDetail, padX, y, textW, { px: 70, minPx: 32, lines: 2, fill: ink }) + 10
-  y += shout(ctx, content.hook, padX, y, textW, { px: 60, minPx: 30, lines: 3, fill: ink, maxHeight: (contentBottom - y) * 0.3 }) + 10
-  y += body(ctx, content.subhead, padX, y, textW, { px: 28, minPx: 18, lines: 2, weight: '600', fill: ink, maxHeight: contentBottom - 90 - y }) + 20
-  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: contentTop + 60, w: cutW, h: Math.min(cutW * 1.3, h * 0.5) })
+  const amount = amountWords(content)
+  if (amount) y += shout(ctx, amount, padX, y, textW, { px: 250, minPx: 100, lines: 1, fill: WHITE, stroke: dark ? badgeColor || SLATE : 'rgba(2,6,23,0.35)', strokeW: 14, tracking: 2, maxHeight: (B - y) * 0.4 })
+  y += shout(ctx, content.offerDetail, padX, y, textW, { px: 70, minPx: 32, lines: 2, fill: ink, maxHeight: (B - y) * 0.35 }) + 10
+  y += shout(ctx, content.hook, padX, y, textW, { px: 60, minPx: 30, lines: 3, fill: ink, maxHeight: (B - y) * 0.4 }) + 10
+  y += body(ctx, content.subhead, padX, y, textW, { px: 28, minPx: 18, lines: 2, weight: '600', fill: ink, maxHeight: (B - y) * 0.5 }) + 20
+  let cutBottom = contentTop + 60
+  if (cutW) {
+    const ch = Math.min(cutW * 1.3, h * 0.5, B - (contentTop + 60))
+    cutBottom = contentTop + 60 + ch
+    drawCutout(ctx, content, assets, { x: w - padX - cutW, y: contentTop + 60, w: cutW, h: ch })
+  }
   const st = stickerWords(content) || 'Monthly payments available'
-  seal(ctx, w - padX - 120, Math.min(contentBottom - 140, Math.max(y + 100, h * 0.62)), 120, st, { fill: accent, ink: WHITE })
+  const sealR = Math.min(120, (B - Math.max(cutBottom + 20, y)) / 2)
+  if (sealR >= 60) seal(ctx, w - padX - sealR, Math.max(cutBottom + 20 + sealR, Math.min(B - sealR, Math.max(y + 100, h * 0.62))), sealR, st, { fill: accent, ink: WHITE })
   const offers = offersFor(content).filter((o) => o.amount !== amount || o.detail !== String(content.offerDetail || '').trim())
   if (offers.length) {
-    const gh = Math.min(offers.length > 2 ? 420 : 240, contentBottom - 110 - y)
+    const gh = Math.min(offers.length > 2 ? 420 : 240, B - y)
     if (gh > 90) tiles(ctx, offers, { x: padX, y, w: maxWidth - 280, h: gh }, { fill: 'rgba(255,255,255,0.12)', ink: WHITE, amountInk: WHITE, columns: 2, gap: 12, radius: 10, border: 'rgba(255,255,255,0.3)' })
     y += gh + 20
   }
-  const lb = logoAt(ctx, assets?.logo, padX, contentBottom, 120, { bottom: true, pill: true })
-  starsLine(ctx, content.proof, w - padX, contentBottom - 30, maxWidth - (lb ? lb.w + 30 : 0), { ink, align: 'right' })
-  return { band: { top: y, bottom: contentBottom - 60 } }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
 }
 
-/** 10. Coupon: a dashed coupon with the offer inside, the fine print, the logo. */
+/** 12. Coupon: a dashed coupon with the offer inside, the fine print, the logo. */
 function coupon(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
-  const { w, h, padX, contentTop, contentBottom, maxWidth } = m
+  const { w, h, padX, contentTop, maxWidth } = m
   const { accent, badgeColor } = content
   const theme = paintTheme(ctx, w, h, content)
   const dark = theme.ink === 'dark'
   const ink = dark ? SLATE : WHITE
+  const cutOn = hasCutout(content, assets)
+  const cutW = cutOn ? Math.min(maxWidth * 0.42, 440) : 0
+  const foot = footer(ctx, m, content, assets, { onDark: !dark, ink, logo: 'none', right: w - padX - cutW - (cutW ? 20 : 0) })
+  const B = foot.top - 16
   let y = contentTop
-  const lb = logoAt(ctx, assets?.logo, padX, y, 150, { pill: !dark })
+  const lb = logoAt(ctx, assets, !dark, padX, y, { maxW: 300, maxH: 100 })
   const badgeH = drawBadge(ctx, content.badge, w - padX - 380, y, 380, badgeColor)
   y += Math.max(lb ? lb.h : 0, badgeH) + 26
-  y += shout(ctx, kickerWords(content), padX, y, maxWidth, { px: 70, minPx: 36, lines: 1, fill: accent, tracking: 4 }) + 10
+  y += shout(ctx, kickerWords(content), padX, y, maxWidth, { px: 70, minPx: 36, lines: 1, fill: accent, tracking: 4, maxHeight: (B - y) * 0.2 }) + 10
   // The coupon box, sized to what goes in it: measured first, drawn after.
   const innerW = maxWidth - 100
-  const amount = String(content.offerAmount || '').trim()
-  const roomH = Math.min(h * 0.46, contentBottom - y - 160)
+  const amount = amountWords(content)
+  const roomH = Math.min(h * 0.46, B - y - 160)
   const aFit = amount ? fitText(ctx, amount.toUpperCase(), innerW, 1, 220, 90, '400', 2, { lineRatio: 0.98, maxHeight: roomH * 0.5, face: CONDENSED }) : null
   const dFit = content.offerDetail ? fitText(ctx, String(content.offerDetail).toUpperCase(), innerW, 2, 64, 30, '400', 1, { lineRatio: 0.98, maxHeight: roomH * 0.3, face: CONDENSED }) : null
   const sFit = content.subhead ? fitText(ctx, typographic(content.subhead), innerW, 2, 24, 16, '600', 0, { lineRatio: 1.3 }) : null
   const need = 100 + (aFit ? aFit.px * 1.08 : 0) + (dFit ? dFit.lines.length * dFit.px * 0.98 + dFit.px * 0.1 + 10 : 0) + (sFit ? sFit.lines.length * sFit.px * 1.3 : 0)
-  const boxH = Math.max(220, Math.min(roomH, need))
+  const boxH = Math.max(200, Math.min(roomH, need))
   ctx.fillStyle = WHITE
   roundRect(ctx, padX, y, maxWidth, boxH, 18)
   ctx.fill()
@@ -1192,55 +1380,53 @@ function coupon(ctx, size, content, assets, opts) {
   roundRect(ctx, padX + 14, y + 14, maxWidth - 28, boxH - 28, 12)
   ctx.stroke()
   ctx.restore()
-  // Scissors mark on the dashed line.
   setFont(ctx, '700', 40, 0)
   ctx.fillStyle = badgeColor || SLATE
   ctx.fillText('✂', padX + 40, y + 28)
   let cy = y + 50
   if (amount) cy += shout(ctx, amount, w / 2, cy, innerW, { px: 220, minPx: 90, lines: 1, fill: accent, align: 'center', tracking: 2, maxHeight: boxH * 0.5 })
   cy += shout(ctx, content.offerDetail, w / 2, cy, innerW, { px: 64, minPx: 30, lines: 2, fill: badgeColor || SLATE, align: 'center', maxHeight: boxH * 0.3 }) + 10
-  body(ctx, content.subhead, w / 2, cy, innerW, { px: 24, minPx: 16, lines: 2, weight: '600', fill: '#475569', align: 'center' })
+  body(ctx, content.subhead, w / 2, cy, innerW, { px: 24, minPx: 16, lines: 2, weight: '600', fill: '#475569', align: 'center', maxHeight: y + boxH - 20 - cy })
   y += boxH + 24
   // The headline under the coupon, the unit beside it.
-  const cutOn = hasCutout(content, assets)
-  const cutW = cutOn ? Math.min(maxWidth * 0.42, 440) : 0
   const cutTop = y - 10
-  y += shout(ctx, content.hook, padX, y, maxWidth - (cutW ? cutW + 20 : 0), { px: 84, minPx: 30, lines: 4, fill: ink, maxHeight: contentBottom - y - 60 })
-  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: cutTop, w: cutW, h: contentBottom - 50 - cutTop })
-  starsLine(ctx, content.proof, padX, contentBottom - 30, maxWidth - cutW - 20, { ink })
-  return { band: { top: y, bottom: contentBottom - 60 } }
+  y += shout(ctx, content.hook, padX, y, maxWidth - (cutW ? cutW + 20 : 0), { px: 84, minPx: 30, lines: 4, fill: ink, maxHeight: B - y })
+  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: cutTop, w: cutW, h: m.contentBottom - 10 - cutTop })
+  foot.draw()
+  return { band: { top: y, bottom: B } }
 }
 
-/** 11. Big number: the amount fills the width and that is the ad. */
+/** 13. Big number: the amount fills the width and that is the ad. */
 function bigNumber(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
-  const { w, h, padX, contentTop, contentBottom, maxWidth } = m
+  const { w, h, padX, contentTop, maxWidth } = m
   const { accent, badgeColor } = content
   const theme = paintTheme(ctx, w, h, content)
   const dark = theme.ink === 'dark'
   const ink = dark ? SLATE : WHITE
+  const foot = footer(ctx, m, content, assets, { onDark: !dark, ink, logo: 'right', maxW: 260, maxH: 90 })
+  const B = foot.top - 16
   let y = contentTop
   const badgeH = drawBadge(ctx, content.badge, padX, y, maxWidth, dark ? badgeColor : accent)
   if (badgeH) y += badgeH + 20
   const st = stickerWords(content)
   const topW = maxWidth - (st ? 250 : 0)
-  y += shout(ctx, kickerWords(content), padX, y, topW, { px: 70, minPx: 36, lines: 1, fill: accent, tracking: 4 })
-  y += shout(ctx, content.hook, padX, y, topW, { px: 80, minPx: 36, lines: 3, fill: ink, maxHeight: (contentBottom - y) * 0.25 }) + 10
-  const amount = String(content.offerAmount || '').trim()
-  if (amount) y += shout(ctx, amount, padX, y, maxWidth, { px: 420, minPx: 120, lines: 1, fill: accent, stroke: WHITE, strokeW: 16, tracking: -4, maxHeight: (contentBottom - y) * 0.55 })
+  y += shout(ctx, kickerWords(content), padX, y, topW, { px: 70, minPx: 36, lines: 1, fill: dark ? badgeColor || accent : accent, tracking: 4, maxHeight: (B - y) * 0.2 })
+  y += shout(ctx, content.hook, padX, y, topW, { px: 80, minPx: 36, lines: 3, fill: ink, maxHeight: (B - y) * 0.25 }) + 10
+  const amount = amountWords(content)
+  if (amount) y += shout(ctx, amount, padX, y, maxWidth, { px: 420, minPx: 120, lines: 1, fill: accent, stroke: WHITE, strokeW: 16, tracking: -4, maxHeight: (B - y) * 0.55 })
   const cutOn = hasCutout(content, assets)
   const cutW = cutOn ? Math.min(maxWidth * 0.38, 400) : 0
   const cutTop = y
-  y += shout(ctx, content.offerDetail, padX, y, maxWidth - (cutW ? cutW + 20 : 0), { px: 90, minPx: 36, lines: 2, fill: ink, tracking: 3 }) + 14
-  y += body(ctx, content.subhead, padX, y, maxWidth - (cutW ? cutW + 20 : 0), { px: 32, minPx: 20, lines: 3, weight: '600', fill: ink, maxHeight: contentBottom - 70 - y })
+  y += shout(ctx, content.offerDetail, padX, y, maxWidth - (cutW ? cutW + 20 : 0), { px: 90, minPx: 36, lines: 2, fill: ink, tracking: 3, maxHeight: (B - y) * 0.5 }) + 14
+  y += body(ctx, content.subhead, padX, y, maxWidth - (cutW ? cutW + 20 : 0), { px: 32, minPx: 20, lines: 3, weight: '600', fill: ink, maxHeight: B - y })
   if (st) starburst(ctx, w - padX - 110, contentTop + (badgeH ? badgeH + 140 : 110), 108, st, { fill: GOLD, ink: SLATE })
-  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: cutTop, w: cutW, h: contentBottom - 150 - cutTop })
-  const lb = logoAt(ctx, assets?.logo, w - padX, contentBottom, 130, { align: 'right', bottom: true, pill: !dark })
-  starsLine(ctx, content.proof, padX, contentBottom - 30, maxWidth - (lb ? lb.w + 30 : 0), { ink })
-  return { band: { top: y, bottom: contentBottom - 60 } }
+  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: cutTop, w: cutW, h: B - cutTop })
+  foot.draw()
+  return { band: { top: y, bottom: B } }
 }
 
-/** 12. Photo sale: the photo full-bleed, a SALE ribbon in the corner, the offers on a band below. */
+/** 14. Photo sale: the photo full-bleed, a SALE ribbon in the corner, the offers on a band below. */
 function photoSale(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, contentBottom, maxWidth } = m
@@ -1248,9 +1434,7 @@ function photoSale(ctx, size, content, assets, opts) {
   const bandH = r(Math.min(h * 0.34, 420))
   const bandTop = contentBottom - bandH + 40
   if (assets?.background) drawCoverIn(ctx, assets.background, { x: 0, y: 0, w, h: bandTop + 30 }, focus)
-  else {
-    paintTheme(ctx, w, h, content)
-  }
+  else paintTheme(ctx, w, h, content)
   // A lift at the top for the badge and the kicker.
   const g = ctx.createLinearGradient(0, 0, 0, h * 0.4)
   g.addColorStop(0, 'rgba(2,6,23,0.55)')
@@ -1263,53 +1447,114 @@ function photoSale(ctx, size, content, assets, opts) {
   ribbon(ctx, w, stickerWords(content) || 'SALE', { fill: accent, ink: WHITE, size: 360 })
   y += shout(ctx, kickerWords(content), padX, y, maxWidth - 260, { px: 90, minPx: 40, lines: 1, fill: WHITE, stroke: 'rgba(2,6,23,0.6)', strokeW: 8, tracking: 3 })
   shout(ctx, content.hook, padX, y, maxWidth - 60, { px: 84, minPx: 36, lines: 3, fill: WHITE, stroke: 'rgba(2,6,23,0.6)', strokeW: 8, maxHeight: (bandTop - y) * 0.6 })
-  // The band.
-  ctx.fillStyle = badgeColor || SLATE
+  // The band: tiles, the subhead, then the logo and the stars.
+  const bandFill = badgeColor || SLATE
+  const onBandDark = readableTextOn(bandFill) === WHITE
+  const bandInk = onBandDark ? WHITE : SLATE
+  ctx.fillStyle = bandFill
   roundRect(ctx, 0, bandTop, w, h - bandTop + 40, 36)
   ctx.fill()
+  const foot = footer(ctx, m, content, assets, { onDark: onBandDark, ink: bandInk, logo: 'right', maxW: 240, maxH: 70, starsPx: 22, bottom: contentBottom - 8 })
+  const B = foot.top - 14
   const offers = offersFor(content)
-  const inner = { x: padX, y: bandTop + 30, w: maxWidth, h: Math.min(170, bandH * 0.5) }
-  if (offers.length) tiles(ctx, offers, inner, { fill: accent, ink: WHITE, amountInk: WHITE, columns: Math.min(offers.length, 3), gap: 12, radius: 12 })
-  let by = inner.y + (offers.length ? inner.h + 18 : 0)
-  by += body(ctx, content.subhead, padX, by, maxWidth, { px: 28, minPx: 18, lines: 2, weight: '600', fill: 'rgba(255,255,255,0.9)' })
-  const lb = logoAt(ctx, assets?.logo, w - padX, contentBottom, 110, { align: 'right', bottom: true, pill: true })
-  starsLine(ctx, content.proof, padX, contentBottom - 28, maxWidth - (lb ? lb.w + 30 : 0), { ink: WHITE, px: 22 })
+  let by = bandTop + 30
+  if (offers.length) {
+    const th = Math.min(170, bandH * 0.5, (B - by) * 0.6)
+    if (th > 70) {
+      tiles(ctx, offers, { x: padX, y: by, w: maxWidth, h: th }, { fill: accent, ink: WHITE, amountInk: WHITE, columns: Math.min(offers.length, 3), gap: 12, radius: 12 })
+      by += th + 18
+    }
+  }
+  body(ctx, content.subhead, padX, by, maxWidth, { px: 28, minPx: 18, lines: 2, weight: '600', fill: onBandDark ? 'rgba(255,255,255,0.9)' : '#334155', maxHeight: B - by })
+  foot.draw()
   return { band: { top: y, bottom: bandTop } }
 }
 
-/** 13. Holiday: red and green, snow, a gift-tag offer. */
-function holidayDeals(ctx, size, content, assets, opts) {
-  return seasonSale(ctx, size, { ...content, theme: themeFor(content), kicker: content.kicker || 'Holiday Deals' }, assets, opts)
-}
-
-/** 14. Tune-up: a fresh green spring board with the service price in a starburst. */
-function tuneUp(ctx, size, content, assets, opts) {
+/** 15. Before and after sale: the pair up top, the kicker, the headline and the offer tiles on the season below. */
+function beforeSale(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
-  const { w, h, padX, contentTop, contentBottom, maxWidth } = m
+  const { w, h, padX, contentTop, maxWidth } = m
   const { accent, badgeColor } = content
   const theme = paintTheme(ctx, w, h, content)
-  const dark = theme.ink === 'dark'
-  const ink = dark ? SLATE : WHITE
-  let y = contentTop
-  const badgeH = drawBadge(ctx, content.badge, padX, y, maxWidth, dark ? badgeColor : accent)
-  if (badgeH) y += badgeH + 18
-  y += shout(ctx, kickerWords(content), padX, y, maxWidth * 0.62, { px: 96, minPx: 44, lines: 2, fill: ink, tracking: 3 })
-  const amount = String(content.offerAmount || '').trim()
-  const rad = Math.min(170, maxWidth * 0.19)
-  const sx = w - padX - rad
-  const sy = contentTop + rad + (badgeH ? 30 : 10)
-  if (amount) starburst(ctx, sx, sy, rad, amount, { fill: GOLD, ink: SLATE, points: 16 })
-  y = Math.max(y, sy + rad - 40)
-  y += shout(ctx, content.offerDetail, padX, y, maxWidth, { px: 76, minPx: 36, lines: 2, fill: dark ? accent : GOLD, stroke: dark ? '' : 'rgba(2,6,23,0.3)', strokeW: 6 }) + 10
-  const cutOn = hasCutout(content, assets)
-  const cutW = cutOn ? Math.min(maxWidth * 0.38, 400) : 0
-  const textW = maxWidth - (cutW ? cutW + 24 : 0)
-  y += shout(ctx, content.hook, padX, y, textW, { px: 64, minPx: 32, lines: 3, fill: ink, maxHeight: (contentBottom - y) * 0.45 }) + 10
-  y += body(ctx, content.subhead, padX, y, textW, { px: 28, minPx: 18, lines: 3, weight: '600', fill: ink, maxHeight: contentBottom - 90 - y })
-  if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: Math.max(sy + rad + 20, contentBottom - 80 - cutW * 1.1), w: cutW, h: Math.min(cutW * 1.1, contentBottom - 80 - Math.max(sy + rad + 20, contentBottom - 80 - cutW * 1.1)) })
-  const lb = logoAt(ctx, assets?.logo, padX, contentBottom, 120, { bottom: true, pill: true })
-  starsLine(ctx, content.proof, w - padX, contentBottom - 30, maxWidth - (lb ? lb.w + 30 : 0), { ink, align: 'right' })
-  return { band: { top: y, bottom: contentBottom - 60 } }
+  const onDark = theme.ink === 'light'
+  const ink = onDark ? WHITE : SLATE
+  const foot = footer(ctx, m, content, assets, { onDark, ink, logo: 'right', maxW: 260, maxH: 90 })
+  const B = foot.top - 16
+  // The pair on a white print border.
+  const area = { x: padX, y: contentTop, w: maxWidth, h: r((B - contentTop) * 0.46) }
+  ctx.fillStyle = WHITE
+  roundRect(ctx, area.x - 8, area.y - 8, area.w + 16, area.h + 16, 10)
+  ctx.fill()
+  drawPair(ctx, assets, content, area, accent)
+  let y = area.y + area.h + 26
+  const badgeH = drawBadge(ctx, content.badge, padX, y, 400, badgeColor)
+  if (badgeH) y += badgeH + 12
+  y += shout(ctx, kickerWords(content), padX, y, maxWidth, { px: 96, minPx: 44, lines: 1, fill: onDark ? GOLD : accent, tracking: 3, maxHeight: (B - y) * 0.3 })
+  y += shout(ctx, content.hook, padX, y, maxWidth, { px: 72, minPx: 34, lines: 3, fill: ink, maxHeight: (B - y) * 0.45 }) + 12
+  const offers = offersFor(content)
+  if (offers.length) {
+    const th = Math.min(150, (B - y) * 0.5)
+    if (th > 76) {
+      tiles(ctx, offers, { x: padX, y, w: maxWidth, h: th }, { fill: accent, ink: readableTextOn(accent), amountInk: readableTextOn(accent), columns: Math.min(offers.length, 3), gap: 12, radius: 12 })
+      y += th + 14
+    }
+  }
+  body(ctx, content.subhead, padX, y, maxWidth, { px: 28, minPx: 18, lines: 2, weight: '600', fill: ink, maxHeight: B - y })
+  foot.draw()
+  return { band: { top: y, bottom: B } }
+}
+
+/** 16. Before inset: the After photo whole, the Before as a framed inset, the words on a brand-colour plate. */
+function reveal(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, contentBottom, maxWidth } = m
+  const { accent, badgeColor, focus } = content
+  if (assets?.after) drawCoverIn(ctx, assets.after, { x: 0, y: 0, w, h }, CENTRE)
+  else paintTheme(ctx, w, h, content)
+  // A lift at the top for the badge and the tag.
+  const g = ctx.createLinearGradient(0, 0, 0, h * 0.3)
+  g.addColorStop(0, 'rgba(2,6,23,0.5)')
+  g.addColorStop(1, 'rgba(2,6,23,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, w, h * 0.3)
+  drawBadge(ctx, content.badge, padX, contentTop, maxWidth - 200, badgeColor)
+  tag(ctx, assets?.after ? 'AFTER' : 'PICK THE AFTER PHOTO', w - padX, contentTop + 6, { fill: accent, ink: readableTextOn(accent), align: 'right', px: 34 })
+  // The plate, from a little over half way down to the bottom of the frame.
+  const plateFill = badgeColor || SLATE
+  const onPlate = readableTextOn(plateFill) === WHITE
+  const plateInk = onPlate ? WHITE : SLATE
+  const plateTop = r(contentTop + (contentBottom - contentTop) * 0.56)
+  ctx.fillStyle = plateFill
+  roundRect(ctx, 0, plateTop, w, h - plateTop + 40, 36)
+  ctx.fill()
+  // The inset, bottom-left, overlapping the plate's top edge.
+  const insetW = r(maxWidth * 0.38)
+  const insetH = r(insetW * 0.75)
+  const inset = { x: padX, y: plateTop - insetH + 44, w: insetW, h: insetH }
+  ctx.fillStyle = WHITE
+  roundRect(ctx, inset.x - 8, inset.y - 8, inset.w + 16, inset.h + 16, 10)
+  ctx.fill()
+  photoIn(ctx, assets?.background, inset, 'Before', focus)
+  tag(ctx, 'BEFORE', inset.x + 12, inset.y + 12, { fill: SLATE, px: 26 })
+  const insetBottom = inset.y + inset.h + 8
+  const foot = footer(ctx, m, content, assets, { onDark: onPlate, ink: plateInk, logo: 'right', maxW: 240, maxH: 80, starsPx: 22, bottom: contentBottom - 8 })
+  const B = foot.top - 14
+  // The words: beside the inset first, then the whole width under it.
+  const tx = inset.x + inset.w + 28
+  const tw = w - padX - tx
+  let y = plateTop + 26
+  y += shout(ctx, kickerWords(content), tx, y, tw, { px: 70, minPx: 32, lines: 1, fill: onPlate ? GOLD : accent, tracking: 3, maxHeight: Math.max(60, (insetBottom - y) * 0.5) })
+  y += shout(ctx, content.hook, tx, y, tw, { px: 64, minPx: 30, lines: 3, fill: plateInk, maxHeight: Math.max(70, insetBottom + 60 - y) }) + 10
+  y = Math.max(y, insetBottom + 16)
+  const amount = amountWords(content)
+  const detail = String(content.offerDetail || '').trim()
+  if (amount || detail) {
+    const text = [amount, detail].filter(Boolean).join('  ')
+    y += shout(ctx, text, padX, y, maxWidth, { px: 110, minPx: 40, lines: 2, fill: accent, stroke: WHITE, strokeW: 8, tracking: 1, maxHeight: (B - y) * 0.6 }) + 8
+  }
+  body(ctx, content.subhead, padX, y, maxWidth, { px: 28, minPx: 18, lines: 2, weight: '600', fill: onPlate ? 'rgba(255,255,255,0.9)' : '#334155', maxHeight: B - y })
+  foot.draw()
+  return { band: { top: plateTop, bottom: B } }
 }
 
 export const TEMPLATES = {
@@ -1327,6 +1572,8 @@ export const TEMPLATES = {
   coupon,
   big_number: bigNumber,
   photo_sale: photoSale,
+  before_sale: beforeSale,
+  reveal,
 }
 
 export function hasTemplate(key) {

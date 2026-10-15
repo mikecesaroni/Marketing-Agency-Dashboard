@@ -3,7 +3,7 @@
 // upload, and edits survive a switch between sets.
 // Run: node scripts/check-ad-batch.mjs
 
-import { BATCH_LOOKS, BATCH_PHOTO_MAX, assignLooks, assignPhotos, batchReady, lookName, makeAdsPrompt, photoPool, pickBackground, setTitle, snapshotSet } from '../src/lib/adBatch.js'
+import { BATCH_LOOKS, BATCH_PHOTO_MAX, SET_FIELDS, assignLooks, assignPhotos, batchReady, cutoutFor, lookName, makeAdsPrompt, photoPool, pickBackground, setTitle, snapshotSet, tilesFrom } from '../src/lib/adBatch.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -25,8 +25,16 @@ check('the count is clamped', /Write 6 static ads/.test(makeAdsPrompt({ count: 4
 check('a missing name still reads', /for this client to run now/.test(makeAdsPrompt({})), true)
 
 // The looks.
-check('three looks, no classic', BATCH_LOOKS, ['stack', 'plate', 'split'])
-check('each set gets the next look', assignLooks([{ hook: 'a' }, { hook: 'b' }, { hook: 'c' }, { hook: 'd' }]).map((s) => s.layout), ['stack', 'plate', 'split', 'stack'])
+check('a poster for the offer, the season template for the time of year, the owner photo for proof, then another round', BATCH_LOOKS, ['massive_deal', 'season_sale', 'stack', 'photo_sale', 'price_grid', 'plate'])
+check('each set gets the next look', assignLooks([{ hook: 'a' }, { hook: 'b' }, { hook: 'c' }, { hook: 'd' }]).map((s) => s.layout), ['massive_deal', 'season_sale', 'stack', 'photo_sale'])
+check('the batch asks for a sticker and offer tiles', /"sticker"/.test(makeAdsPrompt({ clientName: 'Prime' })) && /"offers"/.test(makeAdsPrompt({ clientName: 'Prime' })), true)
+check('tiles: blanks dropped, four at most, either key spelling', tilesFrom([{ amount: ' $0 ', detail: 'Down' }, { offer_amount: '$89', offer_detail: 'Tune-up' }, {}, { amount: '1' }, { amount: '2' }, { amount: '3' }]).map((o) => o.amount), ['$0', '$89', '1', '2'])
+check('tiles: junk is an empty list', tilesFrom('no'), [])
+check('an HVAC company gets a furnace in the heating months', cutoutFor('HVAC', new Date(2026, 10, 1)), 'furnace')
+check('and a condenser in the cooling ones', cutoutFor('Heating & Cooling', new Date(2026, 6, 1)), 'ac')
+check('a plumber gets a water heater', cutoutFor('Plumbing', new Date(2026, 6, 1)), 'water_heater')
+check('a roofer gets nothing', cutoutFor('Roofing', new Date(2026, 6, 1)), '')
+check('the set fields carry the template extras and the second photo', SET_FIELDS.slice(-6), ['backgroundPath2', 'kicker', 'sticker', 'offers', 'cutout', 'theme'])
 check('a set that names a look keeps it', assignLooks([{ hook: 'a', layout: 'cover' }])[0].layout, 'cover')
 check('a look has a name', [lookName('stack'), lookName('plate'), lookName('split'), lookName('zzz')], ['Headline stack', 'Bottom plate', 'Split panel', 'zzz'])
 

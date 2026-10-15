@@ -5,7 +5,7 @@
 // season gets, how the offer tiles fall back, and that every template is a
 // layout the Studio, the help chat and the saved-ad recipe all know.
 
-import { CUTOUTS, PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS, THEME_KEYS, isTemplate, kickerFor, offersFor, offersToStore, seasonKicker, themeFor } from '../src/lib/adTemplateMeta.js'
+import { CUTOUTS, PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS, THEME_KEYS, TWO_PHOTO_TEMPLATES, isTemplate, kickerFor, offersFor, offersToStore, seasonKicker, themeFor } from '../src/lib/adTemplateMeta.js'
 import { FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEXT_LAYOUTS } from '../src/lib/adLayout.js'
 import { lookName } from '../src/lib/adBatch.js'
 
@@ -18,19 +18,20 @@ function check(name, actual, expected) {
 }
 
 // The registry.
-check('fourteen templates', TEMPLATE_KEYS.length, 14)
+check('sixteen templates', TEMPLATE_KEYS.length, 16)
 check('every template has a key, a label and a hint', TEMPLATE_LAYOUTS.every((t) => t.key && t.label && t.hint), true)
-check('keys are snake_case and unique', [TEMPLATE_KEYS.every((k) => /^[a-z][a-z0-9_]*$/.test(k)), new Set(TEMPLATE_KEYS).size], [true, 14])
+check('keys are snake_case and unique', [TEMPLATE_KEYS.every((k) => /^[a-z][a-z0-9_]*$/.test(k)), new Set(TEMPLATE_KEYS).size], [true, 16])
 check('no template key collides with a photo look', TEMPLATE_KEYS.filter((k) => PHOTO_LOOKS.some((l) => l.key === k)), [])
-check('the two photo templates', PHOTO_TEMPLATES, ['stay_warm', 'photo_sale'])
+check('the photo templates', PHOTO_TEMPLATES, ['stay_warm', 'photo_sale', 'before_sale', 'reveal'])
+check('the two-photo templates take the After picker', TWO_PHOTO_TEMPLATES, ['before_sale', 'reveal'])
 check('isTemplate', [isTemplate('poster'), isTemplate('cover'), isTemplate(''), isTemplate(undefined)], [true, false, false, false])
 check('the templates have names for the batch strip and the help chat', [lookName('massive_deal'), lookName('poster'), lookName('stack')], ['Massive deal', 'White poster', 'Headline stack'])
 
 // The layout list the Studio reads.
 check('LAYOUTS is the photo looks then the templates', LAYOUTS.map((l) => l.key), [...PHOTO_LOOKS.map((l) => l.key), ...TEMPLATE_KEYS])
-check('the templates are grouped so the row and the gallery can split them', LAYOUTS.filter((l) => l.group === 'template').length, 14)
+check('the templates are grouped so the row and the gallery can split them', LAYOUTS.filter((l) => l.group === 'template').length, 16)
 check('every template paints the words', TEMPLATE_KEYS.every((k) => TEXT_LAYOUTS.includes(k)), true)
-check('dragging moves the photo on the photo templates only', TEMPLATE_KEYS.filter((k) => FOCUS_LAYOUTS.includes(k)), ['stay_warm', 'photo_sale'])
+check('dragging moves the photo on the photo templates only', TEMPLATE_KEYS.filter((k) => FOCUS_LAYOUTS.includes(k)), ['stay_warm', 'photo_sale', 'before_sale', 'reveal'])
 
 // Themes.
 check('nine themes', THEME_KEYS.length, 9)

@@ -51,7 +51,7 @@ import { readableTextOn } from './logoColours'
 // be dragged and resized on the artboard. It exists for a product shot, a
 // logo-heavy layout or a photo whose edges are not worth showing, and it is
 // never chosen for someone.
-export { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_LAYOUTS, TEXT_LAYOUTS, accentWord, containRect, coverRect, dragFocus, dragPhoto, photoRect } from './adLayout'
+export { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_LAYOUTS, TEXT_LAYOUTS, TWO_PHOTO_LAYOUTS, accentWord, containRect, coverRect, dragFocus, dragPhoto, photoRect } from './adLayout'
 import { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, coverRect, photoRect } from './adLayout'
 
 export const DEFAULT_ACCENT = '#C81E1E' // offer block

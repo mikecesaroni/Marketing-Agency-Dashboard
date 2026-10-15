@@ -13,10 +13,12 @@
 
 import { TEMPLATE_LAYOUTS } from './adTemplateMeta.js'
 
-// The three looks a batch cycles through, in order: the three newest
-// compositions, so a batch reads as a campaign rather than one template
-// three times. The classic look stays a click away.
-export const BATCH_LOOKS = ['stack', 'plate', 'split']
+// The looks a batch cycles through, in order, matched to the angles the
+// prompt asks for: the offer on a poster that shouts the price, the time of
+// year on the season's template, proof on the owner's photo with the stars;
+// then another round of the same three ideas in other clothes. A batch reads
+// as a campaign rather than one template three times.
+export const BATCH_LOOKS = ['massive_deal', 'season_sale', 'stack', 'photo_sale', 'price_grid', 'plate']
 export const BATCH_SIZE = 3
 
 const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', split: 'Split panel', before: 'Before and after', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept',
@@ -45,6 +47,7 @@ export function makeAdsPrompt({ count = BATCH_SIZE, clientName, today = new Date
   const parts = [
     `Write ${n} static ads for ${clientName || 'this client'} to run now, in ${month}: ${angles}, one ad each, each a different hook.`,
     'For every ad fill every slot of FORMAT 2 with real words: location badge, headline on image (five to eight words, the shout first: FREE, $89, SAVE), offer badge with the price first, subhead, proof strip, background note. Also the primary text, headline and description Meta shows beside the image. Leave offer_colour and badge_colour empty: the Studio takes the colours from the logo.',
+    'Two more keys on every set, for the poster templates: "sticker", two or three words for a starburst or a seal (EASY FINANCING, SAME DAY, 0% FOR 18 MONTHS; "" when nothing fits), and "offers", a list of up to two {"amount","detail"} price tiles when the brief carries more than one price (the main offer first; [] otherwise). Real prices from the brief only; never invent one.',
   ]
   if (photos.length > 0) {
     const list = photos.map((p, i) => `${i + 1} ${p.name || `photo ${i + 1}`}`).join(', ')
@@ -131,8 +134,32 @@ export function setTitle(set, i) {
   return `${i + 1} · ${words}`
 }
 
-// The Studio fields a set carries, and the order the Studio reads them.
-export const SET_FIELDS = ['badge', 'hook', 'offerAmount', 'offerDetail', 'subhead', 'proof', 'primaryText', 'headline', 'description', 'accent', 'badgeColor', 'layout', 'backgroundPath']
+// The Studio fields a set carries, and the order the Studio reads them. The
+// last six are the template extras and the second photo (src/lib/adTemplates.js).
+export const SET_FIELDS = ['badge', 'hook', 'offerAmount', 'offerDetail', 'subhead', 'proof', 'primaryText', 'headline', 'description', 'accent', 'badgeColor', 'layout', 'backgroundPath', 'backgroundPath2', 'kicker', 'sticker', 'offers', 'cutout', 'theme']
+
+/** The chat's offer tiles, as the Studio keeps them: up to four {amount, detail}, blanks dropped. */
+export function tilesFrom(raw) {
+  return (Array.isArray(raw) ? raw : [])
+    .map((o) => ({ amount: String(o?.amount ?? o?.offer_amount ?? '').trim(), detail: String(o?.detail ?? o?.offer_detail ?? '').trim() }))
+    .filter((o) => o.amount || o.detail)
+    .slice(0, 4)
+}
+
+/**
+ * The piece of equipment a batch stands in the corner of a template, from
+ * the trade and the month: a furnace through the heating months and a
+ * condenser through the cooling ones for an HVAC company, a water heater
+ * for a plumber, nothing for a trade with no unit to show.
+ */
+export function cutoutFor(industry, today = new Date()) {
+  const trade = String(industry || '').toLowerCase()
+  const month = today.getMonth() + 1
+  const heating = month >= 10 || month <= 3
+  if (/plumb|water heater|drain/.test(trade)) return 'water_heater'
+  if (/hvac|heat|cool|air|furnace|a\/c|ac\b|mechanical|comfort/.test(trade)) return heating ? 'furnace' : 'ac'
+  return ''
+}
 
 /**
  * A set rebuilt from the Studio's current fields, so switching between the

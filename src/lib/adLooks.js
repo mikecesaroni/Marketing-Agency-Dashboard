@@ -16,6 +16,7 @@
 // the creative, and a painted one is a decoy (see adCanvas.js).
 
 import { readableTextOn } from './logoColours'
+import { logoFor } from './logoCutout'
 import { PAD, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
 import { DEFAULT_BG, accentWord, containRect, coverRect, beforeRects, plateRects, splitRects } from './adLayout'
 
@@ -333,9 +334,11 @@ function renderPlate(ctx, size, content, assets, opts) {
 function drawPlateBody(ctx, m, content, assets, plate) {
   const { w, padX, contentBottom, maxWidth } = m
   const { hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor } = content
-  const { logo } = assets || {}
   const plateColor = badgeColor || DEFAULT_BG
   const ink = readableTextOn(plateColor)
+  // The logo sits on the solid plate with no box: the mark with its white
+  // knocked out, reversed to white on a dark plate (src/lib/logoCutout.js).
+  const logo = logoFor(assets, ink === '#FFFFFF')
   const soft = ink === '#FFFFFF' ? 'rgba(255,255,255,0.78)' : 'rgba(15,23,42,0.7)'
 
   // The plate, with rounded top corners laid over the photo.
@@ -591,8 +594,12 @@ function renderSplit(ctx, size, content, assets, opts) {
   // frame it joins the badge row inside the panel, so nothing floats over
   // the picture in the middle of a Story.
   if (logoBox) {
-    if (stacked) drawLogoPill(ctx, logo, w - padX, contentTop, 120, { align: 'right' })
-    else drawLogoPill(ctx, logo, w - padX, contentBottom, 140, { align: 'right', bottom: true })
+    if (stacked) {
+      // On the panel: the mark with no box, reversed to white on a dark panel.
+      const mark = logoFor(assets, ink === '#FFFFFF')
+      const fit = logoFit(mark, 120)
+      ctx.drawImage(mark, w - padX - fit.w, contentTop + 4, fit.w, fit.h)
+    } else drawLogoPill(ctx, logo, w - padX, contentBottom, 140, { align: 'right', bottom: true })
   }
   return { band: { top: photo.y, bottom: photo.y + photo.h } }
 }

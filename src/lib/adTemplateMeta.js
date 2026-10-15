@@ -22,11 +22,16 @@ export const TEMPLATE_LAYOUTS = [
   { key: 'coupon', label: 'Coupon', hint: 'a dashed coupon with the offer inside, the headline under it', theme: 'paper' },
   { key: 'big_number', label: 'Big number', hint: 'the amount fills the width and that is the ad', theme: 'brand' },
   { key: 'photo_sale', label: 'Photo sale', hint: 'the photo full-bleed with a SALE ribbon in the corner, the offers on a band below', photo: true },
+  { key: 'before_sale', label: 'Before and after sale', hint: 'the two photos side by side (one above the other on the Story), Before and After tagged, the kicker, the headline and the offer tiles on the season below', photo: true, twoPhotos: true },
+  { key: 'reveal', label: 'Before inset', hint: 'the After photo whole, the Before as a small framed inset bottom-left, the words on a brand-colour plate', photo: true, twoPhotos: true },
 ]
 
 export const TEMPLATE_KEYS = TEMPLATE_LAYOUTS.map((t) => t.key)
 
 export const PHOTO_TEMPLATES = TEMPLATE_LAYOUTS.filter((t) => t.photo).map((t) => t.key)
+
+/** The templates that take a second photo (the After picker), like the before-and-after look. */
+export const TWO_PHOTO_TEMPLATES = TEMPLATE_LAYOUTS.filter((t) => t.twoPhotos).map((t) => t.key)
 
 export function isTemplate(key) {
   return TEMPLATE_KEYS.includes(key)

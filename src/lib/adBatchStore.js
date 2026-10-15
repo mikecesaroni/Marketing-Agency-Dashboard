@@ -4,7 +4,7 @@ import { fetchLearnings } from './adLearningsStore'
 import { fetchLandingPages } from './landingPagesStore'
 import { creativeSetToStudio, extractCreativeSets, renderBlocks, sendChatMessage } from './clientChat'
 import { listDriveImages, resolveImageSrc } from './driveAssets'
-import { BATCH_PHOTO_MAX, assignLooks, assignPhotos, makeAdsPrompt, photoPool } from './adBatch'
+import { BATCH_PHOTO_MAX, assignLooks, assignPhotos, cutoutFor, makeAdsPrompt, photoPool, tilesFrom } from './adBatch'
 
 /**
  * Three ads in one go: the network half.
@@ -86,7 +86,19 @@ export async function makeAdBatch({ client, intake, ads = [], count = 3 }) {
   if (raw.length === 0) {
     throw new Error('The chat wrote no creative sets this time. Open the chat and ask it for three ads, or try again.')
   }
-  const sets = raw.slice(0, count).map((r) => ({ ...creativeSetToStudio(r), accent: '', badgeColor: '' }))
+  // The template extras: the sticker and the tiles the chat wrote, the unit
+  // for the trade and the month; the kicker and the theme follow the season.
+  const cutout = cutoutFor(client.industry)
+  const sets = raw.slice(0, count).map((r) => ({
+    ...creativeSetToStudio(r),
+    accent: '',
+    badgeColor: '',
+    kicker: '',
+    sticker: String(r.sticker || '').trim(),
+    offers: tilesFrom(r.offers),
+    cutout,
+    theme: '',
+  }))
   const picks = raw.slice(0, count).map((r) => Number(r.photo) || 0)
   return assignPhotos(assignLooks(sets), { pool, shown, picks })
 }

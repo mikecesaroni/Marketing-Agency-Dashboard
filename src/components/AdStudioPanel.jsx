@@ -19,6 +19,7 @@ import StockPicker from './StockPicker'
 import TemplateGallery from './TemplateGallery'
 import { CUTOUTS, THEME_LAYOUTS, isTemplate, kickerFor, themeFor } from '../lib/adTemplateMeta'
 import { stockPath } from '../lib/stockLibrary'
+import { prepareLogo } from '../lib/logoCutout'
 import { resolveImageSrc } from '../lib/driveAssets'
 import { conceptUrl, createConcepts, deleteConcept, fetchConcepts, refreshConcept } from '../lib/adConceptsStore'
 import { heicToJpegBlob, isHeic, jpegName, jpegPath, toUploadable } from '../lib/imageUpload'
@@ -36,6 +37,7 @@ import {
   FOCUS_LAYOUTS,
   LAYOUTS,
   PHOTO_LOOKS,
+  TWO_PHOTO_LAYOUTS,
   dragFocus,
   dragPhoto,
   brandColours,
@@ -987,6 +989,14 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     }
     if (applied.layout) setLayout(applied.layout)
     if (applied.backgroundPath !== undefined) setBackgroundPath(applied.backgroundPath || '')
+    // The template extras and the second photo, when the set carries them
+    // (a batch set does; a creative set from the chat leaves them alone).
+    if (applied.backgroundPath2 !== undefined) setAfterPath(applied.backgroundPath2 || '')
+    if (applied.kicker !== undefined) setKicker(applied.kicker || '')
+    if (applied.sticker !== undefined) setSticker(applied.sticker || '')
+    if (applied.offers !== undefined) setOffers(Array.isArray(applied.offers) ? applied.offers : [])
+    if (applied.cutout !== undefined) setCutout(applied.cutout || '')
+    if (applied.theme !== undefined) setTheme(applied.theme || '')
   }, [applied, intakeProof])
 
   // The batch itself: asked for once, on mount, when the Studio was opened
@@ -1029,6 +1039,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     badgeColor,
     layout,
     backgroundPath,
+    backgroundPath2: afterPath,
+    kicker,
+    sticker,
+    offers,
+    cutout,
+    theme,
   })
   const batchWithEdits = () => {
     if (!batch || batch.status !== 'done') return batch
@@ -1145,7 +1161,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     Promise.all([bitmap(backgroundPath), bitmap(logoPath), bitmap(afterPath), bitmap(stockPath(cutout))])
       .then(([background, logo, after, cutoutImage]) => {
         if (cancelled) return
-        setAssets({ background, logo, after, cutoutImage })
+        // The logo with its white box knocked out, for the templates
+        // (src/lib/logoCutout.js); the photo looks keep the original.
+        setAssets({ background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null })
         setError('')
 
         if (!logo) {
@@ -1422,12 +1440,18 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       await ensureFonts()
       const bitmap = async (path) => (path ? loadImage(await resolveImageSrc(client.id, path)) : null)
       const logo = assets.logo || (await bitmap(logoPath))
+      const logoCut = assets.logoCut || (logo ? prepareLogo(logo) : null)
       const backgrounds = {}
+      const stocks = {}
       let n = 0
       for (let s = 0; s < cur.sets.length; s++) {
         const set = cur.sets[s]
         const bg = set.backgroundPath || ''
         if (!(bg in backgrounds)) backgrounds[bg] = await bitmap(bg)
+        const bg2 = set.backgroundPath2 || ''
+        if (!(bg2 in backgrounds)) backgrounds[bg2] = await bitmap(bg2)
+        const stock = stockPath(set.cutout)
+        if (!(stock in stocks)) stocks[stock] = await bitmap(stock)
         const content = {
           season: seasonToSave(),
           badge: set.badge || badge,
@@ -1447,17 +1471,17 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           primaryText: set.primaryText || '',
           headline: set.headline || '',
           description: set.description || '',
-          kicker: '',
-          sticker: '',
-          offers: [],
-          cutout: '',
-          theme: '',
+          kicker: set.kicker || '',
+          sticker: set.sticker || '',
+          offers: Array.isArray(set.offers) ? set.offers : [],
+          cutout: set.cutout || '',
+          theme: set.theme || '',
         }
         // Stamps a millisecond apart keep the three ads distinct on the Saved tab.
         const stamp = Date.now() + s
         for (let i = 0; i < SIZES.length; i++) {
           const canvas = document.createElement('canvas')
-          renderAd(canvas, SIZES[i], content, { background: backgrounds[bg], logo }, { safeMode, guides: false })
+          renderAd(canvas, SIZES[i], content, { background: backgrounds[bg], logo, logoCut, after: backgrounds[bg2], cutoutImage: stocks[stock] }, { safeMode, guides: false })
           const blob = await canvasToBlob(canvas)
           const path = `ads/${client.id}/${stamp}-${SIZES[i].key}.png`
           const { error: upErr } = await supabase.storage.from('client-files').upload(path, blob, { contentType: 'image/png' })
@@ -1472,7 +1496,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           if (rowErr) throw rowErr
         }
         try {
-          await saveAdRecipe({ clientId: client.id, stamp, content, backgroundPath: bg, logoPath, safeMode })
+          await saveAdRecipe({ clientId: client.id, stamp, content, backgroundPath: bg, backgroundPath2: bg2, logoPath, safeMode })
         } catch (recipeErr) {
           console.warn('Ad saved but its recipe was not stored:', recipeErr.message)
         }
@@ -1553,7 +1577,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           }
         : undefined,
       photo: backgroundPath || 'none picked',
-      after_photo: layout === 'before' ? afterPath || 'none picked (the before-and-after look needs one)' : undefined,
+      after_photo: TWO_PHOTO_LAYOUTS.includes(layout) ? afterPath || 'none picked (this before-and-after look needs one)' : undefined,
       logo: logoPath ? 'set' : 'none',
       photos_available: files.map((f) => f.file_name),
       batch: batch
@@ -1825,7 +1849,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid md:grid-cols-2 gap-3">
         <AdImagePicker
-          label={layout === 'before' ? 'Before photo' : isTemplate(layout) && !FOCUS_LAYOUTS.includes(layout) ? 'Background photo (this template paints its own)' : 'Background photo'}
+          label={TWO_PHOTO_LAYOUTS.includes(layout) ? 'Before photo' : isTemplate(layout) && !FOCUS_LAYOUTS.includes(layout) ? 'Background photo (this template paints its own)' : 'Background photo'}
           client={client}
           files={files}
           value={backgroundPath}
@@ -1836,8 +1860,8 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           driveFolderId={driveFolderId}
           onFolderSaved={setDriveFolderId}
         />
-        {/* The second photo, only on the before-and-after look. */}
-        {layout === 'before' && (
+        {/* The second photo, only on the before-and-after look and templates. */}
+        {TWO_PHOTO_LAYOUTS.includes(layout) && (
           <div data-after-picker>
             <AdImagePicker
               label="After photo"

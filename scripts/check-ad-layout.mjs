@@ -7,7 +7,7 @@
 // photo over the offer block on Stories. Everything resolves through
 // photoRect, so the 216px preview and the 1080px export agree.
 
-import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_KEYS, TEXT_LAYOUTS, accentWord, beforeRects, containRect, coverRect, dragFocus, dragPhoto, photoRect, plateRects, splitRects } from '../src/lib/adLayout.js'
+import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_KEYS, TEXT_LAYOUTS, TWO_PHOTO_LAYOUTS, accentWord, beforeRects, containRect, coverRect, dragFocus, dragPhoto, photoRect, plateRects, splitRects } from '../src/lib/adLayout.js'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -21,7 +21,8 @@ check('cover is first and therefore the default', LAYOUTS[0].key, 'cover')
 check('the six photo looks, classic first (the card is retired from the row)', PHOTO_LOOKS.map((l) => l.key), ['cover', 'stack', 'plate', 'split', 'before', 'ai'])
 check('the templates follow the photo looks in the full list', LAYOUTS.map((l) => l.key), [...PHOTO_LOOKS.map((l) => l.key), ...TEMPLATE_KEYS])
 check('every look but the AI concept paints the words, the retired card included so old saved ads still edit, the templates too', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'before', 'card', ...TEMPLATE_KEYS])
-check('dragging moves the focal point on the photo looks and the two photo templates', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'before', 'stay_warm', 'photo_sale'])
+check('dragging moves the focal point on the photo looks and the photo templates', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'before', 'stay_warm', 'photo_sale', 'before_sale', 'reveal'])
+check('the before look and the two before templates take the After picker', TWO_PHOTO_LAYOUTS, ['before', 'before_sale', 'reveal'])
 
 // The headline stack's giant word.
 check('a short first word is the shout', accentWord('FREE second opinion on any quote'), { accent: 'FREE', rest: 'second opinion on any quote' })

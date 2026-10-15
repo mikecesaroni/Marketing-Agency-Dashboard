@@ -41,6 +41,8 @@ They sit in a gallery under the Look row, every one painted small with the words
 | Coupon | A dashed coupon with the offer inside, the headline under it |
 | Big number | The amount fills the width and that is the ad |
 | Photo sale | The photo full-bleed with a SALE ribbon in the corner, the offers on a band below |
+| Before and after sale | The two photos side by side (one above the other on the Story), Before and After tagged on a white print border, the kicker, the headline and the offer tiles on the season below. The After picker appears, as on the before-and-after look |
+| Before inset | The After photo whole, the Before as a small framed inset bottom-left, the words on a brand-colour plate. The After picker appears |
 
 The badge, hook, offer, subhead and proof go on every template (the proof paints as five gold stars). A template reads five more fields, in the orange box that appears under the gallery:
 
@@ -50,7 +52,13 @@ The badge, hook, offer, subhead and proof go on every template (the proof paints
 - **Background**: Auto (the template's own, else the season's) or any of the nine themes.
 - **Equipment**: None, one of six built-in drawings (AC unit, furnace, boiler, water heater, mini split, thermostat), or a photo from the **stock library**: real cutouts of equipment shared by every client, uploaded once under `stock/` in the bucket (a PNG with a transparent background looks right; a JPEG is painted as is). Nothing is drawn where the frame has no room for it, such as a Reels-safe Story.
 
-Dragging the artboard moves the photo on the two photo templates (Stay warm, Photo sale); the others paint their own background and keep the photo picker for when the look is switched back. The Panel row says "built into this look". Saved with the ad (`saved_ads.kicker`, `sticker`, `offers` as JSON, `cutout`, `theme`), so Edit and the owner's revision notes re-render the same template.
+Dragging the artboard moves the photo on the photo templates (Stay warm, Photo sale, the two before-and-afters); the others paint their own background and keep the photo picker for when the look is switched back. The Panel row says "built into this look". Saved with the ad (`saved_ads.kicker`, `sticker`, `offers` as JSON, `cutout`, `theme`, and `background_path_2` for the second photo), so Edit and the owner's revision notes re-render the same template.
+
+**The logo on a template sits on the theme with no box.** A logo that arrives on a white rectangle (most of them) has the white knocked out: a flood from the edges removes every pixel near the edge colour, with a soft rim so the anti-aliasing leaves no halo (`src/lib/logoCutout.js`). Only a light, near-neutral edge is knocked out; a logo that fills its box with colour is a box on purpose and stays whole. A dark mark on a dark surface (a navy logo on the night theme or a brand-colour plate) is reversed to white, the way a reversed logo reads on a van; a very light mark on a light surface goes slate. The photo looks keep the original logo and the white pill over a photo, except the bottom plate and the stacked split panel, where the logo now sits on the solid panel the same way.
+
+**The logo can never cut off the words.** Every template measures its footer (the logo in one corner, the stars in the other, or the logo centred over the stars) before it draws anything, and every block of words, every sticker and the unit stop above it. A logo is fitted to at most 90 to 120px tall, so the footer is never more than a strip.
+
+**"Make 3 ads" uses the templates.** The batch's looks now go: the offer on Massive deal, the time of year on Season sale (snow, leaves, sun or green by the season label), proof on the owner's photo with the Headline stack; a batch of six continues with Photo sale, Price grid and Bottom plate. The chat is asked for a sticker (two or three words for a starburst) and up to two price tiles from the brief, and the unit in the corner follows the trade and the month (a furnace through the heating months and a condenser through the cooling ones for an HVAC company, a water heater for a plumber). The before-and-after templates are not in the batch: a before-and-after pair has to be a real pair, picked by hand.
 
 The display faces are Anton (the condensed capitals) and Pacifico (the script word), loaded from Google Fonts next to Inter and waited for before the first paint, so a template never measures with a fallback and wraps wrong.
 

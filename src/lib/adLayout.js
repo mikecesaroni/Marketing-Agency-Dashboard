@@ -4,7 +4,7 @@
 // The looks. The first is the default. Each one is a different composition
 // of the same words, so a set of ads for one client stops looking like one
 // template with the headline swapped.
-import { PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS } from './adTemplateMeta.js'
+import { PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS, TWO_PHOTO_TEMPLATES } from './adTemplateMeta.js'
 
 // The photo looks: the client's photo with the words composed over or beside
 // it (adLooks.js and the classic in adCanvas.js).
@@ -25,6 +25,9 @@ export { TEMPLATE_LAYOUTS, TEMPLATE_KEYS }
 export const TEXT_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'before', 'card', ...TEMPLATE_KEYS]
 // Looks where dragging the artboard moves the photo's focal point.
 export const FOCUS_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'before', ...PHOTO_TEMPLATES]
+// Looks that take a second photo: the "After photo" picker appears and the
+// first picker reads "Before photo".
+export const TWO_PHOTO_LAYOUTS = ['before', ...TWO_PHOTO_TEMPLATES]
 
 export const DEFAULT_BG = '#0F172A'
 // Fractions: x across the frame, y down the FREE BAND (the room between the

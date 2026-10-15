@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient'
 import { SIZES } from './adCanvas'
 import { versioned } from './adRevise'
-import { offersToStore } from './adTemplateMeta'
+import { TWO_PHOTO_TEMPLATES, offersToStore } from './adTemplateMeta'
 
 // Saved artboards live under ads/<client id>/<stamp>-<size>.png in the same
 // public bucket the client's other files use. The stamp is what ties the three
@@ -74,8 +74,8 @@ function recipeColumns(content, backgroundPath, logoPath, safeMode, backgroundPa
     headline: content.headline || null,
     description: content.description || null,
     background_path: backgroundPath || null,
-    // The second photo of a before-and-after; null on every other look.
-    background_path_2: content.layout === 'before' ? backgroundPath2 || null : null,
+    // The second photo of a before-and-after (the look or a template); null on every other look.
+    background_path_2: content.layout === 'before' || TWO_PHOTO_TEMPLATES.includes(content.layout) ? backgroundPath2 || null : null,
     logo_path: logoPath || null,
     // Season label (src/lib/adSeason.js): spring, summer, fall, winter,
     // holiday or all. Guessed at save time, changeable in the gallery.

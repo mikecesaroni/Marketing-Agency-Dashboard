@@ -5,6 +5,7 @@ import { applyCopyChange } from './adCopy'
 import { applyChanges } from './adRevise'
 import { overwriteSavedAd, recipeToContent } from './savedAds'
 import { stockPath } from './stockLibrary'
+import { prepareLogo } from './logoCutout'
 
 /**
  * Applies an owner's note to a saved ad and REPLACES it: same stamp, same
@@ -35,7 +36,7 @@ export async function reviseSavedAd({ client, set, instruction, token }) {
   await ensureFonts()
   const bitmap = async (path) => (path ? loadImage(await resolveImageSrc(client.id, path)) : null)
   const [background, logo, after, cutoutImage] = await Promise.all([bitmap(current.backgroundPath), bitmap(current.logoPath), bitmap(current.backgroundPath2), bitmap(stockPath(current.cutout))])
-  const assets = { background, logo, after, cutoutImage }
+  const assets = { background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null }
 
   const blobs = {}
   for (const { size } of set.ordered || []) {
