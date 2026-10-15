@@ -4,18 +4,27 @@
 // The looks. The first is the default. Each one is a different composition
 // of the same words, so a set of ads for one client stops looking like one
 // template with the headline swapped.
-export const LAYOUTS = [
-  { key: 'cover', label: 'Classic', hint: 'photo fills the frame, headline up top, offer block down the bottom' },
-  { key: 'stack', label: 'Headline stack', hint: 'one giant accent word over the photo, with a white offer card' },
-  { key: 'plate', label: 'Bottom plate', hint: 'photo on top, the words on a brand-colour plate below' },
-  { key: 'split', label: 'Split panel', hint: 'brand-colour panel with the words beside the photo' },
-  { key: 'before', label: 'Before and after', hint: 'two photos side by side (one above the other on the Story), Before and After labelled, the words on a plate below' },
-  { key: 'ai', label: 'AI concept', hint: 'a finished ad made by AI from your brief, used as is' },
+import { PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS } from './adTemplateMeta.js'
+
+// The photo looks: the client's photo with the words composed over or beside
+// it (adLooks.js and the classic in adCanvas.js).
+export const PHOTO_LOOKS = [
+  { key: 'cover', label: 'Classic', hint: 'photo fills the frame, headline up top, offer block down the bottom', group: 'photo' },
+  { key: 'stack', label: 'Headline stack', hint: 'one giant accent word over the photo, with a white offer card', group: 'photo' },
+  { key: 'plate', label: 'Bottom plate', hint: 'photo on top, the words on a brand-colour plate below', group: 'photo' },
+  { key: 'split', label: 'Split panel', hint: 'brand-colour panel with the words beside the photo', group: 'photo' },
+  { key: 'before', label: 'Before and after', hint: 'two photos side by side (one above the other on the Story), Before and After labelled, the words on a plate below', group: 'photo' },
+  { key: 'ai', label: 'AI concept', hint: 'a finished ad made by AI from your brief, used as is', group: 'photo' },
 ]
+// Every look the Studio can paint: the photo looks, then the templates
+// (adTemplates.js: painted seasonal posters with SALE, prices, stickers and
+// a piece of equipment).
+export const LAYOUTS = [...PHOTO_LOOKS, ...TEMPLATE_LAYOUTS.map((t) => ({ ...t, group: 'template' }))]
+export { TEMPLATE_LAYOUTS, TEMPLATE_KEYS }
 // Looks that paint the words themselves (an AI concept carries its own).
-export const TEXT_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'before', 'card']
+export const TEXT_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'before', 'card', ...TEMPLATE_KEYS]
 // Looks where dragging the artboard moves the photo's focal point.
-export const FOCUS_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'before']
+export const FOCUS_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'before', ...PHOTO_TEMPLATES]
 
 export const DEFAULT_BG = '#0F172A'
 // Fractions: x across the frame, y down the FREE BAND (the room between the

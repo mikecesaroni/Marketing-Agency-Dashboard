@@ -1,4 +1,4 @@
-# Ad Studio looks and AI concepts
+# Ad Studio looks, templates and AI concepts
 
 Written 2026-10-13. Until now every static the Studio made was one composition: headline up top, offer block down the bottom, photo behind. A set of ads for one client looked like one template with the words swapped. This adds more ways to paint the same words, and a route to whole ads made by AI from the brief. (2026-10-14: the "Photo on a colour" look was taken off the row; ads saved with it still open and re-render.)
 
@@ -19,6 +19,41 @@ The giant word on the headline stack is the first word of the hook when it is sh
 
 Dragging the artboard still moves the photo's focal point on the photo looks, and the other two sizes follow the same spot. Saved ads remember their look (`saved_ads.layout`), so Edit and the owner's revision notes re-render in the same look.
 
+## The templates
+
+Added 2026-10-15. The photo looks above compose the client's photo with the words. The templates are posters: a painted background for the season (snow, falling leaves, summer sun, spring green, a warm glow with flames, night, holiday red and green, white paper, or the brand colour), condensed capitals that shout, SALE and the price where the thumb lands, offers in a starburst, a seal, a ribbon or a grid of tiles, Google stars, and a piece of equipment standing in the corner. The kind of ad a home-services company runs in the fall and the winter.
+
+They sit in a gallery under the Look row, every one painted small with the words and the colours on the form, so choosing is choosing by eye. Click one and it is the look; "Next look" cycles through the photo looks and the templates together.
+
+| Template | What it is |
+| --- | --- |
+| Winter shout | Snow, the logo up top, a giant outlined offer, the unit standing in the drift |
+| Massive deal | A warm glow with flames, the kicker in two tones, a price that fills the frame, a seal and a SALE star |
+| Stay warm | The photo under a diagonal in the accent colour, a headline stack beside it, a band of offers along the bottom |
+| Price grid | A script season word, a big headline, a grid of up to four prices beside the unit on white |
+| Fall special | Leaves, a script "Fall", two offers stacked with OR between, a seal, the unit |
+| Season sale | The season painted behind a huge SALE, the offer, the unit, a starburst sticker. Follows the season label: snow in winter, sun in summer, leaves in the fall, green in spring |
+| Holiday deals | Red and green with snow, HOLIDAY DEALS, the offer and a sticker |
+| Tune-up | Fresh green, the service price in a starburst, the detail in gold |
+| White poster | White, condensed capitals stacked in the brand colours, logo and Google stars, the unit bottom-left |
+| Same day | Dark and urgent, a 24/7 seal, the headline huge, the offer on a pill |
+| Financing | $0 down huge, monthly payments in a seal, the other offers as tiles |
+| Coupon | A dashed coupon with the offer inside, the headline under it |
+| Big number | The amount fills the width and that is the ad |
+| Photo sale | The photo full-bleed with a SALE ribbon in the corner, the offers on a band below |
+
+The badge, hook, offer, subhead and proof go on every template (the proof paints as five gold stars). A template reads five more fields, in the orange box that appears under the gallery:
+
+- **Kicker**: the shout above the headline. Empty paints the season's: Fall Special, Winter Sale, Summer Sale, Spring Sale, Holiday Deals, or Massive Deals when the season is year-round. The season is the label next to Save (Auto reads it off the words and the date).
+- **Sticker**: the words in the starburst, the seal or the ribbon (EASY FINANCING, 24/7, SALE). Empty means no sticker, except Same day (24/7) and Financing (Monthly payments available).
+- **Offer tiles**: up to four prices with a line each ($0 / Down, 0% for 18 months; $89 / Furnace tune-up). Empty uses the main offer as the one tile. Stay warm, Price grid, Fall special, Financing and Photo sale lay them out; the others use the main offer.
+- **Background**: Auto (the template's own, else the season's) or any of the nine themes.
+- **Equipment**: None, one of six built-in drawings (AC unit, furnace, boiler, water heater, mini split, thermostat), or a photo from the **stock library**: real cutouts of equipment shared by every client, uploaded once under `stock/` in the bucket (a PNG with a transparent background looks right; a JPEG is painted as is). Nothing is drawn where the frame has no room for it, such as a Reels-safe Story.
+
+Dragging the artboard moves the photo on the two photo templates (Stay warm, Photo sale); the others paint their own background and keep the photo picker for when the look is switched back. The Panel row says "built into this look". Saved with the ad (`saved_ads.kicker`, `sticker`, `offers` as JSON, `cutout`, `theme`), so Edit and the owner's revision notes re-render the same template.
+
+The display faces are Anton (the condensed capitals) and Pacifico (the script word), loaded from Google Fonts next to Inter and waited for before the first paint, so a template never measures with a fallback and wraps wrong.
+
 ## AI concepts
 
 The "AI concepts" box under the Look row sends the brief on the screen (headline, offer, subhead, proof, badge, brand colours, the client's name, trade and market) plus the logo and the chosen photo to Higgsfield's Ads Studio, which renders four finished ads, each a different scene and arrangement. The brief quotes every line so the words come back exact, forbids anything else on the image (no invented phone numbers or websites), spells the business name, and tells the model the reference photos are the real owner and van. Direction can be typed in ("owner at the front door, the van in shot, snow on the ground").
@@ -32,6 +67,7 @@ Secrets: `HIGGSFIELD_API_KEY_ID` and `HIGGSFIELD_API_KEY_SECRET` (the same pair 
 ## Where the code is
 
 - `src/lib/adLooks.js`: the stack, plate, split and AI looks. `src/lib/adText.js`: the shared type helpers. `src/lib/adLayout.js`: the pure placement math (`plateRects`, `splitRects`, `containRect`, `accentWord`), tested by `scripts/check-ad-layout.mjs`.
+- `src/lib/adTemplates.js`: the fourteen templates, the themes, the elements (shout, script, starburst, seal, ribbon, tiles, stars) and the equipment drawings. `src/lib/adTemplateMeta.js`: their names, the themes and cutouts, and the pure helpers (`themeFor`, `seasonKicker`, `offersFor`), tested by `scripts/check-ad-templates.mjs`. `src/components/TemplateGallery.jsx`: the thumbnails. `src/lib/stockLibrary.js` and `src/components/StockPicker.jsx`: the stock library.
 - `src/lib/adCanvas.js`: the classic look and the card, and the hand-off to `adLooks.js`.
 - `supabase/functions/ad-concepts` (`index.ts` plus the pure `brief.js`, tested by `scripts/check-ad-concepts.mjs`); `src/lib/adConceptsStore.js`; the `ConceptsPanel` in `src/components/AdStudioPanel.jsx`.
 - `supabase/ad-concepts.sql`: the `ad_concepts` table and the wider `saved_ads.layout` check. Applied live.

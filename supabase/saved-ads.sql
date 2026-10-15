@@ -60,3 +60,19 @@ begin
   end if;
   execute 'alter table saved_ads add constraint saved_ads_layout_check check (layout = any (array[''cover'',''card'',''stack'',''plate'',''split'',''before'',''ai'']))';
 end $$;
+
+-- 2026-10-15: the templates (src/lib/adTemplates.js). Their extras, and a
+-- layout check that takes any look key rather than a list that has to be
+-- re-issued for every new template.
+alter table saved_ads add column if not exists kicker text;
+alter table saved_ads add column if not exists sticker text;
+alter table saved_ads add column if not exists offers jsonb;
+alter table saved_ads add column if not exists cutout text;
+alter table saved_ads add column if not exists theme text;
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'saved_ads_layout_check') then
+    execute 'alter table saved_ads drop constraint saved_ads_layout_check';
+  end if;
+  execute 'alter table saved_ads add constraint saved_ads_layout_check check (layout ~ ''^[a-z][a-z0-9_]{0,39}$'')';
+end $$;

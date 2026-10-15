@@ -12,10 +12,16 @@ export const PAD = 60
 
 // ctx.letterSpacing is ignored rather than fatal where it is unsupported, so
 // this is safe to set unconditionally. It only ever has to be reset to '0px'.
-export function setFont(ctx, weight, px, tracking = 0) {
-  ctx.font = `${weight} ${px}px ${FONT}`
+export function setFont(ctx, weight, px, tracking = 0, face = FONT) {
+  ctx.font = `${weight} ${px}px ${face}`
   ctx.letterSpacing = `${tracking}px`
 }
+
+// The two display faces the templates add to Inter: a tall condensed one for
+// the shouting ("CALL NOW FOR 200$ OFF") and a script for the season word
+// ("Fall", "summer"). Both from Google Fonts, see index.html.
+export const CONDENSED = '"Anton", "Impact", "Arial Narrow", sans-serif'
+export const SCRIPT = '"Pacifico", "Brush Script MT", cursive'
 
 // Display type wants a real apostrophe. A straight quote in a 60px headline
 // reads as a typo, which is not the impression a $30 offer should make.
@@ -56,13 +62,15 @@ export function wrapText(ctx, text, maxWidth) {
 // Shrinks text until it fits the lines allowed. A long hook that silently
 // overflows the frame is worse than a slightly smaller one.
 export function fitText(ctx, text, maxWidth, maxLines, startPx, minPx, weight, tracking = 0, budget) {
-  const { maxHeight = Infinity, lineRatio = 1.2 } = budget || {}
+  const { maxHeight = Infinity, lineRatio = 1.2, face = FONT } = budget || {}
   let px = startPx
   let lines = []
   while (px >= minPx) {
-    setFont(ctx, weight, px, tracking)
+    setFont(ctx, weight, px, tracking, face)
     lines = wrapText(ctx, text, maxWidth)
-    if (lines.length <= maxLines && lines.length * px * lineRatio <= maxHeight) break
+    // A single word wider than the column never wraps, so the width is
+    // checked too: FINANCING in a seal shrinks instead of poking out of it.
+    if (lines.length <= maxLines && lines.length * px * lineRatio <= maxHeight && widest(ctx, lines) <= maxWidth) break
     px -= 3
   }
   // Still too tall at the smallest size: drop lines rather than run the

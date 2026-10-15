@@ -51,7 +51,7 @@ import { readableTextOn } from './logoColours'
 // be dragged and resized on the artboard. It exists for a product shot, a
 // logo-heavy layout or a photo whose edges are not worth showing, and it is
 // never chosen for someone.
-export { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, TEXT_LAYOUTS, accentWord, containRect, coverRect, dragFocus, dragPhoto, photoRect } from './adLayout'
+export { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_LAYOUTS, TEXT_LAYOUTS, accentWord, containRect, coverRect, dragFocus, dragPhoto, photoRect } from './adLayout'
 import { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, coverRect, photoRect } from './adLayout'
 
 export const DEFAULT_ACCENT = '#C81E1E' // offer block
@@ -89,6 +89,7 @@ export function brandColours(intake) {
 // boxes) live in adText.js so the looks in adLooks.js draw with the same type.
 import { PAD, fitText, roundRect, setFont, typographic } from './adText'
 import { hasLook, renderLook } from './adLooks'
+import { hasTemplate, renderTemplate } from './adTemplates'
 
 // Inter is loaded from the stylesheet, but a font declared in CSS is only
 // fetched once something on the page uses it. Canvas text does not count as a
@@ -96,10 +97,13 @@ import { hasLook, renderLook } from './adLooks'
 // on different words than the export does. The 900 weights are the giant
 // accent word and the offer amount in the newer looks.
 const WEIGHTS = ['500 27px', '600 22px', '700 23px', '700 32px', '800 21px', '800 22px', '800 44px', '800 60px', '900 64px', '900 150px']
+// The templates' display faces (see adText.js). Loaded alongside Inter so the
+// first paint of a template does not measure with a fallback and wrap wrong.
+const FACES = ['400 120px "Anton"', '400 80px "Pacifico"']
 export async function ensureFonts() {
   if (!document.fonts) return
   try {
-    await Promise.all(WEIGHTS.map((w) => document.fonts.load(`${w} "Inter"`)))
+    await Promise.all([...WEIGHTS.map((w) => document.fonts.load(`${w} "Inter"`)), ...FACES.map((f) => document.fonts.load(f))])
     await document.fonts.ready
   } catch {
     // A font that will not load is not worth failing the render over; the
@@ -190,17 +194,19 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   } = content
   const { background, logo } = assets || {}
 
-  // The newer looks paint themselves (adLooks.js) against the same safe
-  // margins; this function keeps the classic composition and the card.
-  if (hasLook(layout)) {
+  // The newer looks (adLooks.js) and the templates (adTemplates.js) paint
+  // themselves against the same safe margins; this function keeps the
+  // classic composition and the card.
+  if (hasLook(layout) || hasTemplate(layout)) {
     canvas.width = w
     canvas.height = h
     const lctx = canvas.getContext('2d')
     lctx.letterSpacing = '0px'
-    const out = renderLook(lctx, size, { ...content, layout, accent, badgeColor, focus }, assets, { safeMode })
+    const full = { ...content, layout, accent, badgeColor, focus }
+    const out = hasTemplate(layout) ? renderTemplate(lctx, size, full, assets, { safeMode }) : renderLook(lctx, size, full, assets, { safeMode })
     if (opts.guides) drawGuides(lctx, w, h, safeTop, safeBottom, safeSide, safeOn)
     lctx.letterSpacing = '0px'
-    return { canvas, band: out.band }
+    return { canvas, band: out?.band }
   }
 
   // On the card layout the text sits on the chosen colour, not on a scrimmed

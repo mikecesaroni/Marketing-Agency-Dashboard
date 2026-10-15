@@ -15,6 +15,10 @@ import { overwriteSavedAd, recipeToContent, saveAdRecipe } from '../lib/savedAds
 import { AD_SEASONS, guessAdSeason } from '../lib/adSeason'
 import { creativeWarnings } from '../lib/creativeChecks'
 import AdImagePicker from './AdImagePicker'
+import StockPicker from './StockPicker'
+import TemplateGallery from './TemplateGallery'
+import { CUTOUTS, THEME_LAYOUTS, isTemplate, kickerFor, themeFor } from '../lib/adTemplateMeta'
+import { stockPath } from '../lib/stockLibrary'
 import { resolveImageSrc } from '../lib/driveAssets'
 import { conceptUrl, createConcepts, deleteConcept, fetchConcepts, refreshConcept } from '../lib/adConceptsStore'
 import { heicToJpegBlob, isHeic, jpegName, jpegPath, toUploadable } from '../lib/imageUpload'
@@ -31,6 +35,7 @@ import {
   DEFAULT_PHOTO,
   FOCUS_LAYOUTS,
   LAYOUTS,
+  PHOTO_LOOKS,
   dragFocus,
   dragPhoto,
   brandColours,
@@ -318,6 +323,11 @@ function CopyAssistant({ client, current, onApply, undoable, onUndo }) {
       )}
     </div>
   )
+}
+
+// The small toggle chips in the Background and Equipment rows.
+function chipClass(on) {
+  return `px-2 py-1 rounded text-[11px] font-medium transition ${on ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'}`
 }
 
 function Field({ label, value, onChange, hint }) {
@@ -810,6 +820,17 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   }
   // Photo layout. 'cover' unless somebody switches it; see LAYOUTS in adCanvas.
   const [layout, setLayout] = useState('cover')
+  // The template extras (adTemplates.js): the season word or the shout above
+  // the headline, the words in the sticker, up to four offer tiles, the piece
+  // of equipment in the corner and the painted background. Empty means the
+  // template's own default: the season's kicker and theme, the main offer as
+  // the one tile, no equipment.
+  const [kicker, setKicker] = useState('')
+  const [sticker, setSticker] = useState('')
+  const [offers, setOffers] = useState([])
+  const [cutout, setCutout] = useState('')
+  const [theme, setTheme] = useState('')
+  const [stockOpen, setStockOpen] = useState(false)
   const [bgColor, setBgColor] = useState(DEFAULT_BG)
   const [photo, setPhoto] = useState(DEFAULT_PHOTO)
   // Cover layout: which spot on the photo the crop keeps. Dragging any
@@ -1102,6 +1123,17 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       .catch(() => setPublished([]))
   }, [client.id])
 
+  // The label a save writes: the pick, or a guess from the words and the date.
+  // Also what the templates read for their season (the snow, the leaves, the
+  // kicker) while the pick is on Auto.
+  const seasonGuess = () =>
+    guessAdSeason({
+      content: { badge, hook, offerAmount, offerDetail, subhead, proof, primaryText, headline: metaHeadline, description: metaDescription },
+      savedAt: Date.now(),
+      market: intake?.service_area || client.market || '',
+    })
+  const seasonToSave = () => season || seasonGuess().season
+
   // Reload the bitmaps whenever a pick changes.
   useEffect(() => {
     let cancelled = false
@@ -1110,10 +1142,10 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     // is same-origin and so cannot taint the canvas that toBlob() has to read.
     const bitmap = async (path) => (path ? loadImage(await resolveImageSrc(client.id, path)) : null)
 
-    Promise.all([bitmap(backgroundPath), bitmap(logoPath), bitmap(afterPath)])
-      .then(([background, logo, after]) => {
+    Promise.all([bitmap(backgroundPath), bitmap(logoPath), bitmap(afterPath), bitmap(stockPath(cutout))])
+      .then(([background, logo, after, cutoutImage]) => {
         if (cancelled) return
-        setAssets({ background, logo, after })
+        setAssets({ background, logo, after, cutoutImage })
         setError('')
 
         if (!logo) {
@@ -1143,13 +1175,22 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     return () => {
       cancelled = true
     }
-  }, [backgroundPath, logoPath, afterPath, client.id])
+  }, [backgroundPath, logoPath, afterPath, cutout, client.id])
+
+  // What the artboards paint: the words, the colours, the look and the
+  // template extras. One object, memoised, so the template gallery repaints
+  // when something on it changes and not on every render.
+  const seasonNow = seasonToSave()
+  const paintContent = useMemo(
+    () => ({ badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, season: seasonNow }),
+    [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, seasonNow]
+  )
 
   // Repaint every artboard on any change. Fonts must be ready first or the
   // first paint measures with a fallback face and wraps differently.
   useEffect(() => {
     let cancelled = false
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus }
+    const content = paintContent
     ensureFonts().then(() => {
       if (cancelled) return
       SIZES.forEach((size, i) => {
@@ -1160,12 +1201,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     return () => {
       cancelled = true
     }
-  }, [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, assets, safeMode, guides])
+  }, [paintContent, assets, safeMode, guides])
 
   // Guides are a preview aid. Repaint clean, export, then put them back, so a
   // saved PNG can never carry the red bands into the ad account.
   const withoutGuides = (fn) => async (...args) => {
-    const content = { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus }
+    const content = paintContent
     const repaint = (g) =>
       SIZES.forEach((size, i) => {
         const c = refs.current[i]
@@ -1216,6 +1257,11 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     setLogoPath(r.logoPath)
     setSafeMode(r.safeMode)
     setSeason(r.season || '')
+    setKicker(r.kicker || '')
+    setSticker(r.sticker || '')
+    setOffers(r.offers || [])
+    setCutout(r.cutout || '')
+    setTheme(r.theme || '')
     setSaved('')
     setError('')
     setTab('design')
@@ -1250,15 +1296,6 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
 
   // Saves all three sizes back into the same public bucket. Public is exactly
   // what Meta's image uploader needs: it fetches the bytes with no auth.
-  // The label a save writes: the pick, or a guess from the words and the date.
-  const seasonGuess = () =>
-    guessAdSeason({
-      content: { badge, hook, offerAmount, offerDetail, subhead, proof, primaryText, headline: metaHeadline, description: metaDescription },
-      savedAt: Date.now(),
-      market: intake?.service_area || client.market || '',
-    })
-  const seasonToSave = () => season || seasonGuess().season
-
   const contentNow = () => ({
     season: seasonToSave(),
     badge,
@@ -1278,6 +1315,11 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     primaryText,
     headline: metaHeadline,
     description: metaDescription,
+    kicker,
+    sticker,
+    offers,
+    cutout,
+    theme,
   })
 
   // Writes the artboards over the saved ad that was opened for editing.
@@ -1344,26 +1386,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         await saveAdRecipe({
           clientId: client.id,
           stamp,
-          content: {
-            season: seasonToSave(),
-            badge,
-            hook,
-            offerAmount,
-            offerDetail,
-            subhead,
-            proof,
-            accent,
-            badgeColor,
-            hookPlate,
-            subheadPlate,
-            layout,
-            bgColor,
-            photo,
-            focus,
-            primaryText,
-            headline: metaHeadline,
-            description: metaDescription,
-          },
+          content: contentNow(),
           backgroundPath,
           backgroundPath2: afterPath,
           logoPath,
@@ -1424,6 +1447,11 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           primaryText: set.primaryText || '',
           headline: set.headline || '',
           description: set.description || '',
+          kicker: '',
+          sticker: '',
+          offers: [],
+          cutout: '',
+          theme: '',
         }
         // Stamps a millisecond apart keep the three ads distinct on the Saved tab.
         const stamp = Date.now() + s
@@ -1513,6 +1541,17 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       words: { badge, hook, offerAmount, offerDetail, subhead, proof, primaryText, headline: metaHeadline, description: metaDescription },
       colours: { accent, badgeColor },
       panel: panel === 'none' ? 'none' : panel === 'hook' ? 'behind hook and subhead' : 'behind subhead only',
+      template_extras: isTemplate(layout)
+        ? {
+            kicker: kicker || `(auto: ${kickerFor({ season: seasonNow })})`,
+            sticker: sticker || '(none)',
+            offer_tiles: offers.length ? offers : '(the main offer as one tile)',
+            equipment: cutout || 'none',
+            background: theme || `(auto: ${themeFor({ layout, season: seasonNow })})`,
+            equipment_choices: [...CUTOUTS.map((c) => c.key), 'stock:<path> from the stock library'],
+            background_choices: THEME_LAYOUTS.map((t) => t.key),
+          }
+        : undefined,
       photo: backgroundPath || 'none picked',
       after_photo: layout === 'before' ? afterPath || 'none picked (the before-and-after look needs one)' : undefined,
       logo: logoPath ? 'set' : 'none',
@@ -1543,10 +1582,15 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
             accent: { type: 'string' },
             badgeColor: { type: 'string' },
             panel: { type: 'string', enum: ['none', 'hook', 'subhead'], description: 'A card behind the words: none, behind the hook and subhead, or behind the subhead only' },
+            kicker: { type: 'string', description: 'Templates only: the shout above the headline (FALL SPECIAL, MASSIVE DEALS). Empty means the season\'s.' },
+            sticker: { type: 'string', description: 'Templates only: the words in the starburst or seal (EASY FINANCING, 24/7). Empty means none.' },
+            offers: { type: 'array', description: 'Templates only: up to four offer tiles. Empty means the main offer as one tile.', items: { type: 'object', properties: { amount: { type: 'string' }, detail: { type: 'string' } } } },
+            cutout: { type: 'string', description: `Templates only: the equipment in the corner: none, ${CUTOUTS.map((c) => c.key).join(', ')}, or stock:<path> from the stock library.` },
+            theme: { type: 'string', description: `Templates only: the painted background: auto, ${THEME_LAYOUTS.map((t) => t.key).join(', ')}.` },
           },
         },
         run: (i) => {
-          const setters = { badge: setBadge, hook: setHook, offerAmount: setOfferAmount, offerDetail: setOfferDetail, subhead: setSubhead, proof: setProof, primaryText: setPrimaryText, headline: setMetaHeadline, description: setMetaDescription }
+          const setters = { badge: setBadge, hook: setHook, offerAmount: setOfferAmount, offerDetail: setOfferDetail, subhead: setSubhead, proof: setProof, primaryText: setPrimaryText, headline: setMetaHeadline, description: setMetaDescription, kicker: setKicker, sticker: setSticker }
           const changed = []
           for (const [key, fn] of Object.entries(setters)) {
             if (typeof i[key] === 'string') { fn(i[key]); changed.push(key) }
@@ -1554,12 +1598,28 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           if (typeof i.accent === 'string' && /^#[0-9a-f]{6}$/i.test(i.accent)) { setAccent(i.accent); setFromLogo(false); changed.push('accent') }
           if (typeof i.badgeColor === 'string' && /^#[0-9a-f]{6}$/i.test(i.badgeColor)) { setBadgeColor(i.badgeColor); setFromLogo(false); changed.push('badgeColor') }
           if (['none', 'hook', 'subhead'].includes(i.panel)) { choosePanel(i.panel); changed.push('panel') }
+          if (Array.isArray(i.offers)) {
+            setOffers(i.offers.slice(0, 4).map((o) => ({ amount: String(o?.amount || ''), detail: String(o?.detail || '') })))
+            changed.push('offers')
+          }
+          if (typeof i.cutout === 'string') {
+            const key = i.cutout.trim()
+            if (key === '' || key === 'none') { setCutout(''); changed.push('cutout') }
+            else if (CUTOUTS.some((c) => c.key === key) || key.startsWith('stock:')) { setCutout(key); changed.push('cutout') }
+            else return { error: `No equipment called ${key}. Choices: none, ${CUTOUTS.map((c) => c.key).join(', ')}, stock:<path>.` }
+          }
+          if (typeof i.theme === 'string') {
+            const key = i.theme.trim()
+            if (key === '' || key === 'auto') { setTheme(''); changed.push('theme') }
+            else if (THEME_LAYOUTS.some((t) => t.key === key)) { setTheme(key); changed.push('theme') }
+            else return { error: `No background called ${key}. Choices: auto, ${THEME_LAYOUTS.map((t) => t.key).join(', ')}.` }
+          }
           return { ok: true, changed }
         },
       },
       {
         name: 'studio_look',
-        description: `Switch the look: ${LAYOUTS.map((l) => `${l.key} (${l.label})`).join(', ')}.`,
+        description: `Switch the look. Photo looks: ${PHOTO_LOOKS.map((l) => `${l.key} (${l.label})`).join(', ')}. Templates (painted seasonal posters with SALE, prices, stickers and equipment; they read kicker, sticker, offers, cutout and theme): ${LAYOUTS.filter((l) => l.group === 'template').map((l) => `${l.key} (${l.label}: ${l.hint})`).join('; ')}.`,
         input_schema: { type: 'object', properties: { look: { type: 'string', enum: LAYOUTS.map((l) => l.key) } }, required: ['look'] },
         run: ({ look }) => {
           if (!LAYOUTS.some((l) => l.key === look)) return { error: `No look called ${look}.` }
@@ -1765,7 +1825,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid md:grid-cols-2 gap-3">
         <AdImagePicker
-          label={layout === 'before' ? 'Before photo' : 'Background photo'}
+          label={layout === 'before' ? 'Before photo' : isTemplate(layout) && !FOCUS_LAYOUTS.includes(layout) ? 'Background photo (this template paints its own)' : 'Background photo'}
           client={client}
           files={files}
           value={backgroundPath}
@@ -1974,9 +2034,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       </details>
 
       <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg" data-look-row>
-        <span className="text-xs font-medium text-slate-600">Look</span>
+        <span className="text-xs font-medium text-slate-600">Photo looks</span>
         <div className="flex flex-wrap gap-1">
-          {LAYOUTS.map((l) => (
+          {PHOTO_LOOKS.map((l) => (
             <button
               key={l.key}
               onClick={() => setLayout(l.key)}
@@ -1998,7 +2058,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
               const keys = LAYOUTS.map((l) => l.key).filter((k) => k !== 'ai')
               setLayout(keys[(keys.indexOf(layout) + 1) % keys.length])
             }}
-            title="Cycle through the looks with the words as they are"
+            title="Cycle through every look and template with the words as they are"
             className="px-2.5 py-1 rounded text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 hover:bg-orange-100"
             data-next-look
           >
@@ -2021,6 +2081,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           <p className="text-[11px] text-slate-500 basis-full">
             A finished ad made by AI from this brief, used whole; the words on it are its own. Pick one from the
             concepts below. On the square and the Story the concept sits on a blurred copy of itself.
+          </p>
+        )}
+        {isTemplate(layout) && (
+          <p className="text-[11px] text-slate-500 basis-full">
+            {LAYOUTS.find((l) => l.key === layout)?.label}: {LAYOUTS.find((l) => l.key === layout)?.hint}.
+            {FOCUS_LAYOUTS.includes(layout) ? ' Drag the photo on any artboard to choose what the crop keeps.' : ' The background is painted; the photo picker is kept for when you switch look.'}
           </p>
         )}
         {layout === 'card' && (
@@ -2047,6 +2113,115 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           </>
         )}
       </div>
+
+      <TemplateGallery content={paintContent} assets={assets} safeMode={safeMode} layout={layout} onPick={setLayout} />
+
+      {isTemplate(layout) && (
+        <div className="space-y-3 rounded-lg border border-orange-200 bg-orange-50/40 p-3" data-template-fields>
+          <div className="grid md:grid-cols-2 gap-2">
+            <Field
+              label="Kicker"
+              value={kicker}
+              onChange={setKicker}
+              hint={`the shout above the headline; empty paints "${kickerFor({ season: seasonNow })}"`}
+            />
+            <Field label="Sticker" value={sticker} onChange={setSticker} hint="the words in the starburst or seal: EASY FINANCING, 24/7" />
+          </div>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Offer tiles <span className="font-normal text-slate-400">up to four prices; empty uses the offer above as the one tile</span>
+              </label>
+              {offers.length < 4 && (
+                <button
+                  type="button"
+                  onClick={() => setOffers((o) => [...o, { amount: '', detail: '' }])}
+                  className="text-[11px] text-blue-700 hover:text-blue-900 whitespace-nowrap"
+                  data-add-offer
+                >
+                  + Add a tile
+                </button>
+              )}
+            </div>
+            {offers.length > 0 && (
+              <div className="space-y-1">
+                {offers.map((o, i) => (
+                  <div key={i} className="grid grid-cols-[110px_1fr_auto] gap-1 items-center" data-offer-tile>
+                    <input
+                      value={o.amount}
+                      onChange={(e) => setOffers((list) => list.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
+                      placeholder="$89"
+                      aria-label={`Tile ${i + 1} amount`}
+                      className="px-2 py-1.5 border border-slate-300 rounded text-sm font-semibold"
+                    />
+                    <input
+                      value={o.detail}
+                      onChange={(e) => setOffers((list) => list.map((x, j) => (j === i ? { ...x, detail: e.target.value } : x)))}
+                      placeholder="Furnace tune-up"
+                      aria-label={`Tile ${i + 1} detail`}
+                      className="px-2 py-1.5 border border-slate-300 rounded text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setOffers((list) => list.filter((_, j) => j !== i))}
+                      className="px-1 text-[11px] text-slate-400 hover:text-red-600"
+                      title="Remove this tile"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-1 text-xs text-slate-600" data-theme-row>
+            <span className="mr-0.5">Background</span>
+            {[{ key: '', label: `Auto (${THEME_LAYOUTS.find((t) => t.key === themeFor({ layout, season: seasonNow }))?.label || 'Brand colour'})` }, ...THEME_LAYOUTS].map((t) => (
+              <button
+                key={t.key || 'auto'}
+                type="button"
+                onClick={() => setTheme(t.key)}
+                aria-pressed={theme === t.key}
+                data-theme={t.key || 'auto'}
+                className={chipClass(theme === t.key)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1 text-xs text-slate-600" data-cutout-row>
+            <span className="mr-0.5">Equipment</span>
+            {[{ key: '', label: 'None' }, ...CUTOUTS].map((c) => (
+              <button
+                key={c.key || 'none'}
+                type="button"
+                onClick={() => setCutout(c.key)}
+                aria-pressed={cutout === c.key}
+                data-cutout={c.key || 'none'}
+                className={chipClass(cutout === c.key)}
+              >
+                {c.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setStockOpen((o) => !o)}
+              aria-pressed={cutout.startsWith('stock:')}
+              data-cutout="stock"
+              title="Real photos of equipment, shared by every client"
+              className={chipClass(cutout.startsWith('stock:'))}
+            >
+              {cutout.startsWith('stock:') ? `Stock: ${stockPath(cutout).split('/').pop().replace(/^\d+-/, '')}` : 'Stock library…'}
+            </button>
+          </div>
+          {stockOpen && <StockPicker value={cutout} onChange={setCutout} onClose={() => setStockOpen(false)} />}
+          <p className="text-[11px] text-slate-500">
+            The built-in equipment is drawn flat; the stock library holds real photos (a PNG with a transparent background looks
+            best) that every client can use. The badge, hook, offer, subhead and proof above all go on the template too; the proof
+            paints as five gold stars.
+          </p>
+        </div>
+      )}
 
       <ConceptsPanel
         client={client}
@@ -2080,7 +2255,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         </div>
         {/* The plate, split and AI looks already put the words on a panel, so
             the switch would be a lie there; it says so instead of doing nothing. */}
-        {['plate', 'split', 'ai'].includes(layout) ? (
+        {['plate', 'split', 'ai'].includes(layout) || isTemplate(layout) ? (
           <span className="text-xs text-slate-400" data-hook-plate title="On this look the words already sit on a solid panel">
             Panel: built into this look
           </span>
@@ -2157,7 +2332,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
                 setZoom(i)
                 setZoomPinned(true)
               }}
-              draggable={layout === 'card' || Boolean(assets.background)}
+              draggable={layout === 'card' || (FOCUS_LAYOUTS.includes(layout) && Boolean(assets.background))}
               onDragPhoto={(dx, dy) =>
                 layout === 'card'
                   ? setPhoto((p) => dragPhoto(p, dx, dy, size.h, bands.current[i]))

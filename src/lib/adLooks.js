@@ -19,7 +19,7 @@ import { readableTextOn } from './logoColours'
 import { PAD, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
 import { DEFAULT_BG, accentWord, containRect, coverRect, beforeRects, plateRects, splitRects } from './adLayout'
 
-const SLATE = '#0F172A'
+export const SLATE = '#0F172A'
 const r = (n) => Math.round(n)
 
 /** The frame's margins once the 9:16 interface bands are kept clear. */
@@ -45,7 +45,7 @@ export function frameMargins(size, safeMode) {
 }
 
 /** A cover-fit photo inside a sub-rectangle of the frame. */
-function drawCoverIn(ctx, img, rect, focus) {
+export function drawCoverIn(ctx, img, rect, focus) {
   const c = coverRect(rect.w, rect.h, img, focus)
   ctx.save()
   ctx.beginPath()
@@ -55,7 +55,7 @@ function drawCoverIn(ctx, img, rect, focus) {
   ctx.restore()
 }
 
-function scrim(ctx, x, y, w, h, stops, vertical = true) {
+export function scrim(ctx, x, y, w, h, stops, vertical = true) {
   const g = vertical ? ctx.createLinearGradient(0, y, 0, y + h) : ctx.createLinearGradient(x, 0, x + w, 0)
   for (const [at, color] of stops) g.addColorStop(at, color)
   ctx.fillStyle = g
@@ -63,7 +63,7 @@ function scrim(ctx, x, y, w, h, stops, vertical = true) {
 }
 
 /** The location badge pill, top-left of a rectangle. Returns its height. */
-function drawBadge(ctx, label, x, y, maxW, color) {
+export function drawBadge(ctx, label, x, y, maxW, color) {
   if (!label) return 0
   const text = label.trim().toUpperCase()
   setFont(ctx, '800', 22, 1.4)
@@ -81,14 +81,14 @@ function drawBadge(ctx, label, x, y, maxW, color) {
 }
 
 /** The logo fitted into a box whose top-left is given. Returns the drawn size. */
-function logoFit(logo, box) {
+export function logoFit(logo, box) {
   if (!logo) return null
   const scale = Math.min(box / logo.width, box / logo.height)
   return { w: logo.width * scale, h: logo.height * scale }
 }
 
 /** A small white pill behind a logo, so a dark logo survives a dark photo. */
-function drawLogoPill(ctx, logo, x, y, box, { align = 'left', bottom = false } = {}) {
+export function drawLogoPill(ctx, logo, x, y, box, { align = 'left', bottom = false } = {}) {
   const fit = logoFit(logo, box)
   if (!fit) return null
   const padP = 14
@@ -109,7 +109,7 @@ function drawLogoPill(ctx, logo, x, y, box, { align = 'left', bottom = false } =
 // it; drawn where the look says.
 // ---------------------------------------------------------------------------
 
-function measureOfferCard(ctx, { offerAmount, offerDetail, proof }, maxW, { ink = SLATE, accent } = {}) {
+export function measureOfferCard(ctx, { offerAmount, offerDetail, proof }, maxW, { ink = SLATE, accent } = {}) {
   const amount = offerAmount?.trim() || ''
   const detail = offerDetail?.trim() || ''
   const proofText = proof?.trim() || ''
@@ -141,7 +141,7 @@ function measureOfferCard(ctx, { offerAmount, offerDetail, proof }, maxW, { ink 
   return { w: Math.min(maxW, Math.max(widestW + padC * 2, 320)), h: r(height), padC, lines }
 }
 
-function drawOfferCard(ctx, card, x, y, { align = 'left' } = {}) {
+export function drawOfferCard(ctx, card, x, y, { align = 'left' } = {}) {
   if (!card) return
   ctx.save()
   ctx.shadowColor = 'rgba(2,6,23,0.28)'

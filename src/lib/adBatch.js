@@ -11,13 +11,16 @@
  * Network (the chat call, the files) lives in adBatchStore.js.
  */
 
+import { TEMPLATE_LAYOUTS } from './adTemplateMeta.js'
+
 // The three looks a batch cycles through, in order: the three newest
 // compositions, so a batch reads as a campaign rather than one template
 // three times. The classic look stays a click away.
 export const BATCH_LOOKS = ['stack', 'plate', 'split']
 export const BATCH_SIZE = 3
 
-const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', split: 'Split panel', before: 'Before and after', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept' }
+const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', split: 'Split panel', before: 'Before and after', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept',
+  ...Object.fromEntries(TEMPLATE_LAYOUTS.map((t) => [t.key, t.label])) }
 
 export function lookName(key) {
   return LOOK_NAMES[key] || key

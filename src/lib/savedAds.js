@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient'
 import { SIZES } from './adCanvas'
 import { versioned } from './adRevise'
+import { offersToStore } from './adTemplateMeta'
 
 // Saved artboards live under ads/<client id>/<stamp>-<size>.png in the same
 // public bucket the client's other files use. The stamp is what ties the three
@@ -79,6 +80,13 @@ function recipeColumns(content, backgroundPath, logoPath, safeMode, backgroundPa
     // Season label (src/lib/adSeason.js): spring, summer, fall, winter,
     // holiday or all. Guessed at save time, changeable in the gallery.
     season: content.season || null,
+    // The template extras (src/lib/adTemplates.js). Null when at the
+    // template's own default, and on every photo look.
+    kicker: content.kicker || null,
+    sticker: content.sticker || null,
+    offers: offersToStore(content.offers),
+    cutout: content.cutout || null,
+    theme: content.theme || null,
   }
 }
 
@@ -175,6 +183,11 @@ export function recipeToContent(row) {
     logoPath: row.logo_path || '',
     safeMode: row.safe_mode || 'reels',
     season: row.season || '',
+    kicker: row.kicker || '',
+    sticker: row.sticker || '',
+    offers: Array.isArray(row.offers) ? row.offers : [],
+    cutout: row.cutout || '',
+    theme: row.theme || '',
   }
 }
 
