@@ -90,7 +90,7 @@ A batch takes about a minute and costs roughly 35 cents at list prices. The imag
 
 Review every concept before saving: generated text can still misspell or add a word, and a likeness is never guaranteed. Never use a concept that shows a made-up customer or a testimonial.
 
-Secrets: `HIGGSFIELD_API_KEY_ID` and `HIGGSFIELD_API_KEY_SECRET` (the same pair the AI video B-roll uses), from console.higgsfield.ai. Until they are set, the button says so.
+Secrets: `HIGGSFIELD_API_KEY_ID` and `HIGGSFIELD_API_KEY_SECRET`, from console.higgsfield.ai. Until they are set, the button says so.
 
 ## Where the code is
 

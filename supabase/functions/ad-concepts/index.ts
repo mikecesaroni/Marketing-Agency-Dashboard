@@ -18,8 +18,7 @@
 // (no invented phone numbers), the business name is spelled out, and the
 // real owner and van come from the reference photos.
 //
-// Secrets: HIGGSFIELD_API_KEY_ID and HIGGSFIELD_API_KEY_SECRET (the same
-// pair the ai-video function uses for B-roll). Cost is roughly $0.08 to
+// Secrets: HIGGSFIELD_API_KEY_ID and HIGGSFIELD_API_KEY_SECRET . Cost is roughly $0.08 to
 // $0.10 an image at list prices.
 //
 // Deployed with verify_jwt = true; the browser calls it with the anon key.

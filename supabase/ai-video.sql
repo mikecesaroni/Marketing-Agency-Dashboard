@@ -1,3 +1,7 @@
+-- RETIRED 2026-10-15: the AI videos feature was taken out of the CRM (the panel,
+-- the Make AI video button, the ai-video function source). These tables and
+-- the deployed function were left in place; drop them by hand if wanted.
+
 -- AI videos: one real recording per owner, then the CRM makes the weekly ads.
 --
 -- The owner records a short base clip once (talking to camera) and agrees in

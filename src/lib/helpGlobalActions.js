@@ -49,7 +49,7 @@ export function globalHelpTools({ navigate }) {
     },
     {
       name: 'open_client',
-      description: "Open a client's page (their intake, ads, files, AI videos, chat).",
+      description: "Open a client's page (their intake, ads, files, chat).",
       input_schema: { type: 'object', properties: { client: { type: 'string', description: 'Client name, loosely matched' } }, required: ['client'] },
       run: async ({ client }) => {
         const f = await findClient(client)
