@@ -18,10 +18,10 @@ function check(name, actual, expected) {
 }
 
 check('cover is first and therefore the default', LAYOUTS[0].key, 'cover')
-check('the six photo looks, classic first (the card is retired from the row)', PHOTO_LOOKS.map((l) => l.key), ['cover', 'stack', 'plate', 'split', 'before', 'ai'])
+check('the five photo looks, classic first (the card and the AI concept are retired from the row)', PHOTO_LOOKS.map((l) => l.key), ['cover', 'stack', 'plate', 'split', 'before'])
 check('the templates follow the photo looks in the full list', LAYOUTS.map((l) => l.key), [...PHOTO_LOOKS.map((l) => l.key), ...TEMPLATE_KEYS])
 check('every look but the AI concept paints the words, the retired card included so old saved ads still edit, the templates too', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'before', 'card', ...TEMPLATE_KEYS])
-check('dragging moves the focal point on the photo looks and the photo templates', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'before', 'stay_warm', 'photo_sale', 'before_sale', 'reveal'])
+check('dragging moves the focal point on the photo looks and the photo templates', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'before', 'photo_sale', 'before_sale', 'reveal'])
 check('the before look and the two before templates take the After picker', TWO_PHOTO_LAYOUTS, ['before', 'before_sale', 'reveal'])
 
 // The headline stack's giant word.

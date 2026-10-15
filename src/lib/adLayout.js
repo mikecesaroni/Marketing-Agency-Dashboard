@@ -14,8 +14,9 @@ export const PHOTO_LOOKS = [
   { key: 'plate', label: 'Bottom plate', hint: 'photo on top, the words on a brand-colour plate below', group: 'photo' },
   { key: 'split', label: 'Split panel', hint: 'brand-colour panel with the words beside the photo', group: 'photo' },
   { key: 'before', label: 'Before and after', hint: 'two photos side by side (one above the other on the Story), Before and After labelled, the words on a plate below', group: 'photo' },
-  { key: 'ai', label: 'AI concept', hint: 'a finished ad made by AI from your brief, used as is', group: 'photo' },
 ]
+// The AI concept look (key 'ai') is retired from the row; an ad saved with it
+// still paints (adLooks.js keeps the painter).
 // Every look the Studio can paint: the photo looks, then the templates
 // (adTemplates.js: painted seasonal posters with SALE, prices, stickers and
 // a piece of equipment).

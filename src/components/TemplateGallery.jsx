@@ -14,6 +14,8 @@ const THUMB_W = 150
 export default function TemplateGallery({ content, assets, safeMode, layout, onPick }) {
   const refs = useRef({})
   const [stamp, setStamp] = useState(0)
+  // Templates where these words overlap or run past the edge (adAudit.js), flagged on the tile.
+  const [flags, setFlags] = useState({})
 
   // Debounce: fourteen full paints per keystroke would make the form sticky.
   const latest = useRef({ content, assets, safeMode })
@@ -29,11 +31,13 @@ export default function TemplateGallery({ content, assets, safeMode, layout, onP
       if (cancelled) return
       const { content: c, assets: a, safeMode: m } = latest.current
       const off = document.createElement('canvas')
+      const next = {}
       for (const t of TEMPLATE_LAYOUTS) {
         const dst = refs.current[t.key]
         if (!dst) continue
         try {
-          renderAd(off, THUMB_SIZE, { ...c, layout: t.key }, a, { safeMode: m, guides: false })
+          const out = renderAd(off, THUMB_SIZE, { ...c, layout: t.key }, a, { safeMode: m, guides: false })
+          next[t.key] = (out?.problems || []).length
           dst.width = THUMB_W
           dst.height = Math.round((THUMB_W * THUMB_SIZE.h) / THUMB_SIZE.w)
           const ctx = dst.getContext('2d')
@@ -42,6 +46,7 @@ export default function TemplateGallery({ content, assets, safeMode, layout, onP
           console.warn(`Template ${t.key} did not paint:`, err.message)
         }
       }
+      setFlags(next)
     })
     return () => {
       cancelled = true
@@ -63,15 +68,17 @@ export default function TemplateGallery({ content, assets, safeMode, layout, onP
             key={t.key}
             type="button"
             onClick={() => onPick(t.key)}
-            title={t.hint}
+            title={flags[t.key] ? `${t.hint}. With these words something overlaps on this template.` : t.hint}
             data-look={t.key}
             data-template={t.key}
+            data-tile-problems={flags[t.key] || 0}
             aria-pressed={layout === t.key}
-            className={`flex-shrink-0 rounded-lg border-2 p-1 text-left transition ${
+            className={`relative flex-shrink-0 rounded-lg border-2 p-1 text-left transition ${
               layout === t.key ? 'border-slate-900 bg-white' : 'border-transparent hover:border-slate-400'
             }`}
           >
             <canvas ref={(el) => (refs.current[t.key] = el)} className="block rounded bg-slate-200" style={{ width: THUMB_W }} />
+            {flags[t.key] > 0 && <span className="absolute right-2 top-2 rounded bg-amber-400 px-1 text-[10px] font-bold text-slate-900" title="Something overlaps with these words">⚠</span>}
             <span className={`mt-1 block text-[11px] font-medium ${layout === t.key ? 'text-slate-900' : 'text-slate-600'}`}>{t.label}</span>
           </button>
         ))}

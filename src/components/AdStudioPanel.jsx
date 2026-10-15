@@ -20,11 +20,11 @@ import TemplateGallery from './TemplateGallery'
 import SeasonPlaybook from './SeasonPlaybook'
 import { bestTemplates, phaseOf, pickTemplate } from '../lib/seasonPlaybook'
 import { findBeforeAfterPairs } from '../lib/beforeAfterStore'
+import { auditLine } from '../lib/adAudit'
 import { CUTOUTS, TEMPLATE_LAYOUTS, THEME_LAYOUTS, isTemplate, kickerFor, themeFor } from '../lib/adTemplateMeta'
 import { stockPath } from '../lib/stockLibrary'
 import { prepareLogo } from '../lib/logoCutout'
 import { resolveImageSrc } from '../lib/driveAssets'
-import { conceptUrl, createConcepts, deleteConcept, fetchConcepts, refreshConcept } from '../lib/adConceptsStore'
 import { heicToJpegBlob, isHeic, jpegName, jpegPath, toUploadable } from '../lib/imageUpload'
 import { makeAdBatch } from '../lib/adBatchStore'
 import { looseMatch } from '../lib/helpActions'
@@ -597,143 +597,6 @@ function BatchStrip({ batch, client, count, saving, onShow, onSave, onRetry, onD
  * like any other ad. The batches persist per client, so a good one from
  * last week is still here.
  */
-function ConceptsPanel({ client, brief, refPaths, hasLogo, onPick, picked }) {
-  const [batches, setBatches] = useState(null)
-  const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState('')
-
-  useEffect(() => {
-    let live = true
-    fetchConcepts(client.id)
-      .then((rows) => live && setBatches(rows))
-      .catch((err) => live && setProblem(err.message))
-    return () => {
-      live = false
-    }
-  }, [client.id])
-
-  // A working batch is asked about every few seconds until it is done.
-  useEffect(() => {
-    const working = (batches || []).filter((b) => b.status === 'working' || b.status === 'queued')
-    if (working.length === 0) return undefined
-    let live = true
-    const timer = setTimeout(async () => {
-      for (const b of working) {
-        try {
-          const next = await refreshConcept(b.id)
-          if (live && next) setBatches((prev) => (prev || []).map((x) => (x.id === next.id ? next : x)))
-        } catch {
-          /* the next tick asks again */
-        }
-      }
-    }, 5000)
-    return () => {
-      live = false
-      clearTimeout(timer)
-    }
-  }, [batches])
-
-  const make = async () => {
-    setBusy(true)
-    setProblem('')
-    try {
-      const row = await createConcepts({ clientId: client.id, brief: { ...brief, notes: note }, refPaths, hasLogo })
-      setBatches((prev) => [row, ...(prev || [])])
-    } catch (err) {
-      setProblem(err.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const remove = async (b) => {
-    if (!confirm('Delete this batch of concepts?')) return
-    try {
-      await deleteConcept(b)
-      setBatches((prev) => (prev || []).filter((x) => x.id !== b.id))
-    } catch (err) {
-      setProblem(err.message)
-    }
-  }
-
-  const ready = Boolean(brief.hook?.trim() || brief.offerAmount?.trim() || brief.offerDetail?.trim())
-
-  return (
-    <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50/60 p-3" data-concepts>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold text-violet-900">✨ AI concepts</span>
-        <span className="text-[11px] text-violet-800/80">
-          Four finished ads from these words, the brand colours, the logo and the photo, each a different scene. Pick one and it becomes the AI concept look.
-        </span>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Direction, optional: owner at the front door, the van in shot, snow on the ground…"
-          className="min-w-[16rem] flex-1 rounded border border-violet-200 bg-white px-2 py-1.5 text-xs"
-          data-concept-note
-        />
-        <button
-          onClick={make}
-          disabled={busy || !ready}
-          title={ready ? 'About a minute, roughly 35 cents for four' : 'Type a hook or an offer first'}
-          className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50"
-          data-make-concepts
-        >
-          {busy ? 'Sending the brief…' : 'Make 4 concepts'}
-        </button>
-        <span className="text-[11px] text-violet-800/70">
-          {refPaths.length > 0 ? `${refPaths.length} reference ${refPaths.length === 1 ? 'image' : 'images'} go with it` : 'No logo or photo picked, so it invents a technician'}
-        </span>
-      </div>
-      {problem && <p className="text-xs text-red-700">{problem}</p>}
-      {batches === null ? null : batches.length === 0 ? null : (
-        <div className="space-y-2">
-          {batches.map((b) => (
-            <div key={b.id} className="rounded border border-violet-100 bg-white p-2" data-concept-batch data-status={b.status}>
-              <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                <span className="font-semibold text-slate-800">{new Date(b.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-                {b.status === 'done' ? (
-                  <span className="rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-green-800">{(b.paths || []).length} concepts</span>
-                ) : b.status === 'failed' ? (
-                  <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-red-700" title={b.error || ''}>
-                    Failed{b.error ? `: ${b.error}` : ''}
-                  </span>
-                ) : (
-                  <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-amber-800 animate-pulse">Making {b.batch} concepts… about a minute</span>
-                )}
-                <span className="truncate text-slate-400">{b.brief?.hook}</span>
-                <button onClick={() => remove(b)} className="ml-auto text-slate-400 hover:text-red-600">
-                  Delete
-                </button>
-              </div>
-              {b.status === 'done' && (
-                <div className="grid grid-cols-4 gap-2">
-                  {(b.paths || []).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => onPick(p)}
-                      title="Use this concept as the ad"
-                      className={`relative aspect-[4/5] overflow-hidden rounded border-2 transition ${picked === p ? 'border-violet-600 ring-2 ring-violet-200' : 'border-transparent hover:border-violet-300'}`}
-                      data-concept-pick
-                    >
-                      <img src={conceptUrl(p)} alt="AI concept" className="h-full w-full object-cover" />
-                      {picked === p && <span className="absolute right-1 top-1 rounded-full bg-violet-600 px-1.5 text-[10px] font-semibold text-white">in use</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function proofFromIntake(intake) {
   const rating = intake?.reviews_star_rating
   if (!rating) return ''
@@ -846,6 +709,11 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   const [suggestion, setSuggestion] = useState(null)
   // The before-and-after finder: { status: 'working' | 'done' | 'error', pairs, looked, how, error }.
   const [finder, setFinder] = useState(null)
+  // THE OVERLAP AUDIT (src/lib/adAudit.js): per artboard, every pair of
+  // things that overlap and everything past the edge on the last paint.
+  // Nothing saves while this has entries, short of "Save anyway".
+  const [problems, setProblems] = useState([])
+  const [saveAnyway, setSaveAnyway] = useState(false)
   const [bgColor, setBgColor] = useState(DEFAULT_BG)
   const [photo, setPhoto] = useState(DEFAULT_PHOTO)
   // Cover layout: which spot on the photo the crop keeps. Dragging any
@@ -1224,15 +1092,26 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     const content = paintContent
     ensureFonts().then(() => {
       if (cancelled) return
+      const found = []
       SIZES.forEach((size, i) => {
         const canvas = refs.current[i]
-        if (canvas) bands.current[i] = renderAd(canvas, size, content, assets, { safeMode, guides })?.band
+        if (!canvas) return
+        const out = renderAd(canvas, size, content, assets, { safeMode, guides })
+        bands.current[i] = out?.band
+        found[i] = out?.problems || []
+        // For the tests, and for anyone poking at the page.
+        canvas.dataset.size = size.key
+        canvas.dataset.problems = JSON.stringify(found[i])
       })
+      setProblems((prev) => (JSON.stringify(prev) === JSON.stringify(found) ? prev : found))
+      setSaveAnyway(false)
     })
     return () => {
       cancelled = true
     }
   }, [paintContent, assets, safeMode, guides])
+  const overlapLines = problems.map((list, i) => (list?.length ? auditLine(list, SIZES[i].label) : '')).filter(Boolean)
+  const blocked = overlapLines.length > 0 && !saveAnyway
 
   // Guides are a preview aid. Repaint clean, export, then put them back, so a
   // saved PNG can never carry the red bands into the ad account.
@@ -1636,6 +1515,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         leave_out: phase.avoid,
         best_templates: bestTemplates(phase, { hasPhoto: Boolean(assets.background), hasAfter: Boolean(assets.after) }).map((t) => `${t.key}: ${t.why}`),
       },
+      overlaps: overlapLines.length ? overlapLines : 'none: nothing overlaps or runs past the edge',
       template_for_these_words: `${livePick.key}: ${livePick.reason}`,
       last_applied_pick: suggestion ? `${suggestion.key}: ${suggestion.reason}` : 'none',
       before_after_finder: finder ? { status: finder.status, pairs: (finder.pairs || []).map((p) => `${p.before.name} -> ${p.after.name} (${p.what})`), error: finder.error } : 'not run',
@@ -2256,12 +2136,6 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
             </p>
           </>
         )}
-        {layout === 'ai' && (
-          <p className="text-[11px] text-slate-500 basis-full">
-            A finished ad made by AI from this brief, used whole; the words on it are its own. Pick one from the
-            concepts below. On the square and the Story the concept sits on a blurred copy of itself.
-          </p>
-        )}
         {isTemplate(layout) && (
           <p className="text-[11px] text-slate-500 basis-full">
             {LAYOUTS.find((l) => l.key === layout)?.label}: {LAYOUTS.find((l) => l.key === layout)?.hint}.
@@ -2415,17 +2289,6 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         </div>
       )}
 
-      <ConceptsPanel
-        client={client}
-        brief={{ badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, industry: client.industry, market: client.market }}
-        refPaths={[logoPath, backgroundPath].filter((p, i, all) => p && !p.startsWith('drive:') && !p.startsWith('concepts/') && all.indexOf(p) === i)}
-        hasLogo={Boolean(logoPath && !logoPath.startsWith('drive:'))}
-        picked={layout === 'ai' ? backgroundPath : ''}
-        onPick={(path) => {
-          setBackgroundPath(path)
-          setLayout('ai')
-        }}
-      />
 
       <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
         <span className="text-xs font-medium text-slate-600">9:16 safe area</span>
@@ -2541,6 +2404,19 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         ))}
       </div>
 
+      {overlapLines.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900" data-overlap-warning>
+          <p className="font-semibold">Something would be cut off. Not saved until it is fixed.</p>
+          {overlapLines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+          <label className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-800">
+            <input type="checkbox" checked={saveAnyway} onChange={(e) => setSaveAnyway(e.target.checked)} className="rounded" data-save-anyway />
+            I have looked and it is fine; let me save anyway
+          </label>
+        </div>
+      )}
+
       {zoom !== null && refs.current[zoom] && (
         <ZoomedArtboard
           source={refs.current[zoom]}
@@ -2573,11 +2449,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         </label>
         <button
           onClick={editing ? saveOver : saveAll}
-          disabled={saving}
-          title={editing ? 'Writes these artboards over the saved ad you opened. Nothing is duplicated.' : undefined}
+          disabled={saving || blocked}
+          title={blocked ? 'Something overlaps or runs past the edge (see the warning above the buttons). Fix it, or tick "save anyway".' : editing ? 'Writes these artboards over the saved ad you opened. Nothing is duplicated.' : undefined}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+          data-save-button
         >
-          {saving ? 'Saving...' : editing ? 'Save changes' : 'Save all 3 sizes'}
+          {saving ? 'Saving...' : blocked ? 'Fix the overlap to save' : editing ? 'Save changes' : 'Save all 3 sizes'}
         </button>
         {editing && (
           <>

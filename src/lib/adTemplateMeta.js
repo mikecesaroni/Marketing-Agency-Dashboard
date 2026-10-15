@@ -10,7 +10,6 @@
 export const TEMPLATE_LAYOUTS = [
   { key: 'winter_shout', label: 'Winter shout', hint: 'snow, the logo up top, a giant outlined offer, the unit standing in the drift', theme: 'snow' },
   { key: 'massive_deal', label: 'Massive deal', hint: 'a warm glow with flames, MASSIVE DEALS in two tones, a price that fills the frame, a seal and a SALE star', theme: 'glow' },
-  { key: 'stay_warm', label: 'Stay warm', hint: 'the photo under a diagonal in the accent colour, a headline stack beside it, a band of offers along the bottom', photo: true },
   { key: 'price_grid', label: 'Price grid', hint: 'a script season word, a big SALE headline, a grid of up to four prices beside the unit', theme: 'paper' },
   { key: 'fall_special', label: 'Fall special', hint: 'leaves, a script "Fall", two offers stacked with OR between, a seal, the unit', theme: 'leaves' },
   { key: 'season_sale', label: 'Season sale', hint: 'the season painted behind a huge SALE, the offer, the unit, a starburst sticker' },
@@ -46,7 +45,6 @@ export function isLookKey(key) {
 export const TEMPLATE_SHAPES = {
   winter_shout: { wins: 'a winter offer with a dollar amount; the be-ready-for-winter poster', needs: 'a short kicker, a dollar offer, a headline of six to ten words' },
   massive_deal: { wins: 'a loud replacement or install deal with a big price', needs: 'a kicker like MASSIVE DEALS or WINTER SALE, a dollar offer, a one-line sticker' },
-  stay_warm: { wins: 'a photo of the owner or the crew with two to four prices', needs: 'a headline, a subhead, two to four offer tiles' },
   price_grid: { wins: 'several services with a price each (tune-up, plan, install)', needs: 'two to four offer tiles with a price and a line each, a headline' },
   fall_special: { wins: 'a fall offer with two choices (this OR that)', needs: 'two offer tiles, a short headline, a one-line sticker' },
   season_sale: { wins: 'a seasonal sale: the season word and SALE huge', needs: 'a kicker ending in SALE or DEALS, a dollar offer, a headline' },

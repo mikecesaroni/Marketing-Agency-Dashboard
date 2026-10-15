@@ -206,7 +206,9 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     const out = hasTemplate(layout) ? renderTemplate(lctx, size, full, assets, { safeMode }) : renderLook(lctx, size, full, assets, { safeMode })
     if (opts.guides) drawGuides(lctx, w, h, safeTop, safeBottom, safeSide, safeOn)
     lctx.letterSpacing = '0px'
-    return { canvas, band: out?.band }
+    // The overlap audit (adAudit.js): every pair of things that overlap and
+    // everything past the edge, for the Studio to show before a save.
+    return { canvas, band: out?.band, problems: out?.problems || [] }
   }
 
   // On the card layout the text sits on the chosen colour, not on a scrimmed

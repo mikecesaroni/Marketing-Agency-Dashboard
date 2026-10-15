@@ -631,7 +631,6 @@ export function pickTemplate({ phase, content = {}, hasPhoto = false, hasAfter =
   if (WORDS.holiday.test(text) || phase?.season === 'holiday') add('holiday_deals', 9, 'it is the holidays')
   if (offers.length >= 2) {
     add('price_grid', 12, `${offers.length} prices want a grid`)
-    add('stay_warm', 7, 'several prices fit the band')
     add('photo_sale', 5, 'several prices fit the band')
     add('before_sale', 3)
     add('fall_special', offers.length === 2 ? 4 : 0, 'two offers stack with OR between')
@@ -648,7 +647,6 @@ export function pickTemplate({ phase, content = {}, hasPhoto = false, hasAfter =
   }
   if (hasPhoto && !hasAfter) {
     add('photo_sale', 6, 'there is a photo to show')
-    add('stay_warm', 5, 'there is a photo to show')
   }
   for (const k of PHOTO_TEMPLATES) {
     if (!hasPhoto) add(k, -30)

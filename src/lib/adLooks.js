@@ -64,11 +64,29 @@ export function scrim(ctx, x, y, w, h, stops, vertical = true) {
 }
 
 /** The location badge pill, top-left of a rectangle. Returns its height. */
+/** The badge's size for its words and room, the words shrunk to fit the room (never past the box). */
+export function badgeSize(ctx, label, maxW) {
+  const text = String(label || '').trim().toUpperCase()
+  if (!text) return { w: 0, h: 0, px: 22 }
+  let px = 22
+  let tracking = 1.4
+  setFont(ctx, '800', px, tracking)
+  let textW = ctx.measureText(text).width
+  while (textW + 38 > maxW && px > 13) {
+    px -= 1
+    tracking = px >= 18 ? 1.4 : 0.6
+    setFont(ctx, '800', px, tracking)
+    textW = ctx.measureText(text).width
+  }
+  return { w: Math.min(textW + 38, maxW), h: 52, px, tracking }
+}
+
 export function drawBadge(ctx, label, x, y, maxW, color) {
-  if (!label) return 0
+  if (!label || !String(label).trim()) return 0
   const text = label.trim().toUpperCase()
-  setFont(ctx, '800', 22, 1.4)
-  const boxW = Math.min(ctx.measureText(text).width + 38, maxW)
+  const size = badgeSize(ctx, text, maxW)
+  setFont(ctx, '800', size.px, size.tracking)
+  const boxW = size.w
   const boxH = 52
   ctx.fillStyle = color
   roundRect(ctx, x, y, boxW, boxH, 8)

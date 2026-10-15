@@ -1,3 +1,8 @@
+-- RETIRED 2026-10-15: the AI concepts box and the AI concept look were taken
+-- off the Studio (the panel, the store, the ad-concepts function source).
+-- The table and the deployed function were left in place; the saved_ads.layout
+-- check below was later replaced by a regex check (see saved-ads.sql).
+
 -- AI ad concepts: batches of finished ads made by Higgsfield's Ads Studio
 -- from the Studio's brief, so a client's ads stop looking like one template.
 --
