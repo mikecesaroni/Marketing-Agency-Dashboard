@@ -12,6 +12,7 @@
  */
 
 import { TEMPLATE_LAYOUTS } from './adTemplateMeta.js'
+import { pickTemplate } from './seasonPlaybook.js'
 
 // The looks a batch cycles through, in order, matched to the angles the
 // prompt asks for: the offer on a poster that shouts the price, the time of
@@ -28,9 +29,34 @@ export function lookName(key) {
   return LOOK_NAMES[key] || key
 }
 
-/** Each set gets a look, round robin, unless it already carries one. */
+/** Each set gets a look, round robin, unless it already carries one. The fallback when there is no playbook. */
 export function assignLooks(sets) {
   return (sets || []).map((s, i) => ({ ...s, layout: s.layout || BATCH_LOOKS[i % BATCH_LOOKS.length] }))
+}
+
+/**
+ * A look for every set from the season playbook: each set gets the template
+ * that scores best for its words at this time of year (financing words to
+ * the financing template, a tune-up to the tune-up poster, two prices to
+ * the grid), no template twice, and the proof ad goes on the owner's photo
+ * (the Headline stack) when there is a photo to put it on. A set that
+ * already carries a look keeps it.
+ */
+export function chooseLooks(sets, { phase, hasPhoto = false, pick = pickTemplate } = {}) {
+  const used = []
+  return (sets || []).map((s, i) => {
+    if (s.layout) {
+      used.push(s.layout)
+      return s
+    }
+    const angle = String(s.hookAngle || '').toLowerCase()
+    const proof = /proof|trust|review|star/.test(angle) || (i === 2 && !angle)
+    let layout
+    if (proof && hasPhoto && !used.includes('stack')) layout = 'stack'
+    else layout = pick({ phase, content: s, hasPhoto, hasAfter: false, exclude: used }).key
+    used.push(layout)
+    return { ...s, layout }
+  })
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -40,12 +66,13 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
  * already uses) carries the formats and the JSON schema; this only says how
  * many, which angles, and that the JSON is the part that matters.
  */
-export function makeAdsPrompt({ count = BATCH_SIZE, clientName, today = new Date(), photos = [] } = {}) {
+export function makeAdsPrompt({ count = BATCH_SIZE, clientName, today = new Date(), photos = [], playbook = '' } = {}) {
   const n = Math.max(1, Math.min(6, Number(count) || BATCH_SIZE))
   const month = MONTHS[today.getMonth()]
   const angles = n >= 3 ? 'the current offer, the time of year, and proof or trust' : 'the current offer and the time of year'
   const parts = [
     `Write ${n} static ads for ${clientName || 'this client'} to run now, in ${month}: ${angles}, one ad each, each a different hook.`,
+    ...(playbook ? [`SEASON PLAYBOOK, write to it: ${playbook}`] : []),
     'For every ad fill every slot of FORMAT 2 with real words: location badge, headline on image (five to eight words, the shout first: FREE, $89, SAVE), offer badge with the price first, subhead, proof strip, background note. Also the primary text, headline and description Meta shows beside the image. Leave offer_colour and badge_colour empty: the Studio takes the colours from the logo.',
     'Two more keys on every set, for the poster templates: "sticker", two or three words for a starburst or a seal (EASY FINANCING, SAME DAY, 0% FOR 18 MONTHS; "" when nothing fits), and "offers", a list of up to two {"amount","detail"} price tiles when the brief carries more than one price (the main offer first; [] otherwise). Real prices from the brief only; never invent one.',
   ]

@@ -1557,6 +1557,96 @@ function reveal(ctx, size, content, assets, opts) {
   return { band: { top: plateTop, bottom: B } }
 }
 
+/** 17. Maintenance plan: a membership card with the price a month and what is included, from the subhead. */
+function planCard(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth } = m
+  const { accent, badgeColor } = content
+  const theme = paintTheme(ctx, w, h, content)
+  const onDark = theme.ink === 'light'
+  const ink = onDark ? WHITE : SLATE
+  const foot = footer(ctx, m, content, assets, { onDark, ink, logo: 'right', maxW: 260, maxH: 90 })
+  const B = foot.top - 16
+  let y = contentTop
+  const badgeH = drawBadge(ctx, content.badge, padX, y, maxWidth, onDark ? accent : badgeColor)
+  if (badgeH) y += badgeH + 16
+  y += shout(ctx, content.hook, padX, y, maxWidth, { px: 84, minPx: 36, lines: 2, fill: ink, maxHeight: (B - y) * 0.28 }) + 18
+  // What goes on the card decides its height: the checklist rows on the
+  // left, the price block on the right, whichever is taller, so a short
+  // plan does not leave a white void. The unit stands under it when there
+  // is room.
+  const items = String(content.subhead || '')
+    .split(/\s*(?:[,;|•\n]|\.\s)\s*/)
+    .map((t) => t.trim().replace(/^(and|or|plus)\s+/i, '').replace(/\.$/, ''))
+    .filter(Boolean)
+    .slice(0, 6)
+  const amount = amountWords(content)
+  const headH = 86
+  const rowH = 62
+  const listH = items.length * rowH
+  const priceH = amount ? 120 + (content.offerDetail ? 90 : 0) : 0
+  const card = { x: padX, y, w: maxWidth, h: Math.min(B - y - 6, headH + 26 + Math.max(listH, priceH, 120) + 28) }
+  if (card.h < 200) {
+    foot.draw()
+    return { band: { top: y, bottom: B } }
+  }
+  ctx.fillStyle = 'rgba(2,6,23,0.18)'
+  roundRect(ctx, card.x + 6, card.y + 10, card.w, card.h, 24)
+  ctx.fill()
+  ctx.fillStyle = WHITE
+  roundRect(ctx, card.x, card.y, card.w, card.h, 24)
+  ctx.fill()
+  const head = badgeColor || SLATE
+  ctx.fillStyle = head
+  roundRect(ctx, card.x, card.y, card.w, headH, 24)
+  ctx.fill()
+  ctx.fillRect(card.x, card.y + headH / 2, card.w, headH / 2)
+  const st = stickerWords(content)
+  shout(ctx, kickerWords(content), card.x + 28, card.y + 16, card.w - 56 - (st ? 150 : 0), { px: 54, minPx: 26, lines: 1, fill: readableTextOn(head), tracking: 2, maxHeight: headH - 20 })
+  // The price on the right, what is included on the left.
+  const inner = { x: card.x + 32, y: card.y + headH + 26, w: card.w - 64, bottom: card.y + card.h - 28 }
+  const priceW = amount ? Math.min(inner.w * 0.42, 380) : 0
+  if (amount) {
+    const rx = inner.x + inner.w
+    let py = inner.y
+    py += shout(ctx, amount, rx, py, priceW, { px: 120, minPx: 50, lines: 1, fill: accent, align: 'right', maxHeight: (inner.bottom - py) * 0.5 })
+    shout(ctx, content.offerDetail, rx, py, priceW, { px: 36, minPx: 20, lines: 3, fill: head, align: 'right', maxHeight: (inner.bottom - py) * 0.6 })
+  }
+  const listW = inner.w - (priceW ? priceW + 30 : 0)
+  let ly = inner.y + 4
+  for (const item of items) {
+    if (ly + rowH > inner.bottom + 4) break
+    const cy = ly + rowH / 2
+    ctx.fillStyle = '#16A34A'
+    ctx.beginPath()
+    ctx.arc(inner.x + 18, cy, 16, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = WHITE
+    ctx.lineWidth = 4
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    ctx.moveTo(inner.x + 10, cy)
+    ctx.lineTo(inner.x + 16, cy + 6)
+    ctx.lineTo(inner.x + 27, cy - 7)
+    ctx.stroke()
+    const fit = fitText(ctx, typographic(item), listW - 50, 2, Math.min(32, rowH * 0.5), 18, '600', 0, { lineRatio: 1.2, maxHeight: rowH })
+    setFont(ctx, '600', fit.px, 0)
+    ctx.fillStyle = SLATE
+    drawLines(ctx, fit.lines, inner.x + 48, cy - ((fit.lines.length - 1) * fit.px * 1.2) / 2 + fit.px * 0.35, fit.px, 1.2, 'left')
+    ly += rowH
+  }
+  if (st) starburst(ctx, card.x + card.w - 70, card.y + 12, 92, st, { fill: GOLD, ink: SLATE })
+  // The unit under the card, bottom-right, when there is room for it.
+  const below = card.y + card.h + 20
+  if (hasCutout(content, assets) && B - below > 160) {
+    const cw = Math.min(maxWidth * 0.4, 420, (B - below) * 0.9)
+    drawCutout(ctx, content, assets, { x: w - padX - cw, y: below, w: cw, h: B - below })
+  }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
+}
+
 export const TEMPLATES = {
   winter_shout: winterShout,
   massive_deal: massiveDeal,
@@ -1574,6 +1664,7 @@ export const TEMPLATES = {
   photo_sale: photoSale,
   before_sale: beforeSale,
   reveal,
+  plan_card: planCard,
 }
 
 export function hasTemplate(key) {

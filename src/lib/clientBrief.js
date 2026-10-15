@@ -15,6 +15,7 @@ import { META_KNOWLEDGE } from './metaKnowledge'
 import { learningsBlock } from './adLearnings'
 import { websiteBlock } from './websiteProfile'
 import { landingPagesBlock } from './landingPages'
+import { TRADE_WORDS, phaseOf, playbookText } from './seasonPlaybook'
 
 // Below this daily budget the playbook says stay on one broad ad set. Splitting
 // a small budget across campaigns starves each of data and none exit learning.
@@ -152,6 +153,11 @@ export function buildBrief({ client, intake, ads, learnings, pages = [] }) {
   const account = client?.meta_ad_account_id
     ? `act_${client.meta_ad_account_id}`
     : 'not set in the CRM'
+  // The season playbook: the phase of the year for this trade in this
+  // market, so every answer (ads, scripts, plans) is written to it.
+  const phase = phaseOf({ industry: i.industry_trade || client?.industry || '', market: i.service_area || client?.market || '' })
+  const playbook = playbookText(phase, { tradeWords: TRADE_WORDS[phase.trade] || 'home services', market: i.service_area || client?.market || '' })
+  const bestTemplates = phase.templates.slice(0, 4).map((t) => `${t.key} (${t.why})`).join('; ')
 
   const stageLine =
     stage === 1
@@ -213,6 +219,10 @@ Proof: ${val(i.reviews_star_rating)} stars, ${val(i.reviews_count)} reviews.
   Before/after photos: ${val(i.has_before_after_photos)}. Video footage: ${val(i.has_video_footage)}. Logo: ${val(i.has_logo)}.
 Where leads go: ${val(i.leads_go_to)} (answered by ${val(i.who_answers_leads)}, response time ${val(i.response_time_to_lead)})
 CRM / booking: ${val(i.crm_system)}
+
+=== SEASON PLAYBOOK (right now, from the CRM) ===
+${playbook}
+Ad Studio templates that say it best right now: ${bestTemplates}. Pick the one that fits the ad's words: the financing template for a $0 down offer, the emergency template for a same-day call, the tune-up poster for a service price, the maintenance plan card for a membership, the price grid for several prices, a before-and-after when there are real before and after photos.
 ${websiteBlock(client) ? `\n${websiteBlock(client)}\n` : ''}${landingPagesBlock(pages) ? `\n${landingPagesBlock(pages)}\n` : ''}
 === STRUCTURE DECISION (already made, do not re-derive) ===
 ${stageLine}

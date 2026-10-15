@@ -43,6 +43,7 @@ They sit in a gallery under the Look row, every one painted small with the words
 | Photo sale | The photo full-bleed with a SALE ribbon in the corner, the offers on a band below |
 | Before and after sale | The two photos side by side (one above the other on the Story), Before and After tagged on a white print border, the kicker, the headline and the offer tiles on the season below. The After picker appears, as on the before-and-after look |
 | Before inset | The After photo whole, the Before as a small framed inset bottom-left, the words on a brand-colour plate. The After picker appears |
+| Maintenance plan | A membership card: the plan name (the kicker) on a brand-colour band, the price a month on the right, and what is included as a green checklist on the left, read from the subhead split on commas ("Two tune-ups a year, priority service, 15% off repairs") |
 
 The badge, hook, offer, subhead and proof go on every template (the proof paints as five gold stars). A template reads five more fields, in the orange box that appears under the gallery:
 
@@ -58,7 +59,24 @@ Dragging the artboard moves the photo on the photo templates (Stay warm, Photo s
 
 **The logo can never cut off the words.** Every template measures its footer (the logo in one corner, the stars in the other, or the logo centred over the stars) before it draws anything, and every block of words, every sticker and the unit stop above it. A logo is fitted to at most 90 to 120px tall, so the footer is never more than a strip.
 
-**"Make 3 ads" uses the templates.** The batch's looks now go: the offer on Massive deal, the time of year on Season sale (snow, leaves, sun or green by the season label), proof on the owner's photo with the Headline stack; a batch of six continues with Photo sale, Price grid and Bottom plate. The chat is asked for a sticker (two or three words for a starburst) and up to two price tiles from the brief, and the unit in the corner follows the trade and the month (a furnace through the heating months and a condenser through the cooling ones for an HVAC company, a water heater for a plumber). The before-and-after templates are not in the batch: a before-and-after pair has to be a real pair, picked by hand.
+## The season playbook
+
+Added 2026-10-15. A trade's year is not four seasons; it is peaks and shoulders. An HVAC company has two peaks (the heat wave, the cold snap) when the phone rings by itself and the ad's job is to be the one they call, and two shoulders (spring, fall) when nothing is broken and the ad's job is to get into the house cheaply (a tune-up, a plan) and book the replacements while the install crews have room. A plumber's peaks are the freeze and the week after Thanksgiving. `src/lib/seasonPlaybook.js` knows these by trade and by climate (a Fort Myers HVAC company has no heating peak, a long cooling season and a break in October) and turns them into a phase: a label, a summary, the tactics, what to leave out, offer shapes, hooks, the kicker, the unit in the corner, the painted background, the saved-ad season, the moments coming up, and a ranked list of templates with a reason each. Tested by `scripts/check-season-playbook.mjs`.
+
+Where it shows up:
+
+- **The Design tab** has a "Season playbook" card above the templates: the phase for this client ("Fall shoulder season (heating prep) · heating and cooling in Manchester, NH, October"), the tactics, the offer shapes, what to leave out, what is coming up, and "Best templates now" as chips (one click applies the template and, where nothing is typed, the phase's kicker and equipment). "Pick the template for these words" scores every template against the words on the form, the phase and the photos picked (financing words go to the financing template, a same-day call to the emergency template, a tune-up to the tune-up poster, a plan to the maintenance plan card, several prices to the grid, a pair of photos to a before-and-after), applies the best one and says why.
+- **The chat brief** carries a SEASON PLAYBOOK section, so every answer about ads, scripts and plans is written to it, and the chat knows which templates say it best right now.
+- **"Make 3 ads"** writes to the playbook and chooses each ad's template by its words: the offer ad lands on the template its offer calls for (financing, a big number, the deal poster), the time-of-year ad on the phase's own (the tune-up poster in the fall, the sun poster in July), the proof ad on the owner's photo with the Headline stack; never the same template twice. The kicker, the unit and the background come from the phase, all editable.
+- **The help chat** sees the playbook in the Studio's state and has `studio_suggest_template`.
+
+## Finding real before-and-after pairs
+
+"Find before and after pairs" under the photo pickers (and the help chat's `studio_find_before_after`, so "make me a before and after ad" works) looks through the client's uploads and Drive photos for two shots of the same job, one before the work and one after. File names first: "furnace-before.jpg" with "furnace-after.jpg" is a pair and needs no model. Then the model is shown the newest sixteen photos, numbered, and asked for pairs of the same place or the same kind of equipment, as JSON; it is told a wrong pair ends up in an ad, so when in doubt it is not a pair. Each pair found is a chip with both thumbnails and what the job was; click it and the two photos go on the Before and after sale template. `src/lib/beforeAfter.js` (pure, tested by `scripts/check-before-after.mjs`) and `src/lib/beforeAfterStore.js`.
+
+Next to the finder: "Open the Drive folder in a new window" (the client's Google Drive folder) and "Drive photos in the CRM" (the Content tab's Drive page), both in their own tab, for when the picker is not enough.
+
+**"Make 3 ads" uses the templates.** Each ad's template is chosen by the season playbook from its words (see above); without a playbook the batch falls back to Massive deal, Season sale, Headline stack, Photo sale, Price grid, Bottom plate in turn. The chat is asked for a sticker (two or three words for a starburst) and up to two price tiles from the brief. The before-and-after templates are not in the batch: a before-and-after pair has to be a real pair, found by the finder or picked by hand.
 
 The display faces are Anton (the condensed capitals) and Pacifico (the script word), loaded from Google Fonts next to Inter and waited for before the first paint, so a template never measures with a fallback and wraps wrong.
 

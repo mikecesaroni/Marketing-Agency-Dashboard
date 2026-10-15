@@ -4,7 +4,8 @@ import { fetchLearnings } from './adLearningsStore'
 import { fetchLandingPages } from './landingPagesStore'
 import { creativeSetToStudio, extractCreativeSets, renderBlocks, sendChatMessage } from './clientChat'
 import { listDriveImages, resolveImageSrc } from './driveAssets'
-import { BATCH_PHOTO_MAX, assignLooks, assignPhotos, cutoutFor, makeAdsPrompt, photoPool, tilesFrom } from './adBatch'
+import { BATCH_PHOTO_MAX, assignPhotos, chooseLooks, makeAdsPrompt, photoPool, tilesFrom } from './adBatch'
+import { TRADE_WORDS, phaseOf, playbookText } from './seasonPlaybook'
 
 /**
  * Three ads in one go: the network half.
@@ -21,8 +22,8 @@ import { BATCH_PHOTO_MAX, assignLooks, assignPhotos, cutoutFor, makeAdsPrompt, p
  * guessed was replacing that with something that matched nothing.
  */
 
-/** A photo as a small JPEG, base64, for the model to look at. Null when it cannot be loaded (a HEIC upload). */
-async function smallImage(src, max = 800) {
+/** A photo as a small JPEG, base64, for the model to look at. Throws when it cannot be loaded (a HEIC upload). */
+export async function smallImage(src, max = 800) {
   const img = await new Promise((resolve, reject) => {
     const el = new Image()
     el.crossOrigin = 'anonymous'
@@ -72,11 +73,19 @@ export async function makeAdBatch({ client, intake, ads = [], count = 3 }) {
     }
   }
 
+  // The season playbook: what this trade sells right now in this market,
+  // which decides the tactics the chat writes to and the template each ad
+  // lands on (src/lib/seasonPlaybook.js).
+  const industry = intake?.industry_trade || client.industry || ''
+  const market = intake?.service_area || client.market || ''
+  const phase = phaseOf({ industry, market })
+  const playbook = playbookText(phase, { tradeWords: TRADE_WORDS[phase.trade] || 'home services', market })
+
   const system = buildBrief({ client, intake, ads, learnings, pages })
   const data = await sendChatMessage({
     clientId: client.id,
     system,
-    message: makeAdsPrompt({ count, clientName: client.name, photos: shown }),
+    message: makeAdsPrompt({ count, clientName: client.name, photos: shown, playbook }),
     images,
     transient: true,
   })
@@ -86,19 +95,19 @@ export async function makeAdBatch({ client, intake, ads = [], count = 3 }) {
   if (raw.length === 0) {
     throw new Error('The chat wrote no creative sets this time. Open the chat and ask it for three ads, or try again.')
   }
-  // The template extras: the sticker and the tiles the chat wrote, the unit
-  // for the trade and the month; the kicker and the theme follow the season.
-  const cutout = cutoutFor(client.industry)
+  // The template extras: the sticker and the tiles the chat wrote; the
+  // kicker, the painted background and the unit in the corner from the
+  // playbook (all editable on the form).
   const sets = raw.slice(0, count).map((r) => ({
     ...creativeSetToStudio(r),
     accent: '',
     badgeColor: '',
-    kicker: '',
+    kicker: phase.kicker || '',
     sticker: String(r.sticker || '').trim(),
     offers: tilesFrom(r.offers),
-    cutout,
-    theme: '',
+    cutout: phase.cutout || '',
+    theme: phase.theme || '',
   }))
   const picks = raw.slice(0, count).map((r) => Number(r.photo) || 0)
-  return assignPhotos(assignLooks(sets), { pool, shown, picks })
+  return assignPhotos(chooseLooks(sets, { phase, hasPhoto: pool.length > 0 }), { pool, shown, picks })
 }

@@ -24,6 +24,7 @@ export const TEMPLATE_LAYOUTS = [
   { key: 'photo_sale', label: 'Photo sale', hint: 'the photo full-bleed with a SALE ribbon in the corner, the offers on a band below', photo: true },
   { key: 'before_sale', label: 'Before and after sale', hint: 'the two photos side by side (one above the other on the Story), Before and After tagged, the kicker, the headline and the offer tiles on the season below', photo: true, twoPhotos: true },
   { key: 'reveal', label: 'Before inset', hint: 'the After photo whole, the Before as a small framed inset bottom-left, the words on a brand-colour plate', photo: true, twoPhotos: true },
+  { key: 'plan_card', label: 'Maintenance plan', hint: 'a membership card: the plan name on a brand-colour band, the price a month, and what is included as a checklist (the subhead, split on commas)', theme: 'brand' },
 ]
 
 export const TEMPLATE_KEYS = TEMPLATE_LAYOUTS.map((t) => t.key)

@@ -17,6 +17,9 @@ import { creativeWarnings } from '../lib/creativeChecks'
 import AdImagePicker from './AdImagePicker'
 import StockPicker from './StockPicker'
 import TemplateGallery from './TemplateGallery'
+import SeasonPlaybook from './SeasonPlaybook'
+import { bestTemplates, phaseOf, pickTemplate } from '../lib/seasonPlaybook'
+import { findBeforeAfterPairs } from '../lib/beforeAfterStore'
 import { CUTOUTS, THEME_LAYOUTS, isTemplate, kickerFor, themeFor } from '../lib/adTemplateMeta'
 import { stockPath } from '../lib/stockLibrary'
 import { prepareLogo } from '../lib/logoCutout'
@@ -787,6 +790,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   const [accent, setAccent] = useState(DEFAULT_ACCENT)
   const [badgeColor, setBadgeColor] = useState(DEFAULT_BADGE)
 
+  // The season playbook (src/lib/seasonPlaybook.js): what this trade sells
+  // right now in this market, and which templates say it best.
+  const tradeIndustry = intake?.industry_trade || client.industry || ''
+  const tradeMarket = intake?.service_area || client.market || ''
+  const phase = useMemo(() => phaseOf({ industry: tradeIndustry, market: tradeMarket }), [tradeIndustry, tradeMarket])
+
   // The intake is fetched by the page above, so on first render it is usually
   // still null -- initialising the state from it would read the defaults and
   // never look again. Applied when it arrives instead, and only over a colour
@@ -833,6 +842,10 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   const [cutout, setCutout] = useState('')
   const [theme, setTheme] = useState('')
   const [stockOpen, setStockOpen] = useState(false)
+  // The season playbook's last pick for the words on the form, with its reason.
+  const [suggestion, setSuggestion] = useState(null)
+  // The before-and-after finder: { status: 'working' | 'done' | 'error', pairs, looked, how, error }.
+  const [finder, setFinder] = useState(null)
   const [bgColor, setBgColor] = useState(DEFAULT_BG)
   const [photo, setPhoto] = useState(DEFAULT_PHOTO)
   // Cover layout: which spot on the photo the crop keeps. Dragging any
@@ -1238,6 +1251,39 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     }
   }
 
+  // A template from the playbook: the look, and the phase's kicker, unit and
+  // (in a hot market, where the calendar misleads) background, only where
+  // nothing has been typed.
+  const applyTemplate = (key) => {
+    setLayout(key)
+    if (!kicker && phase.kicker) setKicker(phase.kicker)
+    if (!cutout && phase.cutout) setCutout(phase.cutout)
+    if (!theme && phase.climate === 'hot' && phase.theme) setTheme(phase.theme)
+  }
+  const suggestTemplate = () => {
+    const s = pickTemplate({ phase, content: paintContent, hasPhoto: Boolean(assets.background), hasAfter: Boolean(assets.after) })
+    applyTemplate(s.key)
+    setSuggestion(s)
+    return s
+  }
+  // Real before-and-after pairs among the uploads and the Drive photos.
+  const findPairs = async () => {
+    setFinder({ status: 'working' })
+    try {
+      const out = await findBeforeAfterPairs({ client, intake })
+      setFinder({ status: 'done', ...out })
+      return out
+    } catch (err) {
+      setFinder({ status: 'error', error: err.message })
+      throw err
+    }
+  }
+  const applyPair = async (pair) => {
+    await pick(setBackgroundPath)(pair.before.path)
+    await pick(setAfterPath)(pair.after.path)
+    if (!TWO_PHOTO_LAYOUTS.includes(layout)) applyTemplate('before_sale')
+  }
+
   /**
    * Reopens a saved ad for editing.
    *
@@ -1565,6 +1611,15 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       words: { badge, hook, offerAmount, offerDetail, subhead, proof, primaryText, headline: metaHeadline, description: metaDescription },
       colours: { accent, badgeColor },
       panel: panel === 'none' ? 'none' : panel === 'hook' ? 'behind hook and subhead' : 'behind subhead only',
+      season_playbook: {
+        phase: phase.label,
+        summary: phase.summary,
+        tactics: phase.tactics,
+        offers_that_fit: phase.offers,
+        leave_out: phase.avoid,
+        best_templates: bestTemplates(phase, { hasPhoto: Boolean(assets.background), hasAfter: Boolean(assets.after) }).map((t) => `${t.key}: ${t.why}`),
+      },
+      before_after_finder: finder ? { status: finder.status, pairs: (finder.pairs || []).map((p) => `${p.before.name} -> ${p.after.name} (${p.what})`), error: finder.error } : 'not run',
       template_extras: isTemplate(layout)
         ? {
             kicker: kicker || `(auto: ${kickerFor({ season: seasonNow })})`,
@@ -1649,6 +1704,26 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           if (!LAYOUTS.some((l) => l.key === look)) return { error: `No look called ${look}.` }
           setLayout(look)
           return { ok: true }
+        },
+      },
+      {
+        name: 'studio_suggest_template',
+        description: 'Pick the best template for the words on the form, the season playbook and the photos picked, and apply it. Returns the template and why.',
+        input_schema: { type: 'object', properties: {} },
+        run: () => {
+          const s = suggestTemplate()
+          return { ok: true, template: s.key, reason: s.reason }
+        },
+      },
+      {
+        name: 'studio_find_before_after',
+        description: "Look through the client's uploads and Drive photos for real before-and-after pairs (by file name first, then by looking at the photos). With apply (default true) the first pair goes on the artboards on a before-and-after template. Takes up to half a minute.",
+        input_schema: { type: 'object', properties: { apply: { type: 'boolean' } } },
+        run: async ({ apply = true } = {}) => {
+          const out = await findPairs()
+          if (!out.pairs.length) return { ok: true, pairs: [], note: `No real pair among the ${out.looked} photos. Ask for a before and an after to be uploaded, or named job-before and job-after.` }
+          if (apply) await applyPair(out.pairs[0])
+          return { ok: true, pairs: out.pairs.map((p) => ({ before: p.before.name, after: p.after.name, what: p.what })), applied: apply ? out.pairs[0].what : undefined }
         },
       },
       {
@@ -1932,6 +2007,65 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         </div>
       </div>
 
+      {/* The Drive in its own window, and the before-and-after finder. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600" data-drive-row>
+        {driveFolderId ? (
+          <a
+            href={`https://drive.google.com/drive/folders/${driveFolderId}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-700 underline hover:text-blue-900"
+            data-open-drive
+          >
+            Open the Drive folder in a new window ↗
+          </a>
+        ) : (
+          <span className="text-slate-400">No Drive folder linked yet (link one on the Drive tab of the photo picker).</span>
+        )}
+        <a href={`/content/drive/${client.id}`} target="_blank" rel="noreferrer" className="text-blue-700 underline hover:text-blue-900">
+          Drive photos in the CRM ↗
+        </a>
+        <button
+          type="button"
+          onClick={() => findPairs().catch(() => {})}
+          disabled={finder?.status === 'working'}
+          title="Looks through the uploads and the Drive photos for two shots of the same job, one before the work and one after: by file name first (job-before, job-after), then by looking at the photos"
+          className="px-2 py-1 rounded text-[11px] font-medium text-orange-700 bg-orange-50 border border-orange-200 hover:bg-orange-100 disabled:opacity-50"
+          data-find-pairs
+        >
+          {finder?.status === 'working' ? 'Looking through the photos…' : '🔍 Find before and after pairs'}
+        </button>
+        {finder?.status === 'error' && <span className="text-red-600">{finder.error}</span>}
+        {finder?.status === 'done' && finder.pairs.length === 0 && (
+          <span className="text-slate-500" data-no-pairs>
+            No real pair among the {finder.looked} photos looked at. Upload a before and an after, or name them job-before and job-after.
+          </span>
+        )}
+      </div>
+      {finder?.status === 'done' && finder.pairs.length > 0 && (
+        <div className="flex flex-wrap gap-2" data-pairs>
+          {finder.pairs.map((p, i) => (
+            <button
+              key={`${p.before.path}-${p.after.path}`}
+              type="button"
+              onClick={() => applyPair(p)}
+              title={`${p.before.name} then ${p.after.name}. Click to put them on a before-and-after template.`}
+              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 hover:border-slate-500"
+              data-pair={i}
+            >
+              <img src={p.beforeUrl} alt={p.before.name} className="h-14 w-20 rounded object-cover" />
+              <span className="text-[10px] text-slate-400">→</span>
+              <img src={p.afterUrl} alt={p.after.name} className="h-14 w-20 rounded object-cover" />
+              <span className="px-1 text-left text-[11px] text-slate-700">
+                {p.what}
+                <br />
+                <span className="text-slate-400">{p.how === 'names' ? 'by file name' : 'spotted in the photos'}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-2">
         <Field label="Location badge" value={badge} onChange={setBadge} hint="top-left pill" />
         <div>
@@ -2137,6 +2271,16 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           </>
         )}
       </div>
+
+      <SeasonPlaybook
+        phase={phase}
+        best={bestTemplates(phase, { hasPhoto: Boolean(assets.background), hasAfter: Boolean(assets.after) })}
+        layout={layout}
+        onPick={applyTemplate}
+        onSuggest={suggestTemplate}
+        suggestion={suggestion}
+        market={tradeMarket}
+      />
 
       <TemplateGallery content={paintContent} assets={assets} safeMode={safeMode} layout={layout} onPick={setLayout} />
 
