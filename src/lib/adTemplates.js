@@ -2807,7 +2807,7 @@ function sunDeal(ctx, size, content, assets, opts) {
   // are sized, so a tall frame does not go to a bigger price and a smaller
   // boiler. W is the words' floor.
   const cutOn = hasCutout(content, assets)
-  const W = cutOn ? B - Math.round((B - y) * 0.4) : B
+  const W = cutOn ? B - Math.round((B - y) * 0.46) : B
   y += shout(ctx, kickerWords(content), w / 2, y, maxWidth, { px: 60, minPx: 28, lines: 1, fill: navy, align: 'center', tracking: 14, maxHeight: Math.max(30, (W - y) * 0.14), label: 'the kicker' }) + 6
   y += twoTone(ctx, content.hook, w / 2, y, maxWidth, { px: 170, minPx: 56, maxHeight: Math.max(60, (W - y) * 0.36), first: { fill: accent, stroke: WHITE, strokeW: 12, shadow: { color: 'rgba(2,6,23,0.4)', dx: 5, dy: 7 } }, rest: { fill: navy } }) + 12
   const amount = amountWords(content)
@@ -2867,8 +2867,8 @@ function clunkers(ctx, size, content, assets, opts) {
   const detail = String(content.offerDetail || '').trim()
   const cutOn = hasCutout(content, assets)
   const avail = B - y
-  const blockH = (amount ? Math.round(avail * 0.26) : 0) + (detail ? Math.min(90, Math.round(avail * 0.1)) : 0) + 16
-  const W = B - blockH - (cutOn ? Math.round(avail * 0.32) : 0)
+  const blockH = (amount ? Math.round(avail * 0.24) : 0) + (detail ? Math.min(90, Math.round(avail * 0.1)) : 0) + 16
+  const W = B - blockH - (cutOn ? Math.round(avail * 0.37) : 0)
   const kw = kickerWords(content).toUpperCase().split(/\s+/)
   const half = Math.ceil(kw.length / 2)
   const s1 = slab(ctx, kw.slice(0, half).join(' '), padX, y, maxWidth * 0.85, { px: 104, minPx: 40, skew: 0.22, maxHeight: Math.max(40, (W - y) * 0.26), label: 'the kicker' })

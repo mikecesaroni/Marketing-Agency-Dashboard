@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { readFunctionError } from './functionError'
+import { trimTransparent } from './imageTrim'
 import { UNIT_PHOTO_KEYS, UNIT_PHOTO_PREFIX, unitPhotoPath } from '../../supabase/functions/_shared/unitPhotos.js'
 
 /**
@@ -33,14 +34,18 @@ export async function listUnitPhotos() {
   return out
 }
 
-/** Bitmaps for every photo there is, keyed by unit. A photo that will not load is left out; the drawing stands in. */
+/**
+ * Bitmaps for every photo there is, keyed by unit, each trimmed of the
+ * transparent air the image model leaves round the unit so it fills its
+ * box. A photo that will not load is left out; the drawing stands in.
+ */
 export async function loadUnitPhotoBitmaps(photos, loadImage) {
   const out = {}
   await Promise.all(
     Object.values(photos || {}).map(async (p) => {
       try {
         const img = await loadImage(p.url)
-        if (img) out[p.key] = img
+        if (img) out[p.key] = trimTransparent(img)
       } catch {
         // left out on purpose
       }
