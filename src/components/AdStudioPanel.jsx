@@ -16,6 +16,8 @@ import { AD_SEASONS, guessAdSeason } from '../lib/adSeason'
 import { creativeWarnings } from '../lib/creativeChecks'
 import AdImagePicker from './AdImagePicker'
 import StockPicker from './StockPicker'
+import RealPhotosLine from './RealPhotosLine'
+import { listUnitPhotos, loadUnitPhotoBitmaps } from '../lib/unitPhotos'
 import TemplateGallery from './TemplateGallery'
 import SeasonPlaybook from './SeasonPlaybook'
 import { bestTemplates, phaseOf, pickTemplate } from '../lib/seasonPlaybook'
@@ -1116,8 +1118,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       .then(([background, logo, after, cutoutImage]) => {
         if (cancelled) return
         // The logo with its white box knocked out, for the templates
-        // (src/lib/logoCutout.js); the photo looks keep the original.
-        setAssets({ background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null })
+        // (src/lib/logoCutout.js); the photo looks keep the original. The
+        // real equipment photos ride along from their own load below.
+        setAssets({ background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos: unitBitmaps.current })
         setError('')
 
         if (!logo) {
@@ -1148,6 +1151,32 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       cancelled = true
     }
   }, [backgroundPath, logoPath, afterPath, cutout, client.id])
+
+  // The real equipment photos from the stock library (stock/units/<key>.png,
+  // src/lib/unitPhotos.js): listed once, their bitmaps kept in a ref so the
+  // pick reload above keeps them, and put on the assets so every template
+  // paints the photo in place of the drawing. `photosStamp` bumps when the
+  // Real photos line makes one, and the artboards repaint with it.
+  const [unitPhotos, setUnitPhotos] = useState({})
+  const [photosStamp, setPhotosStamp] = useState(0)
+  const unitBitmaps = useRef({})
+  useEffect(() => {
+    let cancelled = false
+    listUnitPhotos()
+      .then(async (list) => {
+        const bitmaps = await loadUnitPhotoBitmaps(list, loadImage)
+        if (cancelled) return
+        setUnitPhotos(list)
+        unitBitmaps.current = bitmaps
+        setAssets((a) => ({ ...a, unitPhotos: bitmaps }))
+      })
+      .catch(() => {
+        // No library (or no network): the drawings stand in, as before.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [photosStamp])
 
   // What the artboards paint: the words, the colours, the look and the
   // template extras. One object, memoised, so the template gallery repaints
@@ -1496,7 +1525,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         const stamp = Date.now() + s
         for (let i = 0; i < SIZES.length; i++) {
           const canvas = document.createElement('canvas')
-          renderAd(canvas, SIZES[i], content, { background: backgrounds[bg], logo, logoCut, after: backgrounds[bg2], cutoutImage: stocks[stock] }, { safeMode, guides: false })
+          renderAd(canvas, SIZES[i], content, { background: backgrounds[bg], logo, logoCut, after: backgrounds[bg2], cutoutImage: stocks[stock], unitPhotos: unitBitmaps.current }, { safeMode, guides: false })
           const blob = await canvasToBlob(canvas)
           const path = `ads/${client.id}/${stamp}-${SIZES[i].key}.png`
           const { error: upErr } = await supabase.storage.from('client-files').upload(path, blob, { contentType: 'image/png' })
@@ -2359,11 +2388,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
             </button>
           </div>
           {stockOpen && <StockPicker value={cutout} onChange={setCutout} onClose={() => setStockOpen(false)} />}
+          <RealPhotosLine photos={unitPhotos} onChanged={() => setPhotosStamp((n) => n + 1)} />
           <p className="text-[11px] text-slate-500">
-            The built-in equipment is drawn as a product shot (a furnace with the burner glowing behind its sight glass, a
-            condenser with its fan grille and line set, and so on); the stock library holds real photos (a PNG with a transparent
-            background looks best) that every client can use. The badge, hook, offer, subhead and proof above all go on the template too; the proof
-            paints as five gold stars.
+            Each piece of equipment paints as a real photo once the library has one (made with an image model, shared by every
+            client; the Real photos line above makes them) and as a drawn product shot until then. The trade-in templates use
+            the old, rusty twin of the unit. The stock library holds any other photos (a PNG with a transparent background looks
+            best). The badge, hook, offer, subhead and proof above all go on the template too; the proof paints as five gold stars.
           </p>
         </div>
       )}

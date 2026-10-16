@@ -339,7 +339,7 @@ export default function ClientDashboardPage() {
               </span>
               <span className="text-sm font-semibold tracking-tight text-slate-200">The Working Class Marketing KPIs</span>
             </div>
-            <p className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5">
               {/* The pill says it plainly: these numbers are live, not a sent
                   report. The dot pulses so it reads as live at a glance. */}
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-300 ring-1 ring-inset ring-emerald-400/30" data-live-badge>
@@ -350,7 +350,7 @@ export default function ClientDashboardPage() {
                 Live
               </span>
               <Eyebrow>KPI dashboard</Eyebrow>
-            </p>
+            </div>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white md:text-4xl">{data.client?.name}</h1>
             <p className="mt-1 max-w-2xl text-sm text-slate-400">
               Live numbers from your ad accounts, refreshed every morning{data.last_day ? ` (data through ${rangeLabel(data.last_day, data.last_day).split(' to ')[0]})` : ''}. Showing{' '}

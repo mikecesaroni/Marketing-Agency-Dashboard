@@ -1024,8 +1024,35 @@ function hasCutout(content, assets) {
   return Boolean(CUTOUT_DRAW[key])
 }
 
-/** Draws the cutout bottom-aligned inside the box. Returns true when something was drawn. */
-export function drawCutout(ctx, content, assets, box) {
+/**
+ * The real photo of a unit when the library has one: stock/units/<key>.png,
+ * made by the stock-images function and loaded into assets.unitPhotos by
+ * the Studio (src/lib/unitPhotos.js). The drawing is the stand-in until then.
+ */
+function unitPhoto(assets, key) {
+  const img = assets?.unitPhotos?.[key]
+  return img && img.width && img.height ? img : null
+}
+
+/** A photo fitted into the box, standing on its floor, with a shadow. Returns the box it covers. */
+function photoCutout(ctx, img, box) {
+  const scale = Math.min(box.w / img.width, box.h / img.height)
+  const dw = img.width * scale
+  const dh = img.height * scale
+  const dx = box.x + (box.w - dw) / 2
+  const dy = box.y + box.h - dh
+  shadow(ctx, dx + dw / 2, dy + dh - 4, dw * 0.55, dw * 0.12)
+  ctx.drawImage(img, dx, dy, dw, dh)
+  return { x: dx, y: dy, w: dw, h: dh }
+}
+
+/**
+ * Draws the cutout bottom-aligned inside the box: a stock photo, the unit's
+ * real photo from the library, or the built-in drawing, in that order.
+ * Returns true when something was drawn. `quiet` leaves it out of the
+ * overlap audit (for a paint into an offscreen canvas).
+ */
+export function drawCutout(ctx, content, assets, box, { quiet = false } = {}) {
   const key = String(content?.cutout || '')
   if (!key) return false
   // No room (a short Story band, a frame full of words): no unit, and no
@@ -1034,18 +1061,18 @@ export function drawCutout(ctx, content, assets, box) {
   if (key.startsWith('stock:')) {
     const img = assets?.cutoutImage
     if (!img) return false
-    const scale = Math.min(box.w / img.width, box.h / img.height)
-    const dw = img.width * scale
-    const dh = img.height * scale
-    const dx = box.x + (box.w - dw) / 2
-    const dy = box.y + box.h - dh
-    shadow(ctx, dx + dw / 2, dy + dh - 4, dw * 0.55, dw * 0.12)
-    ctx.drawImage(img, dx, dy, dw, dh)
-    note('cutout', { x: dx, y: dy, w: dw, h: dh }, 'the equipment photo')
+    const covered = photoCutout(ctx, img, box)
+    if (!quiet) note('cutout', covered, 'the equipment photo')
     return true
   }
   const fn = CUTOUT_DRAW[key]
   if (!fn) return false
+  const photo = unitPhoto(assets, key)
+  if (photo) {
+    const covered = photoCutout(ctx, photo, box)
+    if (!quiet) note('cutout', covered, 'the equipment photo')
+    return true
+  }
   // The drawings set line widths, caps and text alignment of their own;
   // none of it may leak into whatever paints next.
   ctx.save()
@@ -1053,8 +1080,99 @@ export function drawCutout(ctx, content, assets, box) {
   ctx.restore()
   // The drawings stand on the box's floor and fill most of it; the box is
   // close enough to what they cover.
-  note('cutout', box, 'the equipment')
+  if (!quiet) note('cutout', box, 'the equipment')
   return true
+}
+
+/**
+ * The unit as a clunker, for the trade-in ads: the library's old, rusty
+ * photo of it when there is one (old_<key>); otherwise the unit as it would
+ * paint (photo or drawing), painted offscreen and aged: the colour drains
+ * to brown, rust blooms and streaks down from the seams, soot gathers at
+ * the base, a few dents and chips. Returns true when something was drawn.
+ */
+export function drawOldUnit(ctx, content, assets, box) {
+  const key = String(content?.cutout || '')
+  if (!key || !box || box.w < 60 || box.h < 60) return false
+  const old = key.startsWith('stock:') ? null : unitPhoto(assets, `old_${key}`)
+  if (old) {
+    note('cutout', photoCutout(ctx, old, box), 'the old unit')
+    return true
+  }
+  if (!hasCutout(content, assets)) return false
+  const off = document.createElement('canvas')
+  off.width = Math.ceil(box.w)
+  off.height = Math.ceil(box.h)
+  const o = off.getContext('2d')
+  o.translate(-box.x, -box.y)
+  drawCutout(o, content, assets, box, { quiet: true })
+  o.setTransform(1, 0, 0, 1, 0, 0)
+  rust(o, off.width, off.height)
+  ctx.drawImage(off, box.x, box.y)
+  note('cutout', box, 'the old unit')
+  return true
+}
+
+/** Ages whatever is painted on the canvas: everything lands only where there are pixels already. */
+function rust(o, w, h) {
+  o.globalCompositeOperation = 'source-atop'
+  // The wash: the colour drains and the metal browns.
+  o.fillStyle = 'rgba(70,45,30,0.5)'
+  o.fillRect(0, 0, w, h)
+  // Soot at the base.
+  const soot = o.createLinearGradient(0, h * 0.55, 0, h)
+  soot.addColorStop(0, 'rgba(20,10,5,0)')
+  soot.addColorStop(1, 'rgba(20,10,5,0.7)')
+  o.fillStyle = soot
+  o.fillRect(0, 0, w, h)
+  // Rust blooms, each with a streak running down from it.
+  const rand = rng(31)
+  const colors = ['#7C2D12', '#9A3412', '#B45309', '#78350F', '#451A03']
+  for (let i = 0; i < 34; i++) {
+    const x = rand() * w
+    const y = h * 0.25 + rand() * h * 0.7
+    const rad = w * (0.03 + rand() * 0.09)
+    const c = colors[i % colors.length]
+    const bloom = o.createRadialGradient(x, y, 0, x, y, rad)
+    bloom.addColorStop(0, `${c}E6`)
+    bloom.addColorStop(0.6, `${c}99`)
+    bloom.addColorStop(1, `${c}00`)
+    o.fillStyle = bloom
+    o.beginPath()
+    o.ellipse(x, y, rad, rad * (0.6 + rand() * 0.8), rand() * 3, 0, Math.PI * 2)
+    o.fill()
+    const len = h * (0.05 + rand() * 0.2)
+    const streak = o.createLinearGradient(0, y, 0, y + len)
+    streak.addColorStop(0, `${c}B3`)
+    streak.addColorStop(1, `${c}00`)
+    o.fillStyle = streak
+    o.fillRect(x - rad * 0.15, y, rad * 0.3, len)
+  }
+  // Chips and scratches.
+  o.strokeStyle = 'rgba(255,255,255,0.25)'
+  o.lineWidth = 1
+  for (let i = 0; i < 26; i++) {
+    const x = rand() * w
+    const y = rand() * h
+    const len = w * (0.02 + rand() * 0.08)
+    const a = rand() * Math.PI
+    o.beginPath()
+    o.moveTo(x, y)
+    o.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len)
+    o.stroke()
+  }
+  // Dents: faint dark crescents.
+  o.strokeStyle = 'rgba(0,0,0,0.22)'
+  o.lineWidth = Math.max(2, w * 0.01)
+  for (let i = 0; i < 4; i++) {
+    const x = w * 0.15 + rand() * w * 0.7
+    const y = h * 0.3 + rand() * h * 0.6
+    const rad = w * (0.03 + rand() * 0.05)
+    o.beginPath()
+    o.arc(x, y, rad, Math.PI * 0.9, Math.PI * 1.9)
+    o.stroke()
+  }
+  o.globalCompositeOperation = 'source-over'
 }
 
 // ---------------------------------------------------------------------------

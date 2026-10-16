@@ -6,6 +6,7 @@ import { applyChanges } from './adRevise'
 import { overwriteSavedAd, recipeToContent } from './savedAds'
 import { stockPath } from './stockLibrary'
 import { prepareLogo } from './logoCutout'
+import { listUnitPhotos, loadUnitPhotoBitmaps } from './unitPhotos'
 
 /**
  * Applies an owner's note to a saved ad and REPLACES it: same stamp, same
@@ -35,8 +36,17 @@ export async function reviseSavedAd({ client, set, instruction, token }) {
   // Paint. Fonts first or the first frame wraps on a fallback face.
   await ensureFonts()
   const bitmap = async (path) => (path ? loadImage(await resolveImageSrc(client.id, path)) : null)
-  const [background, logo, after, cutoutImage] = await Promise.all([bitmap(current.backgroundPath), bitmap(current.logoPath), bitmap(current.backgroundPath2), bitmap(stockPath(current.cutout))])
-  const assets = { background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null }
+  const [background, logo, after, cutoutImage, unitPhotos] = await Promise.all([
+    bitmap(current.backgroundPath),
+    bitmap(current.logoPath),
+    bitmap(current.backgroundPath2),
+    bitmap(stockPath(current.cutout)),
+    // The real equipment photos, so a revised template paints the same unit the Studio did.
+    listUnitPhotos()
+      .then((list) => loadUnitPhotoBitmaps(list, loadImage))
+      .catch(() => ({})),
+  ])
+  const assets = { background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos }
 
   const blobs = {}
   for (const { size } of set.ordered || []) {
