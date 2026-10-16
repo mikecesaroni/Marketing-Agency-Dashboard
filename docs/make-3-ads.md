@@ -21,3 +21,7 @@ Review the three before saving. The chat is good at the words but it does not se
 - `src/lib/adBatchStore.js`: `makeAdBatch`, which gathers the brief, asks the chat, parses the creative sets and attaches a look and a photo to each.
 - `src/components/AdStudioPanel.jsx`: the `make` and `ads` props, the `BatchStrip`, `saveBatch` (paints the sets that are not on the artboards off-screen).
 - `src/pages/ContentPage.jsx` (the door and the card's two links) and `src/pages/ClientDetailPage.jsx` (`?open=studio&make=3`).
+
+## The batch waits for you
+
+Added 2026-10-16. The three used to live only in the open Studio: close it without saving and they were gone. Now the last batch made for a client is kept (`ad_batches`, one row per client, `supabase/ad-batches.sql`) with every edit made on its sets, and the Studio opens with it on the strip whether that is a minute or a week later: "3 ads for Prime · from Tue, Oct 14, not saved yet". The set that was up lands on the artboards again, unless an ad was opened on purpose (a saved ad from the Saved tab, a set from the chat), in which case that ad has the boards and the chips switch to the batch. Every edit is written a beat after the last keystroke, so hopping in and out while editing loses nothing. A new batch replaces the kept one. "Save all 3 ads" drops the kept copy (they are on the Saved ads tab now); "Forget these" on the strip drops it on purpose. The kept copy is per client, not per browser, so it is there from any computer.

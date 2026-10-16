@@ -120,3 +120,44 @@ export async function makeAdBatch({ client, intake, ads = [], count = 3, templat
   const picks = raw.slice(0, count).map((r) => Number(r.photo) || 0)
   return assignPhotos(chooseLooks(sets, { phase, hasPhoto: pool.length > 0 }), { pool, shown, picks })
 }
+
+/**
+ * The batch waits for you. The last batch made for a client is kept in
+ * ad_batches (one row per client, supabase/ad-batches.sql) with every edit
+ * made on its sets, until it is saved or dropped on purpose, so the Studio
+ * can be left mid-review and reopened days later with the same three on
+ * the strip.
+ */
+export async function loadBatchDraft(clientId) {
+  const { data, error } = await supabase
+    .from('ad_batches')
+    .select('sets, active, count, made_at, updated_at')
+    .eq('client_id', clientId)
+    .maybeSingle()
+  if (error) throw error
+  if (!data || !Array.isArray(data.sets) || data.sets.length === 0) return null
+  return data
+}
+
+/** Writes the batch as it stands (its sets with their edits, which one is up). */
+export async function saveBatchDraft(clientId, batch) {
+  if (!batch || !Array.isArray(batch.sets) || batch.sets.length === 0) return
+  const { error } = await supabase.from('ad_batches').upsert(
+    {
+      client_id: clientId,
+      sets: batch.sets,
+      active: batch.active || 0,
+      count: batch.sets.length,
+      made_at: batch.madeAt || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'client_id' }
+  )
+  if (error) throw error
+}
+
+/** Drops the kept batch: after "Save all", or "Forget these" on the strip. */
+export async function forgetBatchDraft(clientId) {
+  const { error } = await supabase.from('ad_batches').delete().eq('client_id', clientId)
+  if (error) throw error
+}

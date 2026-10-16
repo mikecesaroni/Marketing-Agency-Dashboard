@@ -26,7 +26,7 @@ import { stockPath } from '../lib/stockLibrary'
 import { prepareLogo } from '../lib/logoCutout'
 import { resolveImageSrc } from '../lib/driveAssets'
 import { heicToJpegBlob, isHeic, jpegName, jpegPath, toUploadable } from '../lib/imageUpload'
-import { makeAdBatch } from '../lib/adBatchStore'
+import { forgetBatchDraft, loadBatchDraft, makeAdBatch, saveBatchDraft } from '../lib/adBatchStore'
 import { looseMatch } from '../lib/helpActions'
 import { useHelpActions } from '../lib/useHelpActions'
 import { BATCH_SIZE, batchReady, lookName, setTitle, snapshotSet } from '../lib/adBatch'
@@ -521,10 +521,20 @@ function SeedBanner({ seed, from = 'From chat', index }) {
  * them all. Each chip names the angle and the look. The chat wrote the words
  * in the client's own thread, so the same three are also in the chat.
  */
+/** "today", "yesterday", or "Tue, Oct 14": when a kept batch was made. */
+function madeLabel(iso) {
+  const d = new Date(iso || '')
+  if (Number.isNaN(d.getTime())) return 'earlier'
+  const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
 function BatchStrip({ batch, client, count, saving, onShow, onSave, onRetry, onDismiss }) {
   const ready = batch.status === 'done' && batchReady(batch.sets)
   return (
-    <div className="rounded-xl border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 p-3" data-batch data-status={batch.status}>
+    <div className="rounded-xl border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 p-3" data-batch data-status={batch.status} data-restored={batch.restored ? 'yes' : undefined}>
       {batch.status === 'working' && (
         <div className="flex items-center gap-3 text-sm text-orange-900">
           <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-orange-300 border-t-orange-700" />
@@ -549,7 +559,14 @@ function BatchStrip({ batch, client, count, saving, onShow, onSave, onRetry, onD
       )}
       {batch.status === 'done' && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-sm font-semibold text-orange-900">{batch.sets.length === 1 ? 'An ad' : `${batch.sets.length} ads`} for {client.name}</span>
+          <span className="mr-1 text-sm font-semibold text-orange-900">
+            {batch.sets.length === 1 ? 'An ad' : `${batch.sets.length} ads`} for {client.name}
+            {batch.restored && !batch.saved && (
+              <span className="font-normal text-orange-800" title="Kept from last time, with every edit made on them. They stay here until they are saved or forgotten.">
+                {' '}· from {madeLabel(batch.madeAt)}, not saved yet
+              </span>
+            )}
+          </span>
           {batch.sets.map((s, i) => (
             <button
               key={i}
@@ -579,8 +596,13 @@ function BatchStrip({ batch, client, count, saving, onShow, onSave, onRetry, onD
                 {saving ? 'Saving…' : batch.sets.length === 1 ? 'Save the ad' : `Save all ${batch.sets.length} ads`}
               </button>
             )}
-            <button onClick={onDismiss} className="text-xs text-slate-500 underline hover:text-slate-800" title="Keep what is on the artboards, drop the strip">
-              Done
+            <button
+              onClick={onDismiss}
+              className="text-xs text-slate-500 underline hover:text-slate-800"
+              title={batch.saved ? 'Keep what is on the artboards, drop the strip' : 'Drop the strip and forget these ads. Until then they wait here, even after the Studio is closed.'}
+              data-batch-dismiss
+            >
+              {batch.saved ? 'Done' : 'Forget these'}
             </button>
           </div>
         </div>
@@ -611,7 +633,15 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // saves all three. `sets` carry every edit made on them; `active` is the one
   // on the artboards; the active set is what the Design tab is seeded with.
   const [batch, setBatch] = useState(() => (make ? { status: 'working', sets: [], active: 0, error: '' } : null))
-  const [batchSeed, setBatchSeed] = useState(null)
+  // What is on the artboards and where it came from: a saved ad or a chat
+  // set (`seed`, from the page), or one of the batch's sets. Whichever was
+  // applied last wins, so a batch kept from last time never paints over an
+  // ad that was opened on purpose, and a chip click always takes the boards.
+  const [applied, setApplied] = useState(null)
+  useEffect(() => {
+    if (seed) setApplied({ set: seed, from: 'seed' })
+  }, [seed])
+  const showBatchSet = (set) => setApplied({ set, from: 'batch' })
   // The HEIC path being converted to JPEG right now, for the picker's label.
   const [converting, setConverting] = useState('')
   // Mirrors clients.drive_folder_id so linking a folder updates the pickers
@@ -843,41 +873,41 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
 
   // Copy handed over from the chat, already mapped onto the slots. The same
   // path serves a batch set, which also carries a look and a photo.
-  const applied = seed || batchSeed
   useEffect(() => {
-    if (!applied) return
-    setHook(applied.hook || '')
-    setOfferAmount(applied.offerAmount || '')
-    setOfferDetail(applied.offerDetail || '')
-    setSubhead(applied.subhead || '')
-    setProof(applied.proof || '')
-    setPrimaryText(applied.primaryText || '')
-    setMetaHeadline(applied.headline || '')
-    setMetaDescription(applied.description || '')
+    const a = applied?.set
+    if (!a) return
+    setHook(a.hook || '')
+    setOfferAmount(a.offerAmount || '')
+    setOfferDetail(a.offerDetail || '')
+    setSubhead(a.subhead || '')
+    setProof(a.proof || '')
+    setPrimaryText(a.primaryText || '')
+    setMetaHeadline(a.headline || '')
+    setMetaDescription(a.description || '')
     // Neither the location nor the star rating belongs to a creative set, so
     // the intake stays the source for those unless the brief overrode them.
-    if (applied.badge) setBadge(applied.badge)
-    setProof(applied.proof || intakeProof)
+    if (a.badge) setBadge(a.badge)
+    setProof(a.proof || intakeProof)
     // Only when the set actually named a colour. Anything else leaves the
     // studio default, or a colour already pulled off the logo, alone.
-    if (applied.accent) {
-      setAccent(applied.accent)
+    if (a.accent) {
+      setAccent(a.accent)
       setFromLogo(false)
     }
-    if (applied.badgeColor) {
-      setBadgeColor(applied.badgeColor)
+    if (a.badgeColor) {
+      setBadgeColor(a.badgeColor)
       setFromLogo(false)
     }
-    if (applied.layout) setLayout(applied.layout)
-    if (applied.backgroundPath !== undefined) setBackgroundPath(applied.backgroundPath || '')
+    if (a.layout) setLayout(a.layout)
+    if (a.backgroundPath !== undefined) setBackgroundPath(a.backgroundPath || '')
     // The template extras and the second photo, when the set carries them
     // (a batch set does; a creative set from the chat leaves them alone).
-    if (applied.backgroundPath2 !== undefined) setAfterPath(applied.backgroundPath2 || '')
-    if (applied.kicker !== undefined) setKicker(applied.kicker || '')
-    if (applied.sticker !== undefined) setSticker(applied.sticker || '')
-    if (applied.offers !== undefined) setOffers(Array.isArray(applied.offers) ? applied.offers : [])
-    if (applied.cutout !== undefined) setCutout(applied.cutout || '')
-    if (applied.theme !== undefined) setTheme(applied.theme || '')
+    if (a.backgroundPath2 !== undefined) setAfterPath(a.backgroundPath2 || '')
+    if (a.kicker !== undefined) setKicker(a.kicker || '')
+    if (a.sticker !== undefined) setSticker(a.sticker || '')
+    if (a.offers !== undefined) setOffers(Array.isArray(a.offers) ? a.offers : [])
+    if (a.cutout !== undefined) setCutout(a.cutout || '')
+    if (a.theme !== undefined) setTheme(a.theme || '')
   }, [applied, intakeProof])
 
   // The batch itself: asked for once, on mount, when the Studio was opened
@@ -890,8 +920,8 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       .then((sets) => {
         if (cancelled) return
         batchLanded.current = true
-        setBatch({ status: 'done', sets, active: 0, error: '' })
-        setBatchSeed(sets[0])
+        setBatch({ status: 'done', sets, active: 0, error: '', madeAt: new Date().toISOString() })
+        showBatchSet(sets[0])
       })
       .catch((err) => {
         if (cancelled) return
@@ -901,6 +931,30 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       cancelled = true
     }
     // Once: the client and the count are fixed for the life of this Studio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client.id, make])
+
+  // The batch waits for you. The last batch made for this client, when it
+  // was never saved, comes back on the strip with every edit made on it
+  // (ad_batches, one row per client), so closing the Studio mid-review and
+  // reopening it a week later picks up where it stopped. The set that was
+  // up lands on the artboards again unless an ad was opened on purpose.
+  useEffect(() => {
+    if (make) return
+    let cancelled = false
+    loadBatchDraft(client.id)
+      .then((draft) => {
+        if (cancelled || !draft) return
+        batchLanded.current = true
+        const active = Math.min(Math.max(0, Number(draft.active) || 0), draft.sets.length - 1)
+        setBatch({ status: 'done', sets: draft.sets, active, error: '', madeAt: draft.made_at, restored: true })
+        if (!seed) showBatchSet(draft.sets[active])
+      })
+      .catch((err) => console.warn('The kept batch did not load:', err.message))
+    return () => {
+      cancelled = true
+    }
+    // Once, on mount: the client is fixed for the life of this Studio.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client.id, make])
 
@@ -929,6 +983,10 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   })
   const batchWithEdits = () => {
     if (!batch || batch.status !== 'done') return batch
+    // The fields are the active set's only while a batch set is on the
+    // artboards; with a saved ad up, reading them back would write that
+    // ad's words into the batch.
+    if (applied?.from !== 'batch') return batch
     const sets = batch.sets.map((s, i) => (i === batch.active ? snapshotSet(s, fieldsNow()) : s))
     return { ...batch, sets }
   }
@@ -936,7 +994,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     const cur = batchWithEdits()
     if (!cur || !cur.sets[i]) return
     setBatch({ ...cur, active: i })
-    setBatchSeed(cur.sets[i])
+    showBatchSet(cur.sets[i])
     setSaved('')
     setError('')
   }
@@ -946,11 +1004,26 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     makeAdBatch({ client, intake, ads, count, template, about })
       .then((sets) => {
         batchLanded.current = true
-        setBatch({ status: 'done', sets, active: 0, error: '' })
-        setBatchSeed(sets[0])
+        setBatch({ status: 'done', sets, active: 0, error: '', madeAt: new Date().toISOString() })
+        showBatchSet(sets[0])
       })
       .catch((err) => setBatch({ status: 'failed', sets: [], active: 0, error: err.message }))
   }
+
+  // Every edit to a batch set is kept (ad_batches), so leaving the Studio,
+  // the page or the day loses nothing: the strip comes back as it was. A
+  // beat after the last keystroke rather than on each one. Saving all of
+  // them, or "Forget these", drops the row.
+  useEffect(() => {
+    if (!batch || batch.status !== 'done' || batch.saved) return
+    const t = setTimeout(() => {
+      saveBatchDraft(client.id, batchWithEdits()).catch((err) => console.warn('The batch was not kept:', err.message))
+    }, 800)
+    return () => clearTimeout(t)
+    // The fields are read through batchWithEdits(); listing them here is what
+    // makes an edit schedule a write.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batch, applied, badge, hook, offerAmount, offerDetail, subhead, proof, primaryText, metaHeadline, metaDescription, accent, badgeColor, layout, backgroundPath, afterPath, kicker, sticker, offers, cutout, theme])
 
   // The client's uploaded images. Reloadable, because the Studio stays
   // mounted under the chat and the Files section: a photo added there, or
@@ -1445,6 +1518,8 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         n++
       }
       setBatch({ ...cur, saved: true })
+      // Saved is saved: the kept copy has done its job.
+      forgetBatchDraft(client.id).catch(() => {})
       setSaved(`Saved ${n} ads, three sizes each. Find them on the Saved ads tab, or send them for approval from there.`)
       setSavedAt(Date.now())
     } catch (err) {
@@ -1792,7 +1867,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         </div>
       )}
 
-      {seed && <SeedBanner seed={seed} />}
+      {applied?.from === 'seed' && <SeedBanner seed={applied.set} />}
 
       {batch && (
         <BatchStrip
@@ -1803,10 +1878,13 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           onShow={showSet}
           onSave={saveBatch}
           onRetry={() => startBatch()}
-          onDismiss={() => setBatch(null)}
+          onDismiss={() => {
+            setBatch(null)
+            forgetBatchDraft(client.id).catch(() => {})
+          }}
         />
       )}
-      {batch?.status === 'done' && batch.sets[batch.active] && <SeedBanner seed={batch.sets[batch.active]} from="Ad" index={batch.active} />}
+      {batch?.status === 'done' && applied?.from === 'batch' && batch.sets[batch.active] && <SeedBanner seed={batch.sets[batch.active]} from="Ad" index={batch.active} />}
 
       {editing && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
