@@ -1,0 +1,37 @@
+# Copies the twelve real equipment photos from the public stock library into
+# a throwaway branch (relay/stock-units), so a build or a review session that
+# cannot reach the Supabase bucket directly can still fetch them from GitHub.
+# Run it by hand (Actions > Relay the stock unit photos > Run workflow).
+name: Relay the stock unit photos
+
+on:
+  workflow_dispatch:
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the photos from the public bucket
+        run: |
+          mkdir -p relay/units
+          for k in ac furnace boiler water_heater mini_split thermostat old_ac old_furnace old_boiler old_water_heater old_mini_split old_thermostat; do
+            if curl -fsSL -o "relay/units/$k.png" "https://zjtwqpaaejrkurtuakdz.supabase.co/storage/v1/object/public/client-files/stock/units/$k.png"; then
+              echo "got $k ($(stat -c%s "relay/units/$k.png") bytes)"
+            else
+              echo "missing $k"
+              rm -f "relay/units/$k.png"
+            fi
+          done
+          ls -la relay/units
+      - name: Put them on the relay branch
+        run: |
+          git config user.name "stock-relay"
+          git config user.email "stock-relay@users.noreply.github.com"
+          git checkout --orphan relay/stock-units
+          git rm -rf --cached . >/dev/null 2>&1 || true
+          git add -f relay/units
+          git commit -m "Relay: the stock unit photos as of $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -f origin relay/stock-units

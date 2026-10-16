@@ -8,7 +8,13 @@
 // keys live in ../_shared/unitPhotos.js, shared with the browser and the
 // Node checks. The OpenAI key never leaves the server.
 //
-// Deployed with verify_jwt = true; the CRM calls it with the anon key.
+// Deployed with verify_jwt = false and its own door check: a call must carry
+// the project's anon or service key as its bearer (what the CRM sends), or
+// the fill token kept in the database vault (public.stock_fill_token(),
+// readable by the service role only), which a one-off fill run from the
+// database through pg_net sends in an x-fill-token header, since pg_net has
+// no key of its own to hand. Making a photo spends the agency's OpenAI
+// money, so nobody else gets in.
 //
 // Secrets: OPENAI_API_KEY.
 //
@@ -28,11 +34,27 @@ const QUALITIES = ['low', 'medium', 'high']
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-fill-token',
 }
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...CORS } })
+}
+
+/** True when the request comes from the CRM (the project's own keys) or carries the vault's fill token. */
+async function allowed(req: Request, supabaseUrl: string, serviceKey: string): Promise<boolean> {
+  const bearer = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
+  const keys = [Deno.env.get('SUPABASE_ANON_KEY'), serviceKey].filter(Boolean)
+  if (bearer && keys.includes(bearer)) return true
+  const given = req.headers.get('x-fill-token') || ''
+  if (!given) return false
+  const res = await fetch(`${supabaseUrl}/rest/v1/rpc/stock_fill_token`, {
+    method: 'POST',
+    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  const token = res.ok ? String((await res.json().catch(() => '')) || '') : ''
+  return Boolean(token) && token.length === given.length && token === given
 }
 
 Deno.serve(async (req) => {
@@ -42,6 +64,7 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const storage = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }
+  if (!(await allowed(req, supabaseUrl, serviceKey))) return json({ error: 'Not allowed.' }, 401)
 
   let body: Record<string, unknown> = {}
   try {
