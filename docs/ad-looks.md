@@ -22,7 +22,7 @@ Dragging the artboard still moves the photo's focal point on the photo looks, an
 
 Added 2026-10-15. The photo looks above compose the client's photo with the words. The templates are posters: a painted background for the season (snow, falling leaves, summer sun, spring green, a warm glow with flames, night, holiday red and green, white paper, or the brand colour), condensed capitals that shout, SALE and the price where the thumb lands, offers in a starburst, a seal, a ribbon or a grid of tiles, Google stars, and a piece of equipment standing in the corner. The kind of ad a home-services company runs in the fall and the winter.
 
-They sit in a gallery under the Look row, every one painted small with the words and the colours on the form, so choosing is choosing by eye. Click one and it is the look; "Next look" cycles through the photo looks and the templates together.
+They sit in a gallery under the Look row, every one painted small with the words and the colours on the form, so choosing is choosing by eye. The tiles wrap into a grid that fills the column, so all sixteen are on screen at once (they used to sit in one sideways-scrolling strip, which on a laptop showed four or five and no scrollbar to say there were more). Click one and it is the look; "Next look" cycles through the photo looks and the templates together.
 
 | Template | What it is |
 | --- | --- |
@@ -98,6 +98,6 @@ The photo looks (Classic, Headline stack, Bottom plate, Split panel, Before and 
 ## Where the code is
 
 - `src/lib/adLooks.js`: the stack, plate, split and AI looks. `src/lib/adText.js`: the shared type helpers. `src/lib/adLayout.js`: the pure placement math (`plateRects`, `splitRects`, `containRect`, `accentWord`), tested by `scripts/check-ad-layout.mjs`.
-- `src/lib/adTemplates.js`: the fourteen templates, the themes, the elements (shout, script, starburst, seal, ribbon, tiles, stars) and the equipment drawings. `src/lib/adTemplateMeta.js`: their names, the themes and cutouts, and the pure helpers (`themeFor`, `seasonKicker`, `offersFor`), tested by `scripts/check-ad-templates.mjs`. `src/components/TemplateGallery.jsx`: the thumbnails. `src/lib/stockLibrary.js` and `src/components/StockPicker.jsx`: the stock library.
+- `src/lib/adTemplates.js`: the sixteen templates, the themes, the elements (shout, script, starburst, seal, ribbon, tiles, stars) and the equipment drawings. `src/lib/adTemplateMeta.js`: their names, the themes and cutouts, and the pure helpers (`themeFor`, `seasonKicker`, `offersFor`), tested by `scripts/check-ad-templates.mjs`. `src/components/TemplateGallery.jsx`: the thumbnails. `src/lib/stockLibrary.js` and `src/components/StockPicker.jsx`: the stock library.
 - `src/lib/adCanvas.js`: the classic look and the card, and the hand-off to `adLooks.js`.
 - `supabase/ad-concepts.sql`: the `ad_concepts` table (retired) and the wider `saved_ads.layout` check. Applied live.
