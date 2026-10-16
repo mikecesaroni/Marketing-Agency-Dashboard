@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { askLabel, scriptsSummary } from '../../supabase/functions/_shared/scriptStudio.js'
 import { fetchClientScripts, scriptsLink } from '../lib/scriptStudioStore'
 
-const STATUS = { new: ['New', 'bg-orange-100 text-orange-900'], saved: ['Saved', 'bg-slate-200 text-slate-800'], filmed: ['Filmed', 'bg-green-100 text-green-900'], archived: ['Set aside', 'bg-slate-100 text-slate-500'] }
+const STATUS = { new: ['Ready', 'bg-orange-100 text-orange-900'], saved: ['Ready', 'bg-orange-100 text-orange-900'], filmed: ['Filmed', 'bg-green-100 text-green-900'], archived: ['Set aside', 'bg-slate-100 text-slate-500'] }
 const when = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
 /**

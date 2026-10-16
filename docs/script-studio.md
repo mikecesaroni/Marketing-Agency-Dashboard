@@ -12,7 +12,7 @@ It is one tab of the client's one link. The client portal (`src/lib/clientPortal
 
 **What if they want something else?** "Or make your own": ten topics as big chips (this month's offer, a problem I fix every week, meet the owner, a happy customer, before and after, a quick tip, a question I always get, when it breaks, tune-up or plan, why we cost what we cost), three lengths (15, 30, 60 seconds), and behind "More choices" who is on camera (just me, me and a tech, my voice over clips), where (truck, job, shop, customer's home) and tone (straight talk, friendly neighbour, a little funny). An optional box for "anything to add". Two taps is enough.
 
-**What does a script look like?** The hook first, marked "first three seconds". Four to eight spoken lines, each one breath, in big type, with "Show:" under each for what the camera sees. Then the words to put on the screen, "Film it" (where to stand, what to show), and the caption to post with it. "About 30 seconds to say" is counted from the words at 2.5 a second.
+**What does a script look like?** The hook first, marked "first three seconds". Four to eight spoken lines, each one breath, in big type, with "Show:" under each for what the camera sees. Then "Film it" (where to stand, what to show) and the caption to post with it. No on-screen words: the owner just talks, and any text goes on in the edit. "About 30 seconds to say" is counted from the words at 2.5 a second.
 
 **How do they read it while filming?** The teleprompter: the spoken lines huge, white on black, scrolling at reading pace; tap to start and stop, Slower and Faster, bigger and smaller text. For a phone propped next to the one filming, or a laptop behind it. Also "Read it to me" (the phone reads it aloud so they hear the rhythm), Copy, Share or "Text it to me", and Print.
 
@@ -22,7 +22,7 @@ It is one tab of the client's one link. The client portal (`src/lib/clientPortal
 
 **How does it sound like them?** Two ways. "How I talk" is a short sheet: what people call them, "I" or "we", straight talk / friendly / funny, words they never say, how they sign off, anything else. And the transcripts of videos they have already made (`ad_videos.transcript`, from the publish screen) go into the brief as "how they actually sound".
 
-**What happens after they film?** "I filmed this" marks the script filmed (the CRM card shows it). "Filmed it? Send it to us" has their Drive folder when one is linked, else the words to text or email it the usual way. Save for later and Not for me keep the list honest.
+**What happens after they film?** "I filmed this" marks the script filmed (the CRM card shows it). "Filmed it? Send it to us" has their Drive folder when one is linked, else the words to text or email it the usual way. Every script is kept the moment it is written (there is no save button; the page says so under each one), and "Not for me" sets one aside.
 
 **Is it safe?** The page talks only to the `script-studio` Edge Function. The token names the client; every read is by that client's id; a script id has to belong to that client. The brief is built on the server from the CRM, so the browser never holds the Anthropic key or a prompt it could bend. Fields a client should not see stay out of the brief: budgets, fees, call notes, complaints about past marketers. Forty scripts a day per link.
 

@@ -303,7 +303,7 @@ ${playbook || 'No season notes. Write to what the company sells now.'}
 - Match the length asked for: about ${WORDS_PER_SECOND} words a second of speaking (15 seconds is about 38 words, 30 is about 75, 60 is about 150). Count the spoken words.
 - Four to eight spoken lines. Each line is one breath: one or two short sentences. Under each, say what the camera should show.
 - No em dashes anywhere. No hashtags in the spoken lines (the caption may have two or three).
-- No emoji.
+- No emoji. No on-screen text or captions to burn in; the owner just talks, and we add any text in the edit.
 
 === OUTPUT ===
 Reply with one JSON object and nothing else, no markdown fence, no words before or after:
@@ -315,7 +315,6 @@ Reply with one JSON object and nothing else, no markdown fence, no words before 
   "lines": [
     { "say": "the words the owner says, one breath", "show": "what the camera sees or what to hold up" }
   ],
-  "on_screen": ["three to six words of caption text to put on the video", "two or three of these"],
   "caption": "the caption to post with it: two short lines, the offer and the phone or link, then two or three hashtags",
   "cta": "the one thing the viewer should do, as the owner says it",
   "film_it": "where to stand, what to show, one or two sentences, speaking to the owner as you"
@@ -355,7 +354,11 @@ export function reviseAsk(script, changeKey, extra = '') {
   return lines.join('\n')
 }
 
-/** Only the fields a script carries, in order, so a stored row and a model reply compare alike. */
+/**
+ * Only the fields a script carries, in order, so a stored row and a model
+ * reply compare alike. (Older rows carry an on_screen list; it is dropped
+ * here, so nothing shows it and a rewrite does not carry it forward.)
+ */
 export function stripScript(s) {
   const x = s || {}
   return {
@@ -364,7 +367,6 @@ export function stripScript(s) {
     seconds: Number(x.seconds) || 0,
     hook: String(x.hook || ''),
     lines: (Array.isArray(x.lines) ? x.lines : []).map((l) => ({ say: String(l?.say || ''), show: String(l?.show || '') })),
-    on_screen: (Array.isArray(x.on_screen) ? x.on_screen : []).map((t) => String(t || '')),
     caption: String(x.caption || ''),
     cta: String(x.cta || ''),
     film_it: String(x.film_it || ''),
@@ -398,7 +400,6 @@ export function parseScript(text) {
     hook,
     lines,
     seconds: Number(obj.seconds) || secondsFor(lines),
-    on_screen: (Array.isArray(obj.on_screen) ? obj.on_screen : typeof obj.on_screen === 'string' ? [obj.on_screen] : []).filter(Boolean),
   })
   // The hook is the first line; a hook that drifted from it is corrected to it.
   if (script.lines[0].say !== script.hook) script.hook = script.lines[0].say
@@ -408,7 +409,6 @@ export function parseScript(text) {
   script.why_now = clean(script.why_now)
   script.hook = clean(script.hook)
   script.lines = script.lines.map((l) => ({ say: clean(l.say), show: clean(l.show) }))
-  script.on_screen = script.on_screen.map(clean)
   script.caption = clean(script.caption)
   script.cta = clean(script.cta)
   script.film_it = clean(script.film_it)
@@ -423,7 +423,6 @@ export function scriptToText(script, { name = '' } = {}) {
     out.push(`${i + 1}. ${l.say}`)
     if (l.show) out.push(`   Show: ${l.show}`)
   })
-  if (s.on_screen.length) out.push('', `On screen: ${s.on_screen.join(' / ')}`)
   if (s.film_it) out.push('', `Film it: ${s.film_it}`)
   if (s.caption) out.push('', 'Caption to post:', s.caption)
   return out.join('\n')
@@ -442,9 +441,9 @@ export function scriptsSummary(rows = []) {
   const n = rows.length
   if (!n) return 'No scripts yet. Send them the link and the first three picks are waiting.'
   const filmed = rows.filter((r) => r.status === 'filmed').length
-  const saved = rows.filter((r) => r.status === 'saved').length
+  const aside = rows.filter((r) => r.status === 'archived').length
   const parts = [`${n} script${n === 1 ? '' : 's'}`]
   if (filmed) parts.push(`${filmed} filmed`)
-  if (saved) parts.push(`${saved} saved`)
+  if (aside) parts.push(`${aside} set aside`)
   return parts.join(' · ')
 }

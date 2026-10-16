@@ -87,7 +87,8 @@ check('how they talk is in, with their own words', /goes by Ethan/.test(brief) &
 check('the season is in', /It is October/.test(brief), true)
 check('the website fact sheet is in', /Family-owned since 2011/.test(brief), true)
 check('the rules: no ID numbers, no brackets, no em dashes, the pace', [/Never a licence/.test(brief), /No brackets/.test(brief), /No em dashes/.test(brief), /2.5 words a second/.test(brief)], [true, true, true, true])
-check('the output is one JSON object with the fields the page reads', ['"title"', '"why_now"', '"seconds"', '"hook"', '"lines"', '"say"', '"show"', '"on_screen"', '"caption"', '"cta"', '"film_it"'].every((k) => brief.includes(k)), true)
+check('the output is one JSON object with the fields the page reads', ['"title"', '"why_now"', '"seconds"', '"hook"', '"lines"', '"say"', '"show"', '"caption"', '"cta"', '"film_it"'].every((k) => brief.includes(k)), true)
+check('no on-screen words asked for: the owner just talks', !brief.includes('"on_screen"') && /No on-screen text/.test(brief), true)
 check('nothing the client should not see', /secret agency notes|meta_ad_budget|50\/day/.test(brief), false)
 check('the voice block alone reads', /Tone: friendly neighbour/.test(voiceBlock(facts.voice)), true)
 
@@ -108,7 +109,10 @@ check('an em dash never reaches the client', /[—–]/.test(JSON.stringify(scri
 check('the hook is the first line', script.hook, script.lines[0].say)
 check('seconds and the caption come through', [script.seconds, /#hvac/.test(script.caption)], [30, true])
 check('junk is null, one line is null', [parseScript('no json here'), parseScript('{"title":"x","lines":[{"say":"only one"}]}')], [null, null])
-check('string lines and a string on_screen are coerced', parseScript('{"lines":["Hello there neighbours.","Call us."],"on_screen":"Call today"}').on_screen, ['Call today'])
+check('string lines are coerced and an old on_screen list is dropped', (() => {
+  const p = parseScript('{"lines":["Hello there neighbours.","Call us."],"on_screen":["Call today"]}')
+  return [p.lines.length, 'on_screen' in p]
+})(), [2, false])
 check('seconds are counted when missing', parseScript('{"lines":[{"say":"one two three four five"},{"say":"six seven eight nine ten"}]}').seconds, 4)
 check('the reading time adds the spoken words at 2.5 a second', secondsFor([{ say: 'one two three four five six seven eight nine ten' }, { say: 'eleven twelve thirteen fourteen fifteen' }]), 6)
 
@@ -119,9 +123,9 @@ check('an unknown change with words uses the words', /Rewrite it in Spanish/.tes
 
 // ---------------------------------------------------------------- the text
 const text = scriptToText(script, { name: 'Prime' })
-check('plain text for copy and share', text.startsWith('FURNACE TUNE-UP BEFORE THE FREEZE\nAbout 30 seconds · Prime') && /1\. Your furnace has not run since March\.\n   Show: You at the truck/.test(text) && /Caption to post:/.test(text), true)
+check('plain text for copy and share', text.startsWith('FURNACE TUNE-UP BEFORE THE FREEZE\nAbout 30 seconds · Prime') && /1\. Your furnace has not run since March\.\n   Show: You at the truck/.test(text) && /Caption to post:/.test(text) && !/On screen/.test(text), true)
 check('the ask as a line', askLabel({ topic: 'season', length: '30', setting: 'truck' }), 'This month’s offer · 30 seconds · in the truck')
-check('the CRM summary', [scriptsSummary([]), scriptsSummary([{ status: 'filmed' }, { status: 'saved' }, { status: 'new' }])], ['No scripts yet. Send them the link and the first three picks are waiting.', '3 scripts · 1 filmed · 1 saved'])
+check('the CRM summary', [scriptsSummary([]), scriptsSummary([{ status: 'filmed' }, { status: 'archived' }, { status: 'new' }])], ['No scripts yet. Send them the link and the first three picks are waiting.', '3 scripts · 1 filmed · 1 set aside'])
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll script studio checks pass')
 process.exit(failures ? 1 : 0)

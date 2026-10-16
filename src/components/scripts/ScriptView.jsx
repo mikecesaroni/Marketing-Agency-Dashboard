@@ -125,25 +125,11 @@ export default function ScriptView({ row, clientName, busy, onBack, onChange, on
         ))}
       </ol>
 
-      {(s.on_screen?.length > 0 || s.film_it) && (
+      {s.film_it && (
         <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          {s.on_screen?.length > 0 && (
-            <>
-              <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-slate-600">Words to put on the screen</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {s.on_screen.map((t, i) => (
-                  <span key={i} className="rounded-lg bg-slate-900 px-3 py-1.5 text-[15px] font-bold text-white">
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-          {s.film_it && (
-            <p className="mt-3 text-[15px] text-slate-700">
-              <span className="font-semibold">Film it:</span> {s.film_it}
-            </p>
-          )}
+          <p className="text-[15px] text-slate-700">
+            <span className="font-semibold">Film it:</span> {s.film_it}
+          </p>
         </section>
       )}
 
@@ -184,24 +170,24 @@ export default function ScriptView({ row, clientName, busy, onBack, onChange, on
         {busy && <p className="mt-2 text-[14px] text-orange-800">Rewriting… about half a minute. The old one stays in your list.</p>}
       </section>
 
-      <section className="flex flex-wrap items-center gap-2" data-script-status>
-        {status !== 'filmed' && (
-          <button type="button" onClick={() => onStatus('filmed')} className="rounded-xl bg-green-700 px-5 py-3.5 text-[17px] font-bold text-white hover:bg-green-800" data-mark-filmed>
-            I filmed this
-          </button>
-        )}
-        {status === 'filmed' && <span className="rounded-xl bg-green-100 px-4 py-3 text-[15px] font-bold text-green-900">Filmed. Send us the video and we take it from here.</span>}
-        {status !== 'saved' && status !== 'filmed' && (
-          <button type="button" onClick={() => onStatus('saved')} className={action} data-mark-saved>
-            Save for later
-          </button>
-        )}
-        {status === 'saved' && <span className="rounded-xl bg-slate-100 px-4 py-3 text-[15px] font-semibold text-slate-700">Saved</span>}
-        {status !== 'archived' && (
-          <button type="button" onClick={() => onStatus('archived')} className="ml-auto text-[14px] text-slate-500 underline hover:text-slate-800" data-mark-archived>
-            Not for me
-          </button>
-        )}
+      <section className="space-y-2" data-script-status>
+        <div className="flex flex-wrap items-center gap-2">
+          {status !== 'filmed' && (
+            <button type="button" onClick={() => onStatus('filmed')} className="rounded-xl bg-green-700 px-5 py-3.5 text-[17px] font-bold text-white hover:bg-green-800" data-mark-filmed>
+              I filmed this
+            </button>
+          )}
+          {status === 'filmed' && <span className="rounded-xl bg-green-100 px-4 py-3 text-[15px] font-bold text-green-900">Filmed. Send us the video and we take it from here.</span>}
+          {status !== 'archived' && (
+            <button type="button" onClick={() => onStatus('archived')} className="ml-auto text-[14px] text-slate-500 underline hover:text-slate-800" data-mark-archived>
+              Not for me
+            </button>
+          )}
+        </div>
+        {/* Every script is kept the moment it is written; nothing to save. */}
+        <p className="text-[14px] text-slate-500" data-autosaved>
+          Saved to your scripts automatically. Close this and it is still here when you come back.
+        </p>
       </section>
 
       {prompter && <Teleprompter lines={lines} title={s.title} onClose={() => setPrompter(false)} />}

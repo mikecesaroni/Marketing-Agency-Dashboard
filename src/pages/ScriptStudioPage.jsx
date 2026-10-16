@@ -26,7 +26,8 @@ const when = (iso) => {
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
-const STATUS_LABEL = { new: 'New', saved: 'Saved', filmed: 'Filmed', archived: 'Set aside' }
+// 'saved' is from before every script was kept on its own; old rows keep it.
+const STATUS_LABEL = { new: 'Ready', saved: 'Ready', filmed: 'Filmed', archived: 'Set aside' }
 const STATUS_STYLE = {
   new: 'bg-orange-100 text-orange-900',
   saved: 'bg-slate-200 text-slate-800',
@@ -202,6 +203,7 @@ function Mine({ rows, onOpen }) {
   return (
     <section data-mine>
       <h2 className="text-2xl font-bold tracking-tight">Your scripts</h2>
+      <p className="mt-1 text-[15px] text-slate-600">Every script you write is kept here on its own. Tap one to open it again.</p>
       <ul className="mt-3 divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white">
         {shown.map((r) => (
           <li key={r.id}>
