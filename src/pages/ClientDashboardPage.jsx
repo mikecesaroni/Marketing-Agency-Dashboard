@@ -321,8 +321,11 @@ export default function ClientDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-200" data-client-dashboard>
-      <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+      <div className="mx-auto max-w-6xl px-4 pb-6 pt-2 md:px-8 md:pb-8 md:pt-3">
+        {/* One link, several tabs: this is the numbers tab. Stuck to the
+            top so the way to the scripts is always one tap away. */}
+        <PortalTabs token={token} active="numbers" dark />
+        <header className="mt-5 flex flex-wrap items-end justify-between gap-4">
           <div>
             {/* The WC mark at icon size with the agency's name beside it. The
                 mark is dark on off-white by design, so it keeps its own small
@@ -351,11 +354,7 @@ export default function ClientDashboardPage() {
               {rangeLabel(win.from, win.to)}, compared with the {days} days before.
             </p>
           </div>
-          <div className="flex flex-col items-end gap-3">
-            {/* One link, several tabs: this is the numbers tab. */}
-            <PortalTabs token={token} active="numbers" dark />
-            <Segmented options={RANGES} value={days} onChange={setDays} />
-          </div>
+          <Segmented options={RANGES} value={days} onChange={setDays} />
         </header>
 
         {!hasData && (

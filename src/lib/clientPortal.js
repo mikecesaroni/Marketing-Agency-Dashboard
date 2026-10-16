@@ -12,8 +12,8 @@
 // <PortalTabs> in its header.
 
 export const PORTAL_TABS = [
-  { key: 'numbers', label: 'Your numbers', prefix: '/dashboard/', hint: 'Leads, spend, cost per lead, and what each one means.' },
-  { key: 'scripts', label: 'Video scripts', prefix: '/scripts/', hint: 'What to film this week, written from your business.' },
+  { key: 'numbers', label: 'Your numbers', prefix: '/dashboard/', hint: 'Leads, spend and what they mean' },
+  { key: 'scripts', label: 'Video scripts', prefix: '/scripts/', hint: 'What to film this week' },
 ]
 
 /** The address of one tab for a token. */

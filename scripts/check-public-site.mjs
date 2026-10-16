@@ -32,6 +32,9 @@ for (const p of publicPages) {
   check(`${p.split('/').pop()} has no CRM shell and no CRM link`, [src.includes("components/Layout"), crmLink ? crmLink[0] : null], [false, null])
 }
 
+// The agency's help chat never floats over a client page.
+check('the help chat hides on every kind of client page', PUBLIC_PREFIXES.every((p) => read('src/components/HelpChat.jsx').includes(p.replace(/\//g, ''))), true)
+
 // The router serves only the public pages on a client-facing site.
 const app = read('src/App.jsx')
 check('App.jsx has a client-facing mode with a dead end', app.includes('onPublicSite()') && app.includes('NothingHerePage') && app.includes('path="*"'), true)

@@ -39,8 +39,11 @@ const chip = (on) => `rounded-full border px-4 py-2.5 text-[15px] font-semibold 
 
 function Header({ name, token }) {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-2.5">
+    <>
+      {/* One link, several tabs: this is the scripts tab. Stuck to the top
+          so the way back to the numbers is always one tap away. */}
+      <PortalTabs token={token} active="scripts" />
+      <header className="flex items-center gap-2.5">
         <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f8f7f5] ring-1 ring-slate-200">
           <img src="/brand/wc-mark.jpg" alt="The Working Class" className="h-10 w-10 object-contain" />
         </span>
@@ -48,10 +51,8 @@ function Header({ name, token }) {
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-700">Video scripts</p>
           <p className="text-[15px] font-semibold text-slate-900">{name}</p>
         </div>
-      </div>
-      {/* One link, several tabs: this is the scripts tab. */}
-      <PortalTabs token={token} active="scripts" />
-    </header>
+      </header>
+    </>
   )
 }
 
@@ -350,11 +351,9 @@ export default function ScriptStudioPage() {
   if (!data) {
     return (
       <div className="min-h-screen bg-[#FBFBF8] text-slate-900" data-script-studio-error>
-        <div className="mx-auto max-w-xl px-4 py-16">
-          <div className="mb-6">
-            <PortalTabs token={token} active="scripts" />
-          </div>
-          <h1 className="text-2xl font-bold">This link did not open</h1>
+        <div className="mx-auto max-w-xl px-4 pb-16 pt-2">
+          <PortalTabs token={token} active="scripts" />
+          <h1 className="mt-10 text-2xl font-bold">This link did not open</h1>
           <p className="mt-2 text-[17px] text-slate-700">{error || 'The link may be old. Ask us for a fresh one and we will send it over.'}</p>
           <p className="mt-6 text-[14px] text-slate-500">{AGENCY}</p>
         </div>
@@ -367,7 +366,7 @@ export default function ScriptStudioPage() {
 
   return (
     <div className="min-h-screen bg-[#FBFBF8] text-slate-900" data-script-studio>
-      <div className="mx-auto max-w-xl space-y-6 px-4 pb-24 pt-5">
+      <div className="mx-auto max-w-xl space-y-6 px-4 pb-24 pt-2">
         <Header name={name} token={token} />
 
         {error && (
