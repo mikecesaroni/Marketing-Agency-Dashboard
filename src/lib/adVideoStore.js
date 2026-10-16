@@ -15,6 +15,16 @@ export function publicUrl(path) {
   return supabase.storage.from('client-files').getPublicUrl(path).data.publicUrl
 }
 
+/**
+ * A link that downloads the file under its own name rather than playing it.
+ * The bucket is on another origin, so an anchor's `download` attribute is
+ * ignored by browsers; Supabase's `?download=<name>` sets the disposition
+ * server-side instead.
+ */
+export function downloadUrl(path, name = '') {
+  return supabase.storage.from('client-files').getPublicUrl(path, { download: name || true }).data.publicUrl
+}
+
 export async function fetchClientVideos(clientId, account) {
   const [files, registered, drive] = await Promise.all([
     supabase

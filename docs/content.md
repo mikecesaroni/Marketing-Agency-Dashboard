@@ -54,7 +54,12 @@ days, or until somebody clicks "not new ×" on the row (for a clip published
 by hand in Ads Manager, a duplicate, a test). Only clips uploaded into the
 CRM count; a video a client adds to their Google Drive folder is raw footage,
 not a drop, and never flags. "Click to publish" ticks every new clip on the
-row and nothing else. The name comes from the "You:"
+row and nothing else. Beside it, a **Download** link per new clip (two clips,
+two links, each under its own file name) hands over the finished file
+itself, for a client's own posting, a second cut or an archive; the link
+goes through the bucket's download disposition, so the browser saves the
+file instead of playing it. The same links appear under the drop zone the
+moment a clip lands. The name comes from the "You:"
 the CRM keeps for tasks. "clear
 new-clip flags" under the board starts fresh: everything already in the CRM
 stops counting as new (`app_settings.video_drops_reset_at`).
