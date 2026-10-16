@@ -2282,8 +2282,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           </div>
           {stockOpen && <StockPicker value={cutout} onChange={setCutout} onClose={() => setStockOpen(false)} />}
           <p className="text-[11px] text-slate-500">
-            The built-in equipment is drawn flat; the stock library holds real photos (a PNG with a transparent background looks
-            best) that every client can use. The badge, hook, offer, subhead and proof above all go on the template too; the proof
+            The built-in equipment is drawn as a product shot (a furnace with the burner glowing behind its sight glass, a
+            condenser with its fan grille and line set, and so on); the stock library holds real photos (a PNG with a transparent
+            background looks best) that every client can use. The badge, hook, offer, subhead and proof above all go on the template too; the proof
             paints as five gold stars.
           </p>
         </div>

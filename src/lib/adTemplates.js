@@ -337,199 +337,679 @@ function metal(ctx, x, y, w, h, light = '#E2E8F0', dark = '#94A3B8') {
   return g
 }
 
-function drawAc(ctx, x, y, w, h) {
-  const bw = Math.min(w, h * 1.05)
-  const bh = bw * 0.95
-  const bx = x + (w - bw) / 2
-  const by = y + h - bh
-  shadow(ctx, bx + bw / 2, by + bh - 6, bw * 0.6, bw * 0.12)
-  ctx.fillStyle = metal(ctx, bx, by, bw, bh, '#CBD5E1', '#64748B')
-  roundRect(ctx, bx, by + bh * 0.1, bw, bh * 0.9, bw * 0.06)
-  ctx.fill()
-  // Grille lines.
-  ctx.strokeStyle = 'rgba(15,23,42,0.35)'
-  ctx.lineWidth = 2
-  for (let i = 0; i < 14; i++) {
-    const gy = by + bh * 0.22 + i * (bh * 0.68 / 14)
-    ctx.beginPath()
-    ctx.moveTo(bx + bw * 0.06, gy)
-    ctx.lineTo(bx + bw * 0.94, gy)
-    ctx.stroke()
-  }
-  // The top with the fan.
-  ctx.fillStyle = '#1E293B'
-  roundRect(ctx, bx, by, bw, bh * 0.16, bw * 0.06)
-  ctx.fill()
-  ctx.save()
-  ctx.translate(bx + bw / 2, by + bh * 0.08)
-  ctx.scale(1, 0.38)
-  ctx.fillStyle = '#0F172A'
+// The drawings share one style: a product shot in a shallow oblique view
+// (the front, a sliver of the side, the top) in brand-neutral light grey
+// with a dark base, crisp edges, copper and white PVC pipework, and the
+// burner glowing behind a sight glass where there is one.
+const EDGE = 'rgba(15,23,42,0.45)'
+const lwFor = (size) => Math.max(1.2, size * 0.006)
+const COPPER = { body: '#D97706', highlight: '#FCD34D' }
+
+/** A round sight glass with the burner glowing behind it, the glow spilling onto the panel around it. */
+function sightGlass(ctx, gx, gy, gr, lw) {
+  const spill = ctx.createRadialGradient(gx, gy, gr * 0.6, gx, gy, gr * 2.4)
+  spill.addColorStop(0, 'rgba(251,146,60,0.35)')
+  spill.addColorStop(1, 'rgba(251,146,60,0)')
+  ctx.fillStyle = spill
   ctx.beginPath()
-  ctx.arc(0, 0, bw * 0.4, 0, Math.PI * 2)
+  ctx.arc(gx, gy, gr * 2.4, 0, Math.PI * 2)
   ctx.fill()
-  ctx.strokeStyle = 'rgba(148,163,184,0.7)'
-  ctx.lineWidth = 3
-  for (let i = 1; i < 6; i++) {
-    ctx.beginPath()
-    ctx.arc(0, 0, bw * 0.4 * (i / 6), 0, Math.PI * 2)
-    ctx.stroke()
-  }
-  ctx.restore()
-  // Base.
-  ctx.fillStyle = '#0F172A'
-  roundRect(ctx, bx + bw * 0.03, by + bh * 0.96, bw * 0.94, bh * 0.04, 4)
+  ctx.fillStyle = '#1E293B'
+  ctx.beginPath()
+  ctx.arc(gx, gy, gr, 0, Math.PI * 2)
   ctx.fill()
+  const flame = ctx.createRadialGradient(gx, gy + gr * 0.15, 1, gx, gy, gr * 0.8)
+  flame.addColorStop(0, '#FEF3C7')
+  flame.addColorStop(0.35, '#FB923C')
+  flame.addColorStop(0.8, '#9A3412')
+  flame.addColorStop(1, '#1E293B')
+  ctx.fillStyle = flame
+  ctx.beginPath()
+  ctx.arc(gx, gy, gr * 0.8, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)'
+  ctx.lineWidth = lw
+  ctx.beginPath()
+  ctx.arc(gx, gy, gr * 0.8, Math.PI * 1.1, Math.PI * 1.6)
+  ctx.stroke()
 }
 
-function drawFurnace(ctx, x, y, w, h) {
-  const bh = h
-  const bw = Math.min(w, h * 0.62)
-  const bx = x + (w - bw) / 2
-  const by = y
-  shadow(ctx, bx + bw / 2, by + bh - 6, bw * 0.7, bw * 0.14)
-  ctx.fillStyle = metal(ctx, bx, by, bw, bh)
-  roundRect(ctx, bx, by, bw, bh, bw * 0.05)
-  ctx.fill()
-  // Two panels with a seam, a vent slot on the upper one.
-  ctx.fillStyle = 'rgba(15,23,42,0.08)'
-  roundRect(ctx, bx + bw * 0.08, by + bh * 0.07, bw * 0.84, bh * 0.4, bw * 0.03)
-  ctx.fill()
-  roundRect(ctx, bx + bw * 0.08, by + bh * 0.52, bw * 0.84, bh * 0.41, bw * 0.03)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(15,23,42,0.25)'
-  ctx.lineWidth = 2
-  roundRect(ctx, bx + bw * 0.08, by + bh * 0.07, bw * 0.84, bh * 0.4, bw * 0.03)
+/**
+ * A round pipe along a run of points with rounded elbows: an outline, the
+ * body, and a highlight down the middle when one is given (copper shines,
+ * white PVC does not).
+ */
+function pipe(ctx, pts, d, { body = '#F8FAFC', highlight = '', lw = 1.5, radius } = {}) {
+  const r = radius ?? d
+  const path = () => {
+    ctx.beginPath()
+    ctx.moveTo(pts[0][0], pts[0][1])
+    for (let i = 1; i < pts.length - 1; i++) ctx.arcTo(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], r)
+    ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1])
+  }
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.strokeStyle = EDGE
+  ctx.lineWidth = d + lw * 2
+  path()
   ctx.stroke()
-  roundRect(ctx, bx + bw * 0.08, by + bh * 0.52, bw * 0.84, bh * 0.41, bw * 0.03)
+  ctx.strokeStyle = body
+  ctx.lineWidth = d
+  path()
   ctx.stroke()
+  if (highlight) {
+    ctx.strokeStyle = highlight
+    ctx.lineWidth = d * 0.3
+    path()
+    ctx.stroke()
+  }
+  ctx.lineCap = 'butt'
+}
+
+/** A raised door or panel on a cabinet front: a light line along the top, a shadow along the bottom. */
+function raisedPanel(ctx, d, fw, ch, lw) {
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'
+  roundRect(ctx, d.x, d.y, d.w, d.h, fw * 0.02)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(15,23,42,0.28)'
+  ctx.lineWidth = lw
+  roundRect(ctx, d.x, d.y, d.w, d.h, fw * 0.02)
+  ctx.stroke()
+  ctx.fillStyle = 'rgba(15,23,42,0.16)'
+  ctx.fillRect(d.x + fw * 0.02, d.y + d.h, d.w - fw * 0.04, Math.max(2, ch * 0.006))
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'
+  ctx.fillRect(d.x + fw * 0.02, d.y + lw, d.w - fw * 0.04, Math.max(1, ch * 0.003))
+  return d
+}
+
+/** A cabinet in the oblique view: the side, the top, the front with its sheen, outlined. */
+function cabinet(ctx, bx, by, fw, ch, sd, sh, lw, { top = '#CBD5E1' } = {}) {
+  const side = ctx.createLinearGradient(bx + fw, 0, bx + fw + sd, 0)
+  side.addColorStop(0, '#64748B')
+  side.addColorStop(1, '#475569')
+  quad(ctx, [[bx + fw, by], [bx + fw + sd, by - sh], [bx + fw + sd, by + ch - sh], [bx + fw, by + ch]], side, EDGE, lw)
+  quad(ctx, [[bx, by], [bx + sd, by - sh], [bx + fw + sd, by - sh], [bx + fw, by]], top, EDGE, lw)
+  const front = ctx.createLinearGradient(bx, 0, bx + fw, 0)
+  front.addColorStop(0, '#CBD5E1')
+  front.addColorStop(0.3, '#F8FAFC')
+  front.addColorStop(0.65, '#EEF2F7')
+  front.addColorStop(1, '#B6C2D1')
+  ctx.fillStyle = front
+  ctx.fillRect(bx, by, fw, ch)
+  ctx.strokeStyle = EDGE
+  ctx.lineWidth = lw
+  ctx.strokeRect(bx, by, fw, ch)
+}
+
+/** The dark base of a cabinet, front and side. */
+function cabinetBase(ctx, bx, by, fw, ch, sd, sh, from = 0.945) {
   ctx.fillStyle = '#334155'
-  roundRect(ctx, bx + bw * 0.38, by + bh * 0.13, bw * 0.24, bh * 0.035, 6)
-  ctx.fill()
-  // Side shading.
-  const sg = ctx.createLinearGradient(bx + bw * 0.8, 0, bx + bw, 0)
-  sg.addColorStop(0, 'rgba(15,23,42,0)')
-  sg.addColorStop(1, 'rgba(15,23,42,0.35)')
-  ctx.fillStyle = sg
-  roundRect(ctx, bx, by, bw, bh, bw * 0.05)
-  ctx.fill()
+  ctx.fillRect(bx, by + ch * from, fw, ch * (1 - from))
+  quad(ctx, [[bx + fw, by + ch * from], [bx + fw + sd, by + ch * from - sh], [bx + fw + sd, by + ch - sh], [bx + fw, by + ch]], '#1E293B')
 }
 
+/**
+ * An outdoor condenser as a product shot: a slim cabinet in the oblique
+ * view, louvered coil panels on the front and the side, a solid service
+ * panel on the corner, the fan grille set into the dark top, a base pan,
+ * and the insulated line set running from the service corner to the ground.
+ */
+function drawAc(ctx, x, y, w, h) {
+  const total = Math.min(w, h * 0.72)
+  const sd = total * 0.24
+  const sh = sd * 0.5
+  const fw = total - sd
+  const ch = Math.min(h * 0.8 - sh, total * 1.05)
+  const bx = x + (w - total) / 2
+  const by = y + h - ch
+  const lw = lwFor(fw)
+  shadow(ctx, bx + total / 2, by + ch - 4, total * 0.72, total * 0.13)
+  cabinet(ctx, bx, by, fw, ch, sd, sh, lw)
+  // Louvers down the side, following the oblique.
+  ctx.strokeStyle = 'rgba(15,23,42,0.4)'
+  ctx.lineWidth = lw
+  for (let i = 0; i <= 16; i++) {
+    const yy = by + ch * 0.1 + (i * ch * 0.8) / 16
+    ctx.beginPath()
+    ctx.moveTo(bx + fw + sd * 0.08, yy - sh * 0.08)
+    ctx.lineTo(bx + fw + sd * 0.92, yy - sh * 0.92)
+    ctx.stroke()
+  }
+  // The fan grille in the top: a dark disc, rings and spokes, the hub.
+  const cx = bx + fw / 2 + sd / 2
+  const cy = by - sh / 2
+  const rx = fw * 0.46
+  const ry = sh * 0.44
+  ctx.save()
+  ctx.translate(cx, cy)
+  ctx.scale(1, ry / rx)
+  ctx.fillStyle = '#1E293B'
+  ctx.beginPath()
+  ctx.arc(0, 0, rx, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(203,213,225,0.7)'
+  ctx.lineWidth = lw
+  for (let i = 1; i <= 4; i++) {
+    ctx.beginPath()
+    ctx.arc(0, 0, rx * (i / 4), 0, Math.PI * 2)
+    ctx.stroke()
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2
+    ctx.beginPath()
+    ctx.moveTo(Math.cos(a) * rx * 0.2, Math.sin(a) * rx * 0.2)
+    ctx.lineTo(Math.cos(a) * rx, Math.sin(a) * rx)
+    ctx.stroke()
+  }
+  ctx.fillStyle = '#475569'
+  ctx.beginPath()
+  ctx.arc(0, 0, rx * 0.14, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+  // The front: a band along the top, the coil louvers, the service panel.
+  ctx.fillStyle = 'rgba(15,23,42,0.08)'
+  ctx.fillRect(bx, by, fw, ch * 0.08)
+  const coil = { x: bx + fw * 0.05, y: by + ch * 0.12, w: fw * 0.66, h: ch * 0.78 }
+  ctx.fillStyle = 'rgba(15,23,42,0.06)'
+  ctx.fillRect(coil.x, coil.y, coil.w, coil.h)
+  const slotH = Math.max(2, ch * 0.012)
+  for (let i = 0; i < 16; i++) {
+    const sy = coil.y + coil.h * 0.04 + (i * coil.h * 0.92) / 16
+    ctx.fillStyle = '#334155'
+    roundRect(ctx, coil.x + coil.w * 0.04, sy, coil.w * 0.92, slotH, slotH / 2)
+    ctx.fill()
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    ctx.fillRect(coil.x + coil.w * 0.04, sy + slotH, coil.w * 0.92, Math.max(1, slotH * 0.4))
+  }
+  const panel = raisedPanel(ctx, { x: bx + fw * 0.75, y: by + ch * 0.12, w: fw * 0.2, h: ch * 0.78 }, fw, ch, lw)
+  ctx.fillStyle = '#0F172A'
+  roundRect(ctx, panel.x + panel.w * 0.15, panel.y + panel.h * 0.06, panel.w * 0.7, ch * 0.05, 3)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(15,23,42,0.35)'
+  for (const fy of [0.3, 0.9]) {
+    ctx.beginPath()
+    ctx.arc(panel.x + panel.w / 2, panel.y + panel.h * fy, Math.max(1.5, fw * 0.012), 0, Math.PI * 2)
+    ctx.fill()
+  }
+  cabinetBase(ctx, bx, by, fw, ch, sd, sh, 0.93)
+  // The line set: the insulated suction line and the copper liquid line,
+  // from the service corner down to the ground and away.
+  const d = fw * 0.06
+  const sx = panel.x + panel.w * 0.5
+  const sy = by + ch * 0.76
+  const gy = by + ch - d * 0.7
+  const ex = x + w - d
+  pipe(ctx, [[sx, sy], [sx, gy], [ex, gy]], d, { body: '#1F2937', lw, radius: d * 1.2 })
+  pipe(ctx, [[sx + d * 0.9, sy], [sx + d * 0.9, gy - d * 0.9], [ex, gy - d * 0.9]], d * 0.45, { ...COPPER, lw, radius: d * 0.8 })
+}
+
+/** A parallelogram from four points, filled and optionally outlined. */
+function quad(ctx, pts, fill, stroke, lineWidth) {
+  ctx.beginPath()
+  ctx.moveTo(pts[0][0], pts[0][1])
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
+  ctx.closePath()
+  if (fill) {
+    ctx.fillStyle = fill
+    ctx.fill()
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke
+    ctx.lineWidth = lineWidth || 1.5
+    ctx.stroke()
+  }
+}
+
+/**
+ * A high-efficiency gas furnace as a product shot: a two-door cabinet in a
+ * shallow oblique view (the front, a sliver of the side, the top), a louvered
+ * vent and a sight glass with the burner glowing behind it on the upper
+ * door, a recessed pull on the blower door, a dark base, a galvanized supply
+ * plenum stub on top and two white PVC vent pipes bending away. Everything
+ * is clipped to the box. (The old drawing was a plain grey slab with two
+ * faint rectangles; it read as a refrigerator.)
+ */
+function drawFurnace(ctx, x, y, w, h) {
+  const ch = h * 0.84 // the cabinet; the plenum and the pipes take the rest
+  const total = Math.min(w, ch * 0.66) // the front and the side together
+  const sd = total * 0.16 // the side's depth on the page
+  const sh = sd * 0.5 // how far the back edge rises
+  const fw = total - sd
+  const bx = x + (w - total) / 2
+  const by = y + h - ch
+  const edge = EDGE
+  const lw = lwFor(fw)
+  shadow(ctx, bx + total / 2, by + ch - 4, total * 0.72, total * 0.13)
+  cabinet(ctx, bx, by, fw, ch, sd, sh, lw)
+  // The two doors.
+  const upper = raisedPanel(ctx, { x: bx + fw * 0.06, y: by + ch * 0.05, w: fw * 0.88, h: ch * 0.4 }, fw, ch, lw)
+  const lower = raisedPanel(ctx, { x: bx + fw * 0.06, y: by + ch * 0.49, w: fw * 0.88, h: ch * 0.43 }, fw, ch, lw)
+
+  // The upper door: a louvered vent, the sight glass with the flame behind
+  // it, and a small rating plate.
+  const slotH = Math.max(2, ch * 0.012)
+  for (let i = 0; i < 7; i++) {
+    const sy = upper.y + upper.h * 0.1 + i * ch * 0.03
+    ctx.fillStyle = '#334155'
+    roundRect(ctx, upper.x + upper.w * 0.2, sy, upper.w * 0.6, slotH, slotH / 2)
+    ctx.fill()
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    ctx.fillRect(upper.x + upper.w * 0.2, sy + slotH, upper.w * 0.6, Math.max(1, slotH * 0.4))
+  }
+  sightGlass(ctx, upper.x + upper.w * 0.5, upper.y + upper.h * 0.7, fw * 0.085, lw)
+  ctx.fillStyle = '#0F172A'
+  roundRect(ctx, upper.x + upper.w * 0.08, upper.y + upper.h * 0.86, upper.w * 0.3, ch * 0.03, 3)
+  ctx.fill()
+  ctx.fillStyle = '#F97316'
+  ctx.fillRect(upper.x + upper.w * 0.1, upper.y + upper.h * 0.86 + ch * 0.008, upper.w * 0.05, ch * 0.014)
+
+  // The blower door: a recessed pull and an embossed line.
+  ctx.fillStyle = 'rgba(15,23,42,0.55)'
+  roundRect(ctx, lower.x + lower.w * 0.33, lower.y + lower.h * 0.1, lower.w * 0.34, ch * 0.028, ch * 0.014)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'
+  ctx.fillRect(lower.x + lower.w * 0.33, lower.y + lower.h * 0.1 + ch * 0.028, lower.w * 0.34, Math.max(1, ch * 0.004))
+  ctx.fillStyle = 'rgba(15,23,42,0.14)'
+  ctx.fillRect(lower.x + lower.w * 0.08, lower.y + lower.h * 0.58, lower.w * 0.84, Math.max(1, ch * 0.004))
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'
+  ctx.fillRect(lower.x + lower.w * 0.08, lower.y + lower.h * 0.58 + Math.max(1, ch * 0.004), lower.w * 0.84, Math.max(1, ch * 0.003))
+
+  cabinetBase(ctx, bx, by, fw, ch, sd, sh)
+
+  // The supply plenum stub on top: a galvanized duct with its open end.
+  const st = h * 0.09
+  const pd = sd * 0.6
+  const ph = sh * 0.6
+  const px = bx + fw * 0.19
+  const pw = fw * 0.6
+  const pBottom = by - sh * 0.35
+  const pTop = pBottom - st
+  quad(ctx, [[px + pw, pTop], [px + pw + pd, pTop - ph], [px + pw + pd, pBottom - ph], [px + pw, pBottom]], '#64748B', edge, lw)
+  ctx.fillStyle = metal(ctx, px, 0, pw, 0, '#E2E8F0', '#94A3B8')
+  ctx.fillRect(px, pTop, pw, st)
+  ctx.strokeStyle = edge
+  ctx.lineWidth = lw
+  ctx.strokeRect(px, pTop, pw, st)
+  ctx.fillStyle = 'rgba(15,23,42,0.3)'
+  ctx.fillRect(px, pTop + st * 0.45, pw, Math.max(1.5, st * 0.03))
+  quad(ctx, [[px, pTop], [px + pd, pTop - ph], [px + pw + pd, pTop - ph], [px + pw, pTop]], '#1E293B', edge, lw)
+  quad(ctx, [[px + lw * 2, pTop - lw], [px + pd, pTop - ph + lw * 2], [px + pw + pd - lw * 2, pTop - ph + lw * 2], [px + pw - lw, pTop - lw]], 'rgba(203,213,225,0.35)')
+
+  // Two white PVC vent pipes off the top, nested elbows bending away.
+  const d = fw * 0.075
+  const sx = bx + fw * 0.93
+  const sy = by - sh * 0.5
+  const ex = bx + fw + sd - d * 0.4
+  const bend1 = pTop - ph * 0.2
+  pipe(ctx, [[sx, sy], [sx, bend1], [ex, bend1]], d, { lw })
+  pipe(ctx, [[sx - d * 1.5, sy], [sx - d * 1.5, bend1 - d * 1.5], [ex, bend1 - d * 1.5]], d, { lw })
+}
+
+/**
+ * A floor-standing gas boiler as a product shot: a squat cabinet in the
+ * oblique view with a dark control strip (a display, two knobs, a round
+ * gauge), the burner door with its sight glass and a louver band, a dark
+ * base; on top the flue and the copper supply and return, a circulator
+ * pump on the supply and a ball valve on the return.
+ */
 function drawBoiler(ctx, x, y, w, h) {
-  const bh = h * 0.92
-  const bw = Math.min(w * 0.75, h * 0.55)
-  const bx = x + (w - bw) / 2
-  const by = y + h - bh
-  shadow(ctx, bx + bw / 2, by + bh - 6, bw * 0.7, bw * 0.14)
-  // Pipes on top.
-  ctx.strokeStyle = '#A16207'
-  ctx.lineWidth = bw * 0.06
-  ctx.lineCap = 'round'
+  const ch = h * 0.6
+  const total = Math.min(w, ch)
+  const sd = total * 0.18
+  const sh = sd * 0.5
+  const fw = total - sd
+  const bx = x + (w - total) / 2
+  const by = y + h - ch
+  const lw = lwFor(fw)
+  shadow(ctx, bx + total / 2, by + ch - 4, total * 0.72, total * 0.13)
+  // The pipework first, so the cabinet top sits over its feet.
+  const topY = by - sh * 0.5
+  const flueD = fw * 0.15
+  const flueX = bx + fw * 0.74
+  const flueTop = y + h * 0.03 + flueD * 0.2
+  pipe(ctx, [[flueX, topY], [flueX, flueTop]], flueD, { body: '#94A3B8', highlight: 'rgba(255,255,255,0.35)', lw })
+  ctx.fillStyle = '#475569'
   ctx.beginPath()
-  ctx.moveTo(bx + bw * 0.3, by + bh * 0.02)
-  ctx.lineTo(bx + bw * 0.3, by - h * 0.06)
-  ctx.lineTo(bx - bw * 0.15, by - h * 0.06)
+  ctx.ellipse(flueX, flueTop, flueD / 2, flueD * 0.18, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = EDGE
+  ctx.lineWidth = lw
   ctx.stroke()
-  ctx.strokeStyle = '#94A3B8'
+  const cd = fw * 0.07
+  const supX = bx + fw * 0.2
+  const supY = y + h * 0.1
+  const retX = bx + fw * 0.42
+  const retY = y + h * 0.25
+  pipe(ctx, [[supX, topY], [supX, supY], [bx + fw * 0.58, supY]], cd, { ...COPPER, lw })
+  pipe(ctx, [[retX, topY], [retX, retY], [bx + fw * 0.6, retY]], cd, { ...COPPER, lw })
+  // Unions at the open ends, the valve handle on the return, the circulator.
+  ctx.fillStyle = '#A16207'
+  roundRect(ctx, bx + fw * 0.56, supY - cd * 0.8, cd * 1.2, cd * 1.6, cd * 0.2)
+  ctx.fill()
+  roundRect(ctx, bx + fw * 0.58, retY - cd * 0.8, cd * 1.2, cd * 1.6, cd * 0.2)
+  ctx.fill()
+  ctx.fillStyle = '#DC2626'
+  roundRect(ctx, retX + cd * 2.6, retY - cd * 1.8, cd * 0.5, cd * 1.4, cd * 0.2)
+  ctx.fill()
+  const pumpY = (topY + supY) / 2 + cd
+  ctx.fillStyle = '#1E293B'
+  roundRect(ctx, supX - cd * 1.3, pumpY - cd * 1.1, cd * 2.6, cd * 2.2, cd * 0.4)
+  ctx.fill()
+  ctx.strokeStyle = EDGE
+  ctx.lineWidth = lw
+  ctx.stroke()
+  ctx.fillStyle = '#64748B'
   ctx.beginPath()
-  ctx.moveTo(bx + bw * 0.7, by + bh * 0.02)
-  ctx.lineTo(bx + bw * 0.7, by - h * 0.04)
-  ctx.stroke()
-  ctx.fillStyle = metal(ctx, bx, by, bw, bh, '#2F6F4E', '#14532D')
-  roundRect(ctx, bx, by, bw, bh, bw * 0.06)
+  ctx.arc(supX + cd * 0.3, pumpY, cd * 0.7, 0, Math.PI * 2)
   ctx.fill()
   ctx.fillStyle = '#0F172A'
-  roundRect(ctx, bx + bw * 0.12, by + bh * 0.08, bw * 0.3, bh * 0.1, 6)
-  ctx.fill()
-  ctx.fillStyle = 'rgba(255,255,255,0.12)'
-  roundRect(ctx, bx + bw * 0.12, by + bh * 0.3, bw * 0.76, bh * 0.55, bw * 0.04)
-  ctx.fill()
-  ctx.fillStyle = '#F59E0B'
   ctx.beginPath()
-  ctx.arc(bx + bw * 0.78, by + bh * 0.13, bw * 0.045, 0, Math.PI * 2)
+  ctx.arc(supX + cd * 0.3, pumpY, cd * 0.25, 0, Math.PI * 2)
   ctx.fill()
-}
 
-function drawWaterHeater(ctx, x, y, w, h) {
-  const bh = h * 0.94
-  const bw = Math.min(w * 0.6, h * 0.42)
-  const bx = x + (w - bw) / 2
-  const by = y + h - bh
-  shadow(ctx, bx + bw / 2, by + bh - 6, bw * 0.75, bw * 0.16)
-  ctx.strokeStyle = '#94A3B8'
-  ctx.lineWidth = bw * 0.07
-  ctx.lineCap = 'round'
-  ctx.beginPath()
-  ctx.moveTo(bx + bw * 0.3, by + bh * 0.03)
-  ctx.lineTo(bx + bw * 0.3, by - h * 0.05)
-  ctx.moveTo(bx + bw * 0.7, by + bh * 0.03)
-  ctx.lineTo(bx + bw * 0.7, by - h * 0.05)
-  ctx.stroke()
-  ctx.fillStyle = metal(ctx, bx, by, bw, bh, '#F1F5F9', '#94A3B8')
-  roundRect(ctx, bx, by, bw, bh, bw * 0.5)
-  ctx.fill()
+  cabinet(ctx, bx, by, fw, ch, sd, sh, lw)
+  // The control strip: a display, two knobs, the gauge.
+  const strip = { x: bx + fw * 0.05, y: by + ch * 0.07, w: fw * 0.9, h: ch * 0.2 }
   ctx.fillStyle = '#1E293B'
-  roundRect(ctx, bx + bw * 0.2, by + bh * 0.55, bw * 0.6, bh * 0.1, 6)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(15,23,42,0.2)'
-  ctx.lineWidth = 2
-  ctx.beginPath()
-  ctx.moveTo(bx + bw * 0.08, by + bh * 0.2)
-  ctx.lineTo(bx + bw * 0.92, by + bh * 0.2)
-  ctx.moveTo(bx + bw * 0.08, by + bh * 0.8)
-  ctx.lineTo(bx + bw * 0.92, by + bh * 0.8)
-  ctx.stroke()
-}
-
-function drawMiniSplit(ctx, x, y, w, h) {
-  const bw = Math.min(w, h * 2.6)
-  const bh = bw * 0.32
-  const bx = x + (w - bw) / 2
-  const by = y + (h - bh) / 2
-  shadow(ctx, bx + bw / 2, by + bh + bh * 0.3, bw * 0.5, bh * 0.35)
-  ctx.fillStyle = metal(ctx, bx, by, bw, bh, '#FFFFFF', '#CBD5E1')
-  roundRect(ctx, bx, by, bw, bh, bh * 0.35)
-  ctx.fill()
-  ctx.fillStyle = 'rgba(15,23,42,0.12)'
-  roundRect(ctx, bx + bw * 0.05, by + bh * 0.62, bw * 0.9, bh * 0.22, bh * 0.1)
+  roundRect(ctx, strip.x, strip.y, strip.w, strip.h, fw * 0.02)
   ctx.fill()
   ctx.fillStyle = '#0EA5E9'
-  ctx.beginPath()
-  ctx.arc(bx + bw * 0.9, by + bh * 0.3, bh * 0.06, 0, Math.PI * 2)
+  roundRect(ctx, strip.x + strip.w * 0.06, strip.y + strip.h * 0.25, strip.w * 0.3, strip.h * 0.5, 3)
   ctx.fill()
-  ctx.strokeStyle = 'rgba(15,23,42,0.15)'
-  ctx.lineWidth = 2
-  for (let i = 1; i < 4; i++) {
+  ctx.fillStyle = 'rgba(255,255,255,0.6)'
+  ctx.fillRect(strip.x + strip.w * 0.1, strip.y + strip.h * 0.42, strip.w * 0.18, strip.h * 0.16)
+  for (const kx of [0.48, 0.6]) {
+    ctx.fillStyle = '#94A3B8'
     ctx.beginPath()
-    ctx.moveTo(bx + bw * 0.1, by + bh * 0.15 * i)
-    ctx.lineTo(bx + bw * 0.75, by + bh * 0.15 * i)
-    ctx.stroke()
+    ctx.arc(strip.x + strip.w * kx, strip.y + strip.h / 2, strip.h * 0.22, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#0F172A'
+    ctx.fillRect(strip.x + strip.w * kx - lw / 2, strip.y + strip.h * 0.3, lw, strip.h * 0.2)
   }
+  const gcx = strip.x + strip.w * 0.84
+  const gcy = strip.y + strip.h / 2
+  const grad = strip.h * 0.36
+  ctx.fillStyle = '#F8FAFC'
+  ctx.beginPath()
+  ctx.arc(gcx, gcy, grad, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = '#94A3B8'
+  ctx.lineWidth = lw
+  ctx.stroke()
+  ctx.strokeStyle = '#DC2626'
+  ctx.lineWidth = Math.max(1.2, grad * 0.12)
+  ctx.beginPath()
+  ctx.moveTo(gcx, gcy)
+  ctx.lineTo(gcx + grad * 0.55, gcy - grad * 0.5)
+  ctx.stroke()
+  ctx.fillStyle = '#0F172A'
+  ctx.beginPath()
+  ctx.arc(gcx, gcy, grad * 0.15, 0, Math.PI * 2)
+  ctx.fill()
+  // The burner door: the sight glass and a louver band.
+  const door = raisedPanel(ctx, { x: bx + fw * 0.06, y: by + ch * 0.33, w: fw * 0.88, h: ch * 0.56 }, fw, ch, lw)
+  sightGlass(ctx, door.x + door.w * 0.5, door.y + door.h * 0.42, fw * 0.08, lw)
+  const slotH = Math.max(2, ch * 0.014)
+  for (let i = 0; i < 4; i++) {
+    const sy = door.y + door.h * 0.74 + i * ch * 0.035
+    ctx.fillStyle = '#334155'
+    roundRect(ctx, door.x + door.w * 0.2, sy, door.w * 0.6, slotH, slotH / 2)
+    ctx.fill()
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    ctx.fillRect(door.x + door.w * 0.2, sy + slotH, door.w * 0.6, Math.max(1, slotH * 0.4))
+  }
+  cabinetBase(ctx, bx, by, fw, ch, sd, sh, 0.93)
 }
 
+/**
+ * A gas water heater as a product shot: a tall white tank with its dome,
+ * the draft hood and flue on top, the hot and cold copper risers with a
+ * red and a blue ring, the rating label, the gas control valve with its
+ * red dial, the burner access cover and the T&P valve down the side.
+ */
+function drawWaterHeater(ctx, x, y, w, h) {
+  const ch = h * 0.84
+  const bw = Math.min(w * 0.62, ch * 0.42)
+  const bx = x + (w - bw) / 2
+  const by = y + h - ch
+  const cx = bx + bw / 2
+  const ry = bw * 0.16
+  const lw = lwFor(bw)
+  shadow(ctx, cx, by + ch - 4, bw * 0.75, bw * 0.16)
+  // Behind the tank: the risers, the flue and its hood.
+  const pd = bw * 0.08
+  const riserTop = y + pd * 1.6
+  for (const [rx, ring] of [[cx - bw * 0.26, '#DC2626'], [cx + bw * 0.26, '#2563EB']]) {
+    pipe(ctx, [[rx, by + ry], [rx, riserTop]], pd, { ...COPPER, lw })
+    ctx.fillStyle = '#A16207'
+    roundRect(ctx, rx - pd * 0.85, riserTop - pd * 0.4, pd * 1.7, pd, pd * 0.2)
+    ctx.fill()
+    ctx.fillStyle = ring
+    ctx.fillRect(rx - pd * 0.7, by - ry * 0.7, pd * 1.4, pd * 0.7)
+  }
+  const flueD = bw * 0.2
+  const hoodTop = by - bw * 0.16
+  pipe(ctx, [[cx, hoodTop], [cx, y + flueD * 0.6]], flueD, { body: '#94A3B8', highlight: 'rgba(255,255,255,0.35)', lw })
+  quad(ctx, [[cx - flueD / 2, hoodTop], [cx + flueD / 2, hoodTop], [cx + bw * 0.2, by + ry * 0.2], [cx - bw * 0.2, by + ry * 0.2]], '#64748B', EDGE, lw)
+  // The tank: a cylinder shaded across, the dome lit from the upper left.
+  const body = ctx.createLinearGradient(bx, 0, bx + bw, 0)
+  body.addColorStop(0, '#64748B')
+  body.addColorStop(0.18, '#CBD5E1')
+  body.addColorStop(0.38, '#F8FAFC')
+  body.addColorStop(0.62, '#E2E8F0')
+  body.addColorStop(0.85, '#94A3B8')
+  body.addColorStop(1, '#475569')
+  ctx.fillStyle = body
+  ctx.beginPath()
+  ctx.moveTo(bx, by + ry)
+  ctx.lineTo(bx, by + ch - ry * 0.5)
+  ctx.ellipse(cx, by + ch - ry * 0.5, bw / 2, ry * 0.5, 0, Math.PI, 0, true)
+  ctx.lineTo(bx + bw, by + ry)
+  ctx.closePath()
+  ctx.fill()
+  ctx.strokeStyle = EDGE
+  ctx.lineWidth = lw
+  ctx.stroke()
+  const dome = ctx.createRadialGradient(cx - bw * 0.15, by + ry * 0.5, 1, cx, by + ry, bw * 0.6)
+  dome.addColorStop(0, '#FFFFFF')
+  dome.addColorStop(0.6, '#E2E8F0')
+  dome.addColorStop(1, '#94A3B8')
+  ctx.fillStyle = dome
+  ctx.beginPath()
+  ctx.ellipse(cx, by + ry, bw / 2, ry, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  ctx.strokeStyle = 'rgba(15,23,42,0.18)'
+  for (const f of [0.28, 0.8]) {
+    ctx.beginPath()
+    ctx.ellipse(cx, by + ch * f, bw / 2, ry * 0.5, 0, 0, Math.PI)
+    ctx.stroke()
+  }
+  // The rating label.
+  const lab = { x: bx + bw * 0.22, y: by + ch * 0.32, w: bw * 0.56, h: ch * 0.13 }
+  ctx.fillStyle = '#F1F5F9'
+  roundRect(ctx, lab.x, lab.y, lab.w, lab.h, 3)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(15,23,42,0.2)'
+  ctx.stroke()
+  ctx.fillStyle = '#F97316'
+  ctx.fillRect(lab.x + lab.w * 0.08, lab.y + lab.h * 0.12, lab.w * 0.22, lab.h * 0.14)
+  ctx.fillStyle = 'rgba(15,23,42,0.28)'
+  for (let i = 0; i < 4; i++) ctx.fillRect(lab.x + lab.w * 0.08, lab.y + lab.h * (0.38 + i * 0.15), lab.w * (0.84 - (i % 2) * 0.3), Math.max(1, lab.h * 0.06))
+  // The gas control valve, its pilot line, the burner access cover.
+  const gv = { x: bx + bw * 0.28, y: by + ch * 0.66, w: bw * 0.44, h: ch * 0.085 }
+  ctx.fillStyle = '#334155'
+  roundRect(ctx, gv.x, gv.y, gv.w, gv.h, gv.h * 0.2)
+  ctx.fill()
+  ctx.strokeStyle = EDGE
+  ctx.stroke()
+  ctx.fillStyle = '#DC2626'
+  ctx.beginPath()
+  ctx.arc(gv.x + gv.w * 0.72, gv.y + gv.h / 2, gv.h * 0.36, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#0F172A'
+  ctx.beginPath()
+  ctx.arc(gv.x + gv.w * 0.72, gv.y + gv.h / 2, gv.h * 0.14, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#CBD5E1'
+  roundRect(ctx, gv.x + gv.w * 0.12, gv.y + gv.h * 0.3, gv.w * 0.3, gv.h * 0.4, 2)
+  ctx.fill()
+  pipe(ctx, [[gv.x + gv.w * 0.5, gv.y + gv.h], [gv.x + gv.w * 0.5, by + ch * 0.85]], Math.max(1.5, bw * 0.02), { ...COPPER, lw: 0.8 })
+  ctx.fillStyle = '#1E293B'
+  roundRect(ctx, bx + bw * 0.3, by + ch * 0.85, bw * 0.4, ch * 0.045, 3)
+  ctx.fill()
+  // The T&P valve on the side with its discharge pipe.
+  ctx.fillStyle = '#A16207'
+  roundRect(ctx, bx + bw * 0.86, by + ch * 0.2, bw * 0.12, bw * 0.1, 2)
+  ctx.fill()
+  pipe(ctx, [[bx + bw * 0.94, by + ch * 0.2 + bw * 0.1], [bx + bw * 0.94, by + ch * 0.66]], bw * 0.05, { ...COPPER, lw })
+}
+
+/**
+ * A ductless mini split head as a product shot: the white body with its
+ * intake grille along the top, the seam, the display pod, the vane open on
+ * the underside, and the cool air falling from it.
+ */
+function drawMiniSplit(ctx, x, y, w, h) {
+  const bw = Math.min(w, h * 2.4)
+  const bh = bw * 0.3
+  const bx = x + (w - bw) / 2
+  const by = y + Math.max(bh * 0.2, (h - bh) / 2 - bh * 0.4)
+  const fh = bh * 0.74
+  const lw = lwFor(bw * 0.5)
+  shadow(ctx, bx + bw / 2, by + bh + bh * 0.2, bw * 0.5, bh * 0.25)
+  // The cool air: three soft blue sweeps falling and drifting left.
+  const airLen = Math.min(bh * 2.2, y + h - (by + bh) - bh * 0.1)
+  if (airLen > bh * 0.5) {
+    const g = ctx.createLinearGradient(0, by + bh, 0, by + bh + airLen)
+    g.addColorStop(0, 'rgba(125,211,252,0.5)')
+    g.addColorStop(1, 'rgba(125,211,252,0)')
+    ctx.strokeStyle = g
+    ctx.lineWidth = bh * 0.09
+    ctx.lineCap = 'round'
+    for (let i = 0; i < 3; i++) {
+      const sx = bx + bw * (0.28 + i * 0.2)
+      ctx.beginPath()
+      ctx.moveTo(sx, by + bh + bh * 0.05)
+      ctx.quadraticCurveTo(sx - bw * 0.04, by + bh + airLen * 0.55, sx - bw * 0.14, by + bh + airLen)
+      ctx.stroke()
+    }
+    ctx.lineCap = 'butt'
+  }
+  // The underside, the dark outlet and the flap hanging open.
+  const inset = bh * 0.12
+  const uy = by + fh
+  const uh = bh - fh
+  quad(ctx, [[bx + bh * 0.1, uy], [bx + bw - bh * 0.1, uy], [bx + bw - inset - bh * 0.1, by + bh], [bx + inset + bh * 0.1, by + bh]], '#CBD5E1', EDGE, lw)
+  quad(ctx, [[bx + bw * 0.08, uy + uh * 0.2], [bx + bw * 0.74, uy + uh * 0.2], [bx + bw * 0.73, uy + uh * 0.85], [bx + bw * 0.09, uy + uh * 0.85]], '#1E293B')
+  quad(ctx, [[bx + bw * 0.08, uy + uh * 0.6], [bx + bw * 0.74, uy + uh * 0.6], [bx + bw * 0.73, by + bh + uh * 0.25], [bx + bw * 0.09, by + bh + uh * 0.25]], '#E2E8F0', EDGE, lw)
+  // The body.
+  const face = ctx.createLinearGradient(0, by, 0, by + fh)
+  face.addColorStop(0, '#FFFFFF')
+  face.addColorStop(1, '#E8EEF5')
+  ctx.fillStyle = face
+  roundRect(ctx, bx, by, bw, fh, fh * 0.3)
+  ctx.fill()
+  ctx.strokeStyle = EDGE
+  ctx.lineWidth = lw
+  ctx.stroke()
+  // The intake grille along the top, the seam, the display pod.
+  ctx.strokeStyle = 'rgba(15,23,42,0.18)'
+  for (let i = 1; i <= 4; i++) {
+    const yy = by + fh * 0.08 * i
+    ctx.beginPath()
+    ctx.moveTo(bx + bw * 0.08, yy)
+    ctx.lineTo(bx + bw * 0.7, yy)
+    ctx.stroke()
+  }
+  ctx.fillStyle = 'rgba(15,23,42,0.12)'
+  ctx.fillRect(bx + bw * 0.04, by + fh * 0.6, bw * 0.92, Math.max(1, fh * 0.012))
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'
+  ctx.fillRect(bx + bw * 0.04, by + fh * 0.6 + Math.max(1, fh * 0.012), bw * 0.92, Math.max(1, fh * 0.01))
+  const pod = { x: bx + bw * 0.8, y: by + fh * 0.3, w: bw * 0.13, h: fh * 0.3 }
+  ctx.fillStyle = '#0F172A'
+  roundRect(ctx, pod.x, pod.y, pod.w, pod.h, pod.h * 0.3)
+  ctx.fill()
+  ctx.fillStyle = '#38BDF8'
+  roundRect(ctx, pod.x + pod.w * 0.12, pod.y + pod.h * 0.3, pod.w * 0.5, pod.h * 0.4, 2)
+  ctx.fill()
+  ctx.fillStyle = '#22C55E'
+  ctx.beginPath()
+  ctx.arc(pod.x + pod.w * 0.82, pod.y + pod.h / 2, pod.h * 0.12, 0, Math.PI * 2)
+  ctx.fill()
+}
+
+/**
+ * A round smart thermostat: a brushed metal ring lit from the upper left,
+ * black glass with a soft reflection, tick marks round the dial with the
+ * heating range in orange, the set temperature large and HEATING under it.
+ */
 function drawThermostat(ctx, x, y, w, h) {
   const d = Math.min(w, h) * 0.85
   const cx = x + w / 2
   const cy = y + h / 2
-  shadow(ctx, cx, cy + d * 0.5, d * 0.5, d * 0.12)
-  ctx.fillStyle = '#0F172A'
+  const lw = lwFor(d)
+  shadow(ctx, cx, cy + d * 0.55, d * 0.5, d * 0.12)
+  const ring = ctx.createLinearGradient(cx - d / 2, cy - d / 2, cx + d / 2, cy + d / 2)
+  ring.addColorStop(0, '#F8FAFC')
+  ring.addColorStop(0.35, '#94A3B8')
+  ring.addColorStop(0.6, '#E2E8F0')
+  ring.addColorStop(1, '#475569')
+  ctx.fillStyle = ring
   ctx.beginPath()
   ctx.arc(cx, cy, d / 2, 0, Math.PI * 2)
   ctx.fill()
-  ctx.strokeStyle = '#94A3B8'
-  ctx.lineWidth = d * 0.04
-  ctx.beginPath()
-  ctx.arc(cx, cy, d * 0.43, 0, Math.PI * 2)
+  ctx.strokeStyle = EDGE
+  ctx.lineWidth = lw
   ctx.stroke()
-  ctx.strokeStyle = '#F97316'
-  ctx.lineWidth = d * 0.05
+  const face = ctx.createRadialGradient(cx - d * 0.1, cy - d * 0.1, d * 0.05, cx, cy, d * 0.42)
+  face.addColorStop(0, '#1E293B')
+  face.addColorStop(1, '#020617')
+  ctx.fillStyle = face
   ctx.beginPath()
-  ctx.arc(cx, cy, d * 0.36, Math.PI * 0.75, Math.PI * 1.9)
+  ctx.arc(cx, cy, d * 0.41, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)'
   ctx.stroke()
-  setFont(ctx, '800', d * 0.26, -1)
+  // Ticks with a gap at the bottom; the heating range in orange; the setpoint a long white tick.
+  const start = Math.PI * 0.75
+  const span = Math.PI * 1.5
+  const set = Math.PI * 1.9
+  for (let i = 0; i <= 48; i++) {
+    const a = start + (i / 48) * span
+    const hot = a >= Math.PI * 1.3 && a <= set
+    ctx.strokeStyle = hot ? '#FB923C' : 'rgba(255,255,255,0.3)'
+    ctx.lineWidth = Math.max(1, d * 0.008)
+    ctx.beginPath()
+    ctx.moveTo(cx + Math.cos(a) * d * 0.33, cy + Math.sin(a) * d * 0.33)
+    ctx.lineTo(cx + Math.cos(a) * d * 0.37, cy + Math.sin(a) * d * 0.37)
+    ctx.stroke()
+  }
+  ctx.strokeStyle = WHITE
+  ctx.lineWidth = Math.max(1.5, d * 0.014)
+  ctx.beginPath()
+  ctx.moveTo(cx + Math.cos(set) * d * 0.31, cy + Math.sin(set) * d * 0.31)
+  ctx.lineTo(cx + Math.cos(set) * d * 0.38, cy + Math.sin(set) * d * 0.38)
+  ctx.stroke()
+  // The reflection on the glass.
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(cx, cy, d * 0.41, 0, Math.PI * 2)
+  ctx.clip()
+  const gloss = ctx.createLinearGradient(cx - d * 0.3, cy - d * 0.45, cx + d * 0.05, cy)
+  gloss.addColorStop(0, 'rgba(255,255,255,0.16)')
+  gloss.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = gloss
+  ctx.fillRect(cx - d / 2, cy - d / 2, d, d)
+  ctx.restore()
+  setFont(ctx, '800', d * 0.27, -1)
   ctx.fillStyle = WHITE
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('72°', cx, cy + d * 0.02)
+  ctx.fillText('72°', cx, cy - d * 0.02)
+  setFont(ctx, '800', d * 0.065, 2)
+  ctx.fillStyle = '#FB923C'
+  ctx.fillText('HEATING', cx, cy + d * 0.17)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 }
@@ -566,7 +1046,11 @@ export function drawCutout(ctx, content, assets, box) {
   }
   const fn = CUTOUT_DRAW[key]
   if (!fn) return false
+  // The drawings set line widths, caps and text alignment of their own;
+  // none of it may leak into whatever paints next.
+  ctx.save()
   fn(ctx, box.x, box.y, box.w, box.h)
+  ctx.restore()
   // The drawings stand on the box's floor and fill most of it; the box is
   // close enough to what they cover.
   note('cutout', box, 'the equipment')
