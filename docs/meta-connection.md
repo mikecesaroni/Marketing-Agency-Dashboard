@@ -181,6 +181,13 @@ the MCP route is a dead end.
    - **Landing page URL** — required. Where the ad's button sends people.
    - **Pixel ID** — only needed to optimise for leads rather than traffic.
 
+   The Publish screen does not send anyone back here for the Page ID or the
+   pixel. Its "Not ready to publish yet" box has the two fields and a
+   "Detect from Meta" button (the Page and pixel the account's existing ads
+   already use, as chips); "Save and carry on" writes them to the client and
+   the screen continues. Only the ad account itself is still chosen on this
+   card, from the list.
+
 The system user also needs **Manage campaigns** on the ad account (Part 1, step
 3). Read-only access is enough to sync KPIs but not to create anything.
 

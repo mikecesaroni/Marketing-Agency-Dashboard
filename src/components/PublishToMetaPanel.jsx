@@ -44,7 +44,11 @@ import {
   publishAd,
   publishAdBatch,
   summarisePlan,
+  discoverAssets,
 } from '../lib/metaPublish'
+import { pickPage } from '../lib/pickPage'
+import { supabase } from '../lib/supabaseClient'
+import { cacheBust, keys } from '../lib/pageCache'
 
 function Section({ step, id, title, hint, children }) {
   return (
@@ -170,30 +174,164 @@ function Toggle({ value, onChange, options }) {
   )
 }
 
+// A Meta id is all digits. Anything else is a name, a URL or a typo, and
+// Meta would reject the creative with a worse message than this one.
+const META_ID = /^\d{5,}$/
+
 /**
- * Everything Meta needs that the CRM has no value for yet.
+ * Everything Meta needs that the CRM has no value for yet, with the boxes to
+ * fill it in right here.
  *
  * Shown before the form rather than as a failure after the button: the Page ID
  * in particular has never been asked for anywhere in this app, so without this
- * the first publish would be a rejected creative and a confusing error.
+ * the first publish would be a rejected creative and a confusing error. The
+ * Page ID and the pixel save to the client from this box ("Detect from Meta"
+ * asks the ad account which Page and pixel its existing ads use) and the
+ * screen carries on; nobody has to leave for the Meta card and come back. The
+ * ad account itself is picked from a list on that card, so that one still
+ * points there.
  */
-function Preflight({ missing }) {
+function Preflight({ missing, client, onFixed }) {
+  const [pageId, setPageId] = useState(client.meta_page_id || '')
+  const [pixelId, setPixelId] = useState(client.meta_pixel_id || '')
+  const [saving, setSaving] = useState(false)
+  const [detecting, setDetecting] = useState(false)
+  const [detected, setDetected] = useState(null)
+  const [problem, setProblem] = useState('')
   if (missing.length === 0) return null
+  const needPage = missing.some((m) => m.field === 'meta_page_id')
+  const needPixel = missing.some((m) => m.field === 'meta_pixel_id')
+  const needAccount = missing.some((m) => m.field === 'meta_ad_account_id')
+  const fillable = needPage || needPixel
+
+  const detect = async () => {
+    setDetecting(true)
+    setProblem('')
+    try {
+      const found = await discoverAssets(client.id)
+      setDetected(found)
+      // Only fill blanks: a value already typed is a decision.
+      const suggested = pickPage(client.name, found.pages)
+      if (suggested && !pageId) setPageId(suggested)
+      if (found.suggested_pixel_id && !pixelId) setPixelId(found.suggested_pixel_id)
+    } catch (err) {
+      setProblem(err.message)
+    } finally {
+      setDetecting(false)
+    }
+  }
+
+  const save = async () => {
+    const patch = {}
+    if (needPage && pageId.trim()) {
+      if (!META_ID.test(pageId.trim())) return setProblem('A Page ID is all digits (e.g. 102938475610293). Find it under the Page’s About › Page transparency, or detect it from Meta.')
+      patch.meta_page_id = pageId.trim()
+    }
+    if (needPixel && pixelId.trim()) {
+      if (!META_ID.test(pixelId.trim())) return setProblem('A Pixel ID is all digits (e.g. 998877665544332). Events Manager shows it under the pixel’s name, or detect it from Meta.')
+      patch.meta_pixel_id = pixelId.trim()
+    }
+    if (Object.keys(patch).length === 0) return setProblem(needPage && needPixel ? 'Type or detect the Page ID and the Pixel ID first.' : needPage ? 'Type or detect the Page ID first.' : 'Type or detect the Pixel ID first.')
+    setSaving(true)
+    setProblem('')
+    const { error: err } = await supabase.from('clients').update(patch).eq('id', client.id)
+    setSaving(false)
+    if (err) return setProblem(`Not saved: ${err.message}`)
+    onFixed?.(patch)
+  }
+
+  const box = 'w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400'
+  const chip = (on) => `rounded border px-2 py-1 text-[11px] transition ${on ? 'border-amber-700 bg-amber-700 text-white' : 'border-amber-300 bg-white text-amber-900 hover:bg-amber-100'}`
+
   return (
-    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2" data-preflight>
       <p className="text-sm font-medium text-amber-900">
         Not ready to publish yet — {missing.length} thing{missing.length > 1 ? 's' : ''} missing
       </p>
-      <ul className="mt-1.5 space-y-1">
+      <ul className="space-y-1">
         {missing.map((m) => (
           <li key={m.field} className="text-xs text-amber-800">
             <span className="font-medium">{m.label}</span> — {m.why}
           </li>
         ))}
       </ul>
-      <p className="text-[11px] text-amber-700 mt-2">
-        Set these on the client&rsquo;s Meta card, then come back.
-      </p>
+
+      {fillable && (
+        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-100/60 p-2.5" data-preflight-fix>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-medium text-amber-900">Fill {needPage && needPixel ? 'them' : 'it'} in here and carry on. Saved to the client, so the Meta card has {needPage && needPixel ? 'them' : 'it'} too.</p>
+            <button
+              type="button"
+              onClick={detect}
+              disabled={detecting || !client.meta_ad_account_id}
+              title={client.meta_ad_account_id ? 'Ask Meta which Page and pixel this ad account’s existing ads already use' : 'Needs the ad account connected first'}
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              data-preflight-detect
+            >
+              {detecting ? 'Asking Meta…' : 'Detect from Meta'}
+            </button>
+          </div>
+          {detected && (
+            <div className="space-y-1.5">
+              {needPage && (
+                detected.pages?.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {detected.pages.map((pg) => (
+                      <button key={pg.id} type="button" onClick={() => setPageId(pg.id)} className={chip(pageId === pg.id)}>
+                        Page: {pg.name || pg.id}
+                        {pg.ads_using > 0 && <span className="opacity-70"> · {pg.ads_using} existing ad{pg.ads_using > 1 ? 's' : ''}</span>}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-amber-800">No Pages came back. The system user has the ad account but not the Page assigned; add it under Business Settings › Accounts › Pages, or type the ID.</p>
+                )
+              )}
+              {needPixel && detected.pixels?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {detected.pixels.map((px) => (
+                    <button key={px.id} type="button" onClick={() => setPixelId(px.id)} className={chip(pixelId === px.id)}>
+                      Pixel: {px.name || px.id}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {needPage && (
+              <label className="block text-xs font-medium text-amber-900">
+                Facebook Page ID
+                <input type="text" inputMode="numeric" value={pageId} onChange={(e) => setPageId(e.target.value)} placeholder="e.g. 102938475610293" className={`${box} mt-1 font-normal`} data-preflight-page />
+                <span className="mt-1 block text-[11px] font-normal text-amber-800">On the Page: About › Page transparency.</span>
+              </label>
+            )}
+            {needPixel && (
+              <label className="block text-xs font-medium text-amber-900">
+                Pixel ID
+                <input type="text" inputMode="numeric" value={pixelId} onChange={(e) => setPixelId(e.target.value)} placeholder="e.g. 998877665544332" className={`${box} mt-1 font-normal`} data-preflight-pixel />
+                <span className="mt-1 block text-[11px] font-normal text-amber-800">Events Manager, under the pixel’s name.</span>
+              </label>
+            )}
+          </div>
+          {problem && <p className="text-xs text-red-700" data-preflight-problem>{problem}</p>}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-50"
+            data-preflight-save
+          >
+            {saving ? 'Saving…' : 'Save and carry on'}
+          </button>
+        </div>
+      )}
+
+      {needAccount && (
+        <p className="text-[11px] text-amber-700">
+          The ad account is picked from a list on the client&rsquo;s Meta card (the client page, Meta section); connect it there first.
+        </p>
+      )}
     </div>
   )
 }
@@ -669,7 +807,7 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
  * an ad. With no set the panel opens empty and the video step is the way in.
  */
 export default function PublishToMetaPanel({
-  client,
+  client: clientProp,
   set = null,
   initialVideo = '',
   // Pixels of sticky header above this panel (the page's Layout header), so
@@ -679,6 +817,17 @@ export default function PublishToMetaPanel({
   alreadyPublished = [],
   onPublished,
 }) {
+  // What the preflight box saved to the client (a Page ID, a pixel) laid over
+  // the client row this panel was given, so the screen carries on at once
+  // instead of waiting for the page above to reload the client.
+  const [fixes, setFixes] = useState({})
+  const client = useMemo(() => ({ ...clientProp, ...fixes }), [clientProp, fixes])
+  const onFixed = (patch) => {
+    setFixes((f) => ({ ...f, ...patch }))
+    // The client list and the page cache carry the client row.
+    cacheBust(keys.client(clientProp.id))
+    cacheBust(keys.clients())
+  }
   // Every saved creative for this client, so a launch can pick several without
   // going back to the gallery one at a time. The set that opened this panel is
   // the one that starts ticked.
@@ -1575,7 +1724,7 @@ export default function PublishToMetaPanel({
         </p>
       </div>
 
-      <Preflight missing={missing} />
+      <Preflight missing={missing} client={client} onFixed={onFixed} />
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
