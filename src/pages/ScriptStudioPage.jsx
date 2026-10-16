@@ -203,11 +203,12 @@ function Mine({ rows, onOpen }) {
   const [all, setAll] = useState(false)
   const live = rows.filter((r) => r.status !== 'archived')
   if (!live.length) return null
-  const shown = all ? live : live.slice(0, 6)
+  // Four at a time: this sits at the top of the page, above the picks.
+  const shown = all ? live : live.slice(0, 4)
   return (
     <section data-mine>
-      <h2 className="text-2xl font-bold tracking-tight">Your scripts</h2>
-      <p className="mt-1 text-[15px] text-slate-600">Every script you write is kept here on its own. Tap one to open it again.</p>
+      <h2 className="text-2xl font-bold tracking-tight">Your saved scripts</h2>
+      <p className="mt-1 text-[15px] text-slate-600">Every script you write is kept here. Tap one to open it, read it, or film it.</p>
       <ul className="mt-3 divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white">
         {shown.map((r) => (
           <li key={r.id}>
@@ -223,7 +224,7 @@ function Mine({ rows, onOpen }) {
           </li>
         ))}
       </ul>
-      {live.length > 6 && (
+      {live.length > 4 && (
         <button type="button" onClick={() => setAll((a) => !a)} className="mt-1 inline-flex min-h-[44px] items-center text-[15px] font-semibold text-orange-700 hover:text-orange-900">
           {all ? 'Show fewer' : `Show all ${live.length}`}
         </button>
@@ -419,13 +420,17 @@ export default function ScriptStudioPage() {
               </p>
             </section>
 
+            {/* Saved scripts first: an owner who comes back to film what
+                they already have should not scroll past the picks to find
+                it. A brand-new client has none, so for them the picks come
+                first. */}
+            <Mine rows={data.scripts || []} onOpen={(r) => landed(r)} />
+
             <Picks ideas={ideas} busy={busy} onPick={(idea) => write({ ...ask, topic: idea.topic, length: idea.length || ask.length, idea: { key: idea.key, title: idea.title, why: idea.why }, extra: '' })} />
 
             <Builder ask={ask} setAsk={setAsk} busy={busy} onWrite={() => write({ ...ask, idea: undefined })} />
 
             <Working lines={data.working} />
-
-            <Mine rows={data.scripts || []} onOpen={(r) => landed(r)} />
 
             <SendUs driveUrl={data.drive_url} />
 
