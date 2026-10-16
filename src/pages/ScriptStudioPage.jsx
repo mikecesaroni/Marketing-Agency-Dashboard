@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { LENGTHS, SETTINGS, SPEAKERS, TONES, TOPICS, askLabel, ideasFor } from '../../supabase/functions/_shared/scriptStudio.js'
 import { TRADE_WORDS, phaseOf, playbookText } from '../lib/seasonPlaybook'
@@ -283,11 +283,27 @@ export default function ScriptStudioPage() {
     [data, phase]
   )
 
+  // Back to the top of the page. Whatever element is doing the scrolling
+  // (the window, the app's root, a wrapper), scrolling the page's first
+  // element into view lands at the top; window.scrollTo only moves the
+  // window, which on this app is not the scroller, so a script opened from
+  // the list at the bottom used to open at the bottom.
+  const topRef = useRef(null)
+  const toTop = () => {
+    requestAnimationFrame(() => {
+      topRef.current?.scrollIntoView({ block: 'start' })
+      window.scrollTo(0, 0)
+    })
+  }
   const landed = (row, limitLeft) => {
     setData((d) => ({ ...d, scripts: [row, ...(d?.scripts || []).filter((r) => r.id !== row.id)], ...(limitLeft !== undefined ? { limit_left: limitLeft } : {}) }))
     setCurrent(row)
     setView('script')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    toTop()
+  }
+  const goHome = () => {
+    setView('home')
+    toTop()
   }
 
   const write = async (a) => {
@@ -367,6 +383,7 @@ export default function ScriptStudioPage() {
   return (
     <div className="min-h-screen bg-[#FBFBF8] text-slate-900" data-script-studio>
       <div className="mx-auto max-w-xl space-y-6 px-4 pb-24 pt-2">
+        <div ref={topRef} aria-hidden="true" />
         <Header name={name} token={token} />
 
         {error && (
@@ -383,10 +400,10 @@ export default function ScriptStudioPage() {
         )}
 
         {view === 'script' && current && (
-          <ScriptView row={current} clientName={name} busy={busy} onBack={() => setView('home')} onChange={change} onStatus={status} />
+          <ScriptView row={current} clientName={name} busy={busy} onBack={goHome} onChange={change} onStatus={status} />
         )}
 
-        {view === 'voice' && <VoiceSheet voice={data.voice} saving={savingVoice} onSave={voice} onClose={() => setView('home')} />}
+        {view === 'voice' && <VoiceSheet voice={data.voice} saving={savingVoice} onSave={voice} onClose={goHome} />}
 
         {view === 'home' && (
           <>
