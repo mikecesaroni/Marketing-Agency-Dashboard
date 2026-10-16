@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { UNIT_PHOTO_KEYS, makeUnitPhoto, unitPhotoLabel, unitPhotoStatus } from '../lib/unitPhotos'
 
+// Where the OPENAI_API_KEY secret goes, for the one-time setup note. The
+// project ref is the one in the Supabase URL the app already talks to.
+const PROJECT_REF = (() => {
+  try {
+    return new URL(import.meta.env.VITE_SUPABASE_URL || '').hostname.split('.')[0]
+  } catch {
+    return ''
+  }
+})()
+const SECRETS_URL = PROJECT_REF ? `https://supabase.com/dashboard/project/${PROJECT_REF}/functions/secrets` : 'https://supabase.com/dashboard'
+
 /**
  * The line under the Equipment row that says how many of the twelve real
  * photos the library has (a new and an old of each unit) and makes the
@@ -44,7 +55,9 @@ export default function RealPhotosLine({ photos, onChanged }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600" data-real-photos>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-medium text-slate-700">Real photos</span>
+        <span className="font-medium text-slate-700" title="Made with ChatGPT's image model (OpenAI gpt-image-1), once, for every client">
+          Real photos <span className="font-normal text-slate-500">(ChatGPT's image model)</span>
+        </span>
         <span data-real-photos-count>
           {have.length} of {total} made
           {missing.length ? '; the drawings stand in for the rest' : ''}
@@ -78,6 +91,25 @@ export default function RealPhotosLine({ photos, onChanged }) {
         <p className="mt-1 text-red-700" data-real-photos-error>
           {error}
         </p>
+      )}
+      {error && /OPENAI_API_KEY/.test(error) && (
+        <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-slate-700" data-real-photos-setup>
+          <li>
+            Make an API key at{' '}
+            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="underline">
+              platform.openai.com
+            </a>{' '}
+            (the same company as ChatGPT; the photos bill to that account, a few cents each).
+          </li>
+          <li>
+            Open{' '}
+            <a href={SECRETS_URL} target="_blank" rel="noreferrer" className="underline">
+              this project's Edge Function secrets in Supabase
+            </a>{' '}
+            and add one named <code className="rounded bg-slate-100 px-1">OPENAI_API_KEY</code> with that key.
+          </li>
+          <li>Come back here and press the button again. Nothing else to set up.</li>
+        </ol>
       )}
       {done && !error && <p className="mt-1 text-green-800">{done}</p>}
       {open && (
