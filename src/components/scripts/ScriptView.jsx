@@ -114,11 +114,6 @@ export default function ScriptView({ row, clientName, busy, onBack, onChange, on
               <div className="min-w-0">
                 {i === 0 && <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-orange-700">The hook: first three seconds</p>}
                 <p className="text-[21px] font-semibold leading-snug text-slate-900">{l.say}</p>
-                {l.show && (
-                  <p className="mt-2 text-[15px] text-slate-600">
-                    <span className="font-semibold text-slate-700">Show:</span> {l.show}
-                  </p>
-                )}
               </div>
             </div>
           </li>

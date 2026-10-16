@@ -87,7 +87,7 @@ check('how they talk is in, with their own words', /goes by Ethan/.test(brief) &
 check('the season is in', /It is October/.test(brief), true)
 check('the website fact sheet is in', /Family-owned since 2011/.test(brief), true)
 check('the rules: no ID numbers, no brackets, no em dashes, the pace', [/Never a licence/.test(brief), /No brackets/.test(brief), /No em dashes/.test(brief), /2.5 words a second/.test(brief)], [true, true, true, true])
-check('the output is one JSON object with the fields the page reads', ['"title"', '"why_now"', '"seconds"', '"hook"', '"lines"', '"say"', '"show"', '"caption"', '"cta"', '"film_it"'].every((k) => brief.includes(k)), true)
+check('the output is one JSON object with the fields the page reads', ['"title"', '"why_now"', '"seconds"', '"hook"', '"lines"', '"say"', '"caption"', '"cta"', '"film_it"'].every((k) => brief.includes(k)) && !brief.includes('"show"'), true)
 check('no on-screen words asked for: the owner just talks', !brief.includes('"on_screen"') && /No on-screen text/.test(brief), true)
 check('nothing the client should not see', /secret agency notes|meta_ad_budget|50\/day/.test(brief), false)
 check('the voice block alone reads', /Tone: friendly neighbour/.test(voiceBlock(facts.voice)), true)
@@ -104,7 +104,7 @@ check('unknown taps fall back', /15-second/.test(scriptAsk({ length: '15', topic
 const reply = `Here you go:\n\`\`\`json\n{"title":"Furnace tune-up before the freeze","why_now":"October is tune-up month","seconds":30,"hook":"Your furnace has not run since March.","lines":[{"say":"Your furnace has not run since March.","show":"You at the truck"},{"say":"Eighty-nine dollars, we check it top to bottom — before the first cold night.","show":"The furnace"},{"say":"Call 603-555-0100.","show":"The number on screen"}],"on_screen":["$89 tune-up","Before the freeze"],"caption":"$89 furnace tune-up in Manchester. Call 603-555-0100. #hvac #manchesternh","cta":"Call us today.","film_it":"Stand by the truck in daylight, phone upright."}\n\`\`\``
 const script = parseScript(reply)
 check('the JSON is found inside the fence and the words around it', script?.title, 'Furnace tune-up before the freeze')
-check('three lines, say and show', script.lines.map((l) => [l.say.length > 0, l.show.length > 0]), [[true, true], [true, true], [true, true]])
+check('three lines, the words only (camera directions dropped)', script.lines.map((l) => [l.say.length > 0, 'show' in l]), [[true, false], [true, false], [true, false]])
 check('an em dash never reaches the client', /[—–]/.test(JSON.stringify(script)), false)
 check('the hook is the first line', script.hook, script.lines[0].say)
 check('seconds and the caption come through', [script.seconds, /#hvac/.test(script.caption)], [30, true])
@@ -123,7 +123,7 @@ check('an unknown change with words uses the words', /Rewrite it in Spanish/.tes
 
 // ---------------------------------------------------------------- the text
 const text = scriptToText(script, { name: 'Prime' })
-check('plain text for copy and share', text.startsWith('FURNACE TUNE-UP BEFORE THE FREEZE\nAbout 30 seconds · Prime') && /1\. Your furnace has not run since March\.\n   Show: You at the truck/.test(text) && /Caption to post:/.test(text) && !/On screen/.test(text), true)
+check('plain text for copy and share', text.startsWith('FURNACE TUNE-UP BEFORE THE FREEZE\nAbout 30 seconds · Prime') && /1\. Your furnace has not run since March\.\n2\. Eighty-nine dollars/.test(text) && !/Show:/.test(text) && /Caption to post:/.test(text) && !/On screen/.test(text), true)
 check('the ask as a line', askLabel({ topic: 'season', length: '30', setting: 'truck' }), 'This month’s offer · 30 seconds · in the truck')
 check('the CRM summary', [scriptsSummary([]), scriptsSummary([{ status: 'filmed' }, { status: 'archived' }, { status: 'new' }])], ['No scripts yet. Send them the link and the first three picks are waiting.', '3 scripts · 1 filmed · 1 set aside'])
 

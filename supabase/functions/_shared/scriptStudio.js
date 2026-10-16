@@ -301,7 +301,7 @@ ${playbook || 'No season notes. Write to what the company sells now.'}
 - The first line is the hook: the thing that stops a thumb. Say the point in the first three seconds.
 - One clear call to action at the end, with their real phone number when it is on file, otherwise "the link below".
 - Match the length asked for: about ${WORDS_PER_SECOND} words a second of speaking (15 seconds is about 38 words, 30 is about 75, 60 is about 150). Count the spoken words.
-- Four to eight spoken lines. Each line is one breath: one or two short sentences. Under each, say what the camera should show.
+- Four to eight spoken lines. Each line is one breath: one or two short sentences. The words only: no camera directions, no stage notes.
 - No em dashes anywhere. No hashtags in the spoken lines (the caption may have two or three).
 - No emoji. No on-screen text or captions to burn in; the owner just talks, and we add any text in the edit.
 
@@ -313,7 +313,7 @@ Reply with one JSON object and nothing else, no markdown fence, no words before 
   "seconds": 30,
   "hook": "the first spoken line, exactly as in lines[0].say",
   "lines": [
-    { "say": "the words the owner says, one breath", "show": "what the camera sees or what to hold up" }
+    { "say": "the words the owner says, one breath" }
   ],
   "caption": "the caption to post with it: two short lines, the offer and the phone or link, then two or three hashtags",
   "cta": "the one thing the viewer should do, as the owner says it",
@@ -336,7 +336,7 @@ export function scriptAsk(ask = {}) {
   if (ask.idea?.title) lines.push(`It is this one: "${ask.idea.title}". ${ask.idea.why || ''}`.trim())
   lines.push(`What it is about: ${topic.label.toLowerCase()} (${topic.hint}).`)
   lines.push(`Who is on camera: ${speaker.toLowerCase()}.${setting ? ` Filmed ${setting.toLowerCase()}.` : ''}${tone ? ` Tone: ${tone.toLowerCase()}.` : ''}`)
-  if (ask.speaker === 'voiceover') lines.push('A voiceover: every "show" is a clip of the work the owner can film in a day; the owner is heard, not seen.')
+  if (ask.speaker === 'voiceover') lines.push('A voiceover: the owner is heard, not seen, over clips of the work they can film in a day; say so in film_it.')
   if (ask.speaker === 'tech') lines.push('Two people: give the tech at most two short lines and mark them in "say" as "Tech: ...". The rest is the owner.')
   const extra = String(ask.extra || '').trim()
   if (extra) lines.push(`The owner adds: "${extra.slice(0, 600)}". Work it in, as long as it is true to the facts above.`)
@@ -356,8 +356,10 @@ export function reviseAsk(script, changeKey, extra = '') {
 
 /**
  * Only the fields a script carries, in order, so a stored row and a model
- * reply compare alike. (Older rows carry an on_screen list; it is dropped
- * here, so nothing shows it and a rewrite does not carry it forward.)
+ * reply compare alike. (Older rows carry an on_screen list and a "show"
+ * camera direction on each line; both are dropped here, so nothing shows
+ * them and a rewrite does not carry them forward. The owner asked for the
+ * words alone.)
  */
 export function stripScript(s) {
   const x = s || {}
@@ -366,7 +368,7 @@ export function stripScript(s) {
     why_now: String(x.why_now || ''),
     seconds: Number(x.seconds) || 0,
     hook: String(x.hook || ''),
-    lines: (Array.isArray(x.lines) ? x.lines : []).map((l) => ({ say: String(l?.say || ''), show: String(l?.show || '') })),
+    lines: (Array.isArray(x.lines) ? x.lines : []).map((l) => ({ say: String(typeof l === 'string' ? l : l?.say || '') })),
     caption: String(x.caption || ''),
     cta: String(x.cta || ''),
     film_it: String(x.film_it || ''),
@@ -391,7 +393,7 @@ export function parseScript(text) {
   }
   if (!obj || typeof obj !== 'object') return null
   const lines = (Array.isArray(obj.lines) ? obj.lines : [])
-    .map((l) => (typeof l === 'string' ? { say: l, show: '' } : { say: String(l?.say || '').trim(), show: String(l?.show || '').trim() }))
+    .map((l) => ({ say: String(typeof l === 'string' ? l : l?.say || '').trim() }))
     .filter((l) => l.say)
   if (lines.length < 2) return null
   const hook = String(obj.hook || '').trim() || lines[0].say
@@ -408,7 +410,7 @@ export function parseScript(text) {
   script.title = clean(script.title)
   script.why_now = clean(script.why_now)
   script.hook = clean(script.hook)
-  script.lines = script.lines.map((l) => ({ say: clean(l.say), show: clean(l.show) }))
+  script.lines = script.lines.map((l) => ({ say: clean(l.say) }))
   script.caption = clean(script.caption)
   script.cta = clean(script.cta)
   script.film_it = clean(script.film_it)
@@ -419,10 +421,7 @@ export function parseScript(text) {
 export function scriptToText(script, { name = '' } = {}) {
   const s = stripScript(script)
   const out = [s.title.toUpperCase(), `About ${s.seconds || secondsFor(s.lines)} seconds${name ? ` · ${name}` : ''}`, '']
-  s.lines.forEach((l, i) => {
-    out.push(`${i + 1}. ${l.say}`)
-    if (l.show) out.push(`   Show: ${l.show}`)
-  })
+  s.lines.forEach((l, i) => out.push(`${i + 1}. ${l.say}`))
   if (s.film_it) out.push('', `Film it: ${s.film_it}`)
   if (s.caption) out.push('', 'Caption to post:', s.caption)
   return out.join('\n')
