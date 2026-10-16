@@ -12,7 +12,7 @@
 // <PortalTabs> in its header.
 
 export const PORTAL_TABS = [
-  { key: 'numbers', label: 'Your numbers', prefix: '/dashboard/', hint: 'Leads, spend and what they mean' },
+  { key: 'numbers', label: 'Live KPIs', prefix: '/dashboard/', hint: 'Leads, spend and what they mean' },
   { key: 'scripts', label: 'Video scripts', prefix: '/scripts/', hint: 'What to film this week' },
 ]
 
