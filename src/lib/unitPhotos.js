@@ -55,7 +55,7 @@ export async function loadUnitPhotoBitmaps(photos, loadImage) {
 }
 
 /** Asks the function to make (or remake) one photo. Returns { key, path, bytes }. */
-export async function makeUnitPhoto(key, { quality = 'medium' } = {}) {
+export async function makeUnitPhoto(key, { quality = 'high' } = {}) {
   const { data, error } = await supabase.functions.invoke('stock-images', { body: { action: 'make', key, quality } })
   if (error) {
     const { status, detail } = await readFunctionError(error)

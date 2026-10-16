@@ -21,7 +21,7 @@
 // Body:  { action: 'make', key, quality? }   -> { key, path, bytes, usage }
 // Body:  { action: 'list' }                  -> { photos: [{ key, path }] }
 //
-// A photo at medium quality takes about half a minute and costs a few cents;
+// A photo at high quality takes about a minute and costs about a quarter;
 // the browser asks for them one at a time so no call runs long.
 
 import { PROMPTS, UNIT_PHOTO_KEYS, UNIT_PHOTO_PREFIX, unitPhotoPath } from '../_shared/unitPhotos.js'
@@ -92,7 +92,9 @@ Deno.serve(async (req) => {
 
     const key = String(body.key || '')
     if (!UNIT_PHOTO_KEYS.includes(key)) return json({ error: `No unit called ${key}. Choices: ${UNIT_PHOTO_KEYS.join(', ')}.` }, 400)
-    const quality = QUALITIES.includes(String(body.quality)) ? String(body.quality) : 'medium'
+    // High by default: the units are the hero of the ad and the difference
+    // between medium and high is a few cents a photo, once, for everyone.
+    const quality = QUALITIES.includes(String(body.quality)) ? String(body.quality) : 'high'
 
     const apiKey = Deno.env.get('OPENAI_API_KEY')
     if (!apiKey) {

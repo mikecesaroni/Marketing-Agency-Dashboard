@@ -48,19 +48,22 @@ export function unitPhotoStatus(photos) {
 // alone on a transparent background with a soft shadow under it, nothing
 // written on it (a brand name on a client's ad would be somebody else's).
 const SHOT =
-  'Photorealistic catalogue product photograph, three-quarter front view from slightly above, even soft studio lighting, crisp focus, true-to-life materials and reflections, a soft natural shadow directly under the base, the whole unit in frame with a little space around it, isolated on a plain transparent background, nothing else in the picture, no people, no room, no wall, no floor, no text, no logos, no brand names, no labels with words.'
+  'Ultra-realistic commercial catalogue hero product photograph, shot on a full-frame camera with an 85mm lens, three-quarter front view from slightly above, professional showroom lighting from large softboxes, crisp focus edge to edge, true-to-life materials: painted steel with subtle specular highlights and soft reflections of the softbox, polished copper, brushed metal; a soft natural contact shadow directly under the base, the whole unit in frame with a little space around it, isolated on a plain transparent background, nothing else in the picture, no people, no room, no wall, no floor, no text, no logos, no brand names, no labels with words.'
+
+// The new units are brand new: out of the crate, spotless, gleaming.
+const NEW = 'Brand new and factory fresh, straight out of the crate: immaculate, spotless, glossy surfaces with crisp panel seams, not a scratch, not a speck of dust.'
 
 const OLD =
   'It is twenty-five years old and worn out: rust streaks and corrosion along the seams and the base, flaking and faded paint, a few dents, dust and soot, dated design. Still clearly the same kind of unit, standing upright.'
 
 /** What to ask the image model for, per photo. */
 export const PROMPTS = {
-  ac: `A modern residential central air conditioner outdoor condenser unit: a square light grey steel cabinet with louvered coil panels on the sides and a round black fan grille set into the top, a small service panel on one corner. ${SHOT}`,
-  furnace: `A modern residential high-efficiency gas furnace: an upright rectangular steel cabinet, light grey with a darker charcoal upper access door, a small control panel and a narrow vent on the upper door, a plain lower blower door, a short grey supply duct stub on top and two white PVC vent pipes leaving the top. ${SHOT}`,
-  boiler: `A residential cast-iron gas boiler: a compact floor-standing unit with a dark teal green steel jacket, a grey control box on top with a thin pipe into it, copper water pipes and a round white pressure gauge rising from the top, a black burner control box with a small red button on the lower front, a brushed steel badge plate with no writing. ${SHOT}`,
-  water_heater: `A residential gas water heater: a tall white cylindrical tank with a grey domed top, a galvanized flue pipe and two copper water connections rising from the top, a small gas control valve with a dial near the base, a plain rating plate with no writing. ${SHOT}`,
-  mini_split: `A ductless mini split indoor wall unit: a sleek white rounded unit as mounted high on a wall, seen from slightly below, the lower air vane open, a small dark display window at the right end. ${SHOT}`,
-  thermostat: `A modern round smart thermostat: a brushed stainless steel ring around a black glass face that shows the temperature 72 in large white digits and a thin orange arc, seen straight on with a slight reflection on the glass. ${SHOT}`,
+  ac: `A modern residential central air conditioner outdoor condenser unit: a square light grey steel cabinet with louvered coil panels on the sides and a round black fan grille set into the top, a small service panel on one corner. ${NEW} ${SHOT}`,
+  furnace: `A modern residential high-efficiency gas furnace: a tall upright cabinet in glossy light grey powder-coated steel with a darker graphite upper access door, a small backlit digital control display and a narrow louvered vent on the upper door, a plain lower blower door with a flush handle, a clean galvanized supply duct collar on top and two clean white PVC vent pipes leaving the top. ${NEW} ${SHOT}`,
+  boiler: `A residential cast-iron gas boiler: a compact floor-standing unit in a glossy deep teal-green powder-coated steel jacket, a grey control box on top with a thin pipe into it, gleaming polished copper water pipes with a brass fitting and a round white pressure gauge rising from the top, a black burner control module with a small red button on the lower front, a brushed stainless badge plate with no writing. ${NEW} ${SHOT}`,
+  water_heater: `A residential gas water heater: a tall white cylindrical tank with a grey domed top, a galvanized flue pipe and two polished copper water connections rising from the top, a small gas control valve with a dial near the base, a plain rating plate with no writing. ${NEW} ${SHOT}`,
+  mini_split: `A ductless mini split indoor wall unit: a sleek white rounded unit as mounted high on a wall, seen from slightly below, the lower air vane open, a small dark display window at the right end. ${NEW} ${SHOT}`,
+  thermostat: `A modern round smart thermostat: a brushed stainless steel ring around a black glass face that shows the temperature 72 in large white digits and a thin orange arc, seen straight on with a slight reflection on the glass. ${NEW} ${SHOT}`,
 }
 PROMPTS[`${OLD_PREFIX}ac`] = `An old residential central air conditioner outdoor condenser unit: a square steel cabinet with louvered coil panels and a round fan grille on top. ${OLD} ${SHOT}`
 PROMPTS[`${OLD_PREFIX}furnace`] = `An old residential gas furnace: an upright rectangular steel cabinet, originally beige, with two access doors and a metal flue pipe on top. ${OLD} ${SHOT}`

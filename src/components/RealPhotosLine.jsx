@@ -30,7 +30,7 @@ export default function RealPhotosLine({ photos, onChanged }) {
 
   const make = async (keys, label) => {
     if (!keys.length) return
-    const each = 'about 7 cents each at medium quality, about half a minute each'
+    const each = 'about 25 cents each at high quality, about a minute each'
     if (!window.confirm(`${label} ${keys.length} photo${keys.length === 1 ? '' : 's'} with the image model (${each})? They go in the stock library for every client.`)) return
     cancel.current = false
     setError('')
@@ -84,7 +84,7 @@ export default function RealPhotosLine({ photos, onChanged }) {
       {progress && (
         <p className="mt-1 text-slate-700" data-real-photos-progress>
           <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700 align-[-2px]" />
-          Making the {unitPhotoLabel(progress.key).toLowerCase()}, {progress.i} of {progress.n}. About half a minute each.
+          Making the {unitPhotoLabel(progress.key).toLowerCase()}, {progress.i} of {progress.n}. About a minute each.
         </p>
       )}
       {error && (
