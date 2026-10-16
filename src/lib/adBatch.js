@@ -19,7 +19,7 @@ import { pickTemplate } from './seasonPlaybook.js'
 // year on the season's template, proof on the owner's photo with the stars;
 // then another round of the same three ideas in other clothes. A batch reads
 // as a campaign rather than one template three times.
-export const BATCH_LOOKS = ['massive_deal', 'season_sale', 'stack', 'photo_sale', 'price_grid', 'plate']
+export const BATCH_LOOKS = ['sun_deal', 'season_sale', 'stack', 'photo_sale', 'price_grid', 'plate']
 export const BATCH_SIZE = 3
 
 const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', split: 'Split panel', before: 'Before and after', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept',

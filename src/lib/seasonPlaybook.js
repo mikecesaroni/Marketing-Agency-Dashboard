@@ -45,9 +45,12 @@ const HVAC = {
     hooks: ['No heat? We are on the way today', 'Stop paying to patch a dying furnace', 'Third repair this winter? Here is the math'],
     templates: [
       ['emergency', 'the no-heat call: dark, urgent, 24/7'],
+      ['sun_deal', 'the sunburst deal with the monthly number'],
       ['financing', '$0 down is the offer when it is freezing'],
       ['winter_shout', 'the snow poster with the price huge'],
+      ['payment_stack', 'the monthly number stacked beside the furnace'],
       ['massive_deal', 'the replacement deal, loud'],
+      ['clunkers', 'cash for the old furnace'],
       ['big_number', 'one number, the whole ad'],
     ],
     cutout: 'furnace',
@@ -70,8 +73,11 @@ const HVAC = {
     templates: [
       ['tune_up', 'the service price in a starburst on spring green'],
       ['price_grid', 'tune-up, plan and install prices side by side'],
+      ['split_pop', 'a brand-new AC at a starting price, pre-season'],
+      ['clunkers', 'cash for the old AC before the heat'],
       ['coupon', 'the tune-up as a clip-out coupon'],
       ['plan_card', 'the maintenance plan with what is included'],
+      ['rebate_burst', 'the rebate as one big number'],
       ['before_sale', 'the rusted unit and the new one'],
       ['season_sale', 'the spring sale poster'],
     ],
@@ -94,7 +100,9 @@ const HVAC = {
     hooks: ['Beat the heat, and the rush', 'Will your AC make it through July?', 'Installed before the first heat wave'],
     templates: [
       ['season_sale', 'the sun poster with SALE huge'],
+      ['split_pop', 'a brand-new AC, installed before the heat'],
       ['tune_up', 'the last-call tune-up price'],
+      ['sun_deal', 'the sunburst deal with the monthly number'],
       ['financing', 'the replacement with a monthly number'],
       ['big_number', 'the discount as one big number'],
       ['price_grid', 'tune-up and install prices together'],
@@ -119,9 +127,11 @@ const HVAC = {
     templates: [
       ['emergency', 'the AC-is-dead call: 24/7, same day'],
       ['season_sale', 'the summer sale poster'],
+      ['payment_stack', '$0 down stacked beside the new AC'],
       ['financing', '$0 down on the replacement'],
       ['big_number', 'the discount as one big number'],
       ['photo_sale', 'the van or the crew with the offers below'],
+      ['sun_deal', 'the sunburst deal with the monthly number'],
       ['massive_deal', 'the loud replacement deal'],
     ],
     cutout: 'ac',
@@ -149,6 +159,9 @@ const HVAC = {
       ['plan_card', 'the maintenance plan with what is included'],
       ['winter_shout', 'the be-ready-for-winter poster'],
       ['before_sale', 'the old furnace and the new one'],
+      ['clunkers', 'cash for the old furnace before the freeze'],
+      ['rebate_burst', 'the year-end rebate as one big number'],
+      ['feature_list', 'the plan sold on what it includes'],
     ],
     cutout: 'furnace',
     theme: 'leaves',
@@ -586,6 +599,10 @@ const WORDS = {
   sale: /\bsale\b|deals?\b|massive|blowout|clearance|save\b/i,
   holiday: /holiday|christmas|thanksgiving|black friday|new year|year.?end/i,
   beforeAfter: /before and after|before\/after|transformation|replaced|old (unit|furnace|ac|roof|tank)/i,
+  tradeIn: /trade[- ]?in|clunker|cash for your|old (unit|furnace|ac|boiler|system|water heater|tank)|replace (your|that) old/i,
+  rebate: /rebate|tax credit|cash back|incentive|\$\d[\d,]* back/i,
+  brandNew: /brand[- ]new|new (ac|a\/c|furnace|boiler|system|heat pump|water heater)|starting at/i,
+  bestPrice: /best price|lowest price|price match|beat any (price|quote)/i,
 }
 
 function words(content) {
@@ -614,8 +631,20 @@ export function pickTemplate({ phase, content = {}, hasPhoto = false, hasAfter =
   ;(phase?.templates || []).forEach((t, i) => add(t.key, Math.max(2, 12 - i * 2), `${phase.label}: ${t.why}`))
   if (WORDS.financing.test(text)) {
     add('financing', 14, 'the words are a financing offer')
+    add('payment_stack', 8, 'a monthly number stacks beside the unit')
+    add('sun_deal', 6, 'a monthly number is the sunburst deal')
     add('plan_card', 4)
   }
+  // The retail posters.
+  if (WORDS.tradeIn.test(text)) add('clunkers', 18, 'the words are a trade-in offer')
+  if (WORDS.rebate.test(text)) add('rebate_burst', 15, 'the words are a rebate or a tax credit')
+  if (WORDS.brandNew.test(text)) {
+    add('split_pop', 9, 'a brand-new system at a starting price')
+    add('sun_deal', 4)
+  }
+  if (WORDS.bestPrice.test(text)) add('cloud_price', 12, 'the words promise the best price')
+  const listed = String(content.subhead || '').split(/\s*(?:[,;|•\n]|\.\s)\s*/).filter((s) => s.trim()).length
+  if (listed >= 3 && !WORDS.plan.test(text)) add('feature_list', 8, 'the subhead lists what is included')
   if (WORDS.emergency.test(text)) add('emergency', 16, 'the words are an emergency or same-day call')
   if (WORDS.service.test(text)) {
     add('tune_up', 12, 'the words sell a tune-up or an inspection')
@@ -625,8 +654,10 @@ export function pickTemplate({ phase, content = {}, hasPhoto = false, hasAfter =
   if (WORDS.plan.test(text)) add('plan_card', 18, 'the words sell a plan or a membership')
   if (WORDS.free.test(text)) add('coupon', 5, 'a free offer reads as a coupon')
   if (WORDS.sale.test(text)) {
+    add('sun_deal', 6, 'the words shout a sale')
     add('massive_deal', 5, 'the words shout a sale')
     add('season_sale', 5, 'the words shout a sale')
+    add('cloud_price', 4)
   }
   if (WORDS.holiday.test(text) || phase?.season === 'holiday') add('holiday_deals', 9, 'it is the holidays')
   if (offers.length >= 2) {

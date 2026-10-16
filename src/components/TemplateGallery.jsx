@@ -13,9 +13,10 @@ const THUMB_W = 180
  * colours on the form, so choosing one is choosing by eye and not by name.
  * Repainted a beat after the last edit rather than on every keystroke.
  *
- * The tiles wrap into a grid that fills the column, so all sixteen are on
- * screen at once. They used to sit in one sideways-scrolling strip, and on a
- * laptop that showed four or five with no scrollbar to say there were more.
+ * The tiles wrap into a grid that fills the column, so every template is on
+ * screen at once, the retail posters first. They used to sit in one
+ * sideways-scrolling strip, and on a laptop that showed four or five with
+ * no scrollbar to say there were more.
  */
 export default function TemplateGallery({ content, assets, safeMode, layout, onPick }) {
   const refs = useRef({})
@@ -66,8 +67,9 @@ export default function TemplateGallery({ content, assets, safeMode, layout, onP
           Templates <span className="font-normal text-slate-400">all {TEMPLATE_LAYOUTS.length}</span>
         </span>
         <span className="text-[11px] text-slate-500">
-          Painted posters for the season: SALE, prices, stickers, a furnace or a condenser in the corner. Click one to use it;
-          the words on the form go on it.
+          The retail posters first (a sunburst, the price huge, the unit as the hero, a Google reviews card), then the
+          seasonal ones (SALE, prices, stickers, a furnace or a condenser in the corner). Click one to use it; the words on
+          the form go on it.
         </span>
       </div>
       <div className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2" data-template-grid>

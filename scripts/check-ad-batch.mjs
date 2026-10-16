@@ -30,8 +30,8 @@ check('the template ask says what the template needs', /comma-separated list/.te
 check('a missing name still reads', /for this client to run now/.test(makeAdsPrompt({})), true)
 
 // The looks.
-check('a poster for the offer, the season template for the time of year, the owner photo for proof, then another round', BATCH_LOOKS, ['massive_deal', 'season_sale', 'stack', 'photo_sale', 'price_grid', 'plate'])
-check('each set gets the next look', assignLooks([{ hook: 'a' }, { hook: 'b' }, { hook: 'c' }, { hook: 'd' }]).map((s) => s.layout), ['massive_deal', 'season_sale', 'stack', 'photo_sale'])
+check('a poster for the offer, the season template for the time of year, the owner photo for proof, then another round', BATCH_LOOKS, ['sun_deal', 'season_sale', 'stack', 'photo_sale', 'price_grid', 'plate'])
+check('each set gets the next look', assignLooks([{ hook: 'a' }, { hook: 'b' }, { hook: 'c' }, { hook: 'd' }]).map((s) => s.layout), ['sun_deal', 'season_sale', 'stack', 'photo_sale'])
 check('the batch asks for a sticker and offer tiles', /"sticker"/.test(makeAdsPrompt({ clientName: 'Prime' })) && /"offers"/.test(makeAdsPrompt({ clientName: 'Prime' })), true)
 check('tiles: blanks dropped, four at most, either key spelling', tilesFrom([{ amount: ' $0 ', detail: 'Down' }, { offer_amount: '$89', offer_detail: 'Tune-up' }, {}, { amount: '1' }, { amount: '2' }, { amount: '3' }]).map((o) => o.amount), ['$0', '$89', '1', '2'])
 check('tiles: junk is an empty list', tilesFrom('no'), [])

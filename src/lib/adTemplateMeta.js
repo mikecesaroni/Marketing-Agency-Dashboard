@@ -8,6 +8,16 @@
  * that paint the client's photo (dragging the artboard moves its focal point).
  */
 export const TEMPLATE_LAYOUTS = [
+  // The retail posters, modelled on the ads the agency holds up as the
+  // standard: a sunburst, slanted bars, a price with an outline and a
+  // shadow, the unit as the hero, a Google reviews card.
+  { key: 'sun_deal', label: 'Sunburst deal', hint: 'a sky-blue sunburst, MASSIVE in letterspaced caps, the headline in two colours, STARTING FROM ONLY on a bar, the price huge with a white outline, the unit standing in clouds with a red badge, logo and Google card on a white band', theme: 'burst' },
+  { key: 'clunkers', label: 'Cash for clunkers', hint: 'a blue sunburst with torn black corners, the kicker on slanted black bars, the old rusty unit and the new one with an arrow between, GET $1,000 huge, the detail on a black bar, the Google card', theme: 'burst' },
+  { key: 'split_pop', label: 'Brand new', hint: 'pink and teal split on a diagonal, the kicker in a gold pill, BRAND NEW over the headline, the unit on a white pedestal, the sticker in a teal box left, STARTING AT and the price right', theme: 'pop' },
+  { key: 'cloud_price', label: 'Price cloud', hint: 'a red field, the headline in a white cloud, the offer line, the sticker in a gold pill, the unit as a lineup of three', theme: 'coral' },
+  { key: 'payment_stack', label: 'Payment stack', hint: 'the unit on the left, the monthly number stacked on the right: kicker bar, price huge, terms bar, headline, a red badge; logo and Google card on a white band', theme: 'burst' },
+  { key: 'rebate_burst', label: 'Rebate burst', hint: 'a red sunburst with torn navy corners, GET UP TO on a bar, the rebate huge in white, BACK IN REBATES on a bar, a gold sticker, the headline, the unit', theme: 'burst_red' },
+  { key: 'feature_list', label: 'Feature list', hint: 'deep blue, the logo small up top, the headline with its last line in light blue, what is included as ticked rows (the subhead split on commas), the offer in an outlined pill, the unit large on the right', theme: 'deep' },
   { key: 'winter_shout', label: 'Winter shout', hint: 'snow, the logo up top, a giant outlined offer, the unit standing in the drift', theme: 'snow' },
   { key: 'massive_deal', label: 'Massive deal', hint: 'a warm glow with flames, MASSIVE DEALS in two tones, a price that fills the frame, a seal and a SALE star', theme: 'glow' },
   { key: 'price_grid', label: 'Price grid', hint: 'a script season word, a big SALE headline, a grid of up to four prices beside the unit', theme: 'paper' },
@@ -43,6 +53,13 @@ export function isLookKey(key) {
  * a price grid wants tiles, a big number wants one number).
  */
 export const TEMPLATE_SHAPES = {
+  sun_deal: { wins: 'a replacement or install deal with a monthly payment or a starting price: the loud retail poster', needs: 'a one-word kicker like MASSIVE or HUGE, a two-word headline like BOILER DEAL or FURNACE SALE, a price or a monthly number as the offer amount, what it buys as the offer detail, a short sticker for the red badge like MONTHLY PAYMENTS CHEAPER THAN DATE NIGHT' },
+  clunkers: { wins: 'a trade-in or replace-your-old-unit offer: cash for your clunker, trade in and save', needs: 'a kicker like CASH FOR CLUNKERS, a headline like TRADE IN YOUR OLD FURNACE, a dollar amount as the offer, TOWARDS A NEW SYSTEM as the offer detail, the equipment set (the old one paints rusty)' },
+  split_pop: { wins: 'a brand-new system at a starting price, bright and upbeat', needs: 'a kicker like SPECIAL LIMITED OFFER, a headline like BRAND NEW AC SYSTEM, the starting or monthly price as the offer amount, PER MONTH or INSTALLED as the offer detail, a sticker like GET A FREE ESTIMATE' },
+  cloud_price: { wins: 'the best price on a kind of equipment: one dollar-off offer, said plainly', needs: 'a headline like BEST PRICE ON FURNACES, the dollars off as the offer amount, what it is off as the offer detail, a sticker like LIMITED TIME' },
+  payment_stack: { wins: 'a monthly payment or $0 down beside the unit', needs: 'a kicker like EASY FINANCING or $0 DOWN, the monthly number as the offer amount, the terms as the offer detail, a headline of four to eight words, a sticker' },
+  rebate_burst: { wins: 'rebates, tax credits, cash back: up to $X back', needs: 'GET UP TO as the kicker, the dollar amount as the offer, BACK IN REBATES or IN TAX CREDITS as the offer detail, a headline, a sticker like LIMITED TIME' },
+  feature_list: { wins: 'a system or a plan sold on what it includes, the premium product ad', needs: 'a headline of two short sentences (the second is the pay-off), the subhead as a comma-separated list of three or four things included, the price or the terms as the offer' },
   winter_shout: { wins: 'a winter offer with a dollar amount; the be-ready-for-winter poster', needs: 'a short kicker, a dollar offer, a headline of six to ten words' },
   massive_deal: { wins: 'a loud replacement or install deal with a big price', needs: 'a kicker like MASSIVE DEALS or WINTER SALE, a dollar offer, a one-line sticker' },
   price_grid: { wins: 'several services with a price each (tune-up, plan, install)', needs: 'two to four offer tiles with a price and a line each, a headline' },
@@ -89,6 +106,11 @@ export const THEME_LAYOUTS = [
   { key: 'holiday', label: 'Holiday', ink: 'light' },
   { key: 'paper', label: 'White poster', ink: 'dark' },
   { key: 'brand', label: 'Brand colour', ink: 'auto' },
+  { key: 'burst', label: 'Sunburst', ink: 'light' },
+  { key: 'burst_red', label: 'Sunburst red', ink: 'light' },
+  { key: 'pop', label: 'Pink and teal', ink: 'light' },
+  { key: 'coral', label: 'Coral', ink: 'light' },
+  { key: 'deep', label: 'Deep blue', ink: 'light' },
 ]
 
 export const THEME_KEYS = THEME_LAYOUTS.map((t) => t.key)

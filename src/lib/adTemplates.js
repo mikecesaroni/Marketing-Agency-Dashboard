@@ -28,7 +28,7 @@
  */
 
 import { readableTextOn } from './logoColours'
-import { CONDENSED, SCRIPT, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
+import { CONDENSED, FONT, SCRIPT, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
 import { SLATE, badgeSize, drawBadge, drawCoverIn, frameMargins } from './adLooks'
 import { logoFor } from './logoCutout'
 import { createAudit } from './adAudit'
@@ -295,6 +295,95 @@ export const THEMES = {
       ctx.fillRect(0, 0, w, 14)
     },
   },
+  // The retail posters' backgrounds (the RCL boiler and clunkers ads, the
+  // pink-and-teal AC poster, the red furnace cloud, the dark product ad).
+  burst: {
+    paint(ctx, w, h) {
+      sunburst(ctx, w, h, '#1877D1', '#0B3F8F')
+    },
+  },
+  burst_red: {
+    paint(ctx, w, h) {
+      sunburst(ctx, w, h, '#D7263D', '#8E1024')
+    },
+  },
+  pop: {
+    paint(ctx, w, h) {
+      // Two colours split on a diagonal, a soft light where the unit stands.
+      ctx.fillStyle = '#E8336D'
+      ctx.fillRect(0, 0, w, h)
+      ctx.fillStyle = '#23B5CB'
+      ctx.beginPath()
+      ctx.moveTo(w * 0.42, 0)
+      ctx.lineTo(w, 0)
+      ctx.lineTo(w, h)
+      ctx.lineTo(w * 0.78, h)
+      ctx.closePath()
+      ctx.fill()
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.62, 10, w * 0.5, h * 0.62, h * 0.55)
+      g.addColorStop(0, 'rgba(255,255,255,0.22)')
+      g.addColorStop(1, 'rgba(255,255,255,0)')
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, w, h)
+    },
+  },
+  coral: {
+    paint(ctx, w, h) {
+      ctx.fillStyle = '#E5473E'
+      ctx.fillRect(0, 0, w, h)
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.4, 10, w * 0.5, h * 0.4, h * 0.85)
+      g.addColorStop(0, 'rgba(255,255,255,0.14)')
+      g.addColorStop(1, 'rgba(120,10,10,0.3)')
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, w, h)
+    },
+  },
+  deep: {
+    paint(ctx, w, h) {
+      vgrad(ctx, w, h, [[0, '#071A3A'], [0.6, '#0B2B6B'], [1, '#1D4ED8']])
+      const g = ctx.createRadialGradient(w * 0.7, h * 0.45, 10, w * 0.7, h * 0.45, h * 0.6)
+      g.addColorStop(0, 'rgba(96,165,250,0.35)')
+      g.addColorStop(1, 'rgba(96,165,250,0)')
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, w, h)
+    },
+  },
+}
+
+/** Wedges of light from a point: every other wedge is painted. */
+function rays(ctx, cx, cy, radius, color, count = 20, phase = 0) {
+  ctx.save()
+  ctx.translate(cx, cy)
+  ctx.rotate(phase)
+  ctx.fillStyle = color
+  const step = (Math.PI * 2) / count
+  for (let i = 0; i < count; i++) {
+    ctx.beginPath()
+    ctx.moveTo(0, 0)
+    ctx.arc(0, 0, radius, i * step, i * step + step / 2)
+    ctx.closePath()
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+/** The sunburst: a colour field, rays from just above the middle, a glow there, the corners darkened. */
+function sunburst(ctx, w, h, base, deep) {
+  const cx = w * 0.5
+  const cy = h * 0.42
+  ctx.fillStyle = base
+  ctx.fillRect(0, 0, w, h)
+  rays(ctx, cx, cy, Math.hypot(w, h), 'rgba(255,255,255,0.13)', 22, 0.1)
+  const glow = ctx.createRadialGradient(cx, cy, 5, cx, cy, h * 0.5)
+  glow.addColorStop(0, 'rgba(255,255,255,0.45)')
+  glow.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, w, h)
+  const vig = ctx.createRadialGradient(cx, cy, h * 0.3, cx, cy, h)
+  vig.addColorStop(0, 'rgba(0,0,0,0)')
+  vig.addColorStop(1, `${deep}B3`)
+  ctx.fillStyle = vig
+  ctx.fillRect(0, 0, w, h)
 }
 
 /** Dark or light type for a theme (the brand theme reads its colour). */
@@ -1179,27 +1268,59 @@ function rust(o, w, h) {
 // shared elements
 // ---------------------------------------------------------------------------
 
-/** Condensed capitals, optionally outlined, one or more lines. Returns the height used. */
-function shout(ctx, text, x, y, maxW, { px = 120, minPx = 48, lines = 2, fill = SLATE, stroke = '', strokeW = 0, align = 'left', ratio = 0.98, maxHeight, face = CONDENSED, tracking = 1, label = 'the words' } = {}) {
+/**
+ * Condensed capitals, optionally outlined, one or more lines. `slant` leans
+ * the letters like an italic (Anton has none), `shadow` drops a solid copy
+ * behind them, `weight` and `face` take another font. Returns the height used.
+ */
+function shout(ctx, text, x, y, maxW, { px = 120, minPx = 48, lines = 2, fill = SLATE, stroke = '', strokeW = 0, align = 'left', ratio = 0.98, maxHeight, face = CONDENSED, weight = '400', tracking = 1, slant = 0, shadow = null, label = 'the words' } = {}) {
   const t = String(text || '').trim()
   if (!t) return 0
-  const fit = fitText(ctx, t.toUpperCase(), maxW, lines, px, minPx, '400', tracking, { lineRatio: ratio, maxHeight, face })
-  setFont(ctx, '400', fit.px, tracking, face)
+  // The outline, the lean of slanted tops and the shadow all reach past the
+  // glyphs: the words are fitted to the room left after them, and the box
+  // recorded for the audit takes them in.
+  const sdx = shadow ? Math.max(0, shadow.dx ?? 5) : 0
+  const sdy = shadow ? Math.max(0, shadow.dy ?? 7) : 0
+  const extraFor = (size) => strokeW + (slant ? size * 0.75 * slant : 0) + sdx
+  const fit = fitText(ctx, t.toUpperCase(), Math.max(40, maxW - extraFor(px)), lines, px, minPx, weight, tracking, { lineRatio: ratio, maxHeight, face })
+  setFont(ctx, weight, fit.px, tracking, face)
   ctx.textAlign = align
   ctx.textBaseline = 'alphabetic'
-  const wide = widest(ctx, fit.lines) + strokeW
-  const tall = fit.lines.length * fit.px * ratio + fit.px * 0.1
-  note('text', { x: align === 'right' ? x - wide : align === 'center' ? x - wide / 2 : x, y, w: wide, h: tall }, label)
+  const textW = widest(ctx, fit.lines)
+  const wide = textW + extraFor(fit.px)
+  const tall = fit.lines.length * fit.px * ratio + fit.px * 0.1 + sdy
+  const left = (align === 'right' ? x - textW : align === 'center' ? x - textW / 2 : x) - strokeW / 2
+  note('text', { x: left, y, w: wide, h: tall }, label)
   let by = y + fit.px * 0.92
   for (const line of fit.lines) {
-    if (stroke && strokeW) {
-      ctx.lineJoin = 'round'
-      ctx.strokeStyle = stroke
-      ctx.lineWidth = strokeW
-      ctx.strokeText(line, x, by)
+    // Slanted letters are drawn in a sheared frame with the baseline at its
+    // origin, so the baseline stays put and the tops lean right.
+    const draw = (paint) => {
+      if (!slant) return paint(x, by)
+      ctx.save()
+      ctx.translate(x, by)
+      ctx.transform(1, 0, -slant, 1, 0, 0)
+      paint(0, 0)
+      ctx.restore()
     }
-    ctx.fillStyle = fill
-    ctx.fillText(line, x, by)
+    if (shadow) {
+      draw((px2, py2) => {
+        ctx.fillStyle = shadow.color || 'rgba(2,6,23,0.45)'
+        ctx.fillText(line, px2 + (shadow.dx ?? 5), py2 + (shadow.dy ?? 7))
+      })
+    }
+    if (stroke && strokeW) {
+      draw((px2, py2) => {
+        ctx.lineJoin = 'round'
+        ctx.strokeStyle = stroke
+        ctx.lineWidth = strokeW
+        ctx.strokeText(line, px2, py2)
+      })
+    }
+    draw((px2, py2) => {
+      ctx.fillStyle = fill
+      ctx.fillText(line, px2, py2)
+    })
     by += fit.px * ratio
   }
   ctx.textAlign = 'left'
@@ -1303,18 +1424,26 @@ function starburst(ctx, cx, cy, radius, text, { fill = GOLD, ink = SLATE, points
   ctx.textBaseline = 'alphabetic'
 }
 
-/** A round seal with words in it. */
+/** A round seal with words in it. `ring: ''` leaves the inner ring off (a plain badge). */
 function seal(ctx, cx, cy, radius, text, { fill = SLATE, ink = WHITE, ring = WHITE } = {}) {
   note('sticker', { x: cx - radius, y: cy - radius, w: radius * 2, h: radius * 2 }, 'the seal')
+  if (!ring) {
+    ctx.fillStyle = 'rgba(2,6,23,0.3)'
+    ctx.beginPath()
+    ctx.arc(cx + 4, cy + 6, radius, 0, Math.PI * 2)
+    ctx.fill()
+  }
   ctx.fillStyle = fill
   ctx.beginPath()
   ctx.arc(cx, cy, radius, 0, Math.PI * 2)
   ctx.fill()
-  ctx.strokeStyle = ring
-  ctx.lineWidth = Math.max(3, radius * 0.05)
-  ctx.beginPath()
-  ctx.arc(cx, cy, radius * 0.86, 0, Math.PI * 2)
-  ctx.stroke()
+  if (ring) {
+    ctx.strokeStyle = ring
+    ctx.lineWidth = Math.max(3, radius * 0.05)
+    ctx.beginPath()
+    ctx.arc(cx, cy, radius * 0.86, 0, Math.PI * 2)
+    ctx.stroke()
+  }
   const words = String(text || '').trim().toUpperCase()
   const fit = fitText(ctx, words, radius * 1.4, 3, radius * 0.3, radius * 0.14, '900', 0, { lineRatio: 1.08 })
   setFont(ctx, '900', fit.px, 0)
@@ -1547,6 +1676,418 @@ function kickerWords(content) {
 
 function amountWords(content) {
   return String(content?.offerAmount || '').trim()
+}
+
+// ---------------------------------------------------------------------------
+// the retail posters' elements: the RCL boiler and clunkers ads, the
+// pink-and-teal AC poster, the red furnace cloud, the dark product ad
+// ---------------------------------------------------------------------------
+
+const NAVY = '#0B2A5B'
+const INK_DARK = '#0B0F19'
+
+/** The brand's dark colour when it is dark enough for white type, else navy. */
+function darkBrand(content) {
+  const c = content?.badgeColor
+  return c && readableTextOn(c) === WHITE ? c : NAVY
+}
+
+/** "Starting from only" above a price or a monthly number; nothing above $500 OFF or 50%. */
+function stripWords(amount) {
+  const a = String(amount || '').trim()
+  if (!a) return ''
+  return /\/\s*mo\b|month/i.test(a) || /^\$\s?\d[\d,]*(\.\d+)?$/.test(a) ? 'Starting from only' : ''
+}
+
+/** White puffs along a band: drawn before the unit for the sky behind it, again after for the cloud its feet are in. */
+function clouds(ctx, w, top, bottom, seed = 17) {
+  const rand = rng(seed)
+  const band = Math.max(20, bottom - top)
+  for (let i = 0; i < 16; i++) {
+    const x = (i / 15) * w + (rand() - 0.5) * w * 0.05
+    const y = top + band * (0.55 + (rand() - 0.5) * 0.3)
+    const rad = band * (0.38 + rand() * 0.42)
+    const g = ctx.createRadialGradient(x - rad * 0.3, y - rad * 0.45, rad * 0.1, x, y, rad)
+    g.addColorStop(0, '#FFFFFF')
+    g.addColorStop(0.7, '#F4F7FA')
+    g.addColorStop(1, '#C9D4E0')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.arc(x, y, rad, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.fillStyle = WHITE
+  ctx.fillRect(0, top + band * 0.7, w, bottom - (top + band * 0.7) + 2)
+}
+
+/** Torn dark paper over the top-left and bottom-right corners, ink flecks along the tears. Decoration: not audited. */
+function torn(ctx, w, h, fill = INK_DARK) {
+  const rand = rng(29)
+  const n = 14
+  ctx.fillStyle = fill
+  const tl = [[0, 0]]
+  for (let i = 0; i <= n; i++) {
+    const t = i / n
+    tl.push([t * w * 0.55, h * 0.2 * (1 - t) + (rand() - 0.5) * h * 0.035])
+  }
+  tl.push([w * 0.55, 0])
+  quad(ctx, tl, fill)
+  const br = [[w, h]]
+  for (let i = 0; i <= n; i++) {
+    const t = i / n
+    br.push([w - t * w * 0.6, h - h * 0.16 * (1 - t) + (rand() - 0.5) * h * 0.03])
+  }
+  br.push([w - w * 0.6, h])
+  quad(ctx, br, fill)
+  for (let i = 0; i < 40; i++) {
+    const t = rand()
+    const upper = rand() < 0.5
+    const x = upper ? t * w * 0.6 : w - t * w * 0.65
+    const y = upper ? h * 0.2 * (1 - t) + rand() * h * 0.06 : h - h * 0.16 * (1 - t) - rand() * h * 0.06
+    ctx.beginPath()
+    ctx.arc(x, y, 1.5 + rand() * 6, 0, Math.PI * 2)
+    ctx.fill()
+  }
+}
+
+/** A chevron arrow pointing right, with a shadow. */
+function chevron(ctx, x, y, w, h, fill = WHITE) {
+  const path = (dx, dy) => {
+    ctx.beginPath()
+    ctx.moveTo(x + dx, y + h * 0.3 + dy)
+    ctx.lineTo(x + w * 0.55 + dx, y + h * 0.3 + dy)
+    ctx.lineTo(x + w * 0.55 + dx, y + dy)
+    ctx.lineTo(x + w + dx, y + h / 2 + dy)
+    ctx.lineTo(x + w * 0.55 + dx, y + h + dy)
+    ctx.lineTo(x + w * 0.55 + dx, y + h * 0.7 + dy)
+    ctx.lineTo(x + dx, y + h * 0.7 + dy)
+    ctx.closePath()
+  }
+  ctx.fillStyle = 'rgba(2,6,23,0.35)'
+  path(4, 6)
+  ctx.fill()
+  ctx.fillStyle = fill
+  path(0, 0)
+  ctx.fill()
+}
+
+/** A slanted bar with condensed capitals on it, leaning with it. Returns its box. */
+function slab(ctx, text, x, y, maxW, { fill = INK_DARK, ink = WHITE, px = 90, minPx = 36, align = 'left', skew = 0.2, lines = 1, maxHeight, label = 'the words' } = {}) {
+  const t = String(text || '').trim().toUpperCase()
+  if (!t) return { x, y, w: 0, h: 0 }
+  const fit = fitText(ctx, t, Math.max(40, maxW - px * 0.8), lines, px, minPx, '400', 1, { lineRatio: 1.15, maxHeight, face: CONDENSED })
+  setFont(ctx, '400', fit.px, 1, CONDENSED)
+  const tw = widest(ctx, fit.lines)
+  const padX = fit.px * 0.35
+  const bh = fit.px * 1.15 * fit.lines.length + fit.px * 0.25
+  const lean = bh * skew
+  const bw = tw + padX * 2 + lean + fit.px * 0.12
+  const bx = align === 'right' ? x - bw : align === 'center' ? x - bw / 2 : x
+  const para = (dx, dy) => {
+    ctx.beginPath()
+    ctx.moveTo(bx + lean + dx, y + dy)
+    ctx.lineTo(bx + bw + dx, y + dy)
+    ctx.lineTo(bx + bw - lean + dx, y + bh + dy)
+    ctx.lineTo(bx + dx, y + bh + dy)
+    ctx.closePath()
+  }
+  ctx.fillStyle = 'rgba(2,6,23,0.35)'
+  para(6, 8)
+  ctx.fill()
+  ctx.fillStyle = fill
+  para(0, 0)
+  ctx.fill()
+  note('badge', { x: bx, y, w: bw, h: bh }, label)
+  ctx.fillStyle = ink
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  let by = y + fit.px * 0.12 + fit.px
+  for (const line of fit.lines) {
+    ctx.save()
+    ctx.translate(bx + lean * 0.5 + padX, by)
+    ctx.transform(1, 0, -skew * 0.55, 1, 0, 0)
+    ctx.fillText(line, 0, 0)
+    ctx.restore()
+    by += fit.px * 1.15
+  }
+  return { x: bx, y, w: bw, h: bh }
+}
+
+/**
+ * The headline in two colours (BOILER in red with a white outline, DEAL in
+ * navy): the first word one way and the rest another, on one line when
+ * they fit, the first word above the rest when not. Returns the height.
+ */
+function twoTone(ctx, text, cx, y, maxW, { px = 150, minPx = 60, first = {}, rest = {}, maxHeight, slant = 0, tracking = 2, label = 'the headline' } = {}) {
+  const t = String(text || '').trim().toUpperCase()
+  if (!t) return 0
+  const words = t.split(/\s+/)
+  const a = words[0]
+  const b = words.slice(1).join(' ')
+  if (!b) return shout(ctx, a, cx, y, maxW, { px, minPx, lines: 1, align: 'center', maxHeight, tracking, slant, label, ...first })
+  const fit = fitText(ctx, t, maxW, 1, px, minPx, '400', tracking, { lineRatio: 0.98, maxHeight, face: CONDENSED })
+  if (fit.lines.length === 1) {
+    setFont(ctx, '400', fit.px, tracking, CONDENSED)
+    const wa = ctx.measureText(a).width
+    const ws = ctx.measureText(' ').width
+    const wb = ctx.measureText(b).width
+    const sw = first.strokeW || 0
+    const x0 = cx - (wa + ws + wb + sw) / 2
+    const h1 = shout(ctx, a, x0, y, wa + 60, { px: fit.px, minPx: fit.px, lines: 1, align: 'left', tracking, slant, label, ...first })
+    shout(ctx, b, x0 + wa + ws + sw, y, wb + 60, { px: fit.px, minPx: fit.px, lines: 1, align: 'left', tracking, slant, label: `${label} (rest)`, ...rest })
+    return h1
+  }
+  let h = shout(ctx, a, cx, y, maxW, { px, minPx, lines: 1, align: 'center', maxHeight: maxHeight ? maxHeight * 0.5 : undefined, tracking, slant, label, ...first })
+  h += shout(ctx, b, cx, y + h, maxW, { px: px * 0.8, minPx, lines: 2, align: 'center', maxHeight: maxHeight ? maxHeight * 0.5 : undefined, tracking, slant, label: `${label} (rest)`, ...rest })
+  return h
+}
+
+/** The Google reviews card: the word in its colours, five stars beside it, the proof line under. Returns its box. */
+const REVIEWS_W = 280
+const REVIEWS_H = 96
+
+function reviewsBadge(ctx, x, y, { align = 'right', proof = '', w = REVIEWS_W, h = REVIEWS_H } = {}) {
+  const bx = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x
+  ctx.fillStyle = 'rgba(2,6,23,0.3)'
+  roundRect(ctx, bx + 4, y + 6, w, h, 12)
+  ctx.fill()
+  ctx.fillStyle = WHITE
+  roundRect(ctx, bx, y, w, h, 12)
+  ctx.fill()
+  const letters = [['G', '#4285F4'], ['o', '#EA4335'], ['o', '#FBBC05'], ['g', '#4285F4'], ['l', '#34A853'], ['e', '#EA4335']]
+  setFont(ctx, '700', 34, -0.5)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  let lx = bx + 18
+  const ly = y + 40
+  for (const [ch, c] of letters) {
+    ctx.fillStyle = c
+    ctx.fillText(ch, lx, ly)
+    lx += ctx.measureText(ch).width
+  }
+  ctx.fillStyle = GOLD
+  setFont(ctx, '700', 24, 0)
+  for (let i = 0; i < 5; i++) ctx.fillText('★', lx + 14 + i * 24, ly)
+  const t = String(proof || '').trim() || '5-star rated'
+  const fit = fitText(ctx, t, w - 36, 1, 18, 11, '700', 0, { lineRatio: 1 })
+  setFont(ctx, '700', fit.px, 0)
+  ctx.fillStyle = SLATE
+  ctx.fillText(fit.lines[0] || t, bx + 18, y + h - 22)
+  note('stars', { x: bx, y, w, h }, 'the Google reviews badge')
+  return { x: bx, y, w, h }
+}
+
+/**
+ * THE RETAIL FOOTER: the logo bottom-left and the Google reviews card
+ * bottom-right, on a white band (`band`) or straight on the theme. Measured
+ * before anything else is drawn, like footer(); drawn last.
+ */
+function brandFooter(ctx, m, content, assets, { band = false, onDark = true } = {}) {
+  const { w, h, padX, contentBottom } = m
+  const badgeH = REVIEWS_H
+  const bandH = band ? Math.min(160, Math.round(h * 0.13)) : 0
+  const logo = logoFor(assets, band ? false : onDark)
+  const fit = logoFitBox(logo, 300, band ? bandH - 30 : 90)
+  const height = band ? bandH : Math.max(badgeH, fit ? fit.h : 0)
+  const top = contentBottom - height
+  const draw = () => {
+    if (band) {
+      // The band runs a little under the frame's safe zone and no further:
+      // on a Reels-safe Story the sky carries on beneath it.
+      ctx.fillStyle = WHITE
+      ctx.fillRect(0, top, w, Math.min(h - top, height + 40))
+    }
+    if (fit) {
+      const ly = top + (height - fit.h) / 2
+      ctx.drawImage(logo, padX, ly, fit.w, fit.h)
+      note('logo', { x: padX, y: ly, w: fit.w, h: fit.h }, 'the logo')
+    }
+    reviewsBadge(ctx, w - padX, top + (height - badgeH) / 2, { align: 'right', proof: content.proof })
+  }
+  return { top, height, draw }
+}
+
+/** A dark label across a unit: TRADE-IN THIS... It sits on the unit on purpose, so it is a surface, not audited against it. */
+function labelStrip(ctx, text, cx, cy, w, { fill = INK_DARK, ink = WHITE, px = 34 } = {}) {
+  const t = String(text || '').toUpperCase()
+  const fit = fitText(ctx, t, w - 30, 1, px, 14, '400', 2, { lineRatio: 1, face: CONDENSED })
+  setFont(ctx, '400', fit.px, 2, CONDENSED)
+  const h = fit.px * 1.5
+  ctx.save()
+  ctx.translate(cx, cy)
+  ctx.rotate(-0.07)
+  ctx.fillStyle = fill
+  ctx.fillRect(-w / 2, -h / 2, w, h)
+  ctx.fillStyle = ink
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(fit.lines[0] || t, 0, 1)
+  ctx.restore()
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  note('panel', { x: cx - w / 2, y: cy - h / 2, w, h }, 'the label')
+}
+
+/** A gold spark: short rays off a point, the retail "new!" mark. Decoration. */
+function spark(ctx, cx, cy, r, fill = GOLD) {
+  ctx.save()
+  ctx.translate(cx, cy)
+  ctx.fillStyle = fill
+  for (const a of [-2.2, -1.6, -1.0, -0.4]) {
+    ctx.save()
+    ctx.rotate(a)
+    roundRect(ctx, r * 0.35, -r * 0.09, r * 0.65, r * 0.18, r * 0.09)
+    ctx.fill()
+    ctx.restore()
+  }
+  ctx.restore()
+}
+
+/** A pill with words in it: a badge, never a button (Meta draws the real one under the ad). Returns its box. */
+function pill(ctx, text, cx, y, maxW, { fill = GOLD, ink = SLATE, px = 30, minPx = 16, outline = '', label = 'the pill' } = {}) {
+  const t = String(text || '').trim().toUpperCase()
+  if (!t) return { x: cx, y, w: 0, h: 0 }
+  const fit = fitText(ctx, t, Math.max(60, maxW - 60), 1, px, minPx, '800', 1, { lineRatio: 1 })
+  setFont(ctx, '800', fit.px, 1)
+  const w = ctx.measureText(fit.lines[0] || t).width + fit.px * 1.6
+  const h = fit.px * 1.9
+  const x = cx - w / 2
+  roundRect(ctx, x, y, w, h, h / 2)
+  if (fill) {
+    ctx.fillStyle = fill
+    ctx.fill()
+  }
+  if (outline) {
+    ctx.strokeStyle = outline
+    ctx.lineWidth = Math.max(2, fit.px * 0.1)
+    ctx.stroke()
+  }
+  ctx.fillStyle = ink
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(fit.lines[0] || t, cx, y + h / 2 + 1)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  note('badge', { x, y, w, h }, label)
+  return { x, y, w, h }
+}
+
+/** A white platform the unit stands on: the side, then the lit top, a shadow under. */
+function pedestal(ctx, cx, y, w, h) {
+  ctx.fillStyle = 'rgba(2,6,23,0.25)'
+  ctx.beginPath()
+  ctx.ellipse(cx, y + h, w * 0.6, h * 0.5, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#B8C4D2'
+  roundRect(ctx, cx - w / 2, y + h * 0.4, w, h * 0.6, h * 0.2)
+  ctx.fill()
+  const top = ctx.createLinearGradient(0, y, 0, y + h * 0.55)
+  top.addColorStop(0, '#FFFFFF')
+  top.addColorStop(1, '#E2E8F0')
+  ctx.fillStyle = top
+  roundRect(ctx, cx - w / 2, y, w, h * 0.55, h * 0.2)
+  ctx.fill()
+}
+
+/** A white cloud-shaped blob behind words: a rounded body with puffs along the top and bottom. A surface. */
+function cloudBlob(ctx, x, y, w, h) {
+  ctx.fillStyle = WHITE
+  const r = h * 0.5
+  roundRect(ctx, x + r * 0.3, y + h * 0.25, w - r * 0.6, h * 0.55, h * 0.27)
+  ctx.fill()
+  const bumps = Math.max(3, Math.round(w / r))
+  for (let i = 0; i < bumps; i++) {
+    const bx = x + r + (i / (bumps - 1)) * (w - 2 * r)
+    const rr = r * (0.75 + 0.25 * Math.sin(i * 2.1))
+    ctx.beginPath()
+    ctx.arc(bx, y + h * 0.42, rr, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(bx + r * 0.4, y + h * 0.7, rr * 0.8, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  note('panel', { x, y, w, h }, 'the cloud')
+}
+
+/** A rounded box with up to three lines of bold capitals in it. Returns its box. */
+function wordBox(ctx, text, x, y, w, { fill = '#23B5CB', ink = WHITE, px = 44, minPx = 20, maxHeight, label = 'the sticker' } = {}) {
+  const t = String(text || '').trim()
+  if (!t) return { x, y, w: 0, h: 0 }
+  const fit = fitText(ctx, t.toUpperCase(), w - 40, 3, px, minPx, '900', 0, { lineRatio: 1.1, maxHeight: maxHeight ? Math.max(40, maxHeight - 40) : undefined })
+  setFont(ctx, '900', fit.px, 0)
+  const h = fit.lines.length * fit.px * 1.1 + 40
+  ctx.fillStyle = 'rgba(2,6,23,0.25)'
+  roundRect(ctx, x + 4, y + 6, w, h, 18)
+  ctx.fill()
+  ctx.fillStyle = fill
+  roundRect(ctx, x, y, w, h, 18)
+  ctx.fill()
+  ctx.fillStyle = ink
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
+  let by = y + 20 + fit.px * 0.9
+  for (const line of fit.lines) {
+    ctx.fillText(line, x + w / 2, by)
+    by += fit.px * 1.1
+  }
+  ctx.textAlign = 'left'
+  note('sticker', { x, y, w, h }, label)
+  return { x, y, w, h }
+}
+
+/** The subhead as a list: split on commas, semicolons, bullets or sentence ends, at most `n`. */
+function listItems(text, n = 4) {
+  return String(text || '')
+    .split(/\s*(?:[,;|•\n]|\.\s)\s*/)
+    .map((t) => t.trim().replace(/^(and|or|plus)\s+/i, '').replace(/\.$/, ''))
+    .filter(Boolean)
+    .slice(0, n)
+}
+
+/** "Priority service: jump the line" is a head and a tail; most items are a head alone. */
+function splitFeature(item) {
+  const parts = String(item).split(/\s*[:–]\s+|\s+-\s+/)
+  return parts.length > 1 ? [parts[0], parts.slice(1).join(' ')] : [String(item), '']
+}
+
+/** Feature rows: a ringed tick and the words. Returns the height used. */
+function featureRows(ctx, items, x, y, w, { ink = WHITE, accent = '#7DD3FC', rowH = 68, maxBottom } = {}) {
+  let ly = y
+  for (const item of items) {
+    if (maxBottom !== undefined && ly + rowH > maxBottom) break
+    const cy = ly + rowH / 2
+    ctx.strokeStyle = accent
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.arc(x + 22, cy, 20, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.strokeStyle = ink
+    ctx.lineWidth = 4
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    ctx.moveTo(x + 13, cy)
+    ctx.lineTo(x + 20, cy + 7)
+    ctx.lineTo(x + 32, cy - 8)
+    ctx.stroke()
+    ctx.lineCap = 'butt'
+    const [head, tail] = splitFeature(item)
+    const fit = fitText(ctx, head.toUpperCase(), w - 60, 1, 26, 16, '800', 0.5, { lineRatio: 1 })
+    setFont(ctx, '800', fit.px, 0.5)
+    ctx.fillStyle = ink
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+    ctx.fillText(fit.lines[0] || head, x + 56, cy + (tail ? -2 : fit.px * 0.35))
+    if (tail) {
+      const f2 = fitText(ctx, typographic(tail), w - 60, 1, 20, 14, '500', 0, { lineRatio: 1 })
+      setFont(ctx, '500', f2.px, 0)
+      ctx.fillStyle = 'rgba(255,255,255,0.75)'
+      ctx.fillText(f2.lines[0] || tail, x + 56, cy + f2.px + 2)
+    }
+    note('text', { x, y: ly, w, h: rowH }, 'a feature')
+    ly += rowH
+  }
+  return ly - y
 }
 
 // ---------------------------------------------------------------------------
@@ -2238,7 +2779,400 @@ function planCard(ctx, size, content, assets, opts) {
   return { band: { top: y, bottom: B } }
 }
 
+// ---------------------------------------------------------------------------
+// the retail posters, from the ads the agency holds up as the standard
+// ---------------------------------------------------------------------------
+
+/**
+ * 18. Sunburst deal: the RCL boiler poster. A sky-blue sunburst, MASSIVE in
+ * letterspaced navy, BOILER DEAL in two colours, STARTING FROM ONLY on a
+ * navy bar, the price huge in red with a white outline and a shadow, the
+ * unit standing in clouds with a red badge beside it, the logo and the
+ * Google card on a white band.
+ */
+function sunDeal(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth } = m
+  const { accent } = content
+  paintTheme(ctx, w, h, content)
+  const navy = darkBrand(content)
+  const foot = brandFooter(ctx, m, content, assets, { band: true })
+  const cloudH = Math.min(170, Math.round(h * 0.13))
+  clouds(ctx, w, foot.top - cloudH, foot.top + 2)
+  const B = foot.top - 8
+  let y = contentTop
+  const badgeH = badge(ctx, content.badge, padX, y, 400, accent)
+  if (badgeH) y += badgeH + 10
+  // The unit is the hero: it gets two fifths of the height before the words
+  // are sized, so a tall frame does not go to a bigger price and a smaller
+  // boiler. W is the words' floor.
+  const cutOn = hasCutout(content, assets)
+  const W = cutOn ? B - Math.round((B - y) * 0.4) : B
+  y += shout(ctx, kickerWords(content), w / 2, y, maxWidth, { px: 60, minPx: 28, lines: 1, fill: navy, align: 'center', tracking: 14, maxHeight: Math.max(30, (W - y) * 0.14), label: 'the kicker' }) + 6
+  y += twoTone(ctx, content.hook, w / 2, y, maxWidth, { px: 170, minPx: 56, maxHeight: Math.max(60, (W - y) * 0.36), first: { fill: accent, stroke: WHITE, strokeW: 12, shadow: { color: 'rgba(2,6,23,0.4)', dx: 5, dy: 7 } }, rest: { fill: navy } }) + 12
+  const amount = amountWords(content)
+  const strip = stripWords(amount)
+  if (strip) {
+    const sb = slab(ctx, strip, w / 2, y, maxWidth * 0.7, { fill: navy, px: 38, minPx: 20, align: 'center', skew: 0.16, label: 'the strip' })
+    y += sb.h + 12
+  }
+  if (amount) y += shout(ctx, amount, w / 2, y, maxWidth, { px: 290, minPx: 96, lines: 1, fill: accent, stroke: WHITE, strokeW: 16, shadow: { color: 'rgba(2,6,23,0.45)', dx: 8, dy: 10 }, slant: 0.12, align: 'center', tracking: 2, maxHeight: Math.max(90, (W - y) * 0.62), label: 'the offer' }) + 4
+  y += shout(ctx, content.offerDetail, w / 2, y, maxWidth, { px: 56, minPx: 26, lines: 2, fill: navy, align: 'center', maxHeight: Math.max(40, (W - y) * 0.6), label: 'the offer detail' }) + 10
+  const st = stickerWords(content)
+  if (cutOn) {
+    const room = B - y
+    const cw = Math.min(maxWidth * 0.64, Math.max(120, room * 0.78))
+    const box = { x: w / 2 - cw / 2 + (st ? cw * 0.1 : 0), y: Math.max(y, B - cw * 1.3), w: cw, h: 0 }
+    box.h = B - box.y
+    drawCutout(ctx, content, assets, box)
+    // The cloud in front of the unit's feet.
+    clouds(ctx, w, foot.top - cloudH * 0.45, foot.top + 2, 23)
+    if (st) {
+      const rad = Math.min(115, (box.x - padX) / 2 - 8, room * 0.22)
+      if (rad >= 48) seal(ctx, box.x - rad - 8, B - rad - 10, rad, st, { fill: accent, ink: WHITE, ring: '' })
+    }
+  } else {
+    y += body(ctx, content.subhead, w / 2, y, maxWidth * 0.85, { px: 32, minPx: 20, lines: 3, weight: '700', fill: navy, align: 'center', maxHeight: (B - y) * 0.5 }) + 16
+    if (st) {
+      const rad = Math.min(120, (B - y) / 2 - 10)
+      if (rad >= 48) seal(ctx, w / 2, y + rad, rad, st, { fill: accent, ink: WHITE, ring: '' })
+    }
+  }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
+}
+
+/**
+ * 19. Cash for clunkers: the RCL trade-in poster. A blue sunburst with torn
+ * black corners, the kicker on two slanted black bars, the headline in
+ * white italics, the old rusty unit and the new one with an arrow between
+ * (TRADE-IN THIS... / AND GET THIS!), GET $1,000 huge in white, the detail
+ * on a black bar, the logo and the Google card at the bottom.
+ */
+function clunkers(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth } = m
+  const { accent } = content
+  paintTheme(ctx, w, h, content)
+  torn(ctx, w, h, INK_DARK)
+  const foot = brandFooter(ctx, m, content, assets, { band: false, onDark: true })
+  const B = foot.top - 16
+  let y = contentTop
+  const badgeH = badge(ctx, content.badge, padX, y, 400, accent)
+  if (badgeH) y += badgeH + 12
+  // The height is budgeted before the words are sized: a third for the two
+  // units, a quarter for GET $1,000 and its bar, the rest for the kicker
+  // bars and the headline. W is the words' floor.
+  const amount = amountWords(content)
+  const detail = String(content.offerDetail || '').trim()
+  const cutOn = hasCutout(content, assets)
+  const avail = B - y
+  const blockH = (amount ? Math.round(avail * 0.26) : 0) + (detail ? Math.min(90, Math.round(avail * 0.1)) : 0) + 16
+  const W = B - blockH - (cutOn ? Math.round(avail * 0.32) : 0)
+  const kw = kickerWords(content).toUpperCase().split(/\s+/)
+  const half = Math.ceil(kw.length / 2)
+  const s1 = slab(ctx, kw.slice(0, half).join(' '), padX, y, maxWidth * 0.85, { px: 104, minPx: 40, skew: 0.22, maxHeight: Math.max(40, (W - y) * 0.26), label: 'the kicker' })
+  y += s1.h + 6
+  if (kw.length > half) {
+    const s2 = slab(ctx, kw.slice(half).join(' '), padX + s1.h * 0.3, y, maxWidth * 0.85, { px: 104, minPx: 40, skew: 0.22, maxHeight: Math.max(40, (W - y) * 0.3), label: 'the kicker (rest)' })
+    y += s2.h + 6
+  }
+  y += 10
+  y += shout(ctx, content.hook, padX, y, maxWidth, { px: 92, minPx: 38, lines: 3, fill: WHITE, shadow: { color: 'rgba(2,6,23,0.55)', dx: 4, dy: 6 }, slant: 0.14, maxHeight: Math.max(50, (W - y) * 0.9), label: 'the headline' }) + 18
+  const pairH = B - y - blockH - 16
+  if (cutOn && pairH > 150) {
+    const gap = maxWidth * 0.14
+    const uw = (maxWidth - gap) / 2
+    const left = { x: padX, y, w: uw, h: pairH }
+    const right = { x: padX + uw + gap, y, w: uw, h: pairH }
+    drawOldUnit(ctx, content, assets, left)
+    drawCutout(ctx, content, assets, right)
+    chevron(ctx, padX + uw + gap * 0.12, y + pairH * 0.5 - gap * 0.22, gap * 0.76, gap * 0.44)
+    const lp = Math.min(32, uw * 0.1)
+    labelStrip(ctx, 'Trade-in this...', left.x + uw / 2, y + pairH * 0.56, uw * 1.04, { px: lp })
+    labelStrip(ctx, 'And get this!', right.x + uw / 2, y + pairH * 0.56, uw * 1.04, { px: lp })
+    y += pairH + 16
+  } else if (!cutOn) {
+    y += body(ctx, content.subhead, padX, y, maxWidth, { px: 30, minPx: 18, lines: 3, weight: '600', fill: 'rgba(255,255,255,0.9)', maxHeight: Math.max(0, pairH * 0.6) }) + 12
+  }
+  if (amount) {
+    y += shout(ctx, 'Get', w / 2, y, maxWidth, { px: 48, minPx: 22, lines: 1, fill: WHITE, align: 'center', tracking: 8, maxHeight: Math.max(24, (B - y) * 0.14), label: 'the get' })
+    y += shout(ctx, amount, w / 2, y, maxWidth, { px: 230, minPx: 84, lines: 1, fill: WHITE, stroke: INK_DARK, strokeW: 14, shadow: { color: 'rgba(2,6,23,0.5)', dx: 6, dy: 8 }, slant: 0.12, align: 'center', tracking: 2, maxHeight: Math.max(60, (B - y) * 0.62), label: 'the offer' }) + 6
+  }
+  if (detail && B - y > 40) {
+    const sb = slab(ctx, detail, w / 2, y, maxWidth, { px: 56, minPx: 24, align: 'center', skew: 0.2, maxHeight: B - y, label: 'the offer detail' })
+    y += sb.h
+  }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
+}
+
+/**
+ * 20. Payment stack: the unit on the left, the monthly number stacked on
+ * the right (the kicker on a navy bar, the price huge in white with a navy
+ * outline, the terms on a black bar, the headline, a red badge), the logo
+ * and the Google card on a white band.
+ */
+function paymentStack(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth } = m
+  const { accent } = content
+  paintTheme(ctx, w, h, content)
+  const navy = darkBrand(content)
+  const foot = brandFooter(ctx, m, content, assets, { band: true })
+  const B = foot.top - 10
+  let y = contentTop
+  const badgeH = badge(ctx, content.badge, padX, y, 400, accent)
+  if (badgeH) y += badgeH + 14
+  const cutOn = hasCutout(content, assets)
+  const cutW = cutOn ? Math.min(maxWidth * 0.46, 520) : 0
+  const colW = maxWidth - (cutW ? cutW + 24 : 0)
+  const align = cutOn ? 'right' : 'center'
+  const ax = cutOn ? w - padX : w / 2
+  const top = y
+  const k = slab(ctx, kickerWords(content), ax, y, colW, { fill: navy, px: 64, minPx: 28, align, skew: 0.18, maxHeight: (B - y) * 0.14, label: 'the kicker' })
+  y += k.h + 16
+  const amount = amountWords(content)
+  if (amount) y += shout(ctx, amount, ax, y, colW, { px: 250, minPx: 84, lines: 1, fill: WHITE, stroke: navy, strokeW: 14, shadow: { color: 'rgba(2,6,23,0.4)', dx: 6, dy: 8 }, slant: 0.1, align, tracking: 2, maxHeight: Math.max(80, (B - y) * 0.36), label: 'the offer' }) + 6
+  if (content.offerDetail) {
+    const d = slab(ctx, content.offerDetail, ax, y, colW, { fill: INK_DARK, px: 54, minPx: 22, align, skew: 0.18, lines: 2, maxHeight: Math.max(40, (B - y) * 0.22), label: 'the offer detail' })
+    y += d.h + 16
+  }
+  y += shout(ctx, content.hook, ax, y, colW, { px: 70, minPx: 30, lines: 3, fill: WHITE, shadow: { color: 'rgba(2,6,23,0.45)', dx: 3, dy: 5 }, align, maxHeight: Math.max(60, (B - y) * 0.5), label: 'the headline' }) + 12
+  y += body(ctx, content.subhead, ax, y, colW, { px: 28, minPx: 18, lines: 3, weight: '700', fill: WHITE, align, maxHeight: (B - y) * 0.6 }) + 14
+  const st = stickerWords(content)
+  if (st) {
+    const rad = Math.min(110, (B - y) / 2 - 8, colW * 0.22)
+    if (rad >= 48) seal(ctx, cutOn ? w - padX - rad : w / 2, y + rad, rad, st, { fill: accent, ink: WHITE, ring: '' })
+  }
+  if (cutW) {
+    const ctop = Math.max(top, B - cutW * 1.3)
+    drawCutout(ctx, content, assets, { x: padX, y: ctop, w: cutW, h: B - ctop })
+  }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
+}
+
+/**
+ * 21. Rebate burst: a red sunburst with torn navy corners, GET UP TO on a
+ * navy bar, the rebate huge in white with a navy outline, BACK IN REBATES
+ * on a bar, a gold sticker, the headline, the unit bottom-right.
+ */
+function rebateBurst(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth } = m
+  paintTheme(ctx, w, h, content)
+  const navy = darkBrand(content)
+  torn(ctx, w, h, navy)
+  const foot = brandFooter(ctx, m, content, assets, { band: false, onDark: true })
+  const B = foot.top - 16
+  let y = contentTop
+  const badgeH = badge(ctx, content.badge, padX, y, 400, navy)
+  if (badgeH) y += badgeH + 12
+  const st = stickerWords(content)
+  const starR = st ? Math.min(118, maxWidth * 0.14) : 0
+  const topW = maxWidth - (starR ? starR * 2 + 20 : 0)
+  const k = slab(ctx, kickerWords(content), padX, y, topW, { fill: navy, px: 72, minPx: 30, skew: 0.2, maxHeight: (B - y) * 0.12, label: 'the kicker' })
+  if (st) starburst(ctx, w - padX - starR, Math.max(contentTop + starR, y + starR - 10), starR, st, { fill: GOLD, ink: SLATE })
+  y += k.h + 14
+  const amount = amountWords(content)
+  if (amount) y += shout(ctx, amount, padX, y, topW, { px: 300, minPx: 96, lines: 1, fill: WHITE, stroke: navy, strokeW: 16, shadow: { color: 'rgba(2,6,23,0.45)', dx: 8, dy: 10 }, slant: 0.12, tracking: 1, maxHeight: Math.max(90, (B - y) * 0.4), label: 'the offer' }) + 8
+  if (content.offerDetail) {
+    const d = slab(ctx, content.offerDetail, padX, y, maxWidth, { fill: navy, px: 64, minPx: 26, skew: 0.2, lines: 2, maxHeight: Math.max(40, (B - y) * 0.25), label: 'the offer detail' })
+    y += d.h + 18
+  }
+  const cutOn = hasCutout(content, assets)
+  const cutW = cutOn ? Math.min(maxWidth * 0.42, 460) : 0
+  const textW = maxWidth - (cutW ? cutW + 24 : 0)
+  const cutTop = y
+  y += shout(ctx, content.hook, padX, y, textW, { px: 76, minPx: 32, lines: 3, fill: WHITE, shadow: { color: 'rgba(2,6,23,0.45)', dx: 3, dy: 5 }, maxHeight: Math.max(60, (B - y) * 0.55), label: 'the headline' }) + 12
+  y += body(ctx, content.subhead, padX, y, textW, { px: 28, minPx: 18, lines: 3, weight: '600', fill: 'rgba(255,255,255,0.92)', maxHeight: B - y })
+  if (cutW) {
+    const t = Math.max(cutTop, B - cutW * 1.3)
+    drawCutout(ctx, content, assets, { x: w - padX - cutW, y: t, w: cutW, h: B - t })
+  }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
+}
+
+/**
+ * 22. Split pop: the pink-and-teal AC poster. The kicker in a gold pill with
+ * a spark, BRAND NEW in heavy rounded capitals over AC SYSTEM in condensed,
+ * the unit on a white pedestal in the middle, the sticker in a teal box on
+ * the left (GET A FREE ESTIMATE), STARTING AT, the price and the terms on
+ * the right, the logo and the stars along the bottom.
+ */
+function splitPop(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth } = m
+  paintTheme(ctx, w, h, content)
+  const foot = footer(ctx, m, content, assets, { onDark: true, ink: WHITE, logo: 'left', maxW: 240, maxH: 70, starsPx: 22 })
+  const B = foot.top - 16
+  let y = contentTop
+  const kp = pill(ctx, kickerWords(content), w / 2, y, maxWidth * 0.7, { fill: GOLD, ink: SLATE, px: 28, minPx: 16, label: 'the kicker' })
+  spark(ctx, w - padX - 40, contentTop + 50, 60)
+  y += kp.h + 16
+  const badgeH = badge(ctx, content.badge, padX, y, 400, SLATE)
+  if (badgeH) y += badgeH + 10
+  const words = String(content.hook || '').trim().split(/\s+/).filter(Boolean)
+  const cut = Math.ceil(words.length / 2)
+  const h1 = words.slice(0, cut).join(' ')
+  const h2 = words.slice(cut).join(' ')
+  const drop = { color: 'rgba(2,6,23,0.35)', dx: 3, dy: 5 }
+  y += shout(ctx, h1, w / 2, y, maxWidth, { px: 118, minPx: 46, lines: 2, fill: WHITE, face: FONT, weight: '900', tracking: -1, ratio: 1.02, shadow: drop, align: 'center', maxHeight: Math.max(60, (B - y) * 0.26), label: 'the headline' })
+  if (h2) y += shout(ctx, h2, w / 2, y + 6, maxWidth, { px: 108, minPx: 44, lines: 1, fill: WHITE, tracking: 3, shadow: drop, align: 'center', maxHeight: Math.max(50, (B - y) * 0.22), label: 'the headline (rest)' }) + 6
+  y += 16
+  const cutOn = hasCutout(content, assets)
+  const sideW = maxWidth * 0.3
+  const midW = maxWidth - sideW * 2 - 24
+  const pedH = Math.min(70, h * 0.06)
+  const floor = B - pedH * 0.45
+  if (cutOn) {
+    pedestal(ctx, w / 2, floor - pedH * 0.25, Math.min(midW * 1.15, maxWidth * 0.5), pedH)
+    const top = Math.max(y, floor - midW * 1.35)
+    drawCutout(ctx, content, assets, { x: w / 2 - midW / 2, y: top, w: midW, h: floor - top })
+  }
+  const sideTop = Math.max(y + 20, floor - (floor - y) * 0.75)
+  const st = stickerWords(content)
+  if (st) wordBox(ctx, st, padX, sideTop, sideW, { fill: '#23B5CB', px: 40, minPx: 18, maxHeight: floor - sideTop })
+  const amount = amountWords(content)
+  const rx = w - padX
+  let ry = sideTop
+  if (amount) {
+    if (stripWords(amount)) ry += shout(ctx, 'Starting at', rx, ry, sideW, { px: 34, minPx: 18, lines: 1, fill: WHITE, align: 'right', tracking: 2, label: 'the strip' }) + 4
+    ry += shout(ctx, amount, rx, ry, sideW, { px: 110, minPx: 40, lines: 1, fill: WHITE, face: FONT, weight: '900', tracking: -2, ratio: 1.02, shadow: drop, align: 'right', maxHeight: Math.max(50, (floor - ry) * 0.5), label: 'the offer' }) + 4
+  }
+  if (floor - ry > 30) ry += shout(ctx, content.offerDetail, rx, ry, sideW, { px: 40, minPx: 18, lines: 2, fill: WHITE, align: 'right', tracking: 2, maxHeight: floor - ry, label: 'the offer detail' })
+  if (!cutOn) body(ctx, content.subhead, w / 2, sideTop, midW, { px: 28, minPx: 18, lines: 4, weight: '700', fill: WHITE, align: 'center', maxHeight: floor - sideTop })
+  foot.draw()
+  return { band: { top: y, bottom: B } }
+}
+
+/**
+ * 23. Price cloud: the red furnace poster. A white cloud with the headline
+ * in it in the background colour, the offer line in white, the sticker in
+ * a gold pill, and the unit as a lineup of three at the bottom.
+ */
+function cloudPrice(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth } = m
+  const { accent, badgeColor } = content
+  const theme = paintTheme(ctx, w, h, content)
+  const inkCloud = theme.key === 'coral' ? '#E5473E' : accent
+  const foot = footer(ctx, m, content, assets, { onDark: theme.ink === 'light', ink: theme.ink === 'light' ? WHITE : SLATE, logo: 'right', maxW: 240, maxH: 70, starsPx: 22 })
+  const B = foot.top - 16
+  const ink = theme.ink === 'light' ? WHITE : SLATE
+  let y = contentTop
+  const badgeH = badge(ctx, content.badge, padX, y, 400, badgeColor || SLATE)
+  if (badgeH) y += badgeH + 12
+  const cw = maxWidth * 0.88
+  const words = String(content.hook || '').trim().toUpperCase()
+  if (words) {
+    const fit = fitText(ctx, words, cw - 90, 2, 112, 44, '900', -1, { lineRatio: 1.05, maxHeight: Math.max(60, (B - y) * 0.3) })
+    const ch = fit.lines.length * fit.px * 1.05 + 70
+    cloudBlob(ctx, w / 2 - cw / 2, y, cw, ch)
+    setFont(ctx, '900', fit.px, -1)
+    const wide = widest(ctx, fit.lines)
+    note('text', { x: w / 2 - wide / 2, y: y + 35, w: wide, h: fit.lines.length * fit.px * 1.05 }, 'the headline')
+    ctx.fillStyle = inkCloud
+    drawLines(ctx, fit.lines, w / 2, y + 35 + fit.px * 0.9, fit.px, 1.05, 'center')
+    ctx.textAlign = 'left'
+    y += ch + 22
+  }
+  const amount = amountWords(content)
+  const detail = String(content.offerDetail || '').trim()
+  const offerLine = [amount, detail].filter(Boolean).join(' ')
+  if (offerLine) y += body(ctx, offerLine, w / 2, y, maxWidth, { px: 44, minPx: 22, lines: 2, weight: '700', fill: ink, align: 'center', ratio: 1.15, maxHeight: Math.max(40, (B - y) * 0.25), label: 'the offer' }) + 16
+  const pw = pill(ctx, stickerWords(content) || kickerWords(content), w / 2, y, maxWidth * 0.6, { fill: GOLD, ink: SLATE, px: 30, minPx: 16, label: 'the pill' })
+  y += pw.h + 20
+  if (hasCutout(content, assets)) {
+    const room = B - y
+    if (room > 120) {
+      const big = Math.min(maxWidth * 0.4, room * 0.85)
+      const small = big * 0.72
+      const third = small * 0.85
+      const gap = 10
+      let x = w / 2 - (small + big + third + gap * 2) / 2
+      for (const uw of [small, big, third]) {
+        const uh = Math.min(uw * 1.25, room)
+        drawCutout(ctx, content, assets, { x, y: B - uh, w: uw, h: uh })
+        x += uw + gap
+      }
+    }
+  } else {
+    body(ctx, content.subhead, w / 2, y, maxWidth * 0.85, { px: 30, minPx: 18, lines: 3, weight: '600', fill: ink, align: 'center', maxHeight: B - y })
+  }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
+}
+
+/**
+ * 24. Feature list: the dark product ad. The logo small top-left, the
+ * headline stacked with its last sentence in light blue, what is included
+ * as ticked rows (the subhead split on commas), the offer in an outlined
+ * pill, the unit large on the right, the stars at the bottom.
+ */
+function featureList(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth } = m
+  const { accent } = content
+  const theme = paintTheme(ctx, w, h, content)
+  const onDark = theme.ink === 'light'
+  const ink = onDark ? WHITE : SLATE
+  const light = onDark ? '#7DD3FC' : accent
+  let y = contentTop
+  const lb = logoAt(ctx, assets, onDark, padX, y, { maxW: 220, maxH: 70 })
+  const badgeH = badge(ctx, content.badge, w - padX - 360, y, 360, accent)
+  y += Math.max(lb ? lb.h : 0, badgeH) + 30
+  const foot = footer(ctx, m, content, assets, { onDark, ink, logo: 'none', starsPx: 22 })
+  const B = foot.top - 16
+  const cutOn = hasCutout(content, assets)
+  const cutW = cutOn ? Math.min(maxWidth * 0.44, 500) : 0
+  const textW = maxWidth - (cutW ? cutW + 30 : 0)
+  const hook = String(content.hook || '').trim()
+  const parts = hook.split(/(?<=[.!?])\s+/).filter(Boolean)
+  let a = hook
+  let b = ''
+  if (parts.length >= 2) {
+    a = parts.slice(0, -1).join(' ')
+    b = parts[parts.length - 1]
+  } else {
+    const ws = hook.split(/\s+/).filter(Boolean)
+    if (ws.length >= 4) {
+      const c = Math.ceil(ws.length * 0.6)
+      a = ws.slice(0, c).join(' ')
+      b = ws.slice(c).join(' ')
+    }
+  }
+  const head = { face: FONT, weight: '900', tracking: -1, ratio: 1.02 }
+  y += shout(ctx, a, padX, y, textW, { ...head, px: 92, minPx: 36, lines: 2, fill: ink, maxHeight: Math.max(50, (B - y) * 0.3), label: 'the headline' })
+  if (b) y += shout(ctx, b, padX, y, textW, { ...head, px: 92, minPx: 36, lines: 2, fill: light, maxHeight: Math.max(50, (B - y) * 0.25), label: 'the headline (rest)' })
+  y += 26
+  const amount = amountWords(content)
+  const detail = String(content.offerDetail || '').trim()
+  const offerH = amount || detail ? 90 : 0
+  const items = listItems(content.subhead, 4)
+  if (items.length) y += featureRows(ctx, items, padX, y, textW, { ink, accent: light, rowH: 68, maxBottom: B - offerH - 20 }) + 20
+  if (amount || detail) {
+    const p = pill(ctx, [amount, detail].filter(Boolean).join(' · '), padX + textW / 2, Math.min(Math.max(y, B - 80), B - 60), textW, { fill: onDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)', ink, outline: onDark ? 'rgba(255,255,255,0.7)' : SLATE, px: 32, minPx: 16, label: 'the offer' })
+    y = p.y + p.h
+  }
+  if (cutW) {
+    const top = Math.max(contentTop + 70, B - cutW * 1.5)
+    drawCutout(ctx, content, assets, { x: w - padX - cutW, y: top, w: cutW, h: B - top })
+  }
+  foot.draw()
+  return { band: { top: y, bottom: B } }
+}
+
 export const TEMPLATES = {
+  sun_deal: sunDeal,
+  clunkers,
+  split_pop: splitPop,
+  cloud_price: cloudPrice,
+  payment_stack: paymentStack,
+  rebate_burst: rebateBurst,
+  feature_list: featureList,
   winter_shout: winterShout,
   massive_deal: massiveDeal,
   price_grid: priceGrid,

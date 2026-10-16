@@ -18,23 +18,25 @@ function check(name, actual, expected) {
 }
 
 // The registry.
-check('sixteen templates', TEMPLATE_KEYS.length, 16)
+check('twenty-three templates', TEMPLATE_KEYS.length, 23)
+check('the seven retail posters lead the gallery', TEMPLATE_KEYS.slice(0, 7), ['sun_deal', 'clunkers', 'split_pop', 'cloud_price', 'payment_stack', 'rebate_burst', 'feature_list'])
 check('every template has a key, a label and a hint', TEMPLATE_LAYOUTS.every((t) => t.key && t.label && t.hint), true)
-check('keys are snake_case and unique', [TEMPLATE_KEYS.every((k) => /^[a-z][a-z0-9_]*$/.test(k)), new Set(TEMPLATE_KEYS).size], [true, 16])
+check('keys are snake_case and unique', [TEMPLATE_KEYS.every((k) => /^[a-z][a-z0-9_]*$/.test(k)), new Set(TEMPLATE_KEYS).size], [true, 23])
 check('no template key collides with a photo look', TEMPLATE_KEYS.filter((k) => PHOTO_LOOKS.some((l) => l.key === k)), [])
 check('the photo templates', PHOTO_TEMPLATES, ['photo_sale', 'before_sale', 'reveal'])
 check('the two-photo templates take the After picker', TWO_PHOTO_TEMPLATES, ['before_sale', 'reveal'])
 check('isTemplate', [isTemplate('poster'), isTemplate('cover'), isTemplate(''), isTemplate(undefined)], [true, false, false, false])
-check('the templates have names for the batch strip and the help chat', [lookName('massive_deal'), lookName('poster'), lookName('stack')], ['Massive deal', 'White poster', 'Headline stack'])
+check('the templates have names for the batch strip and the help chat', [lookName('massive_deal'), lookName('sun_deal'), lookName('clunkers'), lookName('poster'), lookName('stack')], ['Massive deal', 'Sunburst deal', 'Cash for clunkers', 'White poster', 'Headline stack'])
 
 // The layout list the Studio reads.
 check('LAYOUTS is the photo looks then the templates', LAYOUTS.map((l) => l.key), [...PHOTO_LOOKS.map((l) => l.key), ...TEMPLATE_KEYS])
-check('the templates are grouped so the row and the gallery can split them', LAYOUTS.filter((l) => l.group === 'template').length, 16)
+check('the templates are grouped so the row and the gallery can split them', LAYOUTS.filter((l) => l.group === 'template').length, 23)
 check('every template paints the words', TEMPLATE_KEYS.every((k) => TEXT_LAYOUTS.includes(k)), true)
 check('dragging moves the photo on the photo templates only', TEMPLATE_KEYS.filter((k) => FOCUS_LAYOUTS.includes(k)), ['photo_sale', 'before_sale', 'reveal'])
 
 // Themes.
-check('nine themes', THEME_KEYS.length, 9)
+check('fourteen themes', THEME_KEYS.length, 14)
+check('the retail posters carry their own backgrounds', [themeFor({ layout: 'sun_deal' }), themeFor({ layout: 'clunkers' }), themeFor({ layout: 'split_pop' }), themeFor({ layout: 'cloud_price' }), themeFor({ layout: 'rebate_burst' }), themeFor({ layout: 'feature_list' })], ['burst', 'burst', 'pop', 'coral', 'burst_red', 'deep'])
 check('a season has a theme', [themeFor({ season: 'winter' }), themeFor({ season: 'fall' }), themeFor({ season: 'summer' }), themeFor({ season: 'spring' }), themeFor({ season: 'holiday' })], ['snow', 'leaves', 'sun', 'fresh', 'holiday'])
 check('no season means the brand colour', [themeFor({ season: 'all' }), themeFor({}), themeFor(null)], ['brand', 'brand', 'brand'])
 check('a template with its own theme keeps it whatever the season', themeFor({ layout: 'winter_shout', season: 'summer' }), 'snow')
