@@ -22,7 +22,7 @@ export default function PortalSidebar({ token, active, name = '' }) {
         <span className="text-sm font-semibold tracking-tight text-slate-100">The Working Class</span>
       </div>
       <div className="px-5 pb-4 pt-5">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Your page</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Your page</p>
         {name && <p className="mt-1 truncate text-[15px] font-semibold text-white">{name}</p>}
       </div>
       <nav className="flex-1 space-y-1 px-3" aria-label="Your pages">

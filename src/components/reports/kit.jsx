@@ -38,7 +38,7 @@ export function Panel({ channel, className, children, as: As = 'div', ...rest })
 
 /** Small uppercase label, the way every heading on these pages is set. */
 export function Eyebrow({ children, className }) {
-  return <p className={cn('text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500', className)}>{children}</p>
+  return <p className={cn('text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500', className)}>{children}</p>
 }
 
 /** A section heading with an optional channel dot and a right-hand slot. */
@@ -177,8 +177,9 @@ export function Segmented({ options, value, onChange, size = 'md' }) {
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
           className={cn(
+            // Tall enough for a thumb on a phone: these sit on the client's dashboard too.
             'whitespace-nowrap rounded-[10px] font-medium transition',
-            size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm',
+            size === 'sm' ? 'min-h-[40px] px-3 py-1.5 text-xs' : 'min-h-[44px] px-3.5 py-2 text-sm',
             value === o.value ? 'bg-white text-slate-900 shadow' : 'text-slate-400 hover:text-white'
           )}
         >
@@ -217,7 +218,7 @@ export function DTable({ children }) {
 
 export function DTh({ numeric, className, children }) {
   return (
-    <th className={cn('border-b border-white/[0.07] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500', numeric ? 'text-right' : 'text-left', className)}>
+    <th className={cn('border-b border-white/[0.07] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500', numeric ? 'text-right' : 'text-left', className)}>
       {children}
     </th>
   )

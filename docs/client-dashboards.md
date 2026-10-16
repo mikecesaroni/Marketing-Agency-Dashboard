@@ -71,6 +71,29 @@ checks the walls: the public pages import no CRM shell and link to no CRM
 page, the router has the client-facing mode, every client link goes
 through the public base, and search engines are told to stay out.
 
+## On a phone
+
+Most clients open their link on a phone, so both client pages (the numbers
+and the video scripts) are checked at four phone sizes, 360 to 412 pixels
+wide: nothing scrolls sideways, nothing is clipped, every button is at
+least 40 pixels tall, no type is under 11 pixels, and the teleprompter's
+buttons fit on the screen. The pieces that needed changing for that: the
+weeks table under "The number that matters most" is a list of cards on a
+phone (six columns do not fit) and a table from a tablet up; the time-range
+and chart toggles, the "Tell us" link, the lightbox Close and the small
+text buttons on the scripts page are all at least 40 pixels tall; the tab
+labels never wrap.
+
+What a phone downloads matters as much. The client pages are in the first
+file, so a link opens in one trip; every CRM page and the help chat are
+separate files that load on first visit (`React.lazy` in `src/App.jsx`),
+so a client's phone never downloads the agency's screens. Built files
+carry a hash in their name and `public/_headers` tells Netlify to cache
+them for a year; a tab left open across a deploy reloads itself once if a
+file has gone (`vite:preloadError` in `src/main.jsx`). Before the split
+the one file was about 1.9 MB; the client pages now fetch about 0.7 MB
+before compression.
+
 ## What a message app shows for the link
 
 A dashboard link pasted into iMessage, WhatsApp, Slack or an email

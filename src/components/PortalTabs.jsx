@@ -44,12 +44,12 @@ export default function PortalTabs({ token, active, dark = false }) {
               key={t.key}
               to={portalPath(t.key, token)}
               aria-current={current ? 'page' : undefined}
-              className={`flex min-h-[56px] items-center justify-center gap-3 rounded-xl px-3 py-2.5 transition ${current ? on : off}`}
+              className={`flex min-h-[56px] items-center justify-center gap-2 rounded-xl px-2 py-2.5 transition sm:gap-3 sm:px-3 ${current ? on : off}`}
               data-portal-tab={t.key}
             >
               <span className="flex-shrink-0">{PORTAL_ICONS[t.key] || null}</span>
               <span className="min-w-0 text-left">
-                <span className="block text-[16px] font-bold leading-tight sm:text-[17px]">{t.label}</span>
+                <span className="block whitespace-nowrap text-[14px] font-bold leading-tight min-[400px]:text-[15px] sm:text-[17px]">{t.label}</span>
                 <span className={`hidden text-[12px] font-medium leading-tight sm:block ${current ? hintOn : hintOff}`}>{current ? 'You are here' : t.hint}</span>
               </span>
             </Link>

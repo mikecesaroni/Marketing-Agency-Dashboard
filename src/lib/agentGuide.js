@@ -641,6 +641,10 @@ export const GOTCHAS = [
     body: 'A client gets token links only: a dashboard (/dashboard/<token>), a weekly report (/report/<token>), an ad approval (/approve/<token>), an onboarding form (/onboarding/<token>), their video scripts (/scripts/<token>, the same token as the dashboard). Those pages carry no agency nav and no link into the CRM, and read through token-gated database functions or a token-checking Edge Function rather than the tables. When the build runs as the client-facing site (VITE_PUBLIC_ONLY=true, or its host named in VITE_PUBLIC_HOST), only those five kinds of page exist and every other address is a dead end; with VITE_PUBLIC_APP_URL set, every link the CRM makes for a client points at that site, so the CRM\'s own address never reaches a client. Until that site exists the links use the CRM\'s address, and sign-in being off means the CRM is open to anyone who learns it.',
   },
   {
+    title: 'CRM pages load on demand; client pages load up front',
+    body: 'Every CRM page and the help chat are separate files, fetched the first time a page is opened (React.lazy in src/App.jsx) and cached for a year after that (public/_headers). The five kinds of client page are in the first file so a phone opens a link in one trip and never downloads the agency\'s screens. A tab left open across a deploy reloads itself once if a file it asks for has gone. A new CRM page goes in App.jsx as a lazy import, not a plain one; a new client page as a plain import.',
+  },
+  {
     title: 'Pages remember what they showed last',
     body: 'The client list, a client page, the dashboard and the onboarding board put their last answer on screen at once and refresh it behind. So a number can change a moment after a page opens: the first paint is what was true on the last visit, the second is now. It lives for the browser tab only and is at most six hours old; a reload still asks the database every time.',
   },

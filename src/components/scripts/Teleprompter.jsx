@@ -58,7 +58,7 @@ export default function Teleprompter({ lines, title, onClose }) {
     <div className="fixed inset-0 z-50 flex flex-col bg-black text-white" role="dialog" aria-modal="true" aria-label="Teleprompter" data-teleprompter>
       <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-white/70">
         <span className="truncate">{title}</span>
-        <button type="button" onClick={onClose} className="rounded-lg border border-white/25 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10" data-prompter-close>
+        <button type="button" onClick={onClose} className="min-h-[44px] rounded-lg border border-white/25 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10" data-prompter-close>
           Close
         </button>
       </div>
@@ -72,7 +72,11 @@ export default function Teleprompter({ lines, title, onClose }) {
         style={{ fontSize: size }}
         data-prompter-text
       >
-        <div style={{ height: '40vh' }} aria-hidden="true" />
+        {/* The hints live in the spacers, right above the first line and
+            right below the last, so they never sit on top of the words. */}
+        <div style={{ height: '40vh' }} className="flex items-end justify-center pb-8" aria-hidden="true">
+          {!playing && !done && <span className="text-lg font-normal text-white/60">Tap the words to start</span>}
+        </div>
         {spoken.map((say, i) => (
           <p key={i} className="mb-10">
             {say}
@@ -81,11 +85,10 @@ export default function Teleprompter({ lines, title, onClose }) {
         <p className="text-white/40" style={{ fontSize: Math.round(size * 0.6) }}>
           That is the end. Nice work.
         </p>
-        <div style={{ height: '60vh' }} aria-hidden="true" />
+        <div style={{ height: '60vh' }} className="flex items-start justify-center pt-8" aria-hidden="true">
+          {done && <span className="text-lg font-normal text-white/60">Tap the words to go again</span>}
+        </div>
       </div>
-      {!playing && (
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-lg text-white/60">{done ? 'Tap the words to go again' : 'Tap the words to start'}</div>
-      )}
       <div className="flex flex-wrap items-center justify-center gap-2 border-t border-white/10 px-4 py-3">
         <button type="button" onClick={() => (done ? restart() : setPlaying((p) => !p))} className="rounded-xl bg-orange-600 px-6 py-3 text-base font-bold text-white hover:bg-orange-500" data-prompter-play>
           {playing ? 'Pause' : done ? 'Again' : 'Play'}

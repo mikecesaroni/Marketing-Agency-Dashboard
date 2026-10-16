@@ -70,7 +70,7 @@ export default function ScriptView({ row, clientName, busy, onBack, onChange, on
 
   return (
     <div className="space-y-5" data-script-view data-script-id={row?.id}>
-      <button type="button" onClick={onBack} className="text-[15px] font-semibold text-slate-600 hover:text-slate-900" data-script-back>
+      <button type="button" onClick={onBack} className="inline-flex min-h-[44px] items-center text-[15px] font-semibold text-slate-600 hover:text-slate-900" data-script-back>
         ← Back to your scripts
       </button>
 
@@ -112,7 +112,7 @@ export default function ScriptView({ row, clientName, busy, onBack, onChange, on
             <div className="flex items-start gap-3">
               <span className={`mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold ${i === 0 ? 'bg-orange-600 text-white' : 'bg-slate-900 text-white'}`}>{i + 1}</span>
               <div className="min-w-0">
-                {i === 0 && <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-700">The hook: first three seconds</p>}
+                {i === 0 && <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-orange-700">The hook: first three seconds</p>}
                 <p className="text-[21px] font-semibold leading-snug text-slate-900">{l.say}</p>
                 {l.show && (
                   <p className="mt-2 text-[15px] text-slate-600">
@@ -137,7 +137,7 @@ export default function ScriptView({ row, clientName, busy, onBack, onChange, on
         <section className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-slate-600">Caption to post with it</p>
-            <button type="button" onClick={() => copy(s.caption, 'Copied the caption.')} className="text-[14px] font-semibold text-orange-700 hover:text-orange-900" data-copy-caption>
+            <button type="button" onClick={() => copy(s.caption, 'Copied the caption.')} className="-my-2 -mr-2 inline-flex min-h-[44px] items-center px-2 text-[14px] font-semibold text-orange-700 hover:text-orange-900" data-copy-caption>
               Copy
             </button>
           </div>
@@ -179,7 +179,7 @@ export default function ScriptView({ row, clientName, busy, onBack, onChange, on
           )}
           {status === 'filmed' && <span className="rounded-xl bg-green-100 px-4 py-3 text-[15px] font-bold text-green-900">Filmed. Send us the video and we take it from here.</span>}
           {status !== 'archived' && (
-            <button type="button" onClick={() => onStatus('archived')} className="ml-auto text-[14px] text-slate-500 underline hover:text-slate-800" data-mark-archived>
+            <button type="button" onClick={() => onStatus('archived')} className="ml-auto inline-flex min-h-[44px] items-center px-2 text-[14px] text-slate-500 underline hover:text-slate-800" data-mark-archived>
               Not for me
             </button>
           )}

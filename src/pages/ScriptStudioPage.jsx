@@ -51,7 +51,7 @@ function Header({ name, token }) {
           <img src="/brand/wc-mark.jpg" alt="The Working Class" className="h-10 w-10 object-contain" />
         </span>
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-700">Video scripts</p>
+          <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-orange-700">Video scripts</p>
           <p className="text-[15px] font-semibold text-slate-900">{name}</p>
         </div>
       </header>
@@ -119,7 +119,7 @@ function Builder({ ask, setAsk, onWrite, busy }) {
         ))}
       </div>
 
-      <button type="button" onClick={() => setMore((m) => !m)} className="mt-4 text-[15px] font-semibold text-orange-700 hover:text-orange-900" data-more-choices>
+      <button type="button" onClick={() => setMore((m) => !m)} className="mt-2 inline-flex min-h-[44px] items-center text-[15px] font-semibold text-orange-700 hover:text-orange-900" data-more-choices>
         {more ? 'Fewer choices' : 'More choices: who, where, tone'}
       </button>
       {more && (
@@ -224,7 +224,7 @@ function Mine({ rows, onOpen }) {
         ))}
       </ul>
       {live.length > 6 && (
-        <button type="button" onClick={() => setAll((a) => !a)} className="mt-2 text-[15px] font-semibold text-orange-700 hover:text-orange-900">
+        <button type="button" onClick={() => setAll((a) => !a)} className="mt-1 inline-flex min-h-[44px] items-center text-[15px] font-semibold text-orange-700 hover:text-orange-900">
           {all ? 'Show fewer' : `Show all ${live.length}`}
         </button>
       )}
@@ -430,7 +430,7 @@ export default function ScriptStudioPage() {
             <SendUs driveUrl={data.drive_url} />
 
             <footer className="space-y-2 px-1 text-[14px] text-slate-500">
-              <button type="button" onClick={() => setView('voice')} className="text-[15px] font-semibold text-orange-700 hover:text-orange-900" data-open-voice>
+              <button type="button" onClick={() => setView('voice')} className="inline-flex min-h-[44px] items-center text-[15px] font-semibold text-orange-700 hover:text-orange-900" data-open-voice>
                 {data.voice?.goes_by || data.voice?.tone ? 'How I talk (saved)' : 'Make them sound like me'}
               </button>
               <p>{data.limit_left !== undefined && data.limit_left < 10 ? `${data.limit_left} more scripts today. ` : ''}Questions? Reply to your Monday email and a real person answers.</p>

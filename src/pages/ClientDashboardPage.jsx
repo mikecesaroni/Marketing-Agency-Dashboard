@@ -72,7 +72,7 @@ function MetricTile({ tile, open, onToggle }) {
       <Eyebrow>{guide.label}</Eyebrow>
       <p className="mt-2 text-2xl font-semibold tracking-tight text-white">{tile.value}</p>
       <Delta value={tile.delta} lowerIsBetter={tile.lowerIsBetter} neutral={tile.neutral} />
-      <p className={cn('mt-2 text-[11px] font-medium', open ? 'text-sky-300' : 'text-slate-500')}>{open ? 'Hide' : 'Why it matters'}</p>
+      <p className={cn('mt-2 text-xs font-medium', open ? 'text-sky-300' : 'text-slate-500')}>{open ? 'Hide' : 'Why it matters'}</p>
     </Panel>
   )
 }
@@ -90,7 +90,7 @@ function MiniStat({ label, value }) {
   return (
     <div>
       <p className="text-sm font-semibold tabular-nums text-white">{value}</p>
-      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
     </div>
   )
 }
@@ -528,16 +528,56 @@ export default function ClientDashboardPage() {
             {story.answered > 0 ? (
               <div className="grid gap-5 md:grid-cols-3">
                 <div>
-                  <p className="text-5xl font-semibold tracking-tight text-white">
+                  <p className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
                     {money(story.back)}
-                    <span className="ml-2 text-xl font-medium text-slate-400">back per $1</span>
+                    <span className="block text-xl font-medium text-slate-400 sm:ml-2 sm:inline">back per $1</span>
                   </p>
                   <p className="mt-2 text-sm text-slate-300">
                     From the {story.answered} {plural(story.answered, 'week', 'weeks')} you told us about: {story.jobs} {plural(story.jobs, 'job', 'jobs')} worth {money(story.revenue)} from {money(story.spend)} in ads.
                   </p>
                 </div>
                 <div className="md:col-span-2">
-                  <table className="w-full text-sm">
+                  {/* Six columns do not fit a phone, so there each week is a
+                      small card; the table is for wider screens. */}
+                  <ul className="space-y-2 md:hidden" data-weeks-list>
+                    {(data.weeks || []).slice(0, 8).map((w) => {
+                      const back = Number(w.revenue) > 0 && Number(w.spend) > 0 ? money(Math.round((Number(w.revenue) / Number(w.spend)) * 100) / 100) : ''
+                      const told = Boolean(w.answered_at)
+                      return (
+                        <li key={w.week_start} className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-sm font-semibold text-white">{rangeLabel(w.week_start, w.week_end)}</span>
+                            {back ? (
+                              <span className="whitespace-nowrap text-sm font-semibold text-white">
+                                {back} <span className="text-xs font-normal text-slate-400">back per $1</span>
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400">{told ? 'n/a' : 'not told yet'}</span>
+                            )}
+                          </div>
+                          <div className="mt-1.5 grid grid-cols-4 gap-2 text-xs">
+                            <div>
+                              <span className="block text-slate-500">Spend</span>
+                              <span className="text-slate-200">{money(w.spend)}</span>
+                            </div>
+                            <div>
+                              <span className="block text-slate-500">Leads</span>
+                              <span className="text-slate-200">{fmtLeads(w.leads)}</span>
+                            </div>
+                            <div>
+                              <span className="block text-slate-500">Jobs</span>
+                              <span className={told ? 'text-slate-200' : 'text-slate-500'}>{told ? (w.jobs_booked ?? 0) : '…'}</span>
+                            </div>
+                            <div>
+                              <span className="block text-slate-500">Worth</span>
+                              <span className={told ? 'text-slate-200' : 'text-slate-500'}>{told && Number(w.revenue) > 0 ? money(w.revenue) : told ? 'n/a' : '…'}</span>
+                            </div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <table className="hidden w-full text-sm md:table">
                     <thead>
                       <tr>
                         <DTh>Week</DTh>
@@ -585,7 +625,7 @@ export default function ClientDashboardPage() {
             )}
             <div className="mt-5 flex flex-wrap items-center gap-3">
               {latest ? (
-                <a href={`/report/${latest.token}`} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-200" data-answer-link>
+                <a href={`/report/${latest.token}`} className="inline-flex min-h-[44px] items-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-200" data-answer-link>
                   Tell us how last week&apos;s leads did
                 </a>
               ) : (
@@ -636,7 +676,7 @@ export default function ClientDashboardPage() {
           <div className="max-h-full w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-200">
               <span className="break-words font-semibold">{lightbox.ad.name}</span>
-              <button type="button" onClick={() => setLightbox(null)} className="rounded-lg border border-white/20 px-3 py-1 text-xs hover:bg-white/10">
+              <button type="button" onClick={() => setLightbox(null)} className="min-h-[44px] rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
                 Close
               </button>
             </div>

@@ -38,6 +38,11 @@ check('the help chat hides on every kind of client page', PUBLIC_PREFIXES.every(
 // The router serves only the public pages on a client-facing site.
 const app = read('src/App.jsx')
 check('App.jsx has a client-facing mode with a dead end', app.includes('onPublicSite()') && app.includes('NothingHerePage') && app.includes('path="*"'), true)
+// The CRM's pages and the help chat load on demand, so a client's phone
+// downloads none of the agency's screens; the client pages load up front.
+check('the CRM pages and the help chat are on-demand files', app.includes("lazy(() => import('./components/HelpChat'))") && app.includes("lazy(() => import('./pages/ClientsPage'))") && !/^import HelpChat/m.test(app), true)
+check('the client pages load with the first file', ['ClientDashboardPage', 'ScriptStudioPage', 'WeeklyReportPage', 'AdApprovalPage', 'ClientOnboardingPage'].every((p) => new RegExp(`^import ${p} from`, 'm').test(app)), true)
+check('built files are cached for a year', /\/assets\/\*\s*\n\s*Cache-Control: public, max-age=31536000, immutable/.test(read('public/_headers')), true)
 
 // Links the CRM makes for clients go through publicLink.
 for (const [file, needle] of [
