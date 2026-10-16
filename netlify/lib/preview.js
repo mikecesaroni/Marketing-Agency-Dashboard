@@ -26,6 +26,12 @@ export const KINDS = {
     description: 'Last week in plain words: spend, leads, cost per lead, and the number that matters most.',
     image: '/og-weekly-report.png',
   },
+  scripts: {
+    prefix: '/scripts/',
+    title: (name) => (name ? `Video scripts for ${name}` : 'Video scripts'),
+    description: 'Scripts to read into your phone, written from your business, your reviews and what is bringing you leads. Tap one and film it.',
+    image: '/og-video-scripts.png',
+  },
 }
 
 /** Which client page an address is, and its token; null for anything else. */

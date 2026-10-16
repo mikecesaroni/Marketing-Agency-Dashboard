@@ -22,6 +22,8 @@ check('Live KPI Dashboard for the business', meta.title, 'Live KPI Dashboard for
 check('with a sentence, a card image and the address', [meta.description.length > 20, meta.image, meta.url], [true, 'https://x.netlify.app/og-kpi-dashboard.png', 'https://x.netlify.app/dashboard/tok'])
 check('no name, still a title', previewMeta({ kind: 'dashboard', name: '', origin: 'https://x', pathname: '/d' }).title, 'Live KPI Dashboard')
 check('the report has its own words', previewMeta({ kind: 'report', name: 'Belk', origin: 'https://x', pathname: '/r' }).title, 'Weekly ads report for Belk')
+check('a scripts link', matchClientPath('/scripts/abcdefghijklmnopqrstuvwx'), { kind: 'scripts', token: 'abcdefghijklmnopqrstuvwx' })
+check('the scripts page has its own words and card', [previewMeta({ kind: 'scripts', name: 'Belk', origin: 'https://x', pathname: '/s' }).title, previewMeta({ kind: 'scripts', name: '', origin: 'https://x', pathname: '/s' }).image], ['Video scripts for Belk', 'https://x/og-video-scripts.png'])
 check('no em dashes in the preview words', /[—–]/.test(Object.values(KINDS).map((k) => `${k.title('X')} ${k.description}`).join(' ')), false)
 
 // -------------------------------------------------------------- the rewrite
@@ -44,9 +46,9 @@ check('no keys, no call', await lookupName({ kind: 'dashboard', token: 'good', s
 check('a failing call gives no name rather than an error', await lookupName({ kind: 'dashboard', token: 'good', supabaseUrl: 'https://s', anonKey: 'k', fetchFn: () => Promise.reject(new Error('down')) }), '')
 
 // --------------------------------------------------------------- the pieces
-check('both card images exist', [existsSync(new URL('../public/og-kpi-dashboard.png', import.meta.url)), existsSync(new URL('../public/og-weekly-report.png', import.meta.url))], [true, true])
+check('all three card images exist', [existsSync(new URL('../public/og-kpi-dashboard.png', import.meta.url)), existsSync(new URL('../public/og-weekly-report.png', import.meta.url)), existsSync(new URL('../public/og-video-scripts.png', import.meta.url))], [true, true, true])
 const edge = readFileSync(new URL('../netlify/edge-functions/client-preview.ts', import.meta.url), 'utf8')
-check('the edge function covers both paths and bypasses on error', edge.includes("path: ['/dashboard/*', '/report/*']") && edge.includes("onError: 'bypass'"), true)
+check('the edge function covers the three paths and bypasses on error', edge.includes("path: ['/dashboard/*', '/report/*', '/scripts/*']") && edge.includes("onError: 'bypass'"), true)
 const sql = readFileSync(new URL('../supabase/client-dashboard.sql', import.meta.url), 'utf8')
 check('the name lookup is in the SQL file', sql.includes('function client_link_name(p_kind text, p_token text)'), true)
 

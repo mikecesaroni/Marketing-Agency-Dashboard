@@ -41,4 +41,4 @@ export default async (request: Request, context: { next: () => Promise<Response>
   })
 }
 
-export const config = { path: ['/dashboard/*', '/report/*'], onError: 'bypass' }
+export const config = { path: ['/dashboard/*', '/report/*', '/scripts/*'], onError: 'bypass' }

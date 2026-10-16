@@ -7,6 +7,7 @@ import TasksPage from './pages/TasksPage'
 import ContentPage from './pages/ContentPage'
 import WeeklyReportPage from './pages/WeeklyReportPage'
 import ClientDashboardPage from './pages/ClientDashboardPage'
+import ScriptStudioPage from './pages/ScriptStudioPage'
 import DrivePhotosPage from './pages/DrivePhotosPage'
 import PublishPage from './pages/PublishPage'
 import FunnelPage from './pages/FunnelPage'
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/approve/:token" element={<AdApprovalPage />} />
         <Route path="/report/:token" element={<WeeklyReportPage />} />
         <Route path="/dashboard/:token" element={<ClientDashboardPage />} />
+        <Route path="/scripts/:token" element={<ScriptStudioPage />} />
         <Route path="*" element={<NothingHerePage />} />
       </Routes>
     )
@@ -61,6 +63,9 @@ export default function App() {
           their email, read by token through weekly_report_load. */}
       <Route path="/report/:token" element={<WeeklyReportPage />} />
       <Route path="/dashboard/:token" element={<ClientDashboardPage />} />
+      {/* Public, the same token as the dashboard: the client's own video
+          scripts, through the script-studio function. */}
+      <Route path="/scripts/:token" element={<ScriptStudioPage />} />
       <Route path="/login" element={<LoginPage />} />
       {/* Everything else needs a login. RequireAuth also turns a VA away from
           the admin-only paths (see src/lib/access.js), so /payments and /team

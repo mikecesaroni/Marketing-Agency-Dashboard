@@ -13,8 +13,8 @@ const check = (name, got, want) => {
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
 // ------------------------------------------------------------- the rules
-check('the four kinds of client page', PUBLIC_PREFIXES, ['/dashboard/', '/report/', '/approve/', '/onboarding/'])
-check('a token page is public', [isPublicPath('/dashboard/abc'), isPublicPath('/report/abc'), isPublicPath('/approve/abc'), isPublicPath('/onboarding/abc')], [true, true, true, true])
+check('the five kinds of client page', PUBLIC_PREFIXES, ['/dashboard/', '/report/', '/approve/', '/onboarding/', '/scripts/'])
+check('a token page is public', [isPublicPath('/dashboard/abc'), isPublicPath('/report/abc'), isPublicPath('/approve/abc'), isPublicPath('/onboarding/abc'), isPublicPath('/scripts/abc')], [true, true, true, true, true])
 check('the CRM is not', [isPublicPath('/'), isPublicPath('/clients'), isPublicPath('/dashboard'), isPublicPath('/dashboard/'), isPublicPath('/reports'), isPublicPath('/login')], [false, false, false, false, false, false])
 check('a flag makes a site client-facing', isPublicOnlySite({ hostname: 'anything.netlify.app', env: { VITE_PUBLIC_ONLY: 'true' } }), true)
 check('so does a named host, any case, in a list', isPublicOnlySite({ hostname: 'Clients.Example.com', env: { VITE_PUBLIC_HOST: 'reports.example.com, clients.example.com' } }), true)
@@ -25,10 +25,10 @@ check('and the current origin when not', publicBase({}, 'https://crm.example.com
 
 // ------------------------------------------------- the pages themselves
 // A client page must not import the CRM shell or link into the CRM.
-const publicPages = ['src/pages/ClientDashboardPage.jsx', 'src/pages/WeeklyReportPage.jsx', 'src/pages/AdApprovalPage.jsx', 'src/pages/ClientOnboardingPage.jsx']
+const publicPages = ['src/pages/ClientDashboardPage.jsx', 'src/pages/WeeklyReportPage.jsx', 'src/pages/AdApprovalPage.jsx', 'src/pages/ClientOnboardingPage.jsx', 'src/pages/ScriptStudioPage.jsx', 'src/components/scripts/ScriptView.jsx']
 for (const p of publicPages) {
   const src = read(p)
-  const crmLink = src.match(/(?:to|href)=["'`]\/(?!dashboard\/|report\/|approve\/|onboarding\/)[a-z]/)
+  const crmLink = src.match(/(?:to|href)=[{]?["'`]\/(?!dashboard\/|report\/|approve\/|onboarding\/|scripts\/)[a-z]/)
   check(`${p.split('/').pop()} has no CRM shell and no CRM link`, [src.includes("components/Layout"), crmLink ? crmLink[0] : null], [false, null])
 }
 
@@ -43,6 +43,7 @@ for (const [file, needle] of [
   ['src/lib/adApprovalStore.js', "publicLink(`/approve/"],
   ['src/components/OnboardingLinkPanel.jsx', "publicLink(`/onboarding/"],
   ['src/components/OnboardingCallPanel.jsx', "publicLink(`/onboarding/"],
+  ['src/lib/scriptStudioStore.js', "publicLink(`/scripts/"],
 ]) {
   check(`${file.split('/').pop()} makes client links through the public base`, read(file).includes(needle) && !read(file).includes('window.location.origin'), true)
 }

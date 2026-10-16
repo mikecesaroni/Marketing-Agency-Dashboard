@@ -350,7 +350,18 @@ export default function ClientDashboardPage() {
               {rangeLabel(win.from, win.to)}, compared with the {days} days before.
             </p>
           </div>
-          <Segmented options={RANGES} value={days} onChange={setDays} />
+          <div className="flex flex-col items-end gap-2">
+            <Segmented options={RANGES} value={days} onChange={setDays} />
+            {/* The client's other page: scripts to film this week, on the
+                same private token. */}
+            <a
+              href={`/scripts/${token}`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3.5 py-2 text-sm font-semibold text-white shadow hover:bg-orange-400"
+              data-scripts-link
+            >
+              Film this week&rsquo;s video →
+            </a>
+          </div>
         </header>
 
         {!hasData && (

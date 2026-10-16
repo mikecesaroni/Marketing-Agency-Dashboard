@@ -17,7 +17,7 @@
 // load it in Node.
 
 /** The paths a client may open. Everything else is the CRM. */
-export const PUBLIC_PREFIXES = ['/dashboard/', '/report/', '/approve/', '/onboarding/']
+export const PUBLIC_PREFIXES = ['/dashboard/', '/report/', '/approve/', '/onboarding/', '/scripts/']
 
 export function isPublicPath(pathname) {
   const p = String(pathname || '')

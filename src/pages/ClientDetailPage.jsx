@@ -30,6 +30,7 @@ import ClientSnapshot from '../components/ClientSnapshot'
 import ClientTasksPanel from '../components/ClientTasksPanel'
 import SetupMessageModal from '../components/SetupMessageModal'
 import OnboardingLinkPanel from '../components/OnboardingLinkPanel'
+import ScriptStudioCard from '../components/ScriptStudioCard'
 import { fetchNextStepsFor } from '../lib/nextStepsData'
 import { markStepDone, undoStepDone, whoAmI } from '../lib/completeStep'
 import { Button, Card } from '../components/ui'
@@ -570,6 +571,11 @@ export default function ClientDetailPage() {
             and it was previously three buttons in the header that gave no hint
             whether anything had come back. */}
         <ClientFormsPanel client={client} intake={intake} onDataChanged={loadClientData} />
+
+        {/* The client's own video script page, on their dashboard token. */}
+        <div className="mt-6">
+          <ScriptStudioCard client={client} />
+        </div>
 
         {/* THE LIVE ONBOARDING CALL. The forms above are what the client sends
             back; this is the Zoom where the agency gets every access done on
