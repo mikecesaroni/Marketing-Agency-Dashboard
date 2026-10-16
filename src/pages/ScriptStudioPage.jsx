@@ -6,6 +6,7 @@ import { loadStudio, reviseScript, saveVoice, setScriptStatus, topicsUsedRecentl
 import ScriptView from '../components/scripts/ScriptView'
 import VoiceSheet from '../components/scripts/VoiceSheet'
 import PortalTabs from '../components/PortalTabs'
+import PortalSidebar from '../components/PortalSidebar'
 
 /**
  * The Video Script Studio: a client's own page, from the private token in
@@ -41,9 +42,11 @@ function Header({ name, token }) {
   return (
     <>
       {/* One link, several tabs: this is the scripts tab. Stuck to the top
-          so the way back to the numbers is always one tap away. */}
+          on a phone so the way back to the numbers is always one tap away;
+          on a computer the sidebar has the tabs and the name, so the brand
+          row below hides. */}
       <PortalTabs token={token} active="scripts" />
-      <header className="flex items-center gap-2.5">
+      <header className="flex items-center gap-2.5 lg:hidden">
         <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f8f7f5] ring-1 ring-slate-200">
           <img src="/brand/wc-mark.jpg" alt="The Working Class" className="h-10 w-10 object-contain" />
         </span>
@@ -366,8 +369,9 @@ export default function ScriptStudioPage() {
   }
   if (!data) {
     return (
-      <div className="min-h-screen bg-[#FBFBF8] text-slate-900" data-script-studio-error>
-        <div className="mx-auto max-w-xl px-4 pb-16 pt-2">
+      <div className="min-h-screen bg-[#FBFBF8] text-slate-900 lg:pl-64" data-script-studio-error>
+        <PortalSidebar token={token} active="scripts" />
+        <div className="mx-auto max-w-xl px-4 pb-16 pt-2 lg:pt-8">
           <PortalTabs token={token} active="scripts" />
           <h1 className="mt-10 text-2xl font-bold">This link did not open</h1>
           <p className="mt-2 text-[17px] text-slate-700">{error || 'The link may be old. Ask us for a fresh one and we will send it over.'}</p>
@@ -381,8 +385,9 @@ export default function ScriptStudioPage() {
   const name = data.client?.name || 'your company'
 
   return (
-    <div className="min-h-screen bg-[#FBFBF8] text-slate-900" data-script-studio>
-      <div className="mx-auto max-w-xl space-y-6 px-4 pb-24 pt-2">
+    <div className="min-h-screen bg-[#FBFBF8] text-slate-900 lg:pl-64" data-script-studio>
+      <PortalSidebar token={token} active="scripts" name={name} />
+      <div className="mx-auto max-w-xl space-y-6 px-4 pb-24 pt-2 lg:pt-8">
         <div ref={topRef} aria-hidden="true" />
         <Header name={name} token={token} />
 

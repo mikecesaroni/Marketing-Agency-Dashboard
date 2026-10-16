@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import ChannelDailyChart from '../components/reports/ChannelDailyChart'
 import PortalTabs from '../components/PortalTabs'
+import PortalSidebar from '../components/PortalSidebar'
 import { ChannelDot, DTd, DTh, DTr, Delta, Eyebrow, MixBar, Panel, Pill, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
 import { cn } from '../components/ui/cn'
 import { CHANNELS, channelMix, compactMoney, rangeLabel } from '../lib/channels'
@@ -320,10 +321,12 @@ export default function ClientDashboardPage() {
   const returnGuide = guideFor('return')
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-200" data-client-dashboard>
-      <div className="mx-auto max-w-6xl px-4 pb-6 pt-2 md:px-8 md:pb-8 md:pt-3">
-        {/* One link, several tabs: this is the numbers tab. Stuck to the
-            top so the way to the scripts is always one tap away. */}
+    <div className="min-h-screen bg-[#070b14] text-slate-200 lg:pl-64" data-client-dashboard>
+      {/* One link, several tabs: this is the numbers tab. Down the left on
+          a computer, stuck to the top on a phone, so the way to the scripts
+          is always one tap away. */}
+      <PortalSidebar token={token} active="numbers" name={data.client?.name} />
+      <div className="mx-auto max-w-6xl px-4 pb-6 pt-2 md:px-8 md:pb-8 md:pt-3 lg:pt-6">
         <PortalTabs token={token} active="numbers" dark />
         <header className="mt-5 flex flex-wrap items-end justify-between gap-4">
           <div>

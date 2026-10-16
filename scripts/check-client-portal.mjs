@@ -28,6 +28,9 @@ for (const t of PORTAL_TABS) {
 }
 check('the dashboard renders the tabs as the numbers tab', /<PortalTabs token=\{token\} active="numbers" dark \/>/.test(read('src/pages/ClientDashboardPage.jsx')), true)
 check('the scripts page renders the tabs as the scripts tab', /<PortalTabs token=\{token\} active="scripts" \/>/.test(read('src/pages/ScriptStudioPage.jsx')), true)
+// On a computer the pages go down the left like the CRM; the top bar is for phones.
+check('both pages render the sidebar and clear it', [/<PortalSidebar token=\{token\} active="numbers"/.test(read('src/pages/ClientDashboardPage.jsx')) && /lg:pl-64/.test(read('src/pages/ClientDashboardPage.jsx')), /<PortalSidebar token=\{token\} active="scripts"/.test(read('src/pages/ScriptStudioPage.jsx')) && /lg:pl-64/.test(read('src/pages/ScriptStudioPage.jsx'))], [true, true])
+check('the sidebar is for computers, the bar for phones', [/hidden lg:fixed .*lg:flex lg:w-64/.test(read('src/components/PortalSidebar.jsx')), /lg:hidden/.test(read('src/components/PortalTabs.jsx'))], [true, true])
 
 console.log(failures === 0 ? '\nAll client portal checks pass' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)
