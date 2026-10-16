@@ -449,9 +449,9 @@ export default function ClientDetailPage() {
           target="_blank"
           rel="noreferrer"
           className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 md:w-auto"
-          title="The client's own dashboard: every number, what it means, why return matters. Send them this link."
+          title="The client's own page: their numbers and their video scripts as tabs on one private link. Send them this link."
         >
-          Client dashboard
+          Client page
         </a>
       )}
     </div>

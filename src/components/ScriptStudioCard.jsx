@@ -66,7 +66,8 @@ export default function ScriptStudioCard({ client }) {
         <p className="mt-3 text-sm text-amber-800">This client has no dashboard link yet, and the scripts page uses the same one. Make one on the Reports page (Client dashboards) first.</p>
       )}
       <p className="mt-2 text-xs text-slate-500">
-        Send it by text. It is the same private link as their dashboard with /scripts/ in it, so there is nothing to remember and nothing to log in to.
+        One link, two tabs: their numbers and their video scripts are the same private page, and this address opens it on the scripts tab (the
+        &ldquo;Client dashboard&rdquo; link in the header opens it on the numbers). Send either by text; there is nothing to remember and nothing to log in to.
         {filmed.length > 0 && ` They have marked ${filmed.length} filmed: ask for the video${filmed.length === 1 ? '' : 's'} if it has not landed in their Drive folder.`}
       </p>
 

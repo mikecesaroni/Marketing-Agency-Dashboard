@@ -5,6 +5,7 @@ import { TRADE_WORDS, phaseOf, playbookText } from '../lib/seasonPlaybook'
 import { loadStudio, reviseScript, saveVoice, setScriptStatus, topicsUsedRecently, writeScript } from '../lib/scriptStudioStore'
 import ScriptView from '../components/scripts/ScriptView'
 import VoiceSheet from '../components/scripts/VoiceSheet'
+import PortalTabs from '../components/PortalTabs'
 
 /**
  * The Video Script Studio: a client's own page, from the private token in
@@ -37,7 +38,7 @@ const chip = (on) => `rounded-full border px-4 py-2.5 text-[15px] font-semibold 
 
 function Header({ name, token }) {
   return (
-    <header className="flex items-start justify-between gap-3">
+    <header className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-2.5">
         <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f8f7f5] ring-1 ring-slate-200">
           <img src="/brand/wc-mark.jpg" alt="The Working Class" className="h-10 w-10 object-contain" />
@@ -47,9 +48,8 @@ function Header({ name, token }) {
           <p className="text-[15px] font-semibold text-slate-900">{name}</p>
         </div>
       </div>
-      <a href={`/dashboard/${token}`} className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-[14px] font-semibold text-slate-800 hover:bg-slate-50" data-dashboard-link>
-        Your numbers
-      </a>
+      {/* One link, several tabs: this is the scripts tab. */}
+      <PortalTabs token={token} active="scripts" />
     </header>
   )
 }
@@ -349,6 +349,9 @@ export default function ScriptStudioPage() {
     return (
       <div className="min-h-screen bg-[#FBFBF8] text-slate-900" data-script-studio-error>
         <div className="mx-auto max-w-xl px-4 py-16">
+          <div className="mb-6">
+            <PortalTabs token={token} active="scripts" />
+          </div>
           <h1 className="text-2xl font-bold">This link did not open</h1>
           <p className="mt-2 text-[17px] text-slate-700">{error || 'The link may be old. Ask us for a fresh one and we will send it over.'}</p>
           <p className="mt-6 text-[14px] text-slate-500">{AGENCY}</p>

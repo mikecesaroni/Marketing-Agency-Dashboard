@@ -2,7 +2,7 @@
 
 Written 2026-10-16. A separate page for clients, tied to the CRM: they open a private link on their phone and get video scripts to read into the camera, written from their intake, their website, what is working in their ads, the season, and how they talk. Built for owners who are not computer people: three ready picks at the top, one tap writes a script, big type to read it off the screen, a teleprompter, and one-tap rewrites when it does not sound like them. No login, nothing to install.
 
-The link is `/scripts/<token>`, on the same private token as their dashboard (`clients.dashboard_token`), so a client has one link family and the dashboard and the scripts page point at each other ("Film this week's video" on the dashboard, "Your numbers" on the scripts page).
+It is one tab of the client's one link. The client portal (`src/lib/clientPortal.js`, `src/components/PortalTabs.jsx`) puts a tab bar on every client page: "Your numbers" (`/dashboard/<token>`) and "Video scripts" (`/scripts/<token>`), both on `clients.dashboard_token`. Each tab keeps its own address, so deep links, link previews and the back button keep working; the bar just moves between them. To add a tab later: one entry in `PORTAL_TABS`, a route in both lists in `App.jsx`, its prefix in `publicSite.js`, and a page that renders `<PortalTabs>` in its header (`scripts/check-client-portal.mjs` checks all of it).
 
 ## The questions this answers, and how
 

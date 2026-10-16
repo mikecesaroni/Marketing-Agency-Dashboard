@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import ChannelDailyChart from '../components/reports/ChannelDailyChart'
+import PortalTabs from '../components/PortalTabs'
 import { ChannelDot, DTd, DTh, DTr, Delta, Eyebrow, MixBar, Panel, Pill, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
 import { cn } from '../components/ui/cn'
 import { CHANNELS, channelMix, compactMoney, rangeLabel } from '../lib/channels'
@@ -350,17 +351,10 @@ export default function ClientDashboardPage() {
               {rangeLabel(win.from, win.to)}, compared with the {days} days before.
             </p>
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col items-end gap-3">
+            {/* One link, several tabs: this is the numbers tab. */}
+            <PortalTabs token={token} active="numbers" dark />
             <Segmented options={RANGES} value={days} onChange={setDays} />
-            {/* The client's other page: scripts to film this week, on the
-                same private token. */}
-            <a
-              href={`/scripts/${token}`}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3.5 py-2 text-sm font-semibold text-white shadow hover:bg-orange-400"
-              data-scripts-link
-            >
-              Film this week&rsquo;s video →
-            </a>
           </div>
         </header>
 

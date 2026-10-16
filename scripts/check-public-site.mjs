@@ -25,7 +25,7 @@ check('and the current origin when not', publicBase({}, 'https://crm.example.com
 
 // ------------------------------------------------- the pages themselves
 // A client page must not import the CRM shell or link into the CRM.
-const publicPages = ['src/pages/ClientDashboardPage.jsx', 'src/pages/WeeklyReportPage.jsx', 'src/pages/AdApprovalPage.jsx', 'src/pages/ClientOnboardingPage.jsx', 'src/pages/ScriptStudioPage.jsx', 'src/components/scripts/ScriptView.jsx']
+const publicPages = ['src/pages/ClientDashboardPage.jsx', 'src/pages/WeeklyReportPage.jsx', 'src/pages/AdApprovalPage.jsx', 'src/pages/ClientOnboardingPage.jsx', 'src/pages/ScriptStudioPage.jsx', 'src/components/scripts/ScriptView.jsx', 'src/components/PortalTabs.jsx']
 for (const p of publicPages) {
   const src = read(p)
   const crmLink = src.match(/(?:to|href)=[{]?["'`]\/(?!dashboard\/|report\/|approve\/|onboarding\/|scripts\/)[a-z]/)
