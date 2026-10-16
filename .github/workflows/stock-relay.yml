@@ -1,11 +1,15 @@
 # Copies the twelve real equipment photos from the public stock library into
 # a throwaway branch (relay/stock-units), so a build or a review session that
 # cannot reach the Supabase bucket directly can still fetch them from GitHub.
-# Run it by hand (Actions > Relay the stock unit photos > Run workflow).
+# Run it by hand (Actions > Relay the stock unit photos > Run workflow), or
+# push any commit to the relay/run branch, which exists for nothing else.
 name: Relay the stock unit photos
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - relay/run
 
 jobs:
   relay:
