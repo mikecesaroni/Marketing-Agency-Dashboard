@@ -77,6 +77,23 @@ export function AuthProvider({ children }) {
     (email, password) => supabase.auth.signInWithPassword({ email: String(email).trim(), password }),
     []
   )
+  // "Continue with Google": the browser goes to Google, then to Supabase's
+  // callback, then back to /login with a session in the address, which the
+  // client picks up (detectSessionInUrl) and keeps (persistSession). The page
+  // asked for before all that is kept in sessionStorage, since router state
+  // does not survive the trip. Google must be switched on for the project
+  // (docs/logins.md); the login page checks before showing the button.
+  const signInWithGoogle = useCallback((from = '/') => {
+    try {
+      sessionStorage.setItem('login_from', from)
+    } catch {
+      // private mode: they land on the dashboard instead
+    }
+    return supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/login`, queryParams: { prompt: 'select_account' } },
+    })
+  }, [])
   const signOut = useCallback(() => supabase.auth.signOut(), [])
   const changePassword = useCallback((password) => supabase.auth.updateUser({ password }), [])
   // The reset email's link comes back to the login page, which shows the
@@ -98,6 +115,7 @@ export function AuthProvider({ children }) {
     loading: session === undefined || (Boolean(userId) && !profileLoaded),
     profileError,
     signIn,
+    signInWithGoogle,
     signOut,
     changePassword,
     resetPassword,

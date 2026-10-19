@@ -1,4 +1,5 @@
 // Self-check for who may open what. Run: node scripts/check-access.mjs
+import { readFileSync } from 'node:fs'
 //
 // The rule: A VA SEES EVERYTHING EXCEPT MONEY, AN ADMIN SEES EVERYTHING, AND
 // NOBODY CAN LOCK THE AGENCY OUT OF ITS OWN CRM. The nav, the route guard and
@@ -62,6 +63,11 @@ check('nobody logged in sees no nav', visibleNav(NAV, null), [])
 // --- login switched off --------------------------------------------------------
 
 check('the switch is on: the CRM asks for a sign-in', LOGIN_REQUIRED, true)
+// Google sign-in: the page offers it once the project has it on, the team
+// page adds people without a password for it, and the function allows that.
+const src = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
+check('the login page offers Google when the project has it on', [src('src/pages/LoginPage.jsx').includes('data-google-sign-in'), src('src/lib/authProviders.js').includes('/auth/v1/settings'), src('src/context/AuthContext.jsx').includes("provider: 'google'")], [true, true, true])
+check('the team page adds people the Google way with no password', [src('src/pages/TeamPage.jsx').includes("sign_in: signIn"), src('supabase/functions/team-admin/index.ts').includes("viaGoogle ? {} : { password }")], [true, true])
 // The rules for the switched-off mode stay checkable, so turning it off again
 // (supabase/logins-off.sql and this constant) lands on known behaviour.
 check('without login, clients open', canOpenWithoutLogin('/clients'), true)

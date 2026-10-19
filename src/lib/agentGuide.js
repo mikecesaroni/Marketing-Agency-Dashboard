@@ -333,8 +333,8 @@ export const ROUTES = [
     name: 'Sign in',
     nav: null,
     purpose:
-      'The CRM\'s sign-in (every CRM page lands here without a session; the client token pages never do). Email and password, both made by an admin on the Team page; no self-signup. "Forgot your password?" sends a reset link from Supabase that comes back to this page with a "set a new password" form; an admin can also set a new temporary password from the Team page. See docs/logins.md.',
-    contains: ['An email and password form.', '"Forgot your password?": the email, then "check your email".', 'After the reset link: a new password typed twice, then into the CRM.'],
+      'The CRM\'s sign-in (every CRM page lands here without a session; the client token pages never do). "Continue with Google" for most people (one tap; the browser keeps them signed in from then on; the button shows once Google is switched on for the Supabase project) or an email and password. Who may sign in is decided on the Team page either way; no self-signup, and a Google account whose email is not on the team gets a "not on the team" page. "Forgot your password?" sends a reset link from Supabase that comes back to this page with a "set a new password" form; an admin can also set a new temporary password from the Team page. See docs/logins.md.',
+    contains: ['"Continue with Google", then an email and password form.', '"Forgot your password?": the email, then "check your email".', 'After the reset link: a new password typed twice, then into the CRM.'],
     actions: ['"Sign in" goes to the page that was asked for, or the dashboard.'],
   },
   {
@@ -342,10 +342,10 @@ export const ROUTES = [
     name: 'Team',
     nav: 'Team',
     purpose:
-      'Admins only. Who can sign in and as what. Adds a person with a temporary password (shown once, handed over by the admin), changes a role, resets a password, removes a login.',
+      'Admins only. Who can sign in and as what. Adds a person the Google way (email and role, nothing else: their first "Continue with Google" with that email is their login) or with a temporary password (shown once, handed over by the admin), changes a role, sets or resets a password, removes a login.',
     contains: [
-      'Every member with their role and last sign-in.',
-      '"Add someone": name, email, role, temporary password with a generator.',
+      'Every member with their role, a Google tag once that account is linked, and last sign-in.',
+      '"Add someone": name, email, role, and how they sign in (With Google, the default, or With a temporary password with a generator).',
     ],
     actions: [
       'Changing the Role dropdown applies at once. Nobody can demote or remove themself, and the last admin cannot be demoted or removed.',

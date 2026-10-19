@@ -45,8 +45,9 @@ export default function RequireAuth({ children }) {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="max-w-sm w-full bg-white rounded-xl border border-slate-200 p-6 text-center space-y-3">
           <p className="text-sm text-slate-800">
-            <span className="font-medium">{session.user.email}</span> is signed in but has no role on
-            this CRM. An admin has to add you on the Team page.
+            <span className="font-medium">{session.user.email}</span> is signed in but is not on the
+            team. An admin has to add this email on the Team page; then sign in again. Signed in with
+            the wrong Google account? Sign out and pick the other one.
           </p>
           {profileError && <p className="text-xs text-red-600">{profileError}</p>}
           <button
