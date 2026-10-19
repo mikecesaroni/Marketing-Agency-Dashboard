@@ -6,16 +6,12 @@
 // rather than in the browser, and the function checks that the person calling
 // it is an admin before doing any of it.
 //
-// TWO WAYS IN. Most people sign in with Google: "create" with sign_in
-// 'google' makes the login with no password, and the first "Continue with
-// Google" with that email is theirs (Supabase links a Google identity to
-// the login with the same verified email on its own). The other way is a
-// temporary password: set by the admin rather than sent by email, since an
-// invite email needs the project's Site URL and redirect list configured
-// and a working mail sender, and the built-in one is capped at a few
-// messages an hour. Handing a VA a temporary password over a call or a
-// text, and letting them change it on their first login, needs none of
-// that and cannot end up in a spam folder.
+// WHY PASSWORDS ARE SET BY THE ADMIN rather than sent by email: an invite
+// email needs the project's Site URL and redirect list configured and a
+// working mail sender, and the built-in one is capped at a few messages an
+// hour. Handing a VA a temporary password over a call or a text, and letting
+// them change it on their first login, needs none of that and cannot end up
+// in a spam folder.
 //
 // BOOTSTRAP. While profiles is empty there is no admin to authorise the first
 // admin, so exactly one path is open: "create" with role admin, from any valid
@@ -24,9 +20,8 @@
 // was seconds.
 //
 // Actions (POST, JSON body with "action"):
-//   list                              -> { members: [...] }  (each with
-//                                        providers: ['google'] and/or ['email'])
-//   create   { email, name, role, sign_in: 'google' | 'password', password? }
+//   list                              -> { members: [...] }
+//   create   { email, name, role, password }
 //   set_role { user_id, role }
 //   set_password { user_id, password }
 //   remove   { user_id }
@@ -99,19 +94,9 @@ Deno.serve(async (req) => {
         admin.auth.admin.listUsers({ perPage: 200 }),
       ])
       if (error) throw error
-      const byId = new Map((users.data?.users || []).map((u) => [u.id, u]))
+      const lastSeen = new Map((users.data?.users || []).map((u) => [u.id, u.last_sign_in_at || null]))
       return json({
-        members: (profiles || []).map((p) => {
-          const u = byId.get(p.user_id)
-          return {
-            ...p,
-            last_sign_in_at: u?.last_sign_in_at || null,
-            // How they sign in: 'google' once a Google account is linked,
-            // 'email' once a password is set. A fresh Google-way login has
-            // neither until their first sign-in.
-            providers: [...new Set((u?.identities || []).map((i: { provider?: string }) => String(i.provider || '')).filter(Boolean))],
-          }
-        }),
+        members: (profiles || []).map((p) => ({ ...p, last_sign_in_at: lastSeen.get(p.user_id) || null })),
       })
     }
 
@@ -122,17 +107,14 @@ Deno.serve(async (req) => {
       // login is a VA has nobody who can add the admin.
       const role = bootstrapping ? 'admin' : String(body.role || 'va')
       const password = String(body.password || '')
-      // No password means the Google way: the login exists, and the first
-      // "Continue with Google" with this email is theirs.
-      const viaGoogle = String(body.sign_in || (password ? 'password' : 'google')) === 'google'
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: 'That is not an email address.' }, 400)
       if (!ROLES.includes(role)) return json({ error: 'Role must be admin or va.' }, 400)
-      const pwProblem = viaGoogle ? '' : passwordProblem(password)
+      const pwProblem = passwordProblem(password)
       if (pwProblem) return json({ error: pwProblem }, 400)
 
       const { data: created, error } = await admin.auth.admin.createUser({
         email,
-        ...(viaGoogle ? {} : { password }),
+        password,
         email_confirm: true,
         user_metadata: { name },
         app_metadata: { role },
@@ -152,7 +134,7 @@ Deno.serve(async (req) => {
         await admin.auth.admin.deleteUser(created.user.id)
         throw profErr
       }
-      return json({ member: { user_id: created.user.id, email, name, role, sign_in: viaGoogle ? 'google' : 'password' } })
+      return json({ member: { user_id: created.user.id, email, name, role } })
     }
 
     // Everything below is about an existing member.

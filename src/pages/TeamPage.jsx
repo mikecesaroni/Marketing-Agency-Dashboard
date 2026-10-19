@@ -5,11 +5,8 @@
 // the service key, which the browser must never hold. The page itself only
 // decides what to ask for and what to show.
 //
-// Most people sign in with Google: the admin adds their email and a role,
-// and that is all; the first "Continue with Google" with that account is
-// their login. A temporary password is the other way, set here and handed
-// over by the admin (a text, a call), not emailed. See the note at the top
-// of supabase/functions/team-admin/index.ts.
+// Passwords are set here and handed over by the admin (a text, a call), not
+// emailed. See the note at the top of supabase/functions/team-admin/index.ts.
 
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
@@ -95,8 +92,6 @@ export default function TeamPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('va')
-  // 'google' (no password: their Google account is the login) or 'password'.
-  const [signIn, setSignIn] = useState('google')
   const [password, setPassword] = useState(generatePassword)
   const [adding, setAdding] = useState(false)
 
@@ -118,17 +113,14 @@ export default function TeamPage() {
 
   const add = async (e) => {
     e.preventDefault()
-    const viaGoogle = signIn === 'google'
-    const problem = viaGoogle ? '' : passwordProblem(password)
+    const problem = passwordProblem(password)
     if (problem) return setError(problem)
     setAdding(true)
     setError('')
     setNotice('')
     try {
-      const clean = email.trim().toLowerCase()
-      await team({ action: 'create', email, name, role, sign_in: signIn, password: viaGoogle ? undefined : password })
-      if (viaGoogle) setNotice(`${name || clean} is on the team. Tell them to press "Continue with Google" on the login page with ${clean}; nothing else to set up.`)
-      else setReveal({ email: clean, password })
+      await team({ action: 'create', email, name, role, password })
+      setReveal({ email: email.trim().toLowerCase(), password })
       setName('')
       setEmail('')
       setRole('va')
@@ -229,14 +221,7 @@ export default function TeamPage() {
                           {m.name || <span className="text-slate-400">—</span>}
                           {me && <span className="ml-1.5 text-[10px] uppercase tracking-wide text-blue-600">you</span>}
                         </td>
-                        <td className="py-2 pr-3 text-slate-700">
-                          {m.email}
-                          {m.providers?.includes('google') && (
-                            <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600" title="Signs in with Google">
-                              Google
-                            </span>
-                          )}
-                        </td>
+                        <td className="py-2 pr-3 text-slate-700">{m.email}</td>
                         <td className="py-2 pr-3">
                           <select
                             value={m.role}
@@ -256,7 +241,7 @@ export default function TeamPage() {
                             onClick={() => resetPassword(m)}
                             className="text-xs text-blue-600 hover:text-blue-800 mr-3"
                           >
-                            {m.providers?.includes('email') ? 'Reset password' : 'Set a password'}
+                            Reset password
                           </button>
                           {!me && (
                             <button onClick={() => remove(m)} className="text-xs text-red-600 hover:text-red-800">
@@ -310,39 +295,21 @@ export default function TeamPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">How they sign in</label>
-              <select
-                value={signIn}
-                onChange={(e) => setSignIn(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                data-sign-in-method
-              >
-                <option value="google">With Google (no password)</option>
-                <option value="password">With a temporary password</option>
-              </select>
-              {signIn === 'google' ? (
-                <p className="text-[11px] text-slate-500 mt-1">
-                  They press "Continue with Google" on the login page with this email. The browser keeps them signed in after that.
-                </p>
-              ) : (
-                <div className="mt-2">
-                  <div className="flex gap-2">
-                    <input
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono"
-                      required
-                      aria-label="Temporary password"
-                    />
-                    <Button type="button" variant="outline" size="sm" onClick={() => setPassword(generatePassword())}>
-                      New
-                    </Button>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Shown once after you add them. They change it on their first sign-in.
-                  </p>
-                </div>
-              )}
+              <label className="block text-xs font-medium text-slate-600 mb-1">Temporary password</label>
+              <div className="flex gap-2">
+                <input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono"
+                  required
+                />
+                <Button type="button" variant="outline" size="sm" onClick={() => setPassword(generatePassword())}>
+                  New
+                </Button>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Shown once after you add them. They change it on their first sign-in.
+              </p>
             </div>
             <div className="md:col-span-2">
               <Button type="submit" disabled={adding}>

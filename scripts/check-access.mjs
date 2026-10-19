@@ -63,11 +63,11 @@ check('nobody logged in sees no nav', visibleNav(NAV, null), [])
 // --- login switched off --------------------------------------------------------
 
 check('the switch is on: the CRM asks for a sign-in', LOGIN_REQUIRED, true)
-// Google sign-in: the page offers it once the project has it on, the team
-// page adds people without a password for it, and the function allows that.
+// The simplest sign-in there is, on purpose: an email and a password made on
+// the Team page, nothing that needs Google Cloud, a mail sender or a redirect
+// list. The browser keeps the session.
 const src = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
-check('the login page offers Google when the project has it on', [src('src/pages/LoginPage.jsx').includes('data-google-sign-in'), src('src/lib/authProviders.js').includes('/auth/v1/settings'), src('src/context/AuthContext.jsx').includes("provider: 'google'")], [true, true, true])
-check('the team page adds people the Google way with no password', [src('src/pages/TeamPage.jsx').includes("sign_in: signIn"), src('supabase/functions/team-admin/index.ts').includes("viaGoogle ? {} : { password }")], [true, true])
+check('the login page is email and password only, with no outside provider or sign-in email', [/signInWithOAuth|resetPasswordForEmail|signInWithOtp/.test(src('src/context/AuthContext.jsx') + src('src/pages/LoginPage.jsx')), src('src/pages/LoginPage.jsx').includes('Ask an admin to reset it')], [false, true])
 // The rules for the switched-off mode stay checkable, so turning it off again
 // (supabase/logins-off.sql and this constant) lands on known behaviour.
 check('without login, clients open', canOpenWithoutLogin('/clients'), true)

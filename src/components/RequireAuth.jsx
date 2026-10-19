@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext'
 import { LOGIN_REQUIRED, canOpen, canOpenWithoutLogin } from '../lib/access'
 
 export default function RequireAuth({ children }) {
-  const { loading, session, profile, profileError, role, signOut, recovering } = useAuth()
+  const { loading, session, profile, profileError, role, signOut } = useAuth()
   const location = useLocation()
 
   // Login switched off: straight through, minus the Team page.
@@ -23,10 +23,6 @@ export default function RequireAuth({ children }) {
     if (!canOpenWithoutLogin(location.pathname)) return <Navigate to="/" replace />
     return children ?? <Outlet />
   }
-
-  // Here from the reset email: the link signed them in, but the new password
-  // comes first. The login page has the form.
-  if (recovering) return <Navigate to="/login" replace />
 
   if (loading) {
     return (
@@ -46,8 +42,7 @@ export default function RequireAuth({ children }) {
         <div className="max-w-sm w-full bg-white rounded-xl border border-slate-200 p-6 text-center space-y-3">
           <p className="text-sm text-slate-800">
             <span className="font-medium">{session.user.email}</span> is signed in but is not on the
-            team. An admin has to add this email on the Team page; then sign in again. Signed in with
-            the wrong Google account? Sign out and pick the other one.
+            team. An admin has to add this email on the Team page; then sign in again.
           </p>
           {profileError && <p className="text-xs text-red-600">{profileError}</p>}
           <button

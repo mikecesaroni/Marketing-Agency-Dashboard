@@ -23,11 +23,6 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [profileLoaded, setProfileLoaded] = useState(false)
   const [profileError, setProfileError] = useState('')
-  // True from the moment a "set a new password" link from the reset email
-  // opens the app until the new password is saved. The link signs the person
-  // in, so without this flag the login page would wave them straight through
-  // and the password would never get set.
-  const [recovering, setRecovering] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -37,10 +32,7 @@ export function AuthProvider({ children }) {
     // Only state is set in here. Supabase warns against calling back into the
     // client from inside this callback; the profile query lives in the effect
     // below, keyed on the user id.
-    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      setSession(s ?? null)
-      if (event === 'PASSWORD_RECOVERY') setRecovering(true)
-    })
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s ?? null))
     return () => {
       cancelled = true
       sub.subscription.unsubscribe()
@@ -77,33 +69,8 @@ export function AuthProvider({ children }) {
     (email, password) => supabase.auth.signInWithPassword({ email: String(email).trim(), password }),
     []
   )
-  // "Continue with Google": the browser goes to Google, then to Supabase's
-  // callback, then back to /login with a session in the address, which the
-  // client picks up (detectSessionInUrl) and keeps (persistSession). The page
-  // asked for before all that is kept in sessionStorage, since router state
-  // does not survive the trip. Google must be switched on for the project
-  // (docs/logins.md); the login page checks before showing the button.
-  const signInWithGoogle = useCallback((from = '/') => {
-    try {
-      sessionStorage.setItem('login_from', from)
-    } catch {
-      // private mode: they land on the dashboard instead
-    }
-    return supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/login`, queryParams: { prompt: 'select_account' } },
-    })
-  }, [])
   const signOut = useCallback(() => supabase.auth.signOut(), [])
   const changePassword = useCallback((password) => supabase.auth.updateUser({ password }), [])
-  // The reset email's link comes back to the login page, which shows the
-  // "set a new password" form while `recovering` is true. The address has to
-  // be on the project's redirect list in Supabase (see docs/logins.md).
-  const resetPassword = useCallback(
-    (email) => supabase.auth.resetPasswordForEmail(String(email).trim(), { redirectTo: `${window.location.origin}/login` }),
-    []
-  )
-  const finishRecovery = useCallback(() => setRecovering(false), [])
 
   const value = {
     session: session || null,
@@ -115,12 +82,8 @@ export function AuthProvider({ children }) {
     loading: session === undefined || (Boolean(userId) && !profileLoaded),
     profileError,
     signIn,
-    signInWithGoogle,
     signOut,
     changePassword,
-    resetPassword,
-    recovering,
-    finishRecovery,
   }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

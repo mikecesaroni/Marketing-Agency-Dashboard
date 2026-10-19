@@ -34,7 +34,7 @@ export const GUIDE_TITLE = 'Navigating this CRM'
 
 export const GUIDE_INTRO = [
   'This is the internal CRM for a marketing agency that runs paid advertising for home-services businesses — HVAC, plumbing, electrical and similar trades. Each of those businesses is a "client". The agency runs their Meta (Facebook and Instagram) ads, their Google Local Services Ads, their Google Business Profile, and for some of them a GoHighLevel account that handles automated texts and calls.',
-  'Everything is one screen deep. The CRM asks for a sign-in: an email and password made for the person on the Team page, as an admin (everything) or a VA (everything except Payments, the Team page and the per-client payment tracker, with the database refusing a VA any payment, expense or Stripe data). Anything on screen can be changed by whoever is signed in, so treat that as a reason for care — a wrong edit here is a wrong number in a real client report. The client pages (/dashboard, /scripts, /videos, /report, /approve, /onboarding) ask for no sign-in: the token in the link is the credential. The switch is LOGIN_REQUIRED in src/lib/access.js with supabase/logins-on.sql and logins-off.sql as its database half; see docs/logins.md.',
+  'Everything is one screen deep. The CRM asks for a sign-in: an email and password made for the person on the Team page (the simplest kind on purpose: no Google, no sign-in emails; the browser keeps the session), as an admin (everything) or a VA (everything except Payments, the Team page and the per-client payment tracker, with the database refusing a VA any payment, expense or Stripe data). Anything on screen can be changed by whoever is signed in, so treat that as a reason for care — a wrong edit here is a wrong number in a real client report. The client pages (/dashboard, /scripts, /videos, /report, /approve, /onboarding) ask for no sign-in: the token in the link is the credential. The switch is LOGIN_REQUIRED in src/lib/access.js with supabase/logins-on.sql and logins-off.sql as its database half; see docs/logins.md.',
   'Numbers about ad performance are not live. A scheduled job copies yesterday from Meta each morning, so today is usually absent and the freshest figure is yesterday. Money is different: payments come from Stripe, and Stripe is treated as the truth whenever the CRM disagrees with it.',
 ]
 
@@ -333,8 +333,8 @@ export const ROUTES = [
     name: 'Sign in',
     nav: null,
     purpose:
-      'The CRM\'s sign-in (every CRM page lands here without a session; the client token pages never do). "Continue with Google" for most people (one tap; the browser keeps them signed in from then on; the button shows once Google is switched on for the Supabase project) or an email and password. Who may sign in is decided on the Team page either way; no self-signup, and a Google account whose email is not on the team gets a "not on the team" page. "Forgot your password?" sends a reset link from Supabase that comes back to this page with a "set a new password" form; an admin can also set a new temporary password from the Team page. See docs/logins.md.',
-    contains: ['"Continue with Google", then an email and password form.', '"Forgot your password?": the email, then "check your email".', 'After the reset link: a new password typed twice, then into the CRM.'],
+      'The CRM\'s sign-in (every CRM page lands here without a session; the client token pages never do). An email and password, both made by an admin on the Team page, and nothing else on purpose: no Google (that needs a verified Google Cloud consent screen), no sign-in or reset emails (those need a mail sender and a redirect list). The browser keeps the session, so the next visit on that device opens the CRM straight away until they sign out. No self-signup; a forgotten password is reset by an admin on the Team page. See docs/logins.md.',
+    contains: ['An email and password form, and a line saying they stay signed in on this device.'],
     actions: ['"Sign in" goes to the page that was asked for, or the dashboard.'],
   },
   {
@@ -342,10 +342,10 @@ export const ROUTES = [
     name: 'Team',
     nav: 'Team',
     purpose:
-      'Admins only. Who can sign in and as what. Adds a person the Google way (email and role, nothing else: their first "Continue with Google" with that email is their login) or with a temporary password (shown once, handed over by the admin), changes a role, sets or resets a password, removes a login.',
+      'Admins only. Who can sign in and as what. Adds a person with a temporary password (shown once, handed over by the admin by text or a call), changes a role, resets a password, removes a login.',
     contains: [
-      'Every member with their role, a Google tag once that account is linked, and last sign-in.',
-      '"Add someone": name, email, role, and how they sign in (With Google, the default, or With a temporary password with a generator).',
+      'Every member with their role and last sign-in.',
+      '"Add someone": name, email, role, temporary password with a generator.',
     ],
     actions: [
       'Changing the Role dropdown applies at once. Nobody can demote or remove themself, and the last admin cannot be demoted or removed.',
