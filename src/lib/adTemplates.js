@@ -12,7 +12,7 @@
  *   kicker   the season or the shout above the headline ("Fall Special",
  *            "MASSIVE", "CALL NOW FOR"); empty means one for the season
  *   sticker  the words in the starburst or the seal ("EASY FINANCING")
- *   offers   up to four offer tiles [{amount, detail}]; empty means the
+ *   offers   up to four offers in a grid [{amount, detail}]; empty means the
  *            main offer alone
  *   cutout   a piece of equipment: a built-in drawing (ac, furnace, boiler,
  *            water_heater, mini_split, thermostat) or stock:<path> to a
@@ -27,9 +27,9 @@
  * the creative, and the number belongs on the landing page.
  */
 
-import { readableTextOn } from './logoColours'
+import { hexToRgb, readableTextOn } from './logoColours'
 import { CONDENSED, FONT, SCRIPT, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
-import { SLATE, badgeSize, drawBadge, drawCoverIn, frameMargins } from './adLooks'
+import { SLATE, badgeSize, drawCoverIn, frameMargins } from './adLooks'
 import { logoFor } from './logoCutout'
 import { createAudit } from './adAudit'
 
@@ -40,12 +40,127 @@ import { createAudit } from './adAudit'
 let audit = null
 const note = (kind, box, label) => audit?.add(kind, box, label)
 
-/** The badge, recorded. Returns its height like drawBadge. */
+// ---------------------------------------------------------------------------
+// no boxes: no tile, pill, bar or card behind a word or a price. A box
+// around every number is what made the posters read as machine-made, so the
+// words stand on the background and hold it with colour, size, an outline
+// or a hard shadow. Which colour holds is read off what is already painted
+// under them.
+// ---------------------------------------------------------------------------
+
+function luminance([r, g, b]) {
+  const ch = (v) => {
+    const c = v / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
+}
+
+function contrast(a, b) {
+  const la = luminance(a)
+  const lb = luminance(b)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+/** The average colour already painted in a rectangle, or null when the canvas cannot be read. */
+function paintedUnder(ctx, rect) {
+  const cw = ctx.canvas?.width || 0
+  const chh = ctx.canvas?.height || 0
+  const x0 = Math.max(0, Math.floor(rect.x))
+  const y0 = Math.max(0, Math.floor(rect.y))
+  const x1 = Math.min(cw, Math.ceil(rect.x + rect.w))
+  const y1 = Math.min(chh, Math.ceil(rect.y + rect.h))
+  if (x1 - x0 < 1 || y1 - y0 < 1) return null
+  try {
+    const { data } = ctx.getImageData(x0, y0, x1 - x0, y1 - y0)
+    const step = 4 * Math.max(1, Math.floor(data.length / 4 / 3000))
+    let r0 = 0
+    let g0 = 0
+    let b0 = 0
+    let n = 0
+    for (let i = 0; i < data.length; i += step) {
+      r0 += data[i]
+      g0 += data[i + 1]
+      b0 += data[i + 2]
+      n++
+    }
+    return n ? [r0 / n, g0 / n, b0 / n] : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The first colour in `prefer` that reads (3:1) on what is painted under the
+ * rectangle; else white or slate, whichever reads better. Only plain hex
+ * colours are candidates.
+ */
+function wordInk(ctx, rect, prefer = []) {
+  const hexes = prefer.filter((c) => /^#[0-9a-f]{6}$/i.test(String(c || '')))
+  const under = paintedUnder(ctx, rect)
+  if (!under) return hexes[0] || WHITE
+  for (const c of hexes) if (contrast(hexToRgb(c), under) >= 3) return c
+  return contrast([255, 255, 255], under) >= contrast(hexToRgb(SLATE), under) ? WHITE : SLATE
+}
+
+const isLight = (hex) => luminance(hexToRgb(hex)) > 0.4
+
+/** A soft shadow under light words on a busy picture; none under dark ones. */
+function softShadow(ctx, ink, on = true) {
+  if (on && isLight(ink)) {
+    ctx.shadowColor = 'rgba(2,6,23,0.55)'
+    ctx.shadowBlur = 8
+    ctx.shadowOffsetY = 2
+  } else {
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetY = 0
+  }
+}
+
+/**
+ * The location: small tracked capitals with a pin before them, straight on
+ * the background (it used to be a coloured box). `color` is the brand colour
+ * to use when it reads there. Returns the height used.
+ */
 function badge(ctx, label, x, y, maxW, color) {
   if (!label || !String(label).trim()) return 0
-  const size = badgeSize(ctx, label, maxW)
-  const h = drawBadge(ctx, label, x, y, maxW, color)
-  note('badge', { x, y, w: size.w, h }, 'the location badge')
+  const text = String(label).trim().toUpperCase()
+  const size = badgeSize(ctx, text, maxW)
+  const px = Math.min(26, size.px + 2)
+  setFont(ctx, '800', px, size.tracking + 0.6)
+  const pin = px * 0.62
+  const tw = Math.min(ctx.measureText(text).width, maxW - pin - 10)
+  const h = r(px * 1.45)
+  const rect = { x, y, w: pin + 10 + tw, h }
+  const ink = wordInk(ctx, rect, [color, WHITE, SLATE])
+  const under = paintedUnder(ctx, rect)
+  // The pin: a round head over a point, the hole in it the background's colour.
+  const pcx = x + pin / 2
+  const pcy = y + h * 0.42
+  ctx.save()
+  softShadow(ctx, ink)
+  ctx.fillStyle = ink
+  ctx.beginPath()
+  ctx.arc(pcx, pcy, pin * 0.42, Math.PI * 0.8, Math.PI * 2.2)
+  ctx.lineTo(pcx, pcy + pin * 0.78)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+  ctx.fillStyle = under ? `rgb(${under.map((v) => r(v)).join(',')})` : isLight(ink) ? SLATE : WHITE
+  ctx.beginPath()
+  ctx.arc(pcx, pcy, pin * 0.16, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.save()
+  softShadow(ctx, ink)
+  setFont(ctx, '800', px, size.tracking + 0.6)
+  ctx.fillStyle = ink
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, x + pin + 10, y + h / 2 + 1, tw)
+  ctx.restore()
+  ctx.textBaseline = 'alphabetic'
+  note('badge', rect, 'the location badge')
   return h
 }
 import { CUTOUTS, PHOTO_TEMPLATES, TEMPLATE_KEYS, THEME_KEYS, THEME_LAYOUTS, kickerFor, offersFor, seasonKicker, themeFor } from './adTemplateMeta'
@@ -1484,53 +1599,61 @@ function ribbon(ctx, w, text, { fill = '#DC2626', ink = WHITE, size = 300 } = {}
 }
 
 /**
- * Offer tiles in a grid: a big amount and a small detail each. `columns`
- * decides the grid; a single offer gets the whole width.
+ * The offers in a grid: a big amount and a small detail each, straight on
+ * the background with a thin rule between columns (they used to be tiles).
+ * `columns` decides the grid; a single offer gets the whole width. `fill`
+ * is the colour the tiles were and the amounts now take where it reads;
+ * `amountInk` and `ink` are next in line.
  */
-function tiles(ctx, offers, rect, { fill = '#DC2626', ink = WHITE, amountInk, columns = 2, gap = 14, radius = 12, border = '' } = {}) {
+function tiles(ctx, offers, rect, { fill = '#DC2626', ink = WHITE, amountInk, columns = 2, gap = 14 } = {}) {
   const list = offers.slice(0, 4)
   if (list.length === 0) return 0
   const cols = Math.min(columns, list.length)
   const rows = Math.ceil(list.length / cols)
   const tw = (rect.w - gap * (cols - 1)) / cols
   const th = (rect.h - gap * (rows - 1)) / rows
+  const amountColour = wordInk(ctx, rect, [fill, amountInk, ink])
+  const detailColour = wordInk(ctx, rect, [ink, amountInk])
   list.forEach((o, i) => {
     const cx = rect.x + (i % cols) * (tw + gap)
     const cy = rect.y + Math.floor(i / cols) * (th + gap)
-    ctx.fillStyle = fill
-    roundRect(ctx, cx, cy, tw, th, radius)
-    ctx.fill()
-    note('tile', { x: cx, y: cy, w: tw, h: th }, `offer tile ${i + 1}`)
-    if (border) {
-      ctx.strokeStyle = border
-      ctx.lineWidth = 4
-      roundRect(ctx, cx + 2, cy + 2, tw - 4, th - 4, radius)
-      ctx.stroke()
+    note('tile', { x: cx, y: cy, w: tw, h: th }, `offer ${i + 1}`)
+    // A thin rule before every column but the first.
+    if (i % cols > 0) {
+      ctx.save()
+      ctx.globalAlpha = 0.35
+      ctx.fillStyle = detailColour
+      ctx.fillRect(cx - gap / 2 - 1.5, cy + th * 0.14, 3, th * 0.72)
+      ctx.restore()
     }
-    const pad = Math.min(24, tw * 0.08)
+    const pad = Math.min(12, tw * 0.04)
     const innerW = tw - pad * 2
-    const amountFit = o.amount ? fitText(ctx, o.amount, innerW, 1, Math.min(th * 0.52, 110), 28, '400', 0, { lineRatio: 1, face: CONDENSED }) : null
+    const amountFit = o.amount ? fitText(ctx, o.amount, innerW, 1, Math.min(th * 0.6, 130), 28, '400', 0, { lineRatio: 1, face: CONDENSED }) : null
     const detailFit = o.detail ? fitText(ctx, o.detail.toUpperCase(), innerW, 2, Math.min(th * 0.2, 30), 14, '800', 0.5, { lineRatio: 1.15 }) : null
     const ah = amountFit ? amountFit.px * 0.95 : 0
     const dh = detailFit ? detailFit.lines.length * detailFit.px * 1.15 : 0
     let ty = cy + (th - (ah + (ah && dh ? 8 : 0) + dh)) / 2
+    ctx.save()
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
     if (amountFit) {
+      softShadow(ctx, amountColour)
       setFont(ctx, '400', amountFit.px, 0, CONDENSED)
-      ctx.fillStyle = amountInk || ink
+      ctx.fillStyle = amountColour
       ctx.fillText(amountFit.lines[0] || o.amount, cx + tw / 2, ty + amountFit.px * 0.82)
       ty += ah + (dh ? 8 : 0)
     }
     if (detailFit) {
+      softShadow(ctx, detailColour)
       setFont(ctx, '800', detailFit.px, 0.5)
-      ctx.fillStyle = ink
+      ctx.fillStyle = detailColour
       let ly = ty + detailFit.px * 0.9
       for (const line of detailFit.lines) {
         ctx.fillText(line, cx + tw / 2, ly)
         ly += detailFit.px * 1.15
       }
     }
+    ctx.restore()
   })
   ctx.textAlign = 'left'
   return rect.h
@@ -1600,22 +1723,26 @@ function footer(ctx, m, content, assets, { onDark = false, ink = SLATE, logo = '
   return { top, height, fit, draw }
 }
 
-/** A small condensed label pill: BEFORE, AFTER. Returns its size. */
-function tag(ctx, text, x, y, { fill = SLATE, ink = WHITE, px = 30, align = 'left' } = {}) {
-  setFont(ctx, '400', px, 2, CONDENSED)
-  const tw = ctx.measureText(text).width + 28
-  const th = px * 1.5
+/** A condensed label on a photo: BEFORE, AFTER. No box: the colour where it reads, else white, with a shadow. Returns its size. */
+function tag(ctx, text, x, y, { fill = SLATE, px = 30, align = 'left' } = {}) {
+  const size = px * 1.3
+  setFont(ctx, '400', size, 3, CONDENSED)
+  const tw = ctx.measureText(text).width
+  const th = size * 1.1
   const tx = align === 'right' ? x - tw : x
-  note('badge', { x: tx, y, w: tw, h: th }, `the ${String(text).toLowerCase()} tag`)
-  ctx.fillStyle = fill
-  roundRect(ctx, tx, y, tw, th, 6)
-  ctx.fill()
+  const rect = { x: tx, y, w: tw, h: th }
+  const ink = wordInk(ctx, rect, [fill, WHITE, SLATE])
+  note('badge', rect, `the ${String(text).toLowerCase()} tag`)
+  ctx.save()
+  softShadow(ctx, ink)
+  if (isLight(ink)) ctx.shadowBlur = 12
   ctx.fillStyle = ink
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText(text, tx + 14, y + th / 2 + 1)
+  ctx.fillText(text, tx, y + th / 2 + 1)
+  ctx.restore()
   ctx.textBaseline = 'alphabetic'
-  return { x: tx, y, w: tw, h: th }
+  return rect
 }
 
 const CENTRE = { x: 0.5, y: 0.5 }
@@ -1771,46 +1898,47 @@ function chevron(ctx, x, y, w, h, fill = WHITE) {
   ctx.fill()
 }
 
-/** A slanted bar with condensed capitals on it, leaning with it. Returns its box. */
+/**
+ * Leaning condensed capitals with a hard shadow and an outline in `fill`,
+ * the colour the slanted bar under them used to be. White (`ink`) where it
+ * reads, else `fill` itself. Returns its box.
+ */
 function slab(ctx, text, x, y, maxW, { fill = INK_DARK, ink = WHITE, px = 90, minPx = 36, align = 'left', skew = 0.2, lines = 1, maxHeight, label = 'the words' } = {}) {
   const t = String(text || '').trim().toUpperCase()
   if (!t) return { x, y, w: 0, h: 0 }
-  const fit = fitText(ctx, t, Math.max(40, maxW - px * 0.8), lines, px, minPx, '400', 1, { lineRatio: 1.15, maxHeight, face: CONDENSED })
+  const shear = skew * 0.55
+  const extra = (size) => size * 0.75 * shear + Math.max(3, size * 0.06) + Math.max(2, size * 0.07)
+  const fit = fitText(ctx, t, Math.max(40, maxW - extra(px)), lines, px, minPx, '400', 1, { lineRatio: 1.05, maxHeight, face: CONDENSED })
   setFont(ctx, '400', fit.px, 1, CONDENSED)
   const tw = widest(ctx, fit.lines)
-  const padX = fit.px * 0.35
-  const bh = fit.px * 1.15 * fit.lines.length + fit.px * 0.25
-  const lean = bh * skew
-  const bw = tw + padX * 2 + lean + fit.px * 0.12
+  const sh = Math.max(3, fit.px * 0.06)
+  const sw = Math.max(2, fit.px * 0.07)
+  const bw = tw + extra(fit.px)
+  const bh = fit.px * 1.05 * fit.lines.length + sh
   const bx = align === 'right' ? x - bw : align === 'center' ? x - bw / 2 : x
-  const para = (dx, dy) => {
-    ctx.beginPath()
-    ctx.moveTo(bx + lean + dx, y + dy)
-    ctx.lineTo(bx + bw + dx, y + dy)
-    ctx.lineTo(bx + bw - lean + dx, y + bh + dy)
-    ctx.lineTo(bx + dx, y + bh + dy)
-    ctx.closePath()
-  }
-  ctx.fillStyle = 'rgba(2,6,23,0.35)'
-  para(6, 8)
-  ctx.fill()
-  ctx.fillStyle = fill
-  para(0, 0)
-  ctx.fill()
-  note('badge', { x: bx, y, w: bw, h: bh }, label)
-  ctx.fillStyle = ink
+  const rect = { x: bx, y, w: bw, h: bh }
+  const colour = wordInk(ctx, rect, [ink, fill])
+  const edge = colour === ink ? fill : WHITE
+  note('badge', rect, label)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
-  let by = y + fit.px * 0.12 + fit.px
+  let by = y + fit.px * 0.9
   for (const line of fit.lines) {
     ctx.save()
-    ctx.translate(bx + lean * 0.5 + padX, by)
-    ctx.transform(1, 0, -skew * 0.55, 1, 0, 0)
+    ctx.translate(bx + sw / 2, by)
+    ctx.transform(1, 0, -shear, 1, 0, 0)
+    ctx.lineJoin = 'round'
+    ctx.fillStyle = edge
+    ctx.fillText(line, sh, sh)
+    ctx.strokeStyle = edge
+    ctx.lineWidth = sw
+    ctx.strokeText(line, 0, 0)
+    ctx.fillStyle = colour
     ctx.fillText(line, 0, 0)
     ctx.restore()
-    by += fit.px * 1.15
+    by += fit.px * 1.05
   }
-  return { x: bx, y, w: bw, h: bh }
+  return rect
 }
 
 /**
@@ -1842,37 +1970,43 @@ function twoTone(ctx, text, cx, y, maxW, { px = 150, minPx = 60, first = {}, res
   return h
 }
 
-/** The Google reviews card: the word in its colours, five stars beside it, the proof line under. Returns its box. */
+/** The Google reviews line: the word in its colours, five stars beside it, the proof line under, with no card behind them. Returns its box. */
 const REVIEWS_W = 280
 const REVIEWS_H = 96
 
 function reviewsBadge(ctx, x, y, { align = 'right', proof = '', w = REVIEWS_W, h = REVIEWS_H } = {}) {
   const bx = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x
-  ctx.fillStyle = 'rgba(2,6,23,0.3)'
-  roundRect(ctx, bx + 4, y + 6, w, h, 12)
-  ctx.fill()
-  ctx.fillStyle = WHITE
-  roundRect(ctx, bx, y, w, h, 12)
-  ctx.fill()
+  const ink = wordInk(ctx, { x: bx, y, w, h }, [SLATE, WHITE])
   const letters = [['G', '#4285F4'], ['o', '#EA4335'], ['o', '#FBBC05'], ['g', '#4285F4'], ['l', '#34A853'], ['e', '#EA4335']]
-  setFont(ctx, '700', 34, -0.5)
+  ctx.save()
+  softShadow(ctx, ink)
+  setFont(ctx, '700', 38, -0.5)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
-  let lx = bx + 18
-  const ly = y + 40
+  // Right-aligned like the logo opposite it: the words end at the margin.
+  const t = String(proof || '').trim() || '5-star rated'
+  const fit = fitText(ctx, t, w, 1, 20, 12, '700', 0, { lineRatio: 1 })
+  let wordW = 0
+  for (const [ch] of letters) wordW += ctx.measureText(ch).width
+  setFont(ctx, '700', fit.px, 0)
+  const proofW = ctx.measureText(fit.lines[0] || t).width
+  const topW = wordW + 12 + 5 * 26
+  const left = align === 'right' ? bx + w - Math.max(topW, proofW) : bx
+  setFont(ctx, '700', 38, -0.5)
+  let lx = left
+  const ly = y + 44
   for (const [ch, c] of letters) {
     ctx.fillStyle = c
     ctx.fillText(ch, lx, ly)
     lx += ctx.measureText(ch).width
   }
   ctx.fillStyle = GOLD
-  setFont(ctx, '700', 24, 0)
-  for (let i = 0; i < 5; i++) ctx.fillText('★', lx + 14 + i * 24, ly)
-  const t = String(proof || '').trim() || '5-star rated'
-  const fit = fitText(ctx, t, w - 36, 1, 18, 11, '700', 0, { lineRatio: 1 })
+  setFont(ctx, '700', 26, 0)
+  for (let i = 0; i < 5; i++) ctx.fillText('★', lx + 12 + i * 26, ly - 2)
   setFont(ctx, '700', fit.px, 0)
-  ctx.fillStyle = SLATE
-  ctx.fillText(fit.lines[0] || t, bx + 18, y + h - 22)
+  ctx.fillStyle = ink
+  ctx.fillText(fit.lines[0] || t, left, y + h - 24)
+  ctx.restore()
   note('stars', { x: bx, y, w, h }, 'the Google reviews badge')
   return { x: bx, y, w, h }
 }
@@ -1907,21 +2041,31 @@ function brandFooter(ctx, m, content, assets, { band = false, onDark = true } = 
   return { top, height, draw }
 }
 
-/** A dark label across a unit: TRADE-IN THIS... It sits on the unit on purpose, so it is a surface, not audited against it. */
+/**
+ * Words across a unit: TRADE-IN THIS... White capitals with a dark outline
+ * and a hard shadow, tilted, no strip behind them. They sit on the unit on
+ * purpose, so they are a surface, not audited against it.
+ */
 function labelStrip(ctx, text, cx, cy, w, { fill = INK_DARK, ink = WHITE, px = 34 } = {}) {
   const t = String(text || '').toUpperCase()
-  const fit = fitText(ctx, t, w - 30, 1, px, 14, '400', 2, { lineRatio: 1, face: CONDENSED })
+  const fit = fitText(ctx, t, w - 30, 1, px * 1.15, 14, '400', 2, { lineRatio: 1, face: CONDENSED })
   setFont(ctx, '400', fit.px, 2, CONDENSED)
   const h = fit.px * 1.5
+  const line = fit.lines[0] || t
+  const sh = Math.max(2, fit.px * 0.07)
   ctx.save()
   ctx.translate(cx, cy)
   ctx.rotate(-0.07)
-  ctx.fillStyle = fill
-  ctx.fillRect(-w / 2, -h / 2, w, h)
-  ctx.fillStyle = ink
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText(fit.lines[0] || t, 0, 1)
+  ctx.lineJoin = 'round'
+  ctx.fillStyle = fill
+  ctx.fillText(line, sh, 1 + sh)
+  ctx.strokeStyle = fill
+  ctx.lineWidth = Math.max(3, fit.px * 0.16)
+  ctx.strokeText(line, 0, 1)
+  ctx.fillStyle = ink
+  ctx.fillText(line, 0, 1)
   ctx.restore()
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
@@ -1943,29 +2087,29 @@ function spark(ctx, cx, cy, r, fill = GOLD) {
   ctx.restore()
 }
 
-/** A pill with words in it: a badge, never a button (Meta draws the real one under the ad). Returns its box. */
-function pill(ctx, text, cx, y, maxW, { fill = GOLD, ink = SLATE, px = 30, minPx = 16, outline = '', label = 'the pill' } = {}) {
+/**
+ * A short line of heavy tracked capitals, centred: LIMITED TIME, SPECIAL
+ * LIMITED OFFER. It used to be a pill; now the words stand alone, in `fill`
+ * where it reads (the pill's colour), else white or `ink`. Never a button
+ * (Meta draws the real one under the ad). Returns its box.
+ */
+function pill(ctx, text, cx, y, maxW, { fill = GOLD, ink = SLATE, px = 30, minPx = 16, label = 'the pill' } = {}) {
   const t = String(text || '').trim().toUpperCase()
   if (!t) return { x: cx, y, w: 0, h: 0 }
-  const fit = fitText(ctx, t, Math.max(60, maxW - 60), 1, px, minPx, '800', 1, { lineRatio: 1 })
-  setFont(ctx, '800', fit.px, 1)
-  const w = ctx.measureText(fit.lines[0] || t).width + fit.px * 1.6
-  const h = fit.px * 1.9
+  const size = px * 1.2
+  const fit = fitText(ctx, t, Math.max(60, maxW), 1, size, minPx, '900', 2, { lineRatio: 1 })
+  setFont(ctx, '900', fit.px, 2)
+  const w = ctx.measureText(fit.lines[0] || t).width
+  const h = fit.px * 1.3
   const x = cx - w / 2
-  roundRect(ctx, x, y, w, h, h / 2)
-  if (fill) {
-    ctx.fillStyle = fill
-    ctx.fill()
-  }
-  if (outline) {
-    ctx.strokeStyle = outline
-    ctx.lineWidth = Math.max(2, fit.px * 0.1)
-    ctx.stroke()
-  }
-  ctx.fillStyle = ink
+  const colour = wordInk(ctx, { x, y, w, h }, [fill, WHITE, ink])
+  ctx.save()
+  softShadow(ctx, colour)
+  ctx.fillStyle = colour
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillText(fit.lines[0] || t, cx, y + h / 2 + 1)
+  ctx.restore()
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
   note('badge', { x, y, w, h }, label)
@@ -2009,28 +2153,25 @@ function cloudBlob(ctx, x, y, w, h) {
   note('panel', { x, y, w, h }, 'the cloud')
 }
 
-/** A rounded box with up to three lines of bold capitals in it. Returns its box. */
+/** Up to three lines of heavy capitals, left-aligned, no box: `fill` where it reads, else white or `ink`. Returns its box. */
 function wordBox(ctx, text, x, y, w, { fill = '#23B5CB', ink = WHITE, px = 44, minPx = 20, maxHeight, label = 'the sticker' } = {}) {
   const t = String(text || '').trim()
   if (!t) return { x, y, w: 0, h: 0 }
-  const fit = fitText(ctx, t.toUpperCase(), w - 40, 3, px, minPx, '900', 0, { lineRatio: 1.1, maxHeight: maxHeight ? Math.max(40, maxHeight - 40) : undefined })
+  const fit = fitText(ctx, t.toUpperCase(), w, 3, px * 1.2, minPx, '900', 0, { lineRatio: 1.05, maxHeight })
   setFont(ctx, '900', fit.px, 0)
-  const h = fit.lines.length * fit.px * 1.1 + 40
-  ctx.fillStyle = 'rgba(2,6,23,0.25)'
-  roundRect(ctx, x + 4, y + 6, w, h, 18)
-  ctx.fill()
-  ctx.fillStyle = fill
-  roundRect(ctx, x, y, w, h, 18)
-  ctx.fill()
-  ctx.fillStyle = ink
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'alphabetic'
-  let by = y + 20 + fit.px * 0.9
-  for (const line of fit.lines) {
-    ctx.fillText(line, x + w / 2, by)
-    by += fit.px * 1.1
-  }
+  const h = fit.lines.length * fit.px * 1.05
+  const colour = wordInk(ctx, { x, y, w, h }, [fill, WHITE, ink])
+  ctx.save()
+  softShadow(ctx, colour)
+  ctx.fillStyle = colour
   ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  let by = y + fit.px * 0.88
+  for (const line of fit.lines) {
+    ctx.fillText(line, x, by)
+    by += fit.px * 1.05
+  }
+  ctx.restore()
   note('sticker', { x, y, w, h }, label)
   return { x, y, w, h }
 }
@@ -2214,7 +2355,7 @@ function priceGrid(ctx, size, content, assets, opts) {
   const cutOn = hasCutout(content, assets)
   const gridW = cutOn ? maxWidth * 0.52 : maxWidth
   const gridH = Math.max(140, Math.min(B - y - 120, offers.length > 2 ? 560 : offers.length === 2 ? 400 : 300))
-  tiles(ctx, offers, { x: padX, y, w: gridW, h: gridH }, { fill: '#FFFFFF', ink: badgeColor || '#0369A1', amountInk: accent, columns: 2, gap: 16, radius: 6, border: accent })
+  tiles(ctx, offers, { x: padX, y, w: gridW, h: gridH }, { fill: accent, ink: badgeColor || '#0369A1', columns: 2, gap: 28 })
   if (cutOn) drawCutout(ctx, content, assets, { x: padX + gridW + 24, y: y - 10, w: maxWidth - gridW - 24, h: Math.min(gridH + 40, B - (y - 10)) })
   y += gridH + 26
   y += body(ctx, content.subhead, padX, y, maxWidth, { px: 30, minPx: 18, lines: 2, weight: '600', fill: '#334155', maxHeight: B - y })
@@ -2413,26 +2554,31 @@ function emergency(ctx, size, content, assets, opts) {
   y += body(ctx, content.subhead, padX, y, maxWidth - (cutW ? cutW + 20 : 0), { px: 34, minPx: 22, lines: 3, weight: '600', fill: onDark ? 'rgba(255,255,255,0.85)' : '#334155', maxHeight: (B - y) * 0.5 }) + 24
   const amount = amountWords(content)
   if ((amount || content.offerDetail) && B - y > 70) {
-    const pillH = Math.min(110, B - y)
-    const text = `${amount}${amount && content.offerDetail ? '  ' : ''}${String(content.offerDetail || '').toUpperCase()}`
-    const fit = fitText(ctx, text, maxWidth - 60 - (cutW ? cutW + 20 : 0), 1, 60, 26, '400', 2, { lineRatio: 1, face: CONDENSED })
-    setFont(ctx, '400', fit.px, 2, CONDENSED)
-    const pw = Math.min(maxWidth, widest(ctx, fit.lines) + 60)
-    ctx.fillStyle = accent
-    roundRect(ctx, padX, y, pw, pillH, 14)
-    ctx.fill()
-    ctx.fillStyle = WHITE
-    ctx.textBaseline = 'middle'
-    ctx.fillText(fit.lines[0] || text, padX + 30, y + pillH / 2 + 2)
-    ctx.textBaseline = 'alphabetic'
-    y += pillH + 20
+    // The price big in the accent, the detail beside it: no pill behind them.
+    const offerW = maxWidth - (cutW ? cutW + 20 : 0)
+    const rowH = Math.min(120, B - y)
+    const priceInk = wordInk(ctx, { x: padX, y, w: offerW, h: rowH }, [accent, WHITE])
+    let ox = padX
+    if (amount) {
+      const fit = fitText(ctx, amount, offerW * 0.55, 1, 120, 50, '400', 1, { lineRatio: 1, maxHeight: rowH, face: CONDENSED })
+      setFont(ctx, '400', fit.px, 1, CONDENSED)
+      const aw = ctx.measureText(fit.lines[0] || amount).width
+      shout(ctx, amount, padX, y + (rowH - fit.px) / 2, offerW * 0.55, { px: fit.px, minPx: fit.px, lines: 1, fill: priceInk, tracking: 1, label: 'the offer' })
+      ox += aw + 24
+    }
+    const detail = String(content.offerDetail || '').trim()
+    if (detail && padX + offerW - ox > 80) {
+      const room = padX + offerW - ox
+      shout(ctx, detail, ox, y + rowH * 0.18, room, { px: 46, minPx: 22, lines: 2, fill: ink, tracking: 1, ratio: 1.02, maxHeight: rowH * 0.8, label: 'the offer detail' })
+    }
+    y += rowH + 20
   }
   if (cutW) drawCutout(ctx, content, assets, { x: w - padX - cutW, y: cutTop, w: cutW, h: B - cutTop })
   foot.draw()
   return { band: { top: y, bottom: B } }
 }
 
-/** 11. Financing: $0 down, monthly payments, two price tiles, the unit. */
+/** 11. Financing: $0 down, monthly payments, two more prices side by side, the unit. */
 function financing(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, maxWidth } = m
@@ -2466,14 +2612,14 @@ function financing(ctx, size, content, assets, opts) {
   const offers = offersFor(content).filter((o) => o.amount !== amount || o.detail !== String(content.offerDetail || '').trim())
   if (offers.length) {
     const gh = Math.min(offers.length > 2 ? 420 : 240, B - y)
-    if (gh > 90) tiles(ctx, offers, { x: padX, y, w: maxWidth - 280, h: gh }, { fill: 'rgba(255,255,255,0.12)', ink: WHITE, amountInk: WHITE, columns: 2, gap: 12, radius: 10, border: 'rgba(255,255,255,0.3)' })
+    if (gh > 90) tiles(ctx, offers, { x: padX, y, w: maxWidth - 280, h: gh }, { fill: WHITE, ink: WHITE, columns: 2, gap: 28 })
     y += gh + 20
   }
   foot.draw()
   return { band: { top: y, bottom: B } }
 }
 
-/** 12. Coupon: a dashed coupon with the offer inside, the fine print, the logo. */
+/** 12. Coupon: the offer between two dashed cut lines with the scissors, the fine print, the logo. */
 function coupon(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, maxWidth } = m
@@ -2490,8 +2636,9 @@ function coupon(ctx, size, content, assets, opts) {
   const badgeH = badge(ctx, content.badge, w - padX - 380, y, 380, badgeColor)
   y += Math.max(lb ? lb.h : 0, badgeH) + 26
   y += shout(ctx, kickerWords(content), padX, y, maxWidth, { px: 70, minPx: 36, lines: 1, fill: accent, tracking: 4, maxHeight: (B - y) * 0.2, label: 'the kicker' }) + 10
-  // The coupon box, sized to what goes in it: measured first, drawn after.
-  const innerW = maxWidth - 100
+  // The coupon: a dashed cut line above and below the offer with the
+  // scissors on it, no box. Sized to what goes in it: measured first.
+  const innerW = maxWidth - 40
   const amount = amountWords(content)
   const roomH = Math.min(h * 0.46, B - y - 160)
   const aFit = amount ? fitText(ctx, amount.toUpperCase(), innerW, 1, 220, 90, '400', 2, { lineRatio: 0.98, maxHeight: roomH * 0.5, face: CONDENSED }) : null
@@ -2499,23 +2646,30 @@ function coupon(ctx, size, content, assets, opts) {
   const sFit = content.subhead ? fitText(ctx, typographic(content.subhead), innerW, 2, 24, 16, '600', 0, { lineRatio: 1.3 }) : null
   const need = 100 + (aFit ? aFit.px * 1.08 : 0) + (dFit ? dFit.lines.length * dFit.px * 0.98 + dFit.px * 0.1 + 10 : 0) + (sFit ? sFit.lines.length * sFit.px * 1.3 : 0)
   const boxH = Math.max(200, Math.min(roomH, need))
-  ctx.fillStyle = WHITE
-  roundRect(ctx, padX, y, maxWidth, boxH, 18)
-  ctx.fill()
-  ctx.save()
-  ctx.setLineDash([18, 14])
-  ctx.strokeStyle = badgeColor || SLATE
-  ctx.lineWidth = 6
-  roundRect(ctx, padX + 14, y + 14, maxWidth - 28, boxH - 28, 12)
-  ctx.stroke()
-  ctx.restore()
-  setFont(ctx, '700', 40, 0)
-  ctx.fillStyle = badgeColor || SLATE
-  ctx.fillText('✂', padX + 40, y + 28)
-  let cy = y + 50
-  if (amount) cy += shout(ctx, amount, w / 2, cy, innerW, { px: 220, minPx: 90, lines: 1, fill: accent, align: 'center', tracking: 2, maxHeight: boxH * 0.5, label: 'the offer' })
-  cy += shout(ctx, content.offerDetail, w / 2, cy, innerW, { px: 64, minPx: 30, lines: 2, fill: badgeColor || SLATE, align: 'center', maxHeight: boxH * 0.3, label: 'the offer detail' }) + 10
-  body(ctx, content.subhead, w / 2, cy, innerW, { px: 24, minPx: 16, lines: 2, weight: '600', fill: '#475569', align: 'center', maxHeight: y + boxH - 20 - cy })
+  const area = { x: padX, y, w: maxWidth, h: boxH }
+  const cutInk = wordInk(ctx, area, [badgeColor, ink])
+  const cutLine = (ly) => {
+    ctx.save()
+    ctx.setLineDash([18, 14])
+    ctx.strokeStyle = cutInk
+    ctx.lineWidth = 5
+    ctx.beginPath()
+    ctx.moveTo(padX + 64, ly)
+    ctx.lineTo(padX + maxWidth, ly)
+    ctx.stroke()
+    ctx.restore()
+  }
+  cutLine(y + 14)
+  cutLine(y + boxH - 14)
+  setFont(ctx, '700', 44, 0)
+  ctx.fillStyle = cutInk
+  ctx.textBaseline = 'middle'
+  ctx.fillText('✂', padX, y + 16)
+  ctx.textBaseline = 'alphabetic'
+  let cy = y + 46
+  if (amount) cy += shout(ctx, amount, w / 2, cy, innerW, { px: 220, minPx: 90, lines: 1, fill: wordInk(ctx, area, [accent, ink]), align: 'center', tracking: 2, maxHeight: boxH * 0.5, label: 'the offer' })
+  cy += shout(ctx, content.offerDetail, w / 2, cy, innerW, { px: 64, minPx: 30, lines: 2, fill: cutInk, align: 'center', maxHeight: boxH * 0.3, label: 'the offer detail' }) + 10
+  body(ctx, content.subhead, w / 2, cy, innerW, { px: 24, minPx: 16, lines: 2, weight: '600', fill: wordInk(ctx, area, ['#475569', ink]), align: 'center', maxHeight: y + boxH - 24 - cy })
   y += boxH + 24
   // The headline under the coupon, the unit beside it.
   const cutTop = y - 10
@@ -2578,7 +2732,7 @@ function photoSale(ctx, size, content, assets, opts) {
   ribbon(ctx, w, stickerWords(content) || 'SALE', { fill: accent, ink: WHITE, size: 360 })
   y += shout(ctx, kickerWords(content), padX, y, maxWidth - 260, { px: 90, minPx: 40, lines: 1, fill: WHITE, stroke: 'rgba(2,6,23,0.6)', strokeW: 8, tracking: 3, label: 'the kicker' })
   shout(ctx, content.hook, padX, y, y < 300 ? maxWidth - 260 : maxWidth - 60, { px: 84, minPx: 36, lines: 3, fill: WHITE, stroke: 'rgba(2,6,23,0.6)', strokeW: 8, maxHeight: (bandTop - y) * 0.6, label: 'the headline' })
-  // The band: tiles, the subhead, then the logo and the stars.
+  // The band: the offers, the subhead, then the logo and the stars.
   const bandFill = badgeColor || SLATE
   const onBandDark = readableTextOn(bandFill) === WHITE
   const bandInk = onBandDark ? WHITE : SLATE
@@ -2592,7 +2746,7 @@ function photoSale(ctx, size, content, assets, opts) {
   if (offers.length) {
     const th = Math.min(170, bandH * 0.5, (B - by) * 0.6)
     if (th > 70) {
-      tiles(ctx, offers, { x: padX, y: by, w: maxWidth, h: th }, { fill: accent, ink: WHITE, amountInk: WHITE, columns: Math.min(offers.length, 3), gap: 12, radius: 12 })
+      tiles(ctx, offers, { x: padX, y: by, w: maxWidth, h: th }, { fill: accent, ink: WHITE, amountInk: WHITE, columns: Math.min(offers.length, 3), gap: 28 })
       by += th + 18
     }
   }
@@ -2601,7 +2755,7 @@ function photoSale(ctx, size, content, assets, opts) {
   return { band: { top: y, bottom: bandTop } }
 }
 
-/** 15. Before and after sale: the pair up top, the kicker, the headline and the offer tiles on the season below. */
+/** 15. Before and after sale: the pair up top, the kicker, the headline and the offers on the season below. */
 function beforeSale(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, maxWidth } = m
@@ -2626,7 +2780,7 @@ function beforeSale(ctx, size, content, assets, opts) {
   if (offers.length) {
     const th = Math.min(150, (B - y) * 0.5)
     if (th > 76) {
-      tiles(ctx, offers, { x: padX, y, w: maxWidth, h: th }, { fill: accent, ink: readableTextOn(accent), amountInk: readableTextOn(accent), columns: Math.min(offers.length, 3), gap: 12, radius: 12 })
+      tiles(ctx, offers, { x: padX, y, w: maxWidth, h: th }, { fill: accent, ink, columns: Math.min(offers.length, 3), gap: 28 })
       y += th + 14
     }
   }
@@ -2688,7 +2842,7 @@ function reveal(ctx, size, content, assets, opts) {
   return { band: { top: plateTop, bottom: B } }
 }
 
-/** 17. Maintenance plan: a membership card with the price a month and what is included, from the subhead. */
+/** 17. Maintenance plan: the plan's name, the price a month and what is included (from the subhead), with no card around them. */
 function planCard(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, maxWidth } = m
@@ -2703,10 +2857,9 @@ function planCard(ctx, size, content, assets, opts) {
   if (badgeH) y += badgeH + 16
   const stickerOn = Boolean(stickerWords(content))
   y += shout(ctx, content.hook, padX, y, maxWidth - (stickerOn ? 200 : 0), { px: 84, minPx: 36, lines: 2, fill: ink, maxHeight: (B - y) * 0.28, label: 'the headline' }) + 18
-  // What goes on the card decides its height: the checklist rows on the
-  // left, the price block on the right, whichever is taller, so a short
-  // plan does not leave a white void. The unit stands under it when there
-  // is room.
+  // What goes in the plan decides its height: the checklist rows on the
+  // left, the price block on the right, whichever is taller. The unit
+  // stands under it when there is room.
   const items = String(content.subhead || '')
     .split(/\s*(?:[,;|•\n]|\.\s)\s*/)
     .map((t) => t.trim().replace(/^(and|or|plus)\s+/i, '').replace(/\.$/, ''))
@@ -2722,27 +2875,25 @@ function planCard(ctx, size, content, assets, opts) {
     foot.draw()
     return { band: { top: y, bottom: B } }
   }
-  ctx.fillStyle = 'rgba(2,6,23,0.18)'
-  roundRect(ctx, card.x + 6, card.y + 10, card.w, card.h, 24)
-  ctx.fill()
-  ctx.fillStyle = WHITE
-  roundRect(ctx, card.x, card.y, card.w, card.h, 24)
-  ctx.fill()
-  const head = badgeColor || SLATE
-  ctx.fillStyle = head
-  roundRect(ctx, card.x, card.y, card.w, headH, 24)
-  ctx.fill()
-  ctx.fillRect(card.x, card.y + headH / 2, card.w, headH / 2)
+  // No card: the plan's name over a thin rule, then what is included on
+  // the left and the price on the right, straight on the theme.
+  const head = wordInk(ctx, { x: card.x, y: card.y, w: card.w, h: headH }, [onDark ? GOLD : badgeColor, accent, ink])
   const st = stickerWords(content)
-  shout(ctx, kickerWords(content), card.x + 28, card.y + 16, card.w - 56 - (st ? 150 : 0), { px: 54, minPx: 26, lines: 1, fill: readableTextOn(head), tracking: 2, maxHeight: headH - 20, label: 'the kicker' })
-  // The price on the right, what is included on the left.
-  const inner = { x: card.x + 32, y: card.y + headH + 26, w: card.w - 64, bottom: card.y + card.h - 28 }
+  shout(ctx, kickerWords(content), card.x, card.y + 12, card.w - (st ? 190 : 0), { px: 64, minPx: 26, lines: 1, fill: head, tracking: 2, maxHeight: headH - 24, label: 'the kicker' })
+  ctx.save()
+  ctx.globalAlpha = 0.5
+  ctx.fillStyle = head
+  ctx.fillRect(card.x, card.y + headH - 4, card.w - (st ? 190 : 0), 4)
+  ctx.restore()
+  const inner = { x: card.x, y: card.y + headH + 26, w: card.w, bottom: card.y + card.h - 28 }
   const priceW = amount ? Math.min(inner.w * 0.42, 380) : 0
+  // The sticker sits at the end of the name's row; the price starts under it.
+  const starR = 78
   if (amount) {
     const rx = inner.x + inner.w
-    let py = inner.y
-    py += shout(ctx, amount, rx, py, priceW, { px: 120, minPx: 50, lines: 1, fill: accent, align: 'right', maxHeight: (inner.bottom - py) * 0.5, label: 'the offer' })
-    shout(ctx, content.offerDetail, rx, py, priceW, { px: 36, minPx: 20, lines: 3, fill: head, align: 'right', maxHeight: (inner.bottom - py) * 0.6, label: 'the offer detail' })
+    let py = st ? Math.max(inner.y, card.y + headH / 2 + starR + 14) : inner.y
+    py += shout(ctx, amount, rx, py, priceW, { px: 150, minPx: 50, lines: 1, fill: wordInk(ctx, { x: rx - priceW, y: py, w: priceW, h: 150 }, [accent, ink]), align: 'right', maxHeight: (inner.bottom - py) * 0.55, label: 'the offer' })
+    shout(ctx, content.offerDetail, rx, py, priceW, { px: 40, minPx: 20, lines: 3, fill: ink, align: 'right', maxHeight: (inner.bottom - py) * 0.6, label: 'the offer detail' })
   }
   const listW = inner.w - (priceW ? priceW + 30 : 0)
   let ly = inner.y + 4
@@ -2762,13 +2913,13 @@ function planCard(ctx, size, content, assets, opts) {
     ctx.lineTo(inner.x + 16, cy + 6)
     ctx.lineTo(inner.x + 27, cy - 7)
     ctx.stroke()
-    const fit = fitText(ctx, typographic(item), listW - 50, 2, Math.min(32, rowH * 0.5), 18, '600', 0, { lineRatio: 1.2, maxHeight: rowH })
-    setFont(ctx, '600', fit.px, 0)
-    ctx.fillStyle = SLATE
+    const fit = fitText(ctx, typographic(item), listW - 50, 2, Math.min(34, rowH * 0.52), 18, '700', 0, { lineRatio: 1.2, maxHeight: rowH })
+    setFont(ctx, '700', fit.px, 0)
+    ctx.fillStyle = ink
     drawLines(ctx, fit.lines, inner.x + 48, cy - ((fit.lines.length - 1) * fit.px * 1.2) / 2 + fit.px * 0.35, fit.px, 1.2, 'left')
     ly += rowH
   }
-  if (st) starburst(ctx, card.x + card.w - 70, card.y + 12, 92, st, { fill: GOLD, ink: SLATE })
+  if (st) starburst(ctx, card.x + card.w - starR, card.y + headH / 2, starR, st, { fill: GOLD, ink: SLATE })
   // The unit under the card, bottom-right, when there is room for it.
   const below = card.y + card.h + 20
   if (hasCutout(content, assets) && B - below > 160) {
@@ -2785,10 +2936,10 @@ function planCard(ctx, size, content, assets, opts) {
 
 /**
  * 18. Sunburst deal: the RCL boiler poster. A sky-blue sunburst, MASSIVE in
- * letterspaced navy, BOILER DEAL in two colours, STARTING FROM ONLY on a
- * navy bar, the price huge in red with a white outline and a shadow, the
- * unit standing in clouds with a red badge beside it, the logo and the
- * Google card on a white band.
+ * letterspaced navy, BOILER DEAL in two colours, STARTING FROM ONLY leaning
+ * with a navy outline, the price huge in red with a white outline and a
+ * shadow, the unit standing in clouds with a red seal beside it, the logo
+ * and the Google stars on a white band.
  */
 function sunDeal(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
@@ -2844,10 +2995,11 @@ function sunDeal(ctx, size, content, assets, opts) {
 
 /**
  * 19. Cash for clunkers: the RCL trade-in poster. A blue sunburst with torn
- * black corners, the kicker on two slanted black bars, the headline in
- * white italics, the old rusty unit and the new one with an arrow between
- * (TRADE-IN THIS... / AND GET THIS!), GET $1,000 huge in white, the detail
- * on a black bar, the logo and the Google card at the bottom.
+ * black corners, the kicker in two leaning lines outlined in black, the
+ * headline in white italics, the old rusty unit and the new one with an
+ * arrow between (TRADE-IN THIS... / AND GET THIS!), GET $1,000 huge in
+ * white, the detail leaning under it, the logo and the Google stars at
+ * the bottom.
  */
 function clunkers(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
@@ -2861,8 +3013,8 @@ function clunkers(ctx, size, content, assets, opts) {
   const badgeH = badge(ctx, content.badge, padX, y, 400, accent)
   if (badgeH) y += badgeH + 12
   // The height is budgeted before the words are sized: a third for the two
-  // units, a quarter for GET $1,000 and its bar, the rest for the kicker
-  // bars and the headline. W is the words' floor.
+  // units, a quarter for GET $1,000 and the line under it, the rest for
+  // the kicker and the headline. W is the words' floor.
   const amount = amountWords(content)
   const detail = String(content.offerDetail || '').trim()
   const cutOn = hasCutout(content, assets)
@@ -2909,9 +3061,9 @@ function clunkers(ctx, size, content, assets, opts) {
 
 /**
  * 20. Payment stack: the unit on the left, the monthly number stacked on
- * the right (the kicker on a navy bar, the price huge in white with a navy
- * outline, the terms on a black bar, the headline, a red badge), the logo
- * and the Google card on a white band.
+ * the right (the kicker leaning with a navy outline, the price huge in
+ * white with a navy outline, the terms leaning under it, the headline, a
+ * red seal), the logo and the Google stars on a white band.
  */
 function paymentStack(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
@@ -2954,9 +3106,10 @@ function paymentStack(ctx, size, content, assets, opts) {
 }
 
 /**
- * 21. Rebate burst: a red sunburst with torn navy corners, GET UP TO on a
- * navy bar, the rebate huge in white with a navy outline, BACK IN REBATES
- * on a bar, a gold sticker, the headline, the unit bottom-right.
+ * 21. Rebate burst: a red sunburst with torn navy corners, GET UP TO
+ * leaning with a navy outline, the rebate huge in white with a navy
+ * outline, BACK IN REBATES leaning under it, a gold sticker, the headline,
+ * the unit bottom-right.
  */
 function rebateBurst(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
@@ -2996,11 +3149,11 @@ function rebateBurst(ctx, size, content, assets, opts) {
 }
 
 /**
- * 22. Split pop: the pink-and-teal AC poster. The kicker in a gold pill with
- * a spark, BRAND NEW in heavy rounded capitals over AC SYSTEM in condensed,
- * the unit on a white pedestal in the middle, the sticker in a teal box on
- * the left (GET A FREE ESTIMATE), STARTING AT, the price and the terms on
- * the right, the logo and the stars along the bottom.
+ * 22. Split pop: the pink-and-teal AC poster. The kicker in tracked
+ * capitals with a spark, BRAND NEW in heavy rounded capitals over AC SYSTEM
+ * in condensed, the unit on a white pedestal in the middle, the sticker in
+ * heavy capitals on the left (GET A FREE ESTIMATE), STARTING AT, the price
+ * and the terms on the right, the logo and the stars along the bottom.
  */
 function splitPop(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
@@ -3051,7 +3204,7 @@ function splitPop(ctx, size, content, assets, opts) {
 /**
  * 23. Price cloud: the red furnace poster. A white cloud with the headline
  * in it in the background colour, the offer line in white, the sticker in
- * a gold pill, and the unit as a lineup of three at the bottom.
+ * heavy tracked capitals, and the unit as a lineup of three at the bottom.
  */
 function cloudPrice(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
@@ -3109,8 +3262,8 @@ function cloudPrice(ctx, size, content, assets, opts) {
 /**
  * 24. Feature list: the dark product ad. The logo small top-left, the
  * headline stacked with its last sentence in light blue, what is included
- * as ticked rows (the subhead split on commas), the offer in an outlined
- * pill, the unit large on the right, the stars at the bottom.
+ * as ticked rows (the subhead split on commas), the offer on its own line
+ * in the light blue, the unit large on the right, the stars at the bottom.
  */
 function featureList(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
@@ -3154,7 +3307,9 @@ function featureList(ctx, size, content, assets, opts) {
   const items = listItems(content.subhead, 4)
   if (items.length) y += featureRows(ctx, items, padX, y, textW, { ink, accent: light, rowH: 68, maxBottom: B - offerH - 20 }) + 20
   if (amount || detail) {
-    const p = pill(ctx, [amount, detail].filter(Boolean).join(' · '), padX + textW / 2, Math.min(Math.max(y, B - 80), B - 60), textW, { fill: onDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)', ink, outline: onDark ? 'rgba(255,255,255,0.7)' : SLATE, px: 32, minPx: 16, label: 'the offer' })
+    // The offer in the headline's light blue, on its own line: no pill around it.
+    const oy = Math.min(Math.max(y, B - 70), B - 56)
+    const p = pill(ctx, [amount, detail].filter(Boolean).join(' · '), padX + textW / 2, oy, textW, { fill: light, ink, px: 38, minPx: 16, label: 'the offer' })
     y = p.y + p.h
   }
   if (cutW) {

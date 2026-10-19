@@ -12,8 +12,9 @@ const RETAIL = ['sun_deal', 'clunkers', 'split_pop', 'cloud_price', 'payment_sta
  * Story), about a minute or two each. The example ads are listed and
  * managed here too: every client's ChatGPT ads follow them.
  */
-export default function AiArtLine({ clientId, content, art, onMade, aiOn, onToggle, templateLabel }) {
+export default function AiArtLine({ clientId, content, art, matched, onMade, aiOn, onToggle, templateLabel }) {
   const template = content?.layout
+  // Any picture of this template, and whether one carries these exact words.
   const mine = art?.[template]
   const [progress, setProgress] = useState(null) // { label, i, n }
   const [error, setError] = useState('')
@@ -78,17 +79,19 @@ export default function AiArtLine({ clientId, content, art, onMade, aiOn, onTogg
     <div className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2 text-xs text-slate-600" data-ai-art>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-medium text-slate-800">ChatGPT version</span>
-        {mine ? (
+        {matched ? (
           <label className="flex items-center gap-1.5" data-ai-art-toggle>
             <input type="checkbox" checked={aiOn} onChange={(e) => onToggle?.(e.target.checked)} />
             Use it {aiOn ? '(the artboards show ChatGPT’s design)' : '(showing the drawn version)'}
           </label>
+        ) : mine ? (
+          <span data-ai-art-stale>The one made for this template has other words in it, so the drawn version shows.</span>
         ) : (
           <span>None for this template yet.</span>
         )}
         {!progress && (
           <button type="button" className={btn} onClick={() => run([template])} data-ai-art-make>
-            {mine ? 'Remake it' : 'Make it with ChatGPT'}
+            {matched ? 'Remake it' : mine ? 'Make it with these words' : 'Make it with ChatGPT'}
           </button>
         )}
         {!progress && (
@@ -122,8 +125,9 @@ export default function AiArtLine({ clientId, content, art, onMade, aiOn, onTogg
         </p>
       )}
       <p className="mt-1 text-[11px] text-slate-500">
-        ChatGPT paints the whole poster with your words and the real unit photo, and leaves a white band at the bottom for the real logo and the Google card. It
-        can still misspell a word: read every ad before it goes out, and Remake it if one is off. Change the words, then Remake to put the new words in.
+        ChatGPT paints the whole poster with your words and the real unit photo, and leaves a white band at the bottom for the real logo and the Google stars. It
+        can still misspell a word: read every ad before it goes out, and Remake it if one is off. A picture belongs to the words in it: change a word and the drawn
+        version shows until it is made again with the new words. Save all 3 ads uses each ad’s own picture the same way.
       </p>
       {open && (
         <div className="mt-2" data-ai-art-refs>

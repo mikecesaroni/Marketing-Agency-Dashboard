@@ -2,12 +2,14 @@
 //
 // The painters need a canvas and are exercised in the browser; this covers the
 // decisions around them: which templates exist, which theme and kicker a
-// season gets, how the offer tiles fall back, and that every template is a
-// layout the Studio, the help chat and the saved-ad recipe all know.
+// season gets, how the offers fall back, that no words sit in a box, and
+// that every template is a layout the Studio, the help chat and the
+// saved-ad recipe all know.
 
 import { CUTOUTS, PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS, TEMPLATE_SHAPES, THEME_KEYS, TWO_PHOTO_TEMPLATES, isLookKey, isTemplate, kickerFor, offersFor, offersToStore, seasonKicker, templateMenu, themeFor } from '../src/lib/adTemplateMeta.js'
 import { FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEXT_LAYOUTS } from '../src/lib/adLayout.js'
 import { lookName } from '../src/lib/adBatch.js'
+import { readFileSync } from 'node:fs'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -66,6 +68,26 @@ check('a look key is a template or a photo look', [isLookKey('plan_card'), isLoo
 
 // The equipment.
 check('six built-in cutouts', CUTOUTS.map((c) => c.key), ['ac', 'furnace', 'boiler', 'water_heater', 'mini_split', 'thermostat'])
+
+// No boxes around the words: the helpers that used to paint a tile, a pill,
+// a bar, a strip, a tag, a card or the location box behind words paint the
+// words alone now, and the templates that drew their own box do not.
+const src = readFileSync(new URL('../src/lib/adTemplates.js', import.meta.url), 'utf8')
+const bodyOf = (name) => {
+  const at = src.indexOf(`\nfunction ${name}(`)
+  return at < 0 ? '' : src.slice(at, src.indexOf('\n}\n', at))
+}
+check(
+  'no word helper paints a box behind its words',
+  ['badge', 'tiles', 'tag', 'slab', 'reviewsBadge', 'labelStrip', 'pill', 'wordBox'].filter((n) => !bodyOf(n) || /roundRect\(|strokeRect\(|fillRect\((?!cx - gap)/.test(bodyOf(n))),
+  []
+)
+check(
+  'no template draws its own box around the offer, the coupon or the plan',
+  [/roundRect\(ctx, padX, y, pw, pillH/, /roundRect\(ctx, padX, y, maxWidth, boxH/, /roundRect\(ctx, card\.x/].filter((re) => re.test(src)).map(String),
+  []
+)
+check('the words take a colour that reads on what is under them', [src.includes('function wordInk(ctx, rect, prefer = [])'), src.includes('contrast(hexToRgb(c), under) >= 3')], [true, true])
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll template checks pass')
 process.exit(failures ? 1 : 0)

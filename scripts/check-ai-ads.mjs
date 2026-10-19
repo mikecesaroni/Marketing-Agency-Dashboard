@@ -1,11 +1,12 @@
 // Self-check for the ChatGPT versions of the templates: the prompt carries
 // the words exactly, the bans and the white band; every template but the
 // photo ones has a direction; the Studio picks the newest picture per
-// template and shape; the renderer paints the picture only when it belongs
-// to the picked template.
+// template and shape, and uses one only for the words painted in it; the
+// renderer paints the picture only when it belongs to the picked template;
+// nothing asks for a box around the words.
 // Run: node scripts/check-ai-ads.mjs
 import { readFileSync } from 'node:fs'
-import { AI_TEMPLATE_KEYS, aiArtPath, buildAiPrompt, latestAiArt, parseAiArtName, shapeForSize, spellOut } from '../supabase/functions/_shared/aiAds.js'
+import { AI_DIRECTION, AI_TEMPLATE_KEYS, aiArtFor, aiArtPath, buildAiPrompt, latestAiArt, parseAiArtName, shapeForSize, spellOut, wordsKey } from '../supabase/functions/_shared/aiAds.js'
 import { PHOTO_TEMPLATES, TEMPLATE_KEYS } from '../src/lib/adTemplateMeta.js'
 
 let failures = 0
@@ -40,6 +41,14 @@ check('no phone, no button, no logo, no Google stars', /Never draw a phone numbe
 check('the white band is left for the real logo', prompt.includes('bottom 14% of the image as a plain, flat, pure white band'), true)
 check('the tall picture keeps clear of both crops', prompt.includes('cropped to 4:5') && prompt.includes('9:16 Story'), true)
 check('no em dashes in the prompt', /[—–]/.test(prompt), false)
+check('no boxes, pills, bars or tiles around the words', [prompt.includes('No boxes: never put a word or a number inside a box'), prompt.includes('none of their boxes or bars')], [true, true])
+check(
+  'no template is briefed with a box, pill, bar, tile, panel or card around its words',
+  Object.entries(AI_DIRECTION)
+    .filter(([, d]) => /\b(pill|tiles?|bars?|panel|box|colour block|label strip)\b/i.test(d.look.replace(/without a card/g, '')) || /\bcard\b/i.test(d.look.replace(/without a card/g, '')))
+    .map(([k]) => k),
+  []
+)
 check('a template with no direction is refused', (() => {
   try {
     buildAiPrompt({ template: 'photo_sale' })
@@ -50,16 +59,29 @@ check('a template with no direction is refused', (() => {
 })(), true)
 
 check('square for the square ad, tall for the feed and the Story', [shapeForSize({ w: 1080, h: 1080 }), shapeForSize({ w: 1080, h: 1350 }), shapeForSize({ w: 1080, h: 1920 })], ['square', 'tall', 'tall'])
-check('the path and its parse agree', parseAiArtName(aiArtPath('c1', 'sun_deal', 'tall', 123).split('/').pop()), { template: 'sun_deal', shape: 'tall', stamp: 123 })
+check('the path and its parse agree', parseAiArtName(aiArtPath('c1', 'sun_deal', 'tall', 123, 'a1b2c3d4').split('/').pop()), { template: 'sun_deal', shape: 'tall', stamp: 123, key: 'a1b2c3d4' })
+check('a picture from before the words key still parses, with no key', parseAiArtName('sun_deal-tall-123.jpg'), { template: 'sun_deal', shape: 'tall', stamp: 123, key: '' })
+const k1 = wordsKey([{ role: 'Headline', text: 'Boiler deal' }, { role: 'Price', text: '$139/mo' }])
+check('the words key follows the words, not the roles or the spacing', [k1 === wordsKey([{ role: 'Other', text: ' Boiler  deal ' }, { role: 'Price', text: '$139/mo' }]), k1 === wordsKey([{ role: 'Headline', text: 'Boiler deal' }, { role: 'Price', text: '$149/mo' }]), /^[0-9a-f]{8}$/.test(k1)], [true, false, true])
+const keyed = latestAiArt([`sun_deal-tall-100-${k1}.jpg`, `sun_deal-square-101-${k1}.jpg`, 'sun_deal-tall-300-ffffffff.jpg'], 'c1')
+check(
+  'a picture is used only for the words painted in it',
+  [aiArtFor(keyed, 'sun_deal', k1), aiArtFor(keyed, 'sun_deal', '00000000'), keyed.sun_deal.tall],
+  [{ template: 'sun_deal', square: `ai-ads/c1/sun_deal-square-101-${k1}.jpg`, tall: `ai-ads/c1/sun_deal-tall-100-${k1}.jpg` }, null, 'ai-ads/c1/sun_deal-tall-300-ffffffff.jpg']
+)
 const latest = latestAiArt(['sun_deal-tall-100.jpg', 'sun_deal-tall-300.jpg', 'sun_deal-square-200.jpg', 'junk.png', 'clunkers-square-5.jpg'], 'c1')
 check('the newest picture of each template and shape wins', [latest.sun_deal.tall, latest.sun_deal.square, latest.clunkers.square, latest.clunkers.tall], ['ai-ads/c1/sun_deal-tall-300.jpg', 'ai-ads/c1/sun_deal-square-200.jpg', 'ai-ads/c1/clunkers-square-5.jpg', undefined])
 
 const canvas = read('src/lib/adCanvas.js')
 check('the renderer paints the picture only for its own template', canvas.includes('content.aiArt?.template === layout'), true)
 const tpl = read('src/lib/adTemplates.js')
-check('the real logo and Google card go on the band', /export function renderAiArt[\s\S]{0,2000}brandFooter\(ctx, m, content, assets, \{ band: true \}\)\.draw\(\)/.test(tpl), true)
+check('the real logo and Google stars go on the band', /export function renderAiArt[\s\S]{0,2000}brandFooter\(ctx, m, content, assets, \{ band: true \}\)\.draw\(\)/.test(tpl), true)
 const fn = read('supabase/functions/ai-ads/index.ts')
 check('the function sends the examples, then the unit, to the image edits endpoint', [fn.includes("'https://api.openai.com/v1/images/edits'"), fn.includes("form.append('image[]'"), fn.includes('MAX_STYLE_REFS')], [true, true, true])
+check('the function names the picture with its words key', fn.includes('aiArtPath(clientId, template, shape, Date.now(), key)'), true)
+const studio = read('src/components/AdStudioPanel.jsx')
+check('the Studio and Save all 3 ads use the picture painted with each ad’s words', [studio.includes('const aiMatch = aiArtForAd(aiArtMap'), studio.includes('const art = aiOn ? aiArtForAd(aiArtMap, content) : null')], [true, true])
+check('a revised ad uses the picture painted with its new words', read('src/lib/adRevisionStore.js').includes('aiArtForAd(await listAiArt(client.id)'), true)
 check('the function has the same door as stock-images', [fn.includes('async function allowed('), fn.includes('x-fill-token')], [true, true])
 
 console.log(failures === 0 ? '\nAll ChatGPT ad checks pass' : `\n${failures} FAILED`)

@@ -7,6 +7,7 @@ import { overwriteSavedAd, recipeToContent } from './savedAds'
 import { stockPath } from './stockLibrary'
 import { prepareLogo } from './logoCutout'
 import { listUnitPhotos, loadUnitPhotoBitmaps } from './unitPhotos'
+import { aiArtForAd, aiArtUrl, listAiArt } from './aiArt'
 
 /**
  * Applies an owner's note to a saved ad and REPLACES it: same stamp, same
@@ -46,14 +47,19 @@ export async function reviseSavedAd({ client, set, instruction, token }) {
       .then((list) => loadUnitPhotoBitmaps(list, loadImage))
       .catch(() => ({})),
   ])
-  const assets = { background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos }
+  // The client's ChatGPT picture of the template, when one was painted with
+  // the revised words; otherwise the drawn version, which carries them.
+  const art = aiArtForAd(await listAiArt(client.id).catch(() => ({})), content)
+  const [aiSquare, aiTall] = art ? await Promise.all([art.square, art.tall].map((p) => (p ? loadImage(aiArtUrl(p)).catch(() => null) : null))) : [null, null]
+  const assets = { background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos, aiArt: { square: aiSquare, tall: aiTall } }
+  const painted = art ? { ...content, aiArt: art } : content
 
   const blobs = {}
   for (const { size } of set.ordered || []) {
     const spec = SIZES.find((s) => s.key === size.key)
     if (!spec) continue
     const canvas = document.createElement('canvas')
-    renderAd(canvas, spec, content, assets, { safeMode: current.safeMode })
+    renderAd(canvas, spec, painted, assets, { safeMode: current.safeMode })
     blobs[size.key] = await canvasToBlob(canvas)
   }
   await overwriteSavedAd({

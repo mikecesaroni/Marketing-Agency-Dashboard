@@ -18,7 +18,7 @@ import AdImagePicker from './AdImagePicker'
 import StockPicker from './StockPicker'
 import RealPhotosLine from './RealPhotosLine'
 import AiArtLine from './AiArtLine'
-import { aiArtUrl, listAiArt } from '../lib/aiArt'
+import { aiArtForAd, aiArtUrl, listAiArt } from '../lib/aiArt'
 import { listUnitPhotos, loadUnitPhotoBitmaps } from '../lib/unitPhotos'
 import TemplateGallery from './TemplateGallery'
 import SeasonPlaybook from './SeasonPlaybook'
@@ -1193,9 +1193,12 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // template extras. One object, memoised, so the template gallery repaints
   // when something on it changes and not on every render.
   const seasonNow = seasonToSave()
-  // The ChatGPT version of the picked template, when one was made and is
-  // switched on (src/lib/aiArt.js; the AiArtLine under the gallery).
-  const aiPick = aiOn && aiArtMap[layout] ? { template: layout, square: aiArtMap[layout].square || '', tall: aiArtMap[layout].tall || '' } : null
+  // The ChatGPT version of the picked template, when one was painted with
+  // these exact words and is switched on (src/lib/aiArt.js; the AiArtLine
+  // under the gallery). Change a word and the drawn version comes back
+  // until it is remade: the words are in the picture.
+  const aiMatch = aiArtForAd(aiArtMap, { badge, kicker, hook, offerAmount, offerDetail, offers, subhead, sticker, layout, season: seasonNow })
+  const aiPick = aiOn ? aiMatch : null
   const aiKey = aiPick ? `${aiPick.square}|${aiPick.tall}` : ''
   const paintContent = useMemo(
     () => ({ badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, season: seasonNow, aiArt: aiPick }),
@@ -1518,6 +1521,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       const logoCut = assets.logoCut || (logo ? prepareLogo(logo) : null)
       const backgrounds = {}
       const stocks = {}
+      const arts = {}
       let n = 0
       for (let s = 0; s < cur.sets.length; s++) {
         const set = cur.sets[s]
@@ -1552,11 +1556,19 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           cutout: set.cutout || '',
           theme: set.theme || '',
         }
+        // The client's ChatGPT picture of this set's template, when one was
+        // painted with this set's words and the Studio is using them.
+        const art = aiOn ? aiArtForAd(aiArtMap, content) : null
+        let aiArt = null
+        if (art) {
+          for (const p of [art.square, art.tall]) if (p && !(p in arts)) arts[p] = await loadImage(aiArtUrl(p)).catch(() => null)
+          aiArt = { square: arts[art.square] || null, tall: arts[art.tall] || null }
+        }
         // Stamps a millisecond apart keep the three ads distinct on the Saved tab.
         const stamp = Date.now() + s
         for (let i = 0; i < SIZES.length; i++) {
           const canvas = document.createElement('canvas')
-          renderAd(canvas, SIZES[i], content, { background: backgrounds[bg], logo, logoCut, after: backgrounds[bg2], cutoutImage: stocks[stock], unitPhotos: unitBitmaps.current }, { safeMode, guides: false })
+          renderAd(canvas, SIZES[i], art ? { ...content, aiArt: art } : content, { background: backgrounds[bg], logo, logoCut, after: backgrounds[bg2], cutoutImage: stocks[stock], unitPhotos: unitBitmaps.current, aiArt }, { safeMode, guides: false })
           const blob = await canvasToBlob(canvas)
           const path = `ads/${client.id}/${stamp}-${SIZES[i].key}.png`
           const { error: upErr } = await supabase.storage.from('client-files').upload(path, blob, { contentType: 'image/png' })
@@ -2106,7 +2118,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       )}
 
       <div className="space-y-2">
-        <Field label="Location badge" value={badge} onChange={setBadge} hint="top-left pill" />
+        <Field label="Location badge" value={badge} onChange={setBadge} hint="the small line top-left" />
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">
             1 &middot; Hook <span className="font-normal text-slate-400">biggest text, the eye catcher</span>
@@ -2324,6 +2336,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         clientId={client.id}
         content={paintContent}
         art={aiArtMap}
+        matched={Boolean(aiMatch)}
         onMade={refreshAiArt}
         aiOn={aiOn}
         onToggle={setAiOn}

@@ -5,8 +5,9 @@
 // product), and a prompt with the template's art direction and the ad's
 // words (../_shared/aiAds.js), and paints a finished poster with a plain
 // white band along the bottom. The picture goes to the client's folder,
-// ai-ads/<client id>/<template>-<shape>-<stamp>.jpg in the client-files
-// bucket; the Studio paints the real logo and the Google card on the band.
+// ai-ads/<client id>/<template>-<shape>-<stamp>-<words key>.jpg in the
+// client-files bucket (the key ties it to the words painted in it); the
+// Studio paints the real logo and the Google reviews line on the band.
 // The OpenAI key never leaves the server.
 //
 // Deployed with verify_jwt = false and the same door as stock-images: the
@@ -17,15 +18,16 @@
 // Secrets: OPENAI_API_KEY.
 //
 // Body:  { action: 'make', client_id, template, shape, words, unit?, colours?, season?, quality?, sample? }
-//          -> { path, ms }
+//          -> { path, key, ms }
 // Body:  { action: 'refs' }                      -> { refs: [{ name, path }] }
+// Body:  { action: 'prompt', template, words, shape? } -> { key, prompt }  (no model call)
 // Body:  { action: 'add_ref', name, b64 | url, type }  -> { path }   (an example ad, as
 //          base64 or a raw.githubusercontent.com link into this repository)
 //
 // A picture at high quality takes about a minute or two and costs about a
 // quarter; the Studio asks for them one shape at a time.
 
-import { AI_SHAPES, MAX_STYLE_REFS, STYLE_REF_PREFIX, aiArtPath, buildAiPrompt, isAiTemplate } from '../_shared/aiAds.js'
+import { AI_SHAPES, MAX_STYLE_REFS, STYLE_REF_PREFIX, aiArtPath, buildAiPrompt, isAiTemplate, wordsKey } from '../_shared/aiAds.js'
 import { OLD_PREFIX, UNIT_KEYS, unitPhotoPath } from '../_shared/unitPhotos.js'
 
 const MODEL = 'gpt-image-1'
@@ -132,6 +134,14 @@ Deno.serve(async (req) => {
       return json({ path })
     }
 
+    if (action === 'prompt') {
+      // The prompt a make would send, without calling the model (for checking).
+      const template = String(body.template || '')
+      if (!isAiTemplate(template)) return json({ error: `The ${template} template has no ChatGPT version.` }, 400)
+      const words = Array.isArray(body.words) ? body.words : []
+      return json({ key: wordsKey(words), prompt: buildAiPrompt({ template, words, shape: body.shape === 'tall' ? 'tall' : 'square', refCount: MAX_STYLE_REFS }) })
+    }
+
     if (action !== 'make') return json({ error: `Unknown action ${action}` }, 400)
 
     const template = String(body.template || '')
@@ -162,9 +172,10 @@ Deno.serve(async (req) => {
     const unitBlobs = fetched.slice(refs.length).filter(Boolean) as { path: string; blob: Blob }[]
     if (!refBlobs.length && !unitBlobs.length) return json({ error: 'No example ads and no unit photo to work from.' }, 400)
 
+    const words = Array.isArray(body.words) ? body.words : []
     const prompt = buildAiPrompt({
       template,
-      words: Array.isArray(body.words) ? body.words : [],
+      words,
       unit: unitBlobs.length ? UNIT_NAMES[unit] : '',
       oldUnit: unitBlobs.length > 1,
       shape,
@@ -194,14 +205,15 @@ Deno.serve(async (req) => {
     if (!b64) return json({ error: 'The image model sent nothing back. Try again.' }, 502)
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
 
-    const path = sample ? `ai-ads/samples/${sample}.jpg` : aiArtPath(clientId, template, shape, Date.now())
+    const key = wordsKey(words)
+    const path = sample ? `ai-ads/samples/${sample}.jpg` : aiArtPath(clientId, template, shape, Date.now(), key)
     const up = await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${path}`, {
       method: 'POST',
       headers: { ...storage, 'Content-Type': 'image/jpeg', 'x-upsert': 'true', 'Cache-Control': '3600' },
       body: bytes,
     })
     if (!up.ok) return json({ error: `The ad was made but could not be saved: ${(await up.text().catch(() => '')).slice(0, 200)}` }, 500)
-    return json({ path, ms: Date.now() - started, refs: refBlobs.length, units: unitBlobs.length })
+    return json({ path, key, ms: Date.now() - started, refs: refBlobs.length, units: unitBlobs.length })
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }

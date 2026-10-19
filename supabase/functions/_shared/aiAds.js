@@ -11,7 +11,7 @@
 //
 // The model draws everything but the brand: it leaves a plain white band
 // along the bottom, and the Studio paints the client's real logo and the
-// Google reviews card there (a model redraws a logo wrong). No phone
+// Google reviews line there (a model redraws a logo wrong). No phone
 // number and no button either: Meta draws the real button.
 //
 // Shared three ways, so plain JavaScript with no imports: the ai-ads Edge
@@ -35,37 +35,69 @@ export const STYLE_REF_PREFIX = 'stock/style-refs/'
 /** At most this many examples go to the model with each ad. */
 export const MAX_STYLE_REFS = 6
 
-/** Where a client's made ads live: ai-ads/<client id>/<template>-<shape>-<stamp>.jpg */
+/**
+ * Where a client's made ads live:
+ * ai-ads/<client id>/<template>-<shape>-<stamp>-<words key>.jpg. The words
+ * key ties a picture to the words painted in it (wordsKey), so an ad with
+ * other words never shows it. Pictures made before the key have none.
+ */
 export const AI_ART_PREFIX = 'ai-ads/'
 
-export function aiArtPath(clientId, template, shape, stamp) {
-  return `${AI_ART_PREFIX}${clientId}/${template}-${shape}-${stamp}.jpg`
+export function aiArtPath(clientId, template, shape, stamp, key = '') {
+  return `${AI_ART_PREFIX}${clientId}/${template}-${shape}-${stamp}${key ? `-${key}` : ''}.jpg`
 }
 
-/** { template, shape, stamp } from a file name in a client's folder, or null. */
+/** { template, shape, stamp, key } from a file name in a client's folder, or null. */
 export function parseAiArtName(name) {
-  const m = /^([a-z_]+)-(square|tall)-(\d+)\.jpg$/.exec(String(name || ''))
-  return m ? { template: m[1], shape: m[2], stamp: Number(m[3]) } : null
+  const m = /^([a-z_]+)-(square|tall)-(\d+)(?:-([0-9a-f]{8}))?\.jpg$/.exec(String(name || ''))
+  return m ? { template: m[1], shape: m[2], stamp: Number(m[3]), key: m[4] || '' } : null
 }
 
 /**
- * The newest made picture of each template and shape from a folder listing:
- * { [template]: { square: path, tall: path, stamp } }.
+ * The key for the words a picture is painted with: the texts in order (the
+ * roles only say where they go), FNV-1a, eight hex digits. The function
+ * names the file with it and the Studio looks pictures up by it.
+ */
+export function wordsKey(words) {
+  const text = (words || []).map((w) => clean(w?.text)).filter(Boolean).join('|')
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
+
+/**
+ * The newest made picture of each template and shape from a folder listing,
+ * overall and per words key:
+ * { [template]: { square: path, tall: path, stamp, byWords: { [key]: { square, tall, stamp } } } }.
  */
 export function latestAiArt(names, clientId) {
   const out = {}
-  for (const name of names || []) {
-    const p = parseAiArtName(name)
-    if (!p) continue
-    const slot = (out[p.template] ||= {})
-    const key = `${p.shape}Stamp`
-    if (!slot[key] || p.stamp > slot[key]) {
-      slot[key] = p.stamp
-      slot[p.shape] = `${AI_ART_PREFIX}${clientId}/${name}`
+  const keep = (slot, p, path) => {
+    const at = `${p.shape}Stamp`
+    if (!slot[at] || p.stamp > slot[at]) {
+      slot[at] = p.stamp
+      slot[p.shape] = path
       slot.stamp = Math.max(slot.stamp || 0, p.stamp)
     }
   }
+  for (const name of names || []) {
+    const p = parseAiArtName(name)
+    if (!p) continue
+    const path = `${AI_ART_PREFIX}${clientId}/${name}`
+    const slot = (out[p.template] ||= { byWords: {} })
+    keep(slot, p, path)
+    keep((slot.byWords[p.key] ||= {}), p, path)
+  }
   return out
+}
+
+/** The picture of a template painted with exactly these words ({ square, tall }), or null. */
+export function aiArtFor(map, template, key) {
+  const hit = map?.[template]?.byWords?.[key]
+  return hit && (hit.square || hit.tall) ? { template, square: hit.square || '', tall: hit.tall || '' } : null
 }
 
 /**
@@ -77,29 +109,29 @@ export function latestAiArt(names, clientId) {
  */
 export const AI_DIRECTION = {
   sun_deal: {
-    look: 'A sky-blue sunburst of rays radiating from behind the centre, fluffy white clouds along the lower part. At the top the kicker in small, widely letterspaced navy capitals; under it the headline huge in heavy rounded capitals, its first word red with a thick white outline and a navy drop shadow, the rest navy; then the words above the price on a thin navy line; then the price enormous in red with a thick white outline and a dark shadow. The product stands large in the clouds in the lower half, with a red round sticker overlapping its bottom corner.',
+    look: 'A sky-blue sunburst of rays radiating from behind the centre, fluffy white clouds along the lower part. At the top the kicker in small, widely letterspaced navy capitals; under it the headline huge in heavy rounded capitals, its first word red with a thick white outline and a navy drop shadow, the rest navy; then the words above the price in small leaning navy capitals; then the price enormous in red with a thick white outline and a dark shadow. The product stands large in the clouds in the lower half, with a red round sticker overlapping its bottom corner.',
     fixed: ['STARTING FROM ONLY'],
   },
   clunkers: {
-    look: 'A bright blue sunburst with torn black paper corners. The kicker on two slanted black bars in heavy white italic capitals; the headline under it in heavy black italic capitals. Two products side by side: the old, rusty, worn-out unit on the left with a slanted dark label strip across it reading TRADE-IN THIS..., the brand-new unit on the right with a label strip reading AND GET THIS!, a big white arrow between them. Under them GET on a small bar, the amount huge in black heavy capitals on a white slanted panel, and the line under it on a black slanted bar.',
+    look: 'A bright blue sunburst with torn black paper corners. The kicker in two lines of heavy white italic capitals with a thick black outline and a hard black drop shadow; the headline under it in heavy white italic capitals with a black shadow. Two products side by side: the old, rusty, worn-out unit on the left with TRADE-IN THIS... written across it in white capitals with a black outline, the brand-new unit on the right with AND GET THIS! written across it the same way, a big white arrow between them. Under them GET in small white capitals, the amount huge in white heavy italic capitals with a thick black outline and a shadow, and the line under it in leaning white capitals with a black outline.',
     fixed: ['TRADE-IN THIS...', 'AND GET THIS!', 'GET'],
     old: true,
   },
   split_pop: {
-    look: 'A bold diagonal split: hot pink on one side, teal on the other, a few gold sparkles. The kicker in a gold pill at the top, BRAND NEW in heavy rounded white capitals above the headline in huge condensed white capitals with a dark shadow. The product stands on a white round pedestal in the middle. The sticker words in a teal box on the left, and on the right STARTING AT small above the price in huge white numbers and the line under it.',
+    look: 'A bold diagonal split: hot pink on one side, teal on the other, a few gold sparkles. The kicker in tracked white capitals at the top, BRAND NEW in heavy rounded white capitals above the headline in huge condensed white capitals with a dark shadow. The product stands on a white round pedestal in the middle. The sticker words in heavy white capitals on the left, and on the right STARTING AT small above the price in huge white numbers and the line under it.',
     fixed: ['BRAND NEW', 'STARTING AT'],
   },
   cloud_price: {
-    look: 'A vivid red field. The headline in heavy navy capitals inside a big white cartoon cloud shape across the top; the price huge in white heavy capitals with a navy shadow under it, the line under it, the sticker in a gold pill. A lineup of three of the product standing side by side along the bottom, front one largest.',
+    look: 'A vivid red field. The headline in heavy navy capitals inside a big white cartoon cloud shape across the top; the price huge in white heavy capitals with a navy shadow under it, the line under it, the sticker in heavy gold capitals. A lineup of three of the product standing side by side along the bottom, front one largest.',
   },
   payment_stack: {
-    look: 'A sky-blue sunburst background. The product large on the left half. On the right, stacked: the kicker on a navy bar, the price huge in red with a thick white outline and a dark shadow, the line under it on a navy bar, the headline in heavy navy capitals, and a red round sticker.',
+    look: 'A sky-blue sunburst background. The product large on the left half. On the right, stacked: the kicker in leaning white capitals with a navy outline, the price huge in red with a thick white outline and a dark shadow, the line under it in leaning white capitals with a navy outline, the headline in heavy navy capitals, and a red round sticker.',
   },
   rebate_burst: {
-    look: 'A red sunburst with torn navy paper corners. The kicker on a white slanted bar, the amount enormous in white heavy capitals with a navy shadow, the line under it on a navy slanted bar, a gold round sticker, the headline in white below, and the product at the bottom.',
+    look: 'A red sunburst with torn navy paper corners. The kicker in leaning white capitals with a navy outline, the amount enormous in white heavy capitals with a navy shadow, the line under it in leaning white capitals with a navy outline, a gold round sticker, the headline in white below, and the product at the bottom.',
   },
   feature_list: {
-    look: 'Deep navy blue with a soft spotlight. The headline in large white heavy type at the top left, its last line in light blue. Under it three or four rows, each a white check mark in a circle and one included item. The price in an outlined pill. The product large on the right, lit dramatically.',
+    look: 'Deep navy blue with a soft spotlight. The headline in large white heavy type at the top left, its last line in light blue. Under it three or four rows, each a white check mark in a circle and one included item. The price on its own line in light blue heavy type. The product large on the right, lit dramatically.',
   },
   winter_shout: {
     look: 'A winter scene: a soft blue sky with falling snow and a white snow drift along the bottom. The price huge in white heavy capitals with a blue outline, the headline in white with a blue outline, and the product standing in the snow drift on the right.',
@@ -108,10 +140,10 @@ export const AI_DIRECTION = {
     look: 'A warm glow: cream fading into orange with soft flames rising from the bottom. The kicker in two tones of heavy capitals (deep green and navy), the price filling the width in red with a white outline, a round deep-green seal with the sticker words and a yellow star, the product on the left with flames at its base.',
   },
   price_grid: {
-    look: 'Clean white with bold red wave bands across the top and bottom edges. A red script word over a big blue condensed headline with red swooshes either side, then a grid of up to four red-bordered price tiles on the left, each a heading in a red header and the price under it, and the product on the right.',
+    look: 'Clean white with bold red wave bands across the top and bottom edges. A red script word over a big blue condensed headline with red swooshes either side, then up to four prices in a two-column grid on the left, each price huge in red with its heading in small blue capitals under it and a thin red rule between the columns, and the product on the right.',
   },
   fall_special: {
-    look: 'Autumn: an orange and red background with falling maple leaves. A big script Fall over Special at the top left, the two offers stacked on a dark panel with OR between them in huge white numbers, a round red seal with the sticker words, and the product bottom right.',
+    look: 'Autumn: an orange and red background with falling maple leaves. A big script Fall over Special at the top left, the two offers stacked in huge white numbers with OR between them, a round red seal with the sticker words, and the product bottom right.',
     fixed: ['Fall', 'Special', 'OR'],
   },
   season_sale: {
@@ -124,22 +156,22 @@ export const AI_DIRECTION = {
     look: 'Fresh bright green and white. The price inside a big yellow starburst, the line under it in heavy dark green, the headline above, and the product beside it.',
   },
   poster: {
-    look: 'A clean white poster. Heavy condensed capitals stacked in the brand colours fill the top two thirds, the price in a bold colour block, the product in the bottom left, plenty of white space.',
+    look: 'A clean white poster. Heavy condensed capitals stacked in the brand colours fill the top two thirds, the price huge in a bold brand colour, the product in the bottom left, plenty of white space.',
   },
   emergency: {
-    look: 'Dark and urgent: near-black with red light streaks. A red round seal with the sticker words, the headline huge in white heavy capitals, the price on a red pill, and the product lit from the side.',
+    look: 'Dark and urgent: near-black with red light streaks. A red round seal with the sticker words, the headline huge in white heavy capitals, the price huge in red with the line beside it in white, and the product lit from the side.',
   },
   financing: {
-    look: 'A rich brand-colour background. The price huge in heavy white capitals with an outline, the line under it in a round seal, the product, and the other offers as two small tiles.',
+    look: 'A rich brand-colour background. The price huge in heavy white capitals with an outline, the line under it in a round seal, the product, and the other offers side by side in white numbers with a thin rule between them.',
   },
   coupon: {
-    look: 'A clip-out coupon: a white coupon card with a dashed border and a little scissors mark, on a brand-colour background. The price huge inside the coupon with the line under it, the headline above the coupon, and the product beside it.',
+    look: 'A clip-out coupon without a card: the price huge between two dashed cut lines with a little scissors mark on the top one, straight on a brand-colour background, the line under the price, the headline above the coupon, and the product beside it.',
   },
   big_number: {
     look: 'The number is the ad: the price fills the full width in heavy capitals with a thick white outline and a shadow on a brand-colour background, the line under it, the headline above, and a smaller product to one side.',
   },
   plan_card: {
-    look: 'A membership card: a large rounded card on a soft brand-colour background, the kicker as the plan name on a coloured band across its top, the price a month huge, then the included items as a checklist with check marks, and the product beside the card.',
+    look: 'A membership plan without a card: on a soft brand-colour background, the kicker as the plan name in heavy capitals over a thin rule, the price a month huge on the right, the included items as a checklist with round check marks on the left, and the product beside them.',
   },
 }
 
@@ -188,7 +220,7 @@ export function buildAiPrompt({ template, words = [], unit = '', oldUnit = false
   )
   if (refCount) {
     parts.push(
-      `The first ${refCount === 1 ? 'image is an example ad' : `${refCount} images are example ads`} this agency holds up as the standard. Match their style and quality: bold heavy display type with thick outlines and drop shadows, a huge price, bursts, slanted bars, badges and stickers, saturated colour, and a real product photo as the hero. Copy the style only: none of their words, numbers, names, logos or phone numbers.`
+      `The first ${refCount === 1 ? 'image is an example ad' : `${refCount} images are example ads`} this agency holds up as the standard. Match their style and quality: bold heavy display type with thick outlines and drop shadows, a huge price, bursts and round stickers, saturated colour, and a real product photo as the hero. Copy the style only: none of their words, numbers, names, logos or phone numbers, and none of their boxes or bars.`
     )
   }
   if (products === 2) parts.push(`The last two images are the real product photos: first the brand-new ${unit}, then the old worn-out one. Use those exact units, cut out cleanly, large, photoreal.`)
@@ -211,6 +243,10 @@ export function buildAiPrompt({ template, words = [], unit = '', oldUnit = false
   if (long.length) parts.push(`Spell these words letter by letter exactly so: ${long.join('; ')}.`)
   parts.push(
     'Never draw a phone number, a website, a Call Now line, a button, a logo, a company name, the Google logo, review stars or fine print. Every word must be spelled correctly and fully legible.'
+  )
+  // Boxes around every word and number are what make an ad read as AI-made.
+  parts.push(
+    'No boxes: never put a word or a number inside a box, rectangle, pill, tile, banner, bar, label strip, panel, card or outlined frame. Every word and every price sits straight on the background and stands out by its size, its colour, a thick outline or a drop shadow. The only shapes allowed behind words are round stickers, starbursts, and a cloud where the layout asks for one.'
   )
   parts.push(
     'Leave the bottom 14% of the image as a plain, flat, pure white band, edge to edge, with nothing in it at all: the company logo and its reviews go there later. Keep everything else above it.'

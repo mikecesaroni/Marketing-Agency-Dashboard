@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient'
 import { readFunctionError } from './functionError'
 import { kickerFor, offersFor } from './adTemplateMeta'
-import { AI_ART_PREFIX, AI_TEMPLATE_KEYS, STYLE_REF_PREFIX, isAiTemplate, latestAiArt } from '../../supabase/functions/_shared/aiAds.js'
+import { AI_ART_PREFIX, AI_TEMPLATE_KEYS, STYLE_REF_PREFIX, aiArtFor, isAiTemplate, latestAiArt, wordsKey } from '../../supabase/functions/_shared/aiAds.js'
 
 /**
  * Ads made by ChatGPT's image model, the network half. The ai-ads Edge
@@ -26,7 +26,7 @@ export function aiWordsFor(content) {
     if (t) words.push({ role, text: t })
   }
   const t = content?.layout
-  add('Small pill at the top', content?.badge)
+  add('Small line at the top', content?.badge)
   add('Kicker', kickerFor(content))
   add('Headline', content?.hook)
   if (['price_grid', 'fall_special', 'financing'].includes(t)) {
@@ -47,13 +47,27 @@ export function aiWordsFor(content) {
   return words
 }
 
+/** The key of the words an ad would be painted with (aiAds.js wordsKey). */
+export function aiArtKey(content) {
+  return wordsKey(aiWordsFor(content))
+}
+
+/**
+ * The client's ChatGPT picture for this ad: its template, painted with
+ * exactly its words ({ template, square, tall }), or null. A picture made
+ * with other words is never used: the words are in the picture.
+ */
+export function aiArtForAd(map, content) {
+  return content?.layout ? aiArtFor(map, content.layout, aiArtKey(content)) : null
+}
+
 /** The unit key to put in the picture, from the Studio's equipment pick. */
 export function aiUnitFor(content) {
   const c = String(content?.cutout || '')
   return UNITS.includes(c) ? c : ''
 }
 
-/** The client's made pictures, newest per template and shape: { [template]: { square, tall, stamp } }. */
+/** The client's made pictures, newest per template and shape, overall and per words key (aiAds.js latestAiArt). */
 export async function listAiArt(clientId) {
   const { data, error } = await supabase.storage.from(BUCKET).list(`${AI_ART_PREFIX}${clientId}`, { limit: 1000 })
   if (error) throw error
