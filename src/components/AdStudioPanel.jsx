@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { copyText } from '../lib/intakeSummary'
 import { splitOffer } from '../lib/clientChat'
@@ -17,6 +17,8 @@ import { creativeWarnings } from '../lib/creativeChecks'
 import AdImagePicker from './AdImagePicker'
 import StockPicker from './StockPicker'
 import RealPhotosLine from './RealPhotosLine'
+import AiArtLine from './AiArtLine'
+import { aiArtUrl, listAiArt } from '../lib/aiArt'
 import { listUnitPhotos, loadUnitPhotoBitmaps } from '../lib/unitPhotos'
 import TemplateGallery from './TemplateGallery'
 import SeasonPlaybook from './SeasonPlaybook'
@@ -1120,7 +1122,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         // The logo with its box knocked out (src/lib/logoCutout.js), for
         // every look: the templates and the photo looks alike. The real
         // equipment photos ride along from their own load below.
-        setAssets({ background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos: unitBitmaps.current })
+        setAssets({ background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos: unitBitmaps.current, aiArt: aiBitmaps.current })
         setError('')
 
         if (!logo) {
@@ -1159,6 +1161,15 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // Real photos line makes one, and the artboards repaint with it.
   const [unitPhotos, setUnitPhotos] = useState({})
   const [photosStamp, setPhotosStamp] = useState(0)
+  // The client's ChatGPT pictures, newest per template ({ [template]: { square, tall } }),
+  // whether they are switched on, and their bitmaps for the renderer.
+  const [aiArtMap, setAiArtMap] = useState({})
+  const [aiOn, setAiOn] = useState(true)
+  const aiBitmaps = useRef({})
+  const refreshAiArt = useCallback(() => listAiArt(client.id).then(setAiArtMap).catch(() => setAiArtMap({})), [client.id])
+  useEffect(() => {
+    refreshAiArt()
+  }, [refreshAiArt])
   const unitBitmaps = useRef({})
   useEffect(() => {
     let cancelled = false
@@ -1182,10 +1193,30 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // template extras. One object, memoised, so the template gallery repaints
   // when something on it changes and not on every render.
   const seasonNow = seasonToSave()
+  // The ChatGPT version of the picked template, when one was made and is
+  // switched on (src/lib/aiArt.js; the AiArtLine under the gallery).
+  const aiPick = aiOn && aiArtMap[layout] ? { template: layout, square: aiArtMap[layout].square || '', tall: aiArtMap[layout].tall || '' } : null
+  const aiKey = aiPick ? `${aiPick.square}|${aiPick.tall}` : ''
   const paintContent = useMemo(
-    () => ({ badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, season: seasonNow }),
-    [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, seasonNow]
+    () => ({ badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, season: seasonNow, aiArt: aiPick }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, seasonNow, aiKey]
   )
+
+  // The ChatGPT pictures' bitmaps, for the renderer (assets.aiArt).
+  useEffect(() => {
+    let cancelled = false
+    const load = (path) => (path ? loadImage(aiArtUrl(path)).catch(() => null) : Promise.resolve(null))
+    Promise.all([load(aiPick?.square), load(aiPick?.tall)]).then(([square, tall]) => {
+      if (cancelled) return
+      aiBitmaps.current = { square, tall }
+      setAssets((a) => ({ ...a, aiArt: aiBitmaps.current }))
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiKey])
 
   // Repaint every artboard on any change. Fonts must be ready first or the
   // first paint measures with a fallback face and wraps differently.
@@ -2288,6 +2319,16 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       />
 
       <TemplateGallery content={paintContent} assets={assets} safeMode={safeMode} layout={layout} onPick={setLayout} />
+
+      <AiArtLine
+        clientId={client.id}
+        content={paintContent}
+        art={aiArtMap}
+        onMade={refreshAiArt}
+        aiOn={aiOn}
+        onToggle={setAiOn}
+        templateLabel={(key) => TEMPLATE_LAYOUTS.find((t) => t.key === key)?.label || key}
+      />
 
       {isTemplate(layout) && (
         <div className="space-y-3 rounded-lg border border-orange-200 bg-orange-50/40 p-3" data-template-fields>

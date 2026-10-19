@@ -3195,6 +3195,36 @@ export function hasTemplate(key) {
   return Boolean(TEMPLATES[key])
 }
 
+/**
+ * The ChatGPT version of a template (supabase/functions/_shared/aiAds.js):
+ * the picture the image model painted, laid into the size, with the real
+ * logo and the Google card painted on the white band it left along the
+ * bottom. The square ad uses the square picture; the 4:5 feed ad and the
+ * Story use the tall one, cropped a little off the top and bottom for the
+ * feed and off the sides for the Story (the model keeps words clear of
+ * both). The band sits at the foot of the frame on every size, where the
+ * picture left it.
+ */
+export function renderAiArt(ctx, size, content, assets) {
+  const { w, h } = size
+  const art = w === h ? assets?.aiArt?.square : assets?.aiArt?.tall
+  if (!art) return null
+  audit = createAudit({ w, h })
+  try {
+    ctx.fillStyle = WHITE
+    ctx.fillRect(0, 0, w, h)
+    const s = Math.max(w / art.width, h / art.height)
+    const dw = art.width * s
+    const dh = art.height * s
+    ctx.drawImage(art, (w - dw) / 2, (h - dh) / 2, dw, dh)
+    const m = { ...frameMargins(size, 'off'), contentBottom: h }
+    brandFooter(ctx, m, content, assets, { band: true }).draw()
+  } finally {
+    audit = null
+  }
+  return { band: null, problems: [] }
+}
+
 export function renderTemplate(ctx, size, content, assets, opts = {}) {
   const fn = TEMPLATES[content.layout]
   if (!fn) return null

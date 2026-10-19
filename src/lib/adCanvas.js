@@ -89,7 +89,7 @@ export function brandColours(intake) {
 // boxes) live in adText.js so the looks in adLooks.js draw with the same type.
 import { PAD, fitText, roundRect, setFont, typographic } from './adText'
 import { hasLook, renderLook } from './adLooks'
-import { hasTemplate, renderTemplate } from './adTemplates'
+import { hasTemplate, renderAiArt, renderTemplate } from './adTemplates'
 
 // Inter is loaded from the stylesheet, but a font declared in CSS is only
 // fetched once something on the page uses it. Canvas text does not count as a
@@ -193,6 +193,19 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     focus = DEFAULT_FOCUS,
   } = content
   const { background, logo } = assets || {}
+
+  // The ChatGPT version of this template, when one was made and is switched
+  // on (content.aiArt names the template it belongs to; assets.aiArt holds
+  // the pictures). The real logo and Google card go on its white band.
+  if (content.aiArt?.template === layout && (w === h ? assets?.aiArt?.square : assets?.aiArt?.tall)) {
+    canvas.width = w
+    canvas.height = h
+    const actx = canvas.getContext('2d')
+    actx.letterSpacing = '0px'
+    renderAiArt(actx, size, content, assets)
+    if (opts.guides) drawGuides(actx, w, h, safeTop, safeBottom, safeSide, safeOn)
+    return { canvas, band: null, problems: [] }
+  }
 
   // The newer looks (adLooks.js) and the templates (adTemplates.js) paint
   // themselves against the same safe margins; this function keeps the
