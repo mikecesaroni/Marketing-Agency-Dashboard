@@ -106,19 +106,28 @@ export function logoFit(logo, box) {
   return { w: logo.width * scale, h: logo.height * scale }
 }
 
-/** A small white pill behind a logo, so a dark logo survives a dark photo. */
-export function drawLogoPill(ctx, logo, x, y, box, { align = 'left', bottom = false } = {}) {
+/**
+ * The logo on a photo with no box: the mark with its background knocked
+ * out (src/lib/logoCutout.js), a dark mark reversed to white the way a
+ * reversed logo sits on a van, and a soft shadow so it holds on a busy
+ * picture. It used to sit on a white pill, which read as a sticker. Pass
+ * the assets (or a bare image, which is drawn as it is).
+ */
+export function drawLogoPill(ctx, assetsOrLogo, x, y, box, { align = 'left', bottom = false } = {}) {
+  const logo = assetsOrLogo && (assetsOrLogo.logoCut || assetsOrLogo.logo !== undefined) ? logoFor(assetsOrLogo, true) : assetsOrLogo
   const fit = logoFit(logo, box)
   if (!fit) return null
-  const padP = 14
+  const padP = 6
   const pw = fit.w + padP * 2
   const ph = fit.h + padP * 2
   const px = align === 'right' ? x - pw : x
   const py = bottom ? y - ph : y
-  ctx.fillStyle = 'rgba(255,255,255,0.92)'
-  roundRect(ctx, px, py, pw, ph, 14)
-  ctx.fill()
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.55)'
+  ctx.shadowBlur = 18
+  ctx.shadowOffsetY = 2
   ctx.drawImage(logo, px + padP, py + padP, fit.w, fit.h)
+  ctx.restore()
   return { x: px, y: py, w: pw, h: ph }
 }
 
@@ -195,7 +204,7 @@ function renderStack(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, contentBottom, maxWidth } = m
   const { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, focus, hookPlate, subheadPlate } = content
-  const { background, logo } = assets || {}
+  const { background } = assets || {}
 
   // The photo first. The haze comes after the stack is measured, because it
   // has to reach under the last line of the subhead rather than stop at a
@@ -306,11 +315,11 @@ function renderStack(ctx, size, content, assets, opts) {
   }
 
   // The offer card hangs under the stack on the same column, and the logo
-  // sits bottom-left on a white pill.
+  // sits bottom-left on the photo with no box.
   const card = measureOfferCard(ctx, { offerAmount, offerDetail, proof }, colW, { ink, accent })
   const cardY = Math.min(y + 26, contentBottom - (card?.h || 0))
   if (card) drawOfferCard(ctx, card, right - card.w, Math.max(cardY, y + 10), { align: 'left' })
-  drawLogoPill(ctx, logo, padX, contentBottom, 150, { bottom: true })
+  drawLogoPill(ctx, assets, padX, contentBottom, 150, { bottom: true })
 
   const bottomOfText = card ? Math.max(cardY, y + 10) + card.h : y
   return { band: { top: bottomOfText, bottom: contentBottom } }
@@ -617,7 +626,7 @@ function renderSplit(ctx, size, content, assets, opts) {
       const mark = logoFor(assets, ink === '#FFFFFF')
       const fit = logoFit(mark, 120)
       ctx.drawImage(mark, w - padX - fit.w, contentTop + 4, fit.w, fit.h)
-    } else drawLogoPill(ctx, logo, w - padX, contentBottom, 140, { align: 'right', bottom: true })
+    } else drawLogoPill(ctx, assets, w - padX, contentBottom, 140, { align: 'right', bottom: true })
   }
   return { band: { top: photo.y, bottom: photo.y + photo.h } }
 }

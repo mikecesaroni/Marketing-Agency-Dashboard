@@ -1117,9 +1117,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     Promise.all([bitmap(backgroundPath), bitmap(logoPath), bitmap(afterPath), bitmap(stockPath(cutout))])
       .then(([background, logo, after, cutoutImage]) => {
         if (cancelled) return
-        // The logo with its white box knocked out, for the templates
-        // (src/lib/logoCutout.js); the photo looks keep the original. The
-        // real equipment photos ride along from their own load below.
+        // The logo with its box knocked out (src/lib/logoCutout.js), for
+        // every look: the templates and the photo looks alike. The real
+        // equipment photos ride along from their own load below.
         setAssets({ background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos: unitBitmaps.current })
         setError('')
 
