@@ -17,6 +17,11 @@
 // Shared three ways, so plain JavaScript with no imports: the ai-ads Edge
 // Function (the prompt), the browser (the shapes, the paths, the template
 // list) and scripts/check-ai-ads.mjs.
+//
+// Two kinds of picture: the template art (TEMPLATE_ART below), painted once
+// with no words and shared by every client, which the templates paint
+// their words over; and a whole ad painted with one ad's words in it
+// (AI_DIRECTION, buildAiPrompt), made per ad.
 
 /** The two canvases the model paints. Square for the square ad; tall for the 4:5 feed ad and the 9:16 Story. */
 export const AI_SHAPES = {
@@ -179,6 +184,75 @@ export const AI_TEMPLATE_KEYS = Object.keys(AI_DIRECTION)
 
 export function isAiTemplate(key) {
   return Object.prototype.hasOwnProperty.call(AI_DIRECTION, String(key || ''))
+}
+
+/**
+ * THE CHATGPT TEMPLATES: painted once, used for every client. ChatGPT paints
+ * the art behind a template (the sunburst, the clouds, the snow, the torn
+ * paper) with no words, no product and no logo; the template code paints
+ * each client's words, prices, real unit photo, logo and stars on top, so
+ * the words are always the client's, spelled right and editable. One
+ * picture per theme (every template on that theme shares it), and three
+ * templates whose art carries their own decoration (sun_deal's clouds, the
+ * torn paper corners of clunkers and rebate_burst). The brand theme is
+ * painted in light grey and tinted with each client's colour.
+ * Stored at stock/template-art/<key>-<shape>.jpg.
+ */
+export const TEMPLATE_ART_PREFIX = 'stock/template-art/'
+
+export const TEMPLATE_ART = {
+  burst: { look: 'a bright royal-blue sunburst: rays fanning out from a soft white glow just above the middle, the edges and corners deepening to navy' },
+  burst_red: { look: 'a vivid red sunburst: rays fanning out from a soft warm glow just above the middle, the edges and corners deepening to dark crimson' },
+  pop: { look: 'a bold diagonal split: hot pink on the left two fifths, bright teal on the right, the split running from top middle down to bottom right, a soft white light in the lower middle, three or four small gold sparkle marks near the top right corner' },
+  coral: { look: 'a vivid red-coral field with a soft lighter glow in the upper middle and gently darker edges, a faint fine paper grain' },
+  deep: { look: 'a deep navy blue studio backdrop with a soft blue spotlight glowing on the right side, darker at the top left' },
+  snow: { look: 'a soft winter sky in pale blues, gentle falling snowflakes of different sizes, and a smooth white snow drift along the bottom fifth' },
+  leaves: { look: 'a rich autumn background in deep orange and red, maple and oak leaves falling and scattered, a few leaves blurred close to the camera, the middle a little calmer' },
+  sun: { look: 'a sunny summer background: warm yellow to orange, a bright sun glow in the top right corner with soft rays, a hint of blue sky at the top edge' },
+  fresh: { look: 'a fresh spring background in bright green and teal, soft bokeh light, a few young leaves along the corners' },
+  glow: { look: 'a warm glow: cream at the top fading into orange, soft realistic flames rising along the bottom fifth' },
+  night: { look: 'near-black and urgent, deep charcoal with streaks of red light sweeping diagonally, a faint red glow at the lower right' },
+  holiday: { look: 'festive deep red with gentle falling snow, a few pine branches and red and gold ornaments along the top corners and edges, the middle calm' },
+  paper: { look: 'a clean warm-white poster paper with a very subtle grain and a faint soft shadow toward the edges' },
+  brand: { look: 'a light grey studio backdrop, almost white: soft diagonal light streaks and a gentle vignette, entirely without colour (pure greys), so it can be tinted with any brand colour', grey: true },
+  sun_deal: { look: 'a bright sky-blue sunburst: rays fanning out from a soft white glow just above the middle, the corners deepening to blue, and fluffy realistic white clouds piled along the bottom fifth, edge to edge', theme: 'burst' },
+  clunkers: { look: 'a bright blue sunburst: rays fanning out from a soft white glow in the middle, with torn black paper covering the top left corner (its ripped edge running from the top middle down to the left side, a fifth of the way down) and the bottom right corner (ripped edge from the bottom middle up to the right side), a few black ink flecks along the tears', theme: 'burst' },
+  rebate_burst: { look: 'a vivid red sunburst: rays fanning out from a soft warm glow just above the middle, with torn navy paper covering the top left corner (its ripped edge running from the top middle down to the left side, a fifth of the way down) and the bottom right corner, a few navy ink flecks along the tears', theme: 'burst_red' },
+}
+
+export const TEMPLATE_ART_KEYS = Object.keys(TEMPLATE_ART)
+
+export function templateArtPath(key, shape) {
+  return `${TEMPLATE_ART_PREFIX}${key}-${shape}.jpg`
+}
+
+/** { key, shape } from a file name in the template-art folder, or null. */
+export function parseTemplateArtName(name) {
+  const m = /^([a-z_]+)-(square|tall)\.jpg$/.exec(String(name || ''))
+  return m && TEMPLATE_ART[m[1]] ? { key: m[1], shape: m[2] } : null
+}
+
+/** The art a template paints on a theme: its own when it has one for that theme, else the theme's. */
+export function artKeyFor(template, theme) {
+  const own = TEMPLATE_ART[template]
+  return own && own.theme === theme ? template : theme
+}
+
+/** The prompt for one piece of template art, painted from words alone (no example ads: handed them, the model copies their words). */
+export function buildArtPrompt({ key, shape = 'square' } = {}) {
+  const d = TEMPLATE_ART[key]
+  if (!d) throw new Error(`No template art for ${key}.`)
+  const parts = []
+  parts.push(
+    'Paint the background art for a loud retail poster ad for a local heating and cooling company: the finished, print-quality backdrop a designer would put behind the words, the price and the product. Rich, saturated, polished, with real depth and light.'
+  )
+  parts.push(`The background: ${d.look}.`)
+  parts.push(
+    'This is only the background. Absolutely no words, letters, numbers, price, logo, product, appliance, people, buttons, stickers, badges, boxes, frames or bars. Words and a product photo are added on top later, so keep the middle open and even enough for large words to read over it, with the detail toward the edges.'
+  )
+  if (d.grey) parts.push('Use only shades of grey and white: no colour at all.')
+  parts.push(shape === 'tall' ? 'A tall 2:3 portrait image. It is also cropped to 4:5 and to 9:16, so nothing important at the very top, bottom or sides.' : 'A square 1:1 image.')
+  return parts.join('\n\n')
 }
 
 const SHAPE_RULES = {

@@ -32,6 +32,7 @@ import { CONDENSED, FONT, SCRIPT, drawLines, fitText, roundRect, setFont, typogr
 import { SLATE, badgeSize, drawCoverIn, frameMargins } from './adLooks'
 import { logoFor } from './logoCutout'
 import { createAudit } from './adAudit'
+import { TEMPLATE_ART, artKeyFor } from '../../supabase/functions/_shared/aiAds.js'
 
 // THE OVERLAP AUDIT (adAudit.js). renderTemplate() opens one per paint and
 // every helper below records the box it painted, so the Studio can say
@@ -508,10 +509,39 @@ function inkFor(theme, content) {
   return ink
 }
 
+// THE CHATGPT TEMPLATES (supabase/functions/_shared/aiAds.js TEMPLATE_ART):
+// the art behind a template, painted once by ChatGPT with no words and
+// shared by every client. renderTemplate() puts the loaded pictures here
+// for the paint, like the audit; null paints the drawn themes.
+let art = null
+
+/**
+ * The background: ChatGPT's art for the theme (or the template's own art
+ * on its own theme) when it has been made, cover-fitted, the brand theme's
+ * grey art tinted with the brand colour; else the drawn theme. `art` names
+ * the ChatGPT art used, so a template can leave off the decoration it
+ * carries (sun_deal's clouds, the torn corners).
+ */
 function paintTheme(ctx, w, h, content) {
   const key = themeFor(content)
+  const artKey = artKeyFor(content.layout, key)
+  const pics = art?.pictures?.[artKey]
+  const pic = pics ? pics[art.shape] || pics.tall || pics.square : null
+  if (pic) {
+    drawCoverIn(ctx, pic, { x: 0, y: 0, w, h }, { x: 0.5, y: 0.5 })
+    if (TEMPLATE_ART[artKey]?.grey) {
+      ctx.save()
+      ctx.globalCompositeOperation = 'multiply'
+      ctx.fillStyle = content.badgeColor || '#0F172A'
+      ctx.fillRect(0, 0, w, h)
+      ctx.restore()
+      ctx.fillStyle = content.accent || '#F97316'
+      ctx.fillRect(0, 0, w, 14)
+    }
+    return { key, ink: inkFor(key, content), art: artKey }
+  }
   ;(THEMES[key] || THEMES.brand).paint(ctx, w, h, content)
-  return { key, ink: inkFor(key, content) }
+  return { key, ink: inkFor(key, content), art: '' }
 }
 
 // ---------------------------------------------------------------------------
@@ -2945,11 +2975,12 @@ function sunDeal(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, maxWidth } = m
   const { accent } = content
-  paintTheme(ctx, w, h, content)
+  // ChatGPT's sun_deal art carries its own clouds along the bottom.
+  const ownClouds = paintTheme(ctx, w, h, content).art === 'sun_deal'
   const navy = darkBrand(content)
   const foot = brandFooter(ctx, m, content, assets, { band: true })
   const cloudH = Math.min(170, Math.round(h * 0.13))
-  clouds(ctx, w, foot.top - cloudH, foot.top + 2)
+  if (!ownClouds) clouds(ctx, w, foot.top - cloudH, foot.top + 2)
   const B = foot.top - 8
   let y = contentTop
   const badgeH = badge(ctx, content.badge, padX, y, 400, accent)
@@ -2977,7 +3008,7 @@ function sunDeal(ctx, size, content, assets, opts) {
     box.h = B - box.y
     drawCutout(ctx, content, assets, box)
     // The cloud in front of the unit's feet.
-    clouds(ctx, w, foot.top - cloudH * 0.45, foot.top + 2, 23)
+    if (!ownClouds) clouds(ctx, w, foot.top - cloudH * 0.45, foot.top + 2, 23)
     if (st) {
       const rad = Math.min(115, (box.x - padX) / 2 - 8, room * 0.22)
       if (rad >= 48) seal(ctx, box.x - rad - 8, B - rad - 10, rad, st, { fill: accent, ink: WHITE, ring: '' })
@@ -3005,8 +3036,8 @@ function clunkers(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, maxWidth } = m
   const { accent } = content
-  paintTheme(ctx, w, h, content)
-  torn(ctx, w, h, INK_DARK)
+  // ChatGPT's clunkers art carries its own torn corners.
+  if (paintTheme(ctx, w, h, content).art !== 'clunkers') torn(ctx, w, h, INK_DARK)
   const foot = brandFooter(ctx, m, content, assets, { band: false, onDark: true })
   const B = foot.top - 16
   let y = contentTop
@@ -3114,9 +3145,9 @@ function paymentStack(ctx, size, content, assets, opts) {
 function rebateBurst(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, maxWidth } = m
-  paintTheme(ctx, w, h, content)
+  const theme = paintTheme(ctx, w, h, content)
   const navy = darkBrand(content)
-  torn(ctx, w, h, navy)
+  if (theme.art !== 'rebate_burst') torn(ctx, w, h, navy)
   const foot = brandFooter(ctx, m, content, assets, { band: false, onDark: true })
   const B = foot.top - 16
   let y = contentTop
@@ -3400,10 +3431,12 @@ export function renderTemplate(ctx, size, content, assets, opts = {}) {
   ctx.textBaseline = 'alphabetic'
   ctx.letterSpacing = '0px'
   audit = createAudit({ w: size.w, h: size.h })
+  art = assets?.templateArt ? { pictures: assets.templateArt, shape: size.w === size.h ? 'square' : 'tall' } : null
   let out
   try {
     out = fn(ctx, size, content, assets, opts)
   } finally {
+    art = null
     const done = audit
     audit = null
     out = { ...(out || {}), problems: done.problems() }

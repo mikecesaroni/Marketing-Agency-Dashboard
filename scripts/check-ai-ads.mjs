@@ -1,4 +1,5 @@
-// Self-check for the ChatGPT versions of the templates: the prompt carries
+// Self-check for the ChatGPT templates (the art painted once, no words) and
+// the ChatGPT versions of single ads: the prompt carries
 // the words exactly, the bans and the white band; every template but the
 // photo ones has a direction; the Studio picks the newest picture per
 // template and shape, and uses one only for the words painted in it; the
@@ -6,8 +7,8 @@
 // nothing asks for a box around the words.
 // Run: node scripts/check-ai-ads.mjs
 import { readFileSync } from 'node:fs'
-import { AI_DIRECTION, AI_TEMPLATE_KEYS, aiArtFor, aiArtPath, buildAiPrompt, latestAiArt, parseAiArtName, shapeForSize, spellOut, wordsKey } from '../supabase/functions/_shared/aiAds.js'
-import { PHOTO_TEMPLATES, TEMPLATE_KEYS } from '../src/lib/adTemplateMeta.js'
+import { AI_DIRECTION, AI_TEMPLATE_KEYS, TEMPLATE_ART, TEMPLATE_ART_KEYS, aiArtFor, aiArtPath, artKeyFor, buildAiPrompt, buildArtPrompt, latestAiArt, parseAiArtName, parseTemplateArtName, shapeForSize, spellOut, templateArtPath, wordsKey } from '../supabase/functions/_shared/aiAds.js'
+import { PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS, THEME_KEYS } from '../src/lib/adTemplateMeta.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -83,6 +84,27 @@ const studio = read('src/components/AdStudioPanel.jsx')
 check('the Studio and Save all 3 ads use the picture painted with each ad’s words', [studio.includes('const aiMatch = aiArtForAd(aiArtMap'), studio.includes('const art = aiOn ? aiArtForAd(aiArtMap, content) : null')], [true, true])
 check('a revised ad uses the picture painted with its new words', read('src/lib/adRevisionStore.js').includes('aiArtForAd(await listAiArt(client.id)'), true)
 check('the function has the same door as stock-images', [fn.includes('async function allowed('), fn.includes('x-fill-token')], [true, true])
+
+// The ChatGPT templates: art painted once, no words, shared by every client.
+check('every theme has ChatGPT art', THEME_KEYS.filter((k) => !TEMPLATE_ART[k]), [])
+check(
+  'a template with its own art is on that theme',
+  TEMPLATE_ART_KEYS.filter((k) => TEMPLATE_ART[k].theme).map((k) => [k, TEMPLATE_ART[k].theme === TEMPLATE_LAYOUTS.find((t) => t.key === k)?.theme]),
+  [['sun_deal', true], ['clunkers', true], ['rebate_burst', true]]
+)
+check('a template paints its own art on its own theme, the theme’s art on any other', [artKeyFor('clunkers', 'burst'), artKeyFor('clunkers', 'snow'), artKeyFor('payment_stack', 'burst'), artKeyFor('poster', 'paper')], ['clunkers', 'snow', 'burst', 'paper'])
+check('the art path and its parse agree; junk is ignored', [parseTemplateArtName(templateArtPath('sun_deal', 'tall').split('/').pop()), parseTemplateArtName('nope-tall.jpg'), templateArtPath('snow', 'square')], [{ key: 'sun_deal', shape: 'tall' }, null, 'stock/template-art/snow-square.jpg'])
+const artPrompt = buildArtPrompt({ key: 'brand', shape: 'tall' })
+check('the art has no words, no product, no logo, no boxes', [artPrompt.includes('Absolutely no words, letters, numbers, price, logo, product'), artPrompt.includes('boxes, frames or bars')], [true, true])
+check('the brand art is grey, to be tinted with each client’s colour', [artPrompt.includes('only shades of grey'), buildArtPrompt({ key: 'snow' }).includes('only shades of grey')], [true, false])
+check('no em dashes in the art prompts', TEMPLATE_ART_KEYS.filter((k) => /[—–]/.test(buildArtPrompt({ key: k, shape: 'tall' }))), [])
+check('the function paints the art from the words alone and keeps one picture per key and shape', [fn.includes("if (action === 'art')"), fn.includes("'https://api.openai.com/v1/images/generations'"), fn.includes('templateArtPath(key, shape)')], [true, true, true])
+check(
+  'the templates paint the art in place of the drawn theme, tint the brand, and leave off the clouds and torn corners the art carries',
+  [tpl.includes('const pics = art?.pictures?.[artKey]'), tpl.includes("ctx.globalCompositeOperation = 'multiply'"), tpl.includes("if (!ownClouds) clouds("), tpl.includes(".art !== 'clunkers') torn("), tpl.includes("theme.art !== 'rebate_burst') torn(")],
+  [true, true, true, true, true]
+)
+check('the Studio, Save all 3 ads and a revision all load the art', [studio.includes('templateArtBitmaps(loadImage)'), studio.includes('templateArt: artBitmaps.current }, { safeMode, guides: false })'), read('src/lib/adRevisionStore.js').includes('await templateArtBitmaps(loadImage)')], [true, true, true])
 
 console.log(failures === 0 ? '\nAll ChatGPT ad checks pass' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

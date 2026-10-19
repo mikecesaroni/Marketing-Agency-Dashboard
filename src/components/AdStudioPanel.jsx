@@ -19,6 +19,7 @@ import StockPicker from './StockPicker'
 import RealPhotosLine from './RealPhotosLine'
 import AiArtLine from './AiArtLine'
 import { aiArtForAd, aiArtUrl, listAiArt } from '../lib/aiArt'
+import { templateArtBitmaps } from '../lib/templateArt'
 import { listUnitPhotos, loadUnitPhotoBitmaps } from '../lib/unitPhotos'
 import TemplateGallery from './TemplateGallery'
 import SeasonPlaybook from './SeasonPlaybook'
@@ -1122,7 +1123,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         // The logo with its box knocked out (src/lib/logoCutout.js), for
         // every look: the templates and the photo looks alike. The real
         // equipment photos ride along from their own load below.
-        setAssets({ background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos: unitBitmaps.current, aiArt: aiBitmaps.current })
+        setAssets({ background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos: unitBitmaps.current, aiArt: aiBitmaps.current, templateArt: artBitmaps.current })
         setError('')
 
         if (!logo) {
@@ -1171,6 +1172,20 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     refreshAiArt()
   }, [refreshAiArt])
   const unitBitmaps = useRef({})
+  // The ChatGPT templates (src/lib/templateArt.js): the art behind the
+  // templates, painted once and shared by every client; the list says which
+  // pictures exist, the bitmaps go on the assets for paintTheme.
+  const [templateArt, setTemplateArt] = useState({ list: {}, pictures: {} })
+  const artBitmaps = useRef({})
+  const takeTemplateArt = useCallback((t) => {
+    artBitmaps.current = t.pictures
+    setTemplateArt(t)
+    setAssets((a) => ({ ...a, templateArt: t.pictures }))
+  }, [])
+  useEffect(() => {
+    templateArtBitmaps(loadImage).then(takeTemplateArt)
+  }, [takeTemplateArt])
+  const refreshTemplateArt = useCallback(() => templateArtBitmaps(loadImage, { fresh: true }).then(takeTemplateArt), [takeTemplateArt])
   useEffect(() => {
     let cancelled = false
     listUnitPhotos()
@@ -1568,7 +1583,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         const stamp = Date.now() + s
         for (let i = 0; i < SIZES.length; i++) {
           const canvas = document.createElement('canvas')
-          renderAd(canvas, SIZES[i], art ? { ...content, aiArt: art } : content, { background: backgrounds[bg], logo, logoCut, after: backgrounds[bg2], cutoutImage: stocks[stock], unitPhotos: unitBitmaps.current, aiArt }, { safeMode, guides: false })
+          renderAd(canvas, SIZES[i], art ? { ...content, aiArt: art } : content, { background: backgrounds[bg], logo, logoCut, after: backgrounds[bg2], cutoutImage: stocks[stock], unitPhotos: unitBitmaps.current, aiArt, templateArt: artBitmaps.current }, { safeMode, guides: false })
           const blob = await canvasToBlob(canvas)
           const path = `ads/${client.id}/${stamp}-${SIZES[i].key}.png`
           const { error: upErr } = await supabase.storage.from('client-files').upload(path, blob, { contentType: 'image/png' })
@@ -2338,6 +2353,8 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         art={aiArtMap}
         matched={Boolean(aiMatch)}
         onMade={refreshAiArt}
+        templateArt={templateArt.list}
+        onArtMade={refreshTemplateArt}
         aiOn={aiOn}
         onToggle={setAiOn}
         templateLabel={(key) => TEMPLATE_LAYOUTS.find((t) => t.key === key)?.label || key}
@@ -2357,7 +2374,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           <div>
             <div className="flex items-center justify-between gap-2">
               <label className="block text-xs font-medium text-slate-600 mb-1">
-                Offer tiles <span className="font-normal text-slate-400">up to four prices; empty uses the offer above as the one tile</span>
+                Offers <span className="font-normal text-slate-400">up to four prices with a line each; empty uses the offer above</span>
               </label>
               {offers.length < 4 && (
                 <button
@@ -2366,7 +2383,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
                   className="text-[11px] text-blue-700 hover:text-blue-900 whitespace-nowrap"
                   data-add-offer
                 >
-                  + Add a tile
+                  + Add an offer
                 </button>
               )}
             </div>

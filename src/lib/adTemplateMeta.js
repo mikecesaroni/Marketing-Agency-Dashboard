@@ -9,15 +9,15 @@
  */
 export const TEMPLATE_LAYOUTS = [
   // The retail posters, modelled on the ads the agency holds up as the
-  // standard: a sunburst, slanted bars, a price with an outline and a
-  // shadow, the unit as the hero, a Google reviews card.
-  { key: 'sun_deal', label: 'Sunburst deal', hint: 'a sky-blue sunburst, MASSIVE in letterspaced caps, the headline in two colours, STARTING FROM ONLY on a bar, the price huge with a white outline, the unit standing in clouds with a red badge, logo and Google card on a white band', theme: 'burst' },
-  { key: 'clunkers', label: 'Cash for clunkers', hint: 'a blue sunburst with torn black corners, the kicker on slanted black bars, the old rusty unit and the new one with an arrow between, GET $1,000 huge, the detail on a black bar, the Google card', theme: 'burst' },
-  { key: 'split_pop', label: 'Brand new', hint: 'pink and teal split on a diagonal, the kicker in a gold pill, BRAND NEW over the headline, the unit on a white pedestal, the sticker in a teal box left, STARTING AT and the price right', theme: 'pop' },
-  { key: 'cloud_price', label: 'Price cloud', hint: 'a red field, the headline in a white cloud, the offer line, the sticker in a gold pill, the unit as a lineup of three', theme: 'coral' },
-  { key: 'payment_stack', label: 'Payment stack', hint: 'the unit on the left, the monthly number stacked on the right: kicker bar, price huge, terms bar, headline, a red badge; logo and Google card on a white band', theme: 'burst' },
-  { key: 'rebate_burst', label: 'Rebate burst', hint: 'a red sunburst with torn navy corners, GET UP TO on a bar, the rebate huge in white, BACK IN REBATES on a bar, a gold sticker, the headline, the unit', theme: 'burst_red' },
-  { key: 'feature_list', label: 'Feature list', hint: 'deep blue, the logo small up top, the headline with its last line in light blue, what is included as ticked rows (the subhead split on commas), the offer in an outlined pill, the unit large on the right', theme: 'deep' },
+  // standard: a sunburst, leaning words, a price with an outline and a
+  // shadow, the unit as the hero, the Google stars. No boxes around words.
+  { key: 'sun_deal', label: 'Sunburst deal', hint: 'a sky-blue sunburst, MASSIVE in letterspaced caps, the headline in two colours, STARTING FROM ONLY leaning, the price huge with a white outline, the unit standing in clouds with a red seal, logo and Google stars on a white band', theme: 'burst' },
+  { key: 'clunkers', label: 'Cash for clunkers', hint: 'a blue sunburst with torn black corners, the kicker in leaning outlined capitals, the old rusty unit and the new one with an arrow between, GET $1,000 huge, the detail leaning under it, the Google stars', theme: 'burst' },
+  { key: 'split_pop', label: 'Brand new', hint: 'pink and teal split on a diagonal, the kicker in tracked capitals, BRAND NEW over the headline, the unit on a white pedestal, the sticker in heavy capitals left, STARTING AT and the price right', theme: 'pop' },
+  { key: 'cloud_price', label: 'Price cloud', hint: 'a red field, the headline in a white cloud, the offer line, the sticker in tracked capitals, the unit as a lineup of three', theme: 'coral' },
+  { key: 'payment_stack', label: 'Payment stack', hint: 'the unit on the left, the monthly number stacked on the right: kicker, price huge, terms, headline, a red seal; logo and Google stars on a white band', theme: 'burst' },
+  { key: 'rebate_burst', label: 'Rebate burst', hint: 'a red sunburst with torn navy corners, GET UP TO leaning, the rebate huge in white, BACK IN REBATES leaning, a gold sticker, the headline, the unit', theme: 'burst_red' },
+  { key: 'feature_list', label: 'Feature list', hint: 'deep blue, the logo small up top, the headline with its last line in light blue, what is included as ticked rows (the subhead split on commas), the offer on its own line, the unit large on the right', theme: 'deep' },
   { key: 'winter_shout', label: 'Winter shout', hint: 'snow, the logo up top, a giant outlined offer, the unit standing in the drift', theme: 'snow' },
   { key: 'massive_deal', label: 'Massive deal', hint: 'a warm glow with flames, MASSIVE DEALS in two tones, a price that fills the frame, a seal and a SALE star', theme: 'glow' },
   { key: 'price_grid', label: 'Price grid', hint: 'a script season word, a big SALE headline, a grid of up to four prices beside the unit', theme: 'paper' },
@@ -26,14 +26,14 @@ export const TEMPLATE_LAYOUTS = [
   { key: 'holiday_deals', label: 'Holiday deals', hint: 'red and green with snow, HOLIDAY DEALS, the offer and a sticker', theme: 'holiday' },
   { key: 'tune_up', label: 'Tune-up', hint: 'fresh green, the service price in a starburst, the detail in the accent colour', theme: 'fresh' },
   { key: 'poster', label: 'White poster', hint: 'white, condensed capitals stacked in the brand colours, logo and Google stars, the unit bottom-left', theme: 'paper' },
-  { key: 'emergency', label: 'Same day', hint: 'dark and urgent, a 24/7 seal, the headline huge, the offer on a pill', theme: 'night' },
-  { key: 'financing', label: 'Financing', hint: '$0 down huge, monthly payments in a seal, extra offers as tiles', theme: 'brand' },
-  { key: 'coupon', label: 'Coupon', hint: 'a dashed coupon with the offer inside, the headline under it', theme: 'paper' },
+  { key: 'emergency', label: 'Same day', hint: 'dark and urgent, a 24/7 seal, the headline huge, the price big in the accent', theme: 'night' },
+  { key: 'financing', label: 'Financing', hint: '$0 down huge, monthly payments in a seal, extra offers side by side', theme: 'brand' },
+  { key: 'coupon', label: 'Coupon', hint: 'the offer between two dashed cut lines with scissors, the headline under it', theme: 'paper' },
   { key: 'big_number', label: 'Big number', hint: 'the amount fills the width and that is the ad', theme: 'brand' },
   { key: 'photo_sale', label: 'Photo sale', hint: 'the photo full-bleed with a SALE ribbon in the corner, the offers on a band below', photo: true },
-  { key: 'before_sale', label: 'Before and after sale', hint: 'the two photos side by side (one above the other on the Story), Before and After tagged, the kicker, the headline and the offer tiles on the season below', photo: true, twoPhotos: true },
+  { key: 'before_sale', label: 'Before and after sale', hint: 'the two photos side by side (one above the other on the Story), Before and After written on them, the kicker, the headline and the offers on the season below', photo: true, twoPhotos: true },
   { key: 'reveal', label: 'Before inset', hint: 'the After photo whole, the Before as a small framed inset bottom-left, the words on a brand-colour plate', photo: true, twoPhotos: true },
-  { key: 'plan_card', label: 'Maintenance plan', hint: 'a membership card: the plan name on a brand-colour band, the price a month, and what is included as a checklist (the subhead, split on commas)', theme: 'brand' },
+  { key: 'plan_card', label: 'Maintenance plan', hint: 'a membership plan: the plan name over a thin rule, the price a month, and what is included as a checklist (the subhead, split on commas)', theme: 'brand' },
 ]
 
 export const TEMPLATE_KEYS = TEMPLATE_LAYOUTS.map((t) => t.key)
@@ -150,7 +150,7 @@ export function kickerFor(content) {
   return String(content?.kicker || '').trim() || seasonKicker(content?.season)
 }
 
-/** Up to four offer tiles: the typed ones, else the main offer as one tile, else none. */
+/** Up to four offers: the typed ones, else the main offer as the one, else none. */
 export function offersFor(content) {
   const typed = (Array.isArray(content?.offers) ? content.offers : [])
     .map((o) => ({ amount: String(o?.amount || '').trim(), detail: String(o?.detail || '').trim() }))

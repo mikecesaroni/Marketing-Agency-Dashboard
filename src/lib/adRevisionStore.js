@@ -8,6 +8,7 @@ import { stockPath } from './stockLibrary'
 import { prepareLogo } from './logoCutout'
 import { listUnitPhotos, loadUnitPhotoBitmaps } from './unitPhotos'
 import { aiArtForAd, aiArtUrl, listAiArt } from './aiArt'
+import { templateArtBitmaps } from './templateArt'
 
 /**
  * Applies an owner's note to a saved ad and REPLACES it: same stamp, same
@@ -51,7 +52,9 @@ export async function reviseSavedAd({ client, set, instruction, token }) {
   // the revised words; otherwise the drawn version, which carries them.
   const art = aiArtForAd(await listAiArt(client.id).catch(() => ({})), content)
   const [aiSquare, aiTall] = art ? await Promise.all([art.square, art.tall].map((p) => (p ? loadImage(aiArtUrl(p)).catch(() => null) : null))) : [null, null]
-  const assets = { background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos, aiArt: { square: aiSquare, tall: aiTall } }
+  // The ChatGPT template art, so a revised template paints the same background the Studio did.
+  const { pictures: templateArt } = await templateArtBitmaps(loadImage)
+  const assets = { background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos, aiArt: { square: aiSquare, tall: aiTall }, templateArt }
   const painted = art ? { ...content, aiArt: art } : content
 
   const blobs = {}

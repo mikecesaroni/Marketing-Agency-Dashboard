@@ -20,14 +20,19 @@
 // Body:  { action: 'make', client_id, template, shape, words, unit?, colours?, season?, quality?, sample? }
 //          -> { path, key, ms }
 // Body:  { action: 'refs' }                      -> { refs: [{ name, path }] }
-// Body:  { action: 'prompt', template, words, shape? } -> { key, prompt }  (no model call)
+// Body:  { action: 'prompt', template, words, shape? } or { action: 'prompt', art, shape? }
+//          -> { key?, prompt }  (no model call)
+// Body:  { action: 'art', key, shape, quality? }   -> { path, ms }  (a template's art,
+//          painted once with no words and shared by every client:
+//          stock/template-art/<key>-<shape>.jpg, overwritten on a remake)
 // Body:  { action: 'add_ref', name, b64 | url, type }  -> { path }   (an example ad, as
 //          base64 or a raw.githubusercontent.com link into this repository)
 //
 // A picture at high quality takes about a minute or two and costs about a
-// quarter; the Studio asks for them one shape at a time.
+// quarter; the Studio asks for them one shape at a time. The template art
+// is painted once (17 keys, square and tall) and every client uses it.
 
-import { AI_SHAPES, MAX_STYLE_REFS, STYLE_REF_PREFIX, aiArtPath, buildAiPrompt, isAiTemplate, wordsKey } from '../_shared/aiAds.js'
+import { AI_SHAPES, MAX_STYLE_REFS, STYLE_REF_PREFIX, TEMPLATE_ART, aiArtPath, buildAiPrompt, buildArtPrompt, isAiTemplate, templateArtPath, wordsKey } from '../_shared/aiAds.js'
 import { OLD_PREFIX, UNIT_KEYS, unitPhotoPath } from '../_shared/unitPhotos.js'
 
 const MODEL = 'gpt-image-1'
@@ -136,10 +141,84 @@ Deno.serve(async (req) => {
 
     if (action === 'prompt') {
       // The prompt a make would send, without calling the model (for checking).
+      const shape = body.shape === 'tall' ? 'tall' : 'square'
+      if (body.art) {
+        if (!TEMPLATE_ART[String(body.art) as keyof typeof TEMPLATE_ART]) return json({ error: `There is no template art called ${body.art}.` }, 400)
+        return json({ prompt: buildArtPrompt({ key: String(body.art), shape }) })
+      }
       const template = String(body.template || '')
       if (!isAiTemplate(template)) return json({ error: `The ${template} template has no ChatGPT version.` }, 400)
       const words = Array.isArray(body.words) ? body.words : []
-      return json({ key: wordsKey(words), prompt: buildAiPrompt({ template, words, shape: body.shape === 'tall' ? 'tall' : 'square', refCount: MAX_STYLE_REFS }) })
+      return json({ key: wordsKey(words), prompt: buildAiPrompt({ template, words, shape, refCount: MAX_STYLE_REFS }) })
+    }
+
+    const bytesFrom = (res: Response, out: { data?: { b64_json?: string }[]; error?: { message?: string } } | null) => {
+      if (!res.ok) throw Object.assign(new Error(out?.error?.message || `The image model returned ${res.status}.`), { status: 502 })
+      const b64 = out?.data?.[0]?.b64_json
+      if (!b64) throw Object.assign(new Error('The image model sent nothing back. Try again.'), { status: 502 })
+      return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    }
+    // One picture from the image model: the prompt and the images in order. Returns the JPEG bytes.
+    const paint = async (prompt: string, images: { blob: Blob }[], size: string, quality: string) => {
+      const apiKey = Deno.env.get('OPENAI_API_KEY')
+      if (!apiKey) throw new Error('OPENAI_API_KEY is not set in the Supabase secrets, so ChatGPT cannot make ads yet.')
+      const form = new FormData()
+      form.append('model', MODEL)
+      form.append('prompt', prompt)
+      form.append('size', size)
+      form.append('quality', quality)
+      form.append('n', '1')
+      form.append('output_format', 'jpeg')
+      form.append('output_compression', '92')
+      images.forEach((f, i) => {
+        const ext = f.blob.type.includes('png') ? 'png' : f.blob.type.includes('webp') ? 'webp' : 'jpg'
+        form.append('image[]', f.blob, `image-${i}.${ext}`)
+      })
+      const res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form })
+      const out = (await res.json().catch(() => null)) as { data?: { b64_json?: string }[]; error?: { message?: string } } | null
+      return bytesFrom(res, out)
+    }
+    // From the words alone, on the generations endpoint: the template art.
+    const paintFromWords = async (prompt: string, size: string, quality: string) => {
+      const apiKey = Deno.env.get('OPENAI_API_KEY')
+      if (!apiKey) throw new Error('OPENAI_API_KEY is not set in the Supabase secrets, so ChatGPT cannot make ads yet.')
+      const res = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: MODEL, prompt, size, quality, n: 1, output_format: 'jpeg', output_compression: 92 }),
+      })
+      const out = (await res.json().catch(() => null)) as { data?: { b64_json?: string }[]; error?: { message?: string } } | null
+      return bytesFrom(res, out)
+    }
+    const save = async (path: string, bytes: Uint8Array) => {
+      const up = await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${path}`, {
+        method: 'POST',
+        headers: { ...storage, 'Content-Type': 'image/jpeg', 'x-upsert': 'true', 'Cache-Control': '3600' },
+        body: bytes,
+      })
+      if (!up.ok) throw new Error(`The picture was made but could not be saved: ${(await up.text().catch(() => '')).slice(0, 200)}`)
+    }
+    const fetchImages = (paths: string[]) =>
+      Promise.all(
+        paths.map(async (path) => {
+          const res = await fetch(publicUrl(path))
+          if (!res.ok) return null
+          const type = res.headers.get('content-type') || 'image/png'
+          return { path, blob: new Blob([await res.arrayBuffer()], { type }) }
+        })
+      )
+
+    if (action === 'art') {
+      const key = String(body.key || '')
+      if (!TEMPLATE_ART[key as keyof typeof TEMPLATE_ART]) return json({ error: `There is no template art called ${key}.` }, 400)
+      const shape = body.shape === 'tall' ? 'tall' : 'square'
+      const quality = QUALITIES.includes(String(body.quality)) ? String(body.quality) : 'high'
+      const started = Date.now()
+      // From the words alone: handed the example ads, the model copies their words and products into the art.
+      const bytes = await paintFromWords(buildArtPrompt({ key, shape }), AI_SHAPES[shape].size, quality)
+      const path = templateArtPath(key, shape)
+      await save(path, bytes)
+      return json({ path, ms: Date.now() - started })
     }
 
     if (action !== 'make') return json({ error: `Unknown action ${action}` }, 400)
@@ -153,21 +232,11 @@ Deno.serve(async (req) => {
     const quality = QUALITIES.includes(String(body.quality)) ? String(body.quality) : 'high'
     const unit = UNIT_KEYS.includes(String(body.unit)) ? String(body.unit) : ''
 
-    const apiKey = Deno.env.get('OPENAI_API_KEY')
-    if (!apiKey) return json({ error: 'OPENAI_API_KEY is not set in the Supabase secrets, so ChatGPT cannot make ads yet.' }, 500)
-
     // The images, in the order the prompt names them: the examples, then the unit (new, then old for a trade-in).
     const refs = (await listRefs()).slice(0, MAX_STYLE_REFS)
     const old = template === 'clunkers'
     const unitPaths = unit ? [unitPhotoPath(unit), ...(old ? [unitPhotoPath(`${OLD_PREFIX}${unit}`)] : [])] : []
-    const fetched = await Promise.all(
-      [...refs.map((r) => r.path), ...unitPaths].map(async (path) => {
-        const res = await fetch(publicUrl(path))
-        if (!res.ok) return null
-        const type = res.headers.get('content-type') || 'image/png'
-        return { path, blob: new Blob([await res.arrayBuffer()], { type }) }
-      })
-    )
+    const fetched = await fetchImages([...refs.map((r) => r.path), ...unitPaths])
     const refBlobs = fetched.slice(0, refs.length).filter(Boolean) as { path: string; blob: Blob }[]
     const unitBlobs = fetched.slice(refs.length).filter(Boolean) as { path: string; blob: Blob }[]
     if (!refBlobs.length && !unitBlobs.length) return json({ error: 'No example ads and no unit photo to work from.' }, 400)
@@ -184,37 +253,15 @@ Deno.serve(async (req) => {
       season: String(body.season || '').slice(0, 20),
     })
 
-    const form = new FormData()
-    form.append('model', MODEL)
-    form.append('prompt', prompt)
-    form.append('size', AI_SHAPES[shape].size)
-    form.append('quality', quality)
-    form.append('n', '1')
-    form.append('output_format', 'jpeg')
-    form.append('output_compression', '92')
-    ;[...refBlobs, ...unitBlobs].forEach((f, i) => {
-      const ext = f.blob.type.includes('png') ? 'png' : f.blob.type.includes('webp') ? 'webp' : 'jpg'
-      form.append('image[]', f.blob, `image-${i}.${ext}`)
-    })
-
     const started = Date.now()
-    const res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form })
-    const out = (await res.json().catch(() => null)) as { data?: { b64_json?: string }[]; error?: { message?: string } } | null
-    if (!res.ok) return json({ error: out?.error?.message || `The image model returned ${res.status}.` }, 502)
-    const b64 = out?.data?.[0]?.b64_json
-    if (!b64) return json({ error: 'The image model sent nothing back. Try again.' }, 502)
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-
+    const bytes = await paint(prompt, [...refBlobs, ...unitBlobs], AI_SHAPES[shape].size, quality)
     const key = wordsKey(words)
     const path = sample ? `ai-ads/samples/${sample}.jpg` : aiArtPath(clientId, template, shape, Date.now(), key)
-    const up = await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${path}`, {
-      method: 'POST',
-      headers: { ...storage, 'Content-Type': 'image/jpeg', 'x-upsert': 'true', 'Cache-Control': '3600' },
-      body: bytes,
-    })
-    if (!up.ok) return json({ error: `The ad was made but could not be saved: ${(await up.text().catch(() => '')).slice(0, 200)}` }, 500)
+    await save(path, bytes)
     return json({ path, key, ms: Date.now() - started, refs: refBlobs.length, units: unitBlobs.length })
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : String(err) }, 500)
+    // A refusal from the image model (no credits, a policy block) is a 502; anything else ours.
+    const status = (err as { status?: number })?.status || 500
+    return json({ error: err instanceof Error ? err.message : String(err) }, status)
   }
 })
