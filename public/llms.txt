@@ -7,7 +7,7 @@ NAVIGATING THIS CRM
 
 This is the internal CRM for a marketing agency that runs paid advertising for home-services businesses — HVAC, plumbing, electrical and similar trades. Each of those businesses is a "client". The agency runs their Meta (Facebook and Instagram) ads, their Google Local Services Ads, their Google Business Profile, and for some of them a GoHighLevel account that handles automated texts and calls.
 
-Everything is one screen deep. Sign-in is currently switched off: whoever opens the CRM sees all of it, and anything on screen can be changed by whoever is looking at it. Treat that as a reason for care rather than permission — a wrong edit here is a wrong number in a real client report. A login system with two roles exists behind a switch (LOGIN_REQUIRED in src/lib/access.js); when it is on, an admin sees everything and a VA sees everything except Payments, the Team page and the per-client payment tracker, with the database refusing a VA any payment, expense or Stripe data.
+Everything is one screen deep. The CRM asks for a sign-in: an email and password made for the person on the Team page, as an admin (everything) or a VA (everything except Payments, the Team page and the per-client payment tracker, with the database refusing a VA any payment, expense or Stripe data). Anything on screen can be changed by whoever is signed in, so treat that as a reason for care — a wrong edit here is a wrong number in a real client report. The client pages (/dashboard, /scripts, /videos, /report, /approve, /onboarding) ask for no sign-in: the token in the link is the credential. The switch is LOGIN_REQUIRED in src/lib/access.js with supabase/logins-on.sql and logins-off.sql as its database half; see docs/logins.md.
 
 Numbers about ad performance are not live. A scheduled job copies yesterday from Meta each morning, so today is usually absent and the freshest figure is yesterday. Money is different: payments come from Stripe, and Stripe is treated as the truth whenever the CRM disagrees with it.
 
@@ -286,10 +286,12 @@ What you can do:
 
 Sign in   /login
 ----------------
-Only used while sign-in is switched on; otherwise it redirects to the dashboard. Email and password, both made by an admin on the Team page; no self-signup and no reset-by-email — a forgotten password is reset by an admin.
+The CRM's sign-in (every CRM page lands here without a session; the client token pages never do). Email and password, both made by an admin on the Team page; no self-signup. "Forgot your password?" sends a reset link from Supabase that comes back to this page with a "set a new password" form; an admin can also set a new temporary password from the Team page. See docs/logins.md.
 
 What is on it:
   - An email and password form.
+  - "Forgot your password?": the email, then "check your email".
+  - After the reset link: a new password typed twice, then into the CRM.
 
 What you can do:
   - "Sign in" goes to the page that was asked for, or the dashboard.
@@ -297,7 +299,7 @@ What you can do:
 Team   /team
 ------------
 Sidebar: Team
-Admins only, and only while sign-in is switched on (otherwise it redirects to the dashboard). Who can sign in and as what. Adds a person with a temporary password (shown once, handed over by the admin), changes a role, resets a password, removes a login.
+Admins only. Who can sign in and as what. Adds a person with a temporary password (shown once, handed over by the admin), changes a role, resets a password, removes a login.
 
 What is on it:
   - Every member with their role and last sign-in.
@@ -558,7 +560,7 @@ THINGS THAT WILL CATCH YOU OUT
 ==============================
 
 Client links are not a way into the CRM
-  A client gets token links only: a dashboard (/dashboard/<token>), a weekly report (/report/<token>), an ad approval (/approve/<token>), an onboarding form (/onboarding/<token>), their video scripts (/scripts/<token>) and their videos (/videos/<token>, the same token as the dashboard). Those pages carry no agency nav and no link into the CRM, and read through token-gated database functions or a token-checking Edge Function rather than the tables. When the build runs as the client-facing site (VITE_PUBLIC_ONLY=true, or its host named in VITE_PUBLIC_HOST), only those six kinds of page exist and every other address is a dead end; with VITE_PUBLIC_APP_URL set, every link the CRM makes for a client points at that site, so the CRM's own address never reaches a client. Until that site exists the links use the CRM's address, and sign-in being off means the CRM is open to anyone who learns it.
+  A client gets token links only: a dashboard (/dashboard/<token>), a weekly report (/report/<token>), an ad approval (/approve/<token>), an onboarding form (/onboarding/<token>), their video scripts (/scripts/<token>) and their videos (/videos/<token>, the same token as the dashboard). Those pages carry no agency nav and no link into the CRM, and read through token-gated database functions or a token-checking Edge Function rather than the tables. When the build runs as the client-facing site (VITE_PUBLIC_ONLY=true, or its host named in VITE_PUBLIC_HOST), only those six kinds of page exist and every other address is a dead end; with VITE_PUBLIC_APP_URL set, every link the CRM makes for a client points at that site, so the CRM's own address never reaches a client. Until that site exists the links use the CRM's address; the CRM asks for a sign-in, so a client who edits their link into it meets the login page and nothing else.
 
 CRM pages load on demand; client pages load up front
   Every CRM page and the help chat are separate files, fetched the first time a page is opened (React.lazy in src/App.jsx) and cached for a year after that (public/_headers). The six kinds of client page are in the first file so a phone opens a link in one trip and never downloads the agency's screens. A tab left open across a deploy reloads itself once if a file it asks for has gone. A new CRM page goes in App.jsx as a lazy import, not a plain one; a new client page as a plain import.

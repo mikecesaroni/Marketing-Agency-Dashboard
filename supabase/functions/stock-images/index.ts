@@ -9,12 +9,13 @@
 // Node checks. The OpenAI key never leaves the server.
 //
 // Deployed with verify_jwt = false and its own door check: a call must carry
-// the project's anon or service key as its bearer (what the CRM sends), or
-// the fill token kept in the database vault (public.stock_fill_token(),
-// readable by the service role only), which a one-off fill run from the
-// database through pg_net sends in an x-fill-token header, since pg_net has
-// no key of its own to hand. Making a photo spends the agency's OpenAI
-// money, so nobody else gets in.
+// the project's anon or service key as its bearer, or a signed-in CRM
+// user's session token (what the browser sends once sign-in is on; Auth is
+// asked whether it is live), or the fill token kept in the database vault
+// (public.stock_fill_token(), readable by the service role only), which a
+// one-off fill run from the database through pg_net sends in an
+// x-fill-token header, since pg_net has no key of its own to hand. Making a
+// photo spends the agency's OpenAI money, so nobody else gets in.
 //
 // Secrets: OPENAI_API_KEY.
 //
@@ -41,11 +42,17 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...CORS } })
 }
 
-/** True when the request comes from the CRM (the project's own keys) or carries the vault's fill token. */
+/** True when the request comes from the CRM (the project's own keys, or a signed-in user's live session) or carries the vault's fill token. */
 async function allowed(req: Request, supabaseUrl: string, serviceKey: string): Promise<boolean> {
   const bearer = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
-  const keys = [Deno.env.get('SUPABASE_ANON_KEY'), serviceKey].filter(Boolean)
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || ''
+  const keys = [anonKey, serviceKey].filter(Boolean)
   if (bearer && keys.includes(bearer)) return true
+  // A signed-in person: supabase-js sends their session token as the bearer.
+  if (bearer && anonKey) {
+    const who = await fetch(`${supabaseUrl}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: `Bearer ${bearer}` } }).catch(() => null)
+    if (who?.ok) return true
+  }
   const given = req.headers.get('x-fill-token') || ''
   if (!given) return false
   const res = await fetch(`${supabaseUrl}/rest/v1/rpc/stock_fill_token`, {

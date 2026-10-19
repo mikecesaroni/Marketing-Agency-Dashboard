@@ -61,9 +61,9 @@ check('nobody logged in sees no nav', visibleNav(NAV, null), [])
 
 // --- login switched off --------------------------------------------------------
 
-check('the switch is currently off', LOGIN_REQUIRED, false)
-// With login off there is no session to check, so nothing is gated on one.
-// Payments was behind an owner sign-in for a few days and is open again.
+check('the switch is on: the CRM asks for a sign-in', LOGIN_REQUIRED, true)
+// The rules for the switched-off mode stay checkable, so turning it off again
+// (supabase/logins-off.sql and this constant) lands on known behaviour.
 check('without login, clients open', canOpenWithoutLogin('/clients'), true)
 check('without login, payments opens', canOpenWithoutLogin('/payments'), true)
 check('without login, a payments sub-path opens', canOpenWithoutLogin('/payments/stripe'), true)

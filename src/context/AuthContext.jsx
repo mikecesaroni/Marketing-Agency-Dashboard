@@ -23,6 +23,11 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [profileLoaded, setProfileLoaded] = useState(false)
   const [profileError, setProfileError] = useState('')
+  // True from the moment a "set a new password" link from the reset email
+  // opens the app until the new password is saved. The link signs the person
+  // in, so without this flag the login page would wave them straight through
+  // and the password would never get set.
+  const [recovering, setRecovering] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -32,7 +37,10 @@ export function AuthProvider({ children }) {
     // Only state is set in here. Supabase warns against calling back into the
     // client from inside this callback; the profile query lives in the effect
     // below, keyed on the user id.
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s ?? null))
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s ?? null)
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true)
+    })
     return () => {
       cancelled = true
       sub.subscription.unsubscribe()
@@ -71,6 +79,14 @@ export function AuthProvider({ children }) {
   )
   const signOut = useCallback(() => supabase.auth.signOut(), [])
   const changePassword = useCallback((password) => supabase.auth.updateUser({ password }), [])
+  // The reset email's link comes back to the login page, which shows the
+  // "set a new password" form while `recovering` is true. The address has to
+  // be on the project's redirect list in Supabase (see docs/logins.md).
+  const resetPassword = useCallback(
+    (email) => supabase.auth.resetPasswordForEmail(String(email).trim(), { redirectTo: `${window.location.origin}/login` }),
+    []
+  )
+  const finishRecovery = useCallback(() => setRecovering(false), [])
 
   const value = {
     session: session || null,
@@ -84,6 +100,9 @@ export function AuthProvider({ children }) {
     signIn,
     signOut,
     changePassword,
+    resetPassword,
+    recovering,
+    finishRecovery,
   }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -16,14 +16,20 @@
 // Pure on purpose: scripts/check-access.mjs imports it, so nothing here may
 // touch the DOM, React or supabaseClient.
 
-// THE SWITCH. false: no sign-in, everyone who opens the CRM sees all of it,
-// exactly as before logins existed. true: the login page, the two roles and
-// the Team page all come back.
+// THE SWITCH. true: the CRM asks for a sign-in (the login page, the two
+// roles, the Team page), and the database refuses the anon key on every
+// table. false: no sign-in, everyone who opens the CRM sees all of it, as
+// before logins existed. The client pages (a dashboard, a report, an
+// approval, an onboarding form, video scripts, videos) ask for no sign-in
+// either way: the token in their link is their credential, and they read
+// through security-definer functions, never the tables.
 //
-// Flipping it to true needs one database statement as well, to drop the anon
-// policies that migration open_access_while_login_is_off added (the statement
-// is in that migration's header). Flipping it to false needs the reverse.
-export const LOGIN_REQUIRED = false
+// The database half moves with it: supabase/logins-on.sql with true (drops
+// the anon policies, closes every table, makes the first admin),
+// supabase/logins-off.sql with false (puts the anon policies back). One
+// without the other is either a CRM nobody can open or a CRM that asks for
+// a password and then shows every table empty. See docs/logins.md.
+export const LOGIN_REQUIRED = true
 
 export const ROLES = ['admin', 'va']
 

@@ -69,9 +69,10 @@ address. Two walls, both in the code and ready to switch on:
    emails do too.
 
 Until the client-facing site exists, client links use the CRM's address.
-The real fix for the CRM itself is sign-in: `LOGIN_REQUIRED` in
-`src/lib/access.js`, plus dropping the `anon_open_while_login_off` policies
-(the statement is in that migration's header). `scripts/check-public-site.mjs`
+The CRM itself asks for a sign-in (`LOGIN_REQUIRED` in `src/lib/access.js`,
+with `supabase/logins-on.sql` as its database half; see `docs/logins.md`),
+so a client who edits their link into the CRM meets the login page and
+nothing else; the client pages themselves never ask for one. `scripts/check-public-site.mjs`
 checks the walls: the public pages import no CRM shell and link to no CRM
 page, the router has the client-facing mode, every client link goes
 through the public base, and search engines are told to stay out.

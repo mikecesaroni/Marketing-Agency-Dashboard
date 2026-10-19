@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext'
 import { LOGIN_REQUIRED, canOpen, canOpenWithoutLogin } from '../lib/access'
 
 export default function RequireAuth({ children }) {
-  const { loading, session, profile, profileError, role, signOut } = useAuth()
+  const { loading, session, profile, profileError, role, signOut, recovering } = useAuth()
   const location = useLocation()
 
   // Login switched off: straight through, minus the Team page.
@@ -23,6 +23,10 @@ export default function RequireAuth({ children }) {
     if (!canOpenWithoutLogin(location.pathname)) return <Navigate to="/" replace />
     return children ?? <Outlet />
   }
+
+  // Here from the reset email: the link signed them in, but the new password
+  // comes first. The login page has the form.
+  if (recovering) return <Navigate to="/login" replace />
 
   if (loading) {
     return (
