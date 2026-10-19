@@ -51,7 +51,7 @@ security definer
 set search_path = public
 as $$
   select case
-    when p_kind in ('dashboard', 'scripts') then (select name from clients where dashboard_token = p_token and archived = false and length(p_token) >= 20 limit 1)
+    when p_kind in ('dashboard', 'scripts', 'videos') then (select name from clients where dashboard_token = p_token and archived = false and length(p_token) >= 20 limit 1)
     when p_kind = 'report' then (select c.name from weekly_reports w join clients c on c.id = w.client_id where w.token = p_token and length(p_token) >= 20 limit 1)
     else null
   end;

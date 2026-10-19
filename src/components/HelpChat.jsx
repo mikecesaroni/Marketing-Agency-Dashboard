@@ -26,7 +26,7 @@ import { fetchHelpHistory, rememberHelpChat, rememberedHelpChat, sendHelpMessage
 const MAX_ROUNDS = 12
 
 // Pages the chat must never appear on: what a client or an owner opens.
-const PUBLIC = /^\/(onboarding|approve|report|login)(\/|$)|^\/(dashboard|scripts)\/[^/]+/
+const PUBLIC = /^\/(onboarding|approve|report|login)(\/|$)|^\/(dashboard|scripts|videos)\/[^/]+/
 
 /** The stored turns as the transcript shows them. */
 function transcriptFrom(rows) {

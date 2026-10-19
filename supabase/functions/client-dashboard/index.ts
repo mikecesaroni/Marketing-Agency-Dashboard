@@ -23,6 +23,12 @@
 // Reply: { ad_id, iframe }   Meta's own rendered preview of one ad (an
 //         <iframe> snippet), for playing a video whose file could not be
 //         read. Only for an ad on this client's dashboard.
+//
+// Body:  { token, action: 'videos', ad_ids: [...] }   (at most 60)
+// Reply: { creatives: [...], problems: [] }   The same creatives, for the
+//         ads the client's videos tab names: the video ads client_videos_load
+//         lists for this token and no others, so a request can name nothing
+//         that is not the client's own. Meta's copy of a clip we do not hold.
 
 const META_API_VERSION = 'v21.0'
 const GRAPH = `https://graph.facebook.com/${META_API_VERSION}`
@@ -149,7 +155,7 @@ Deno.serve(async (req) => {
   const metaToken = Deno.env.get('META_ACCESS_TOKEN') || ''
   const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }
 
-  let body: { token?: string; action?: string; ad_id?: string } = {}
+  let body: { token?: string; action?: string; ad_id?: string; ad_ids?: unknown[] } = {}
   try {
     body = await req.json()
   } catch {
@@ -198,22 +204,39 @@ Deno.serve(async (req) => {
       }
     }
 
-    // The ads that ran in the last 90 days, biggest first, at most 100.
-    const rowsRes = await fetch(
-      `${supabaseUrl}/rest/v1/ad_daily?select=ad_id,spend,leads&client_id=eq.${encodeURIComponent(client.id)}&date=gte.${isoDaysAgo(89)}&limit=20000`,
-      { headers }
-    )
-    const rows = ((await rowsRes.json()) || []) as { ad_id: string; spend: number; leads: number }[]
-    const weight = new Map<string, number>()
-    for (const r of rows) {
-      if (!r.ad_id) continue
-      weight.set(r.ad_id, (weight.get(r.ad_id) || 0) + Number(r.spend || 0) + Number(r.leads || 0))
+    // Which ads. The dashboard: the ones that ran in the last 90 days,
+    // biggest first, at most 100. The videos tab (action 'videos'): the ids
+    // it names, kept to the video ads client_videos_load lists for this
+    // token, which is the same list the tab shows.
+    let ids: string[] = []
+    if (body.action === 'videos') {
+      const asked = [...new Set((Array.isArray(body.ad_ids) ? body.ad_ids : []).map((v) => String(v || '').trim()).filter((v) => /^\d{5,}$/.test(v)))].slice(0, 60)
+      if (!asked.length) return json({ creatives: [], problems })
+      const ownRes = await fetch(`${supabaseUrl}/rest/v1/rpc/client_videos_load`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_token: dashToken }),
+      })
+      const listed = ((await ownRes.json().catch(() => null))?.videos || []) as { ad_id?: string }[]
+      const own = new Set(listed.map((v) => String(v.ad_id || '')))
+      ids = asked.filter((id) => own.has(id))
+    } else {
+      const rowsRes = await fetch(
+        `${supabaseUrl}/rest/v1/ad_daily?select=ad_id,spend,leads&client_id=eq.${encodeURIComponent(client.id)}&date=gte.${isoDaysAgo(89)}&limit=20000`,
+        { headers }
+      )
+      const rows = ((await rowsRes.json()) || []) as { ad_id: string; spend: number; leads: number }[]
+      const weight = new Map<string, number>()
+      for (const r of rows) {
+        if (!r.ad_id) continue
+        weight.set(r.ad_id, (weight.get(r.ad_id) || 0) + Number(r.spend || 0) + Number(r.leads || 0))
+      }
+      ids = [...weight.entries()]
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 100)
+        .map(([id]) => id)
     }
-    const ids = [...weight.entries()]
-      .filter(([, v]) => v > 0)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 100)
-      .map(([id]) => id)
     if (!ids.length) return json({ creatives: [], problems })
 
     const creatives: Creative[] = []

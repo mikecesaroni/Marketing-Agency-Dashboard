@@ -19,7 +19,11 @@ owner needs, with no login and no agency chrome.
   the video's opening frame with a play button; a verdict against the
   client's own average cost per lead (Working, Fair, Costly, No leads yet,
   Too early); leads, spend, cost per lead and click rate. Tapping a card
-  opens the picture full size or plays the video. Pictures and videos come
+  opens the picture full size or plays the video. A video ad's card and
+  its full-size view carry "Download video" (the clip from the bucket,
+  under the ad's name, when the CRM published it) or "Open video file"
+  (Meta's copy); "All your videos" above the cards opens the videos tab
+  (`docs/client-videos.md`). Pictures and videos come
   from Meta at the moment the page opens, through the `client-dashboard`
   function, and are never stored, because Meta's links expire. Google
   Search ads are words, so they show no picture.
@@ -53,8 +57,9 @@ address. Two walls, both in the code and ready to switch on:
 1. **A client-facing site.** Deploy the same build a second time (a second
    Netlify site from the same branch, or a second domain on this one) with
    `VITE_PUBLIC_ONLY=true`, or with its host named in `VITE_PUBLIC_HOST`.
-   That deployment serves only the four kinds of client page (dashboard,
-   report, approval, onboarding); every other address is "Nothing here".
+   That deployment serves only the six kinds of client page (dashboard,
+   report, approval, onboarding, video scripts, videos); every other
+   address is "Nothing here".
    The commented rules in `netlify.toml` make Netlify refuse at the edge as
    well, before any JavaScript runs.
 2. **Links that never carry the CRM's address.** Set `VITE_PUBLIC_APP_URL`

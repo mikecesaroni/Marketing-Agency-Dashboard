@@ -1,6 +1,7 @@
 // Netlify Edge Function: the link preview for client pages.
 //
-// Runs in front of /dashboard/<token> and /report/<token>, lets the normal
+// Runs in front of /dashboard/<token>, /report/<token>, /scripts/<token>
+// and /videos/<token>, lets the normal
 // response through (the app's one HTML file), and rewrites its head so a
 // message app shows "KPI Dashboard for <business>" with a card image
 // instead of the CRM's title. See preview.js for the words and the
@@ -41,4 +42,4 @@ export default async (request: Request, context: { next: () => Promise<Response>
   })
 }
 
-export const config = { path: ['/dashboard/*', '/report/*', '/scripts/*'], onError: 'bypass' }
+export const config = { path: ['/dashboard/*', '/report/*', '/scripts/*', '/videos/*'], onError: 'bypass' }

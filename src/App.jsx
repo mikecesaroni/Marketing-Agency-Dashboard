@@ -6,6 +6,7 @@ import { Routes, Route, useLocation } from 'react-router-dom'
 import WeeklyReportPage from './pages/WeeklyReportPage'
 import ClientDashboardPage from './pages/ClientDashboardPage'
 import ScriptStudioPage from './pages/ScriptStudioPage'
+import ClientVideosPage from './pages/ClientVideosPage'
 import ClientOnboardingPage from './pages/ClientOnboardingPage'
 import AdApprovalPage from './pages/AdApprovalPage'
 import LoginPage from './pages/LoginPage'
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="/report/:token" element={<WeeklyReportPage />} />
         <Route path="/dashboard/:token" element={<ClientDashboardPage />} />
         <Route path="/scripts/:token" element={<ScriptStudioPage />} />
+        <Route path="/videos/:token" element={<ClientVideosPage />} />
         <Route path="*" element={<NothingHerePage />} />
       </Routes>
     )
@@ -98,6 +100,9 @@ export default function App() {
       {/* Public, the same token as the dashboard: the client's own video
           scripts, through the script-studio function. */}
       <Route path="/scripts/:token" element={<ScriptStudioPage />} />
+      {/* Public, the same token again: every video ad that went live on the
+          client's account, to watch and download, through client_videos_load. */}
+      <Route path="/videos/:token" element={<ClientVideosPage />} />
       <Route path="/login" element={<LoginPage />} />
       {/* Everything else needs a login. RequireAuth also turns a VA away from
           the admin-only paths (see src/lib/access.js), so /payments and /team

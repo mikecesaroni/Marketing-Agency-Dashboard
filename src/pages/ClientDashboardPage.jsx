@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import ChannelDailyChart from '../components/reports/ChannelDailyChart'
 import PortalTabs from '../components/PortalTabs'
 import PortalSidebar from '../components/PortalSidebar'
@@ -7,6 +7,9 @@ import { ChannelDot, DTd, DTh, DTr, Delta, Eyebrow, MixBar, Panel, Pill, Section
 import { cn } from '../components/ui/cn'
 import { CHANNELS, channelMix, compactMoney, rangeLabel } from '../lib/channels'
 import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailySeries, guideFor, latestReport, lsaFor, money, pctChange, perDay, previewFrame, returnStory, sumDays, windowFor } from '../lib/clientDashboard'
+import { portalPath } from '../lib/clientPortal'
+import { downloadName, mergeClientVideos } from '../lib/clientVideos'
+import { downloadUrl, loadClientVideos } from '../lib/clientVideoStore'
 import { supabase } from '../lib/supabaseClient'
 
 /**
@@ -36,6 +39,47 @@ function publishedLabel(iso) {
 }
 const fmtInt = (n) => Number(n || 0).toLocaleString('en-US')
 const cplText = (v) => (v > 0 ? money(v) : 'n/a')
+
+/**
+ * How a video ad's clip can be had: our file as a download under its own
+ * name when the CRM published it, else Meta's copy (a signed link, opened in
+ * a new tab and saved from the player), else nothing. `file` is the ad's
+ * row from client_videos_load, `creative` what Meta said about it.
+ */
+function videoLink(file, creative) {
+  if (file?.path) {
+    const name = downloadName(file)
+    return { href: downloadUrl(file.path, name), label: 'Download video', download: name }
+  }
+  if (creative?.video) return { href: creative.video, label: 'Open video file', blank: true }
+  return null
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 4v11M7 10l5 5 5-5M4 19h16" />
+    </svg>
+  )
+}
+
+/** The download (or open) link for a video ad, sized for a thumb. */
+function VideoLink({ link, className = '' }) {
+  if (!link) return null
+  return (
+    <a
+      href={link.href}
+      download={link.download}
+      target={link.blank ? '_blank' : undefined}
+      rel={link.blank ? 'noreferrer' : undefined}
+      className={cn('inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-3 text-sm font-semibold text-white hover:bg-white/10', className)}
+      data-ad-download
+    >
+      <DownloadIcon />
+      {link.label}
+    </a>
+  )
+}
 const plural = (n, one, many) => (Number(n) === 1 ? one : many)
 
 function GuideBits({ guide }) {
@@ -100,7 +144,7 @@ function MiniStat({ label, value }) {
  * whether it is working, and its numbers. Tapping the picture opens it full
  * size or plays the video.
  */
-function AdCard({ ad, creative, ready, verdict, onOpen }) {
+function AdCard({ ad, creative, ready, verdict, onOpen, link }) {
   const image = creative?.image || creative?.thumb || null
   const canOpen = Boolean(image || creative?.video)
   const kind = creative?.kind === 'video' ? 'Video' : creative?.kind === 'image' ? 'Image' : ad.channel === 'google' ? 'Search ad' : ''
@@ -157,6 +201,9 @@ function AdCard({ ad, creative, ready, verdict, onOpen }) {
           <MiniStat label="Click rate" value={ad.impressions > 0 ? `${ad.ctr}%` : 'n/a'} />
         </div>
         <p className="mt-2 text-[11px] leading-snug text-slate-500">{verdict.note}</p>
+        {/* A video ad is the client's to keep: the clip downloads here,
+            under its own name, to post on their own pages. */}
+        {link && <VideoLink link={link} className="mt-3 w-full" />}
       </div>
     </Panel>
   )
@@ -175,6 +222,9 @@ export default function ClientDashboardPage() {
   const [stackKey, setStackKey] = useState('leads')
   const [creatives, setCreatives] = useState(new Map())
   const [creativesReady, setCreativesReady] = useState(false)
+  // The client's video ads by ad id (client_videos_load): which ones have
+  // a clip of ours to download. Empty until it lands; the cards manage.
+  const [videos, setVideos] = useState(new Map())
   const [lightbox, setLightbox] = useState(null)
   // Meta's rendered preview, asked for when a video's own file is not
   // readable: { adId, frame | null, loading }.
@@ -209,6 +259,19 @@ export default function ClientDashboardPage() {
       .finally(() => {
         if (alive) setCreativesReady(true)
       })
+    return () => {
+      alive = false
+    }
+  }, [data, token])
+
+  useEffect(() => {
+    if (!data) return
+    let alive = true
+    loadClientVideos(token)
+      .then((res) => {
+        if (alive) setVideos(new Map(mergeClientVideos(res?.videos).map((v) => [v.adId, v])))
+      })
+      .catch(() => {})
     return () => {
       alive = false
     }
@@ -500,7 +563,15 @@ export default function ClientDashboardPage() {
 
           {/* THE ADS THEMSELVES: the creative, whether it is working, the numbers. */}
           <section data-ads>
-            <SectionTitle title="Your ads" sub={`Every ad that ran in the last ${days} days, most leads first. Tap one to see it full size or play it.`} />
+            <SectionTitle
+              title="Your ads"
+              sub={`Every ad that ran in the last ${days} days, most leads first. Tap one to see it full size or play it. A video ad downloads from its card.`}
+              right={
+                <Link to={portalPath('videos', token)} className="inline-flex min-h-[40px] items-center rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-200 hover:bg-white/10" data-all-videos>
+                  All your videos
+                </Link>
+              }
+            />
             {ads.length === 0 ? (
               <Panel className="p-6 text-sm text-slate-400">No ads ran in this range.</Panel>
             ) : (
@@ -513,6 +584,7 @@ export default function ClientDashboardPage() {
                       creative={creatives.get(String(a.key))}
                       ready={creativesReady}
                       verdict={adVerdict(a, all.cpl)}
+                      link={videoLink(videos.get(String(a.key)), creatives.get(String(a.key)))}
                       onOpen={() => setLightbox({ ad: a, creative: creatives.get(String(a.key)) })}
                     />
                   ))}
@@ -675,10 +747,13 @@ export default function ClientDashboardPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={() => setLightbox(null)} role="dialog" aria-modal="true" aria-label={lightbox.ad.name} data-lightbox>
           <div className="max-h-full w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-200">
-              <span className="break-words font-semibold">{lightbox.ad.name}</span>
-              <button type="button" onClick={() => setLightbox(null)} className="min-h-[44px] rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
-                Close
-              </button>
+              <span className="min-w-0 break-words font-semibold">{lightbox.ad.name}</span>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <VideoLink link={videoLink(videos.get(String(lightbox.ad.key)), lightbox.creative)} />
+                <button type="button" onClick={() => setLightbox(null)} className="min-h-[44px] rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
+                  Close
+                </button>
+              </div>
             </div>
             {lightbox.creative?.video ? (
               <video src={lightbox.creative.video} poster={lightbox.creative.image || undefined} controls autoPlay playsInline className="max-h-[80vh] w-full rounded-xl bg-black" />

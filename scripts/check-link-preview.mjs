@@ -24,6 +24,8 @@ check('no name, still a title', previewMeta({ kind: 'dashboard', name: '', origi
 check('the report has its own words', previewMeta({ kind: 'report', name: 'Belk', origin: 'https://x', pathname: '/r' }).title, 'Weekly ads report for Belk')
 check('a scripts link', matchClientPath('/scripts/abcdefghijklmnopqrstuvwx'), { kind: 'scripts', token: 'abcdefghijklmnopqrstuvwx' })
 check('the scripts page has its own words and card', [previewMeta({ kind: 'scripts', name: 'Belk', origin: 'https://x', pathname: '/s' }).title, previewMeta({ kind: 'scripts', name: '', origin: 'https://x', pathname: '/s' }).image], ['Video scripts for Belk', 'https://x/og-video-scripts.png'])
+check('a videos link', matchClientPath('/videos/abcdefghijklmnopqrstuvwx'), { kind: 'videos', token: 'abcdefghijklmnopqrstuvwx' })
+check('the videos page has its own words and card', [previewMeta({ kind: 'videos', name: 'Belk', origin: 'https://x', pathname: '/v' }).title, previewMeta({ kind: 'videos', name: '', origin: 'https://x', pathname: '/v' }).image], ['Your videos for Belk', 'https://x/og-your-videos.png'])
 check('no em dashes in the preview words', /[—–]/.test(Object.values(KINDS).map((k) => `${k.title('X')} ${k.description}`).join(' ')), false)
 
 // -------------------------------------------------------------- the rewrite
@@ -46,11 +48,14 @@ check('no keys, no call', await lookupName({ kind: 'dashboard', token: 'good', s
 check('a failing call gives no name rather than an error', await lookupName({ kind: 'dashboard', token: 'good', supabaseUrl: 'https://s', anonKey: 'k', fetchFn: () => Promise.reject(new Error('down')) }), '')
 
 // --------------------------------------------------------------- the pieces
-check('all three card images exist', [existsSync(new URL('../public/og-kpi-dashboard.png', import.meta.url)), existsSync(new URL('../public/og-weekly-report.png', import.meta.url)), existsSync(new URL('../public/og-video-scripts.png', import.meta.url))], [true, true, true])
+check('every kind has its card image', Object.values(KINDS).map((k) => existsSync(new URL(`../public${k.image}`, import.meta.url))), Object.values(KINDS).map(() => true))
 const edge = readFileSync(new URL('../netlify/edge-functions/client-preview.ts', import.meta.url), 'utf8')
-check('the edge function covers the three paths and bypasses on error', edge.includes("path: ['/dashboard/*', '/report/*', '/scripts/*']") && edge.includes("onError: 'bypass'"), true)
+check('the edge function covers the four paths and bypasses on error', edge.includes("path: ['/dashboard/*', '/report/*', '/scripts/*', '/videos/*']") && edge.includes("onError: 'bypass'"), true)
 const sql = readFileSync(new URL('../supabase/client-dashboard.sql', import.meta.url), 'utf8')
 check('the name lookup is in the SQL file', sql.includes('function client_link_name(p_kind text, p_token text)'), true)
+// The lookup has grown a kind per tab since; the newest definition names them all.
+const newest = readFileSync(new URL('../supabase/client-videos.sql', import.meta.url), 'utf8')
+check('the newest lookup knows every tab with the dashboard token', newest.includes("p_kind in ('dashboard', 'scripts', 'videos')"), true)
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

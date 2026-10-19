@@ -32,6 +32,12 @@ export const KINDS = {
     description: 'Scripts to read into your phone, written from your business, your reviews and what is bringing you leads. Tap one and film it.',
     image: '/og-video-scripts.png',
   },
+  videos: {
+    prefix: '/videos/',
+    title: (name) => (name ? `Your videos for ${name}` : 'Your videos'),
+    description: 'Every video ad that has gone live on your account, to watch here and download to post on your own pages.',
+    image: '/og-your-videos.png',
+  },
 }
 
 /** Which client page an address is, and its token; null for anything else. */
