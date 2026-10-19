@@ -5,7 +5,7 @@
 // to the picked template.
 // Run: node scripts/check-ai-ads.mjs
 import { readFileSync } from 'node:fs'
-import { AI_TEMPLATE_KEYS, aiArtPath, buildAiPrompt, latestAiArt, parseAiArtName, shapeForSize } from '../supabase/functions/_shared/aiAds.js'
+import { AI_TEMPLATE_KEYS, aiArtPath, buildAiPrompt, latestAiArt, parseAiArtName, shapeForSize, spellOut } from '../supabase/functions/_shared/aiAds.js'
 import { PHOTO_TEMPLATES, TEMPLATE_KEYS } from '../src/lib/adTemplateMeta.js'
 
 let failures = 0
@@ -33,6 +33,7 @@ const prompt = buildAiPrompt({
   colours: ['#0B2A5B'],
 })
 check('the words go in exactly, empty ones left out', [prompt.includes('- Kicker: "CASH FOR CLUNKERS"'), prompt.includes('- Price: "$1,000"'), prompt.includes('Empty')], [true, true, false])
+check('long words are spelled out letter by letter, once each', [spellOut(['CASH FOR CLUNKERS', 'clunkers again', 'TOWARDS A NEW SYSTEM']), prompt.includes('CLUNKERS = C-L-U-N-K-E-R-S')], [['CLUNKERS = C-L-U-N-K-E-R-S', 'TOWARDS = T-O-W-A-R-D-S', 'SYSTEM = S-Y-S-T-E-M'], true])
 check('the examples lead and only their style is copied', [prompt.includes('The first 6 images are example ads'), prompt.includes('Copy the style only')], [true, true])
 check('a trade-in gets the new and the old unit', prompt.includes('first the brand-new gas furnace, then the old worn-out one'), true)
 check('no phone, no button, no logo, no Google stars', /Never draw a phone number, a website, a Call Now line, a button, a logo, a company name, the Google logo, review stars/.test(prompt), true)
@@ -56,7 +57,7 @@ check('the newest picture of each template and shape wins', [latest.sun_deal.tal
 const canvas = read('src/lib/adCanvas.js')
 check('the renderer paints the picture only for its own template', canvas.includes('content.aiArt?.template === layout'), true)
 const tpl = read('src/lib/adTemplates.js')
-check('the real logo and Google card go on the band', /export function renderAiArt[\s\S]{0,900}brandFooter\(ctx, m, content, assets, \{ band: true \}\)\.draw\(\)/.test(tpl), true)
+check('the real logo and Google card go on the band', /export function renderAiArt[\s\S]{0,2000}brandFooter\(ctx, m, content, assets, \{ band: true \}\)\.draw\(\)/.test(tpl), true)
 const fn = read('supabase/functions/ai-ads/index.ts')
 check('the function sends the examples, then the unit, to the image edits endpoint', [fn.includes("'https://api.openai.com/v1/images/edits'"), fn.includes("form.append('image[]'"), fn.includes('MAX_STYLE_REFS')], [true, true, true])
 check('the function has the same door as stock-images', [fn.includes('async function allowed('), fn.includes('x-fill-token')], [true, true])

@@ -156,6 +156,21 @@ const SHAPE_RULES = {
 
 const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim()
 
+/** The words of six letters or more, once each, as "CLUNKERS = C-L-U-N-K-E-R-S". At most twelve. */
+export function spellOut(texts) {
+  const seen = new Set()
+  const out = []
+  for (const t of texts || []) {
+    for (const word of String(t || '').match(/[A-Za-z]{6,}/g) || []) {
+      const key = word.toUpperCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(`${word} = ${word.split('').join('-')}`)
+    }
+  }
+  return out.slice(0, 12)
+}
+
 /**
  * The prompt for one ad. words: [{ role, text }] in reading order (the
  * browser builds them from the Studio's fields). unit: the product's name
@@ -190,6 +205,10 @@ export function buildAiPrompt({ template, words = [], unit = '', oldUnit = false
         '\nNo other words at all.'
     )
   }
+  // Image models misspell long words in display type (CLUNKERS came back
+  // OLUNNKERS), so the longer ones are spelled out letter by letter.
+  const long = spellOut(list.map((w) => w.text))
+  if (long.length) parts.push(`Spell these words letter by letter exactly so: ${long.join('; ')}.`)
   parts.push(
     'Never draw a phone number, a website, a Call Now line, a button, a logo, a company name, the Google logo, review stars or fine print. Every word must be spelled correctly and fully legible.'
   )

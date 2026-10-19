@@ -3213,10 +3213,23 @@ export function renderAiArt(ctx, size, content, assets) {
   try {
     ctx.fillStyle = WHITE
     ctx.fillRect(0, 0, w, h)
-    const s = Math.max(w / art.width, h / art.height)
-    const dw = art.width * s
-    const dh = art.height * s
-    ctx.drawImage(art, (w - dw) / 2, (h - dh) / 2, dw, dh)
+    const cover = Math.max(w / art.width, h / art.height)
+    const artTaller = art.width / art.height < w / h - 0.01
+    if (artTaller) {
+      // The 4:5 feed ad from the 2:3 picture: cropping the top and bottom
+      // cut the headline and the band, so the whole picture shows, full
+      // height, and the sides carry on as a soft blur of it.
+      ctx.save()
+      ctx.filter = 'blur(28px) saturate(1.1)'
+      ctx.drawImage(art, (w - art.width * cover) / 2, (h - art.height * cover) / 2, art.width * cover, art.height * cover)
+      ctx.restore()
+      const s = h / art.height
+      ctx.drawImage(art, (w - art.width * s) / 2, 0, art.width * s, h)
+    } else {
+      // Square from square; the Story crops a little off the sides, which
+      // the model was told to keep clear.
+      ctx.drawImage(art, (w - art.width * cover) / 2, (h - art.height * cover) / 2, art.width * cover, art.height * cover)
+    }
     const m = { ...frameMargins(size, 'off'), contentBottom: h }
     brandFooter(ctx, m, content, assets, { band: true }).draw()
   } finally {
