@@ -34,7 +34,7 @@ jobs:
       - name: Fetch the ChatGPT sample ads too
         run: |
           mkdir -p relay/ai-samples
-          for k in sun-deal clunkers split-pop cloud-price payment-stack rebate-burst feature-list; do
+          for k in sun-deal clunkers split-pop cloud-price payment-stack rebate-burst feature-list winter-shout massive-deal price-grid fall-special season-sale holiday-deals tune-up poster emergency financing coupon big-number plan-card; do
             for s in tall square; do
               curl -fsSL -o "relay/ai-samples/$k-$s.jpg" "https://zjtwqpaaejrkurtuakdz.supabase.co/storage/v1/object/public/client-files/ai-ads/samples/$k-$s.jpg" || rm -f "relay/ai-samples/$k-$s.jpg"
             done
