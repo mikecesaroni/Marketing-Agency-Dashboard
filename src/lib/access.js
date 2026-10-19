@@ -24,9 +24,9 @@
 // either way: the token in their link is their credential, and they read
 // through security-definer functions, never the tables.
 //
-// The database half moves with it: supabase/logins-on.sql with true (drops
-// the anon policies, closes every table, makes the first admin),
-// supabase/logins-off.sql with false (puts the anon policies back). One
+// The database half moves with it: supabase/logins-on.sql with true (closes
+// the anon policies, turns row-level security on everywhere, makes the
+// first admin), supabase/logins-off.sql with false (opens them again). One
 // without the other is either a CRM nobody can open or a CRM that asks for
 // a password and then shows every table empty. See docs/logins.md.
 export const LOGIN_REQUIRED = true

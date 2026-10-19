@@ -29,12 +29,13 @@ The CRM asks for a sign-in. The client pages do not.
   the money tables' policies. Nothing writes profiles through the API: the
   `team-admin` Edge Function does, with the service key, after checking
   the caller is an admin.
-- `supabase/logins-on.sql` is the database half of the switch: it drops
-  every policy written for the anonymous key, turns row-level security on
-  for every table with a policy for signed-in people, keeps the
-  `client-files` bucket public to read by URL but makes listing,
-  uploading, changing and deleting need a sign-in, and makes the first
-  admin. `supabase/logins-off.sql` reverses it. Run the matching file with
+- `supabase/logins-on.sql` is the database half of the switch: it closes
+  every policy written for the anonymous key (nothing is dropped; each
+  policy is altered to admit nothing, so the off file opens the very same
+  ones), turns row-level security on for every table with a policy for
+  signed-in people, keeps the `client-files` bucket public to read by URL
+  but makes listing, uploading, changing and deleting need a sign-in, and
+  makes the first admin. `supabase/logins-off.sql` reverses it. Run the matching file with
   the matching value of `LOGIN_REQUIRED`; one without the other is either
   a CRM nobody can open or a CRM that asks for a password and then shows
   every table empty.
