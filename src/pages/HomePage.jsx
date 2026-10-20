@@ -234,7 +234,7 @@ export default function HomePage() {
       tone: 'danger',
       items: lateDeliverables.map((d) => ({
         key: d.id,
-        to: '/deliverables',
+        to: '/status',
         label: `${d.clients?.name || 'Unknown'} — ${d.title}`,
         meta: `due ${d.due_date}`,
       })),
@@ -256,7 +256,7 @@ export default function HomePage() {
       tone: 'info',
       items: dueSoon.map((d) => ({
         key: d.id,
-        to: '/deliverables',
+        to: '/status',
         label: `${d.clients?.name || 'Unknown'} — ${d.title}`,
         meta: `due ${d.due_date}`,
       })),
@@ -280,7 +280,7 @@ export default function HomePage() {
       <HomeTiles
         counts={{
           '/clients': `${live.length} live`,
-          '/deliverables': openDeliverables.length > 0 ? `${openDeliverables.length} open` : 'all done',
+          '/status': openDeliverables.length > 0 ? `${openDeliverables.length} open` : 'all done',
         }}
       />
 

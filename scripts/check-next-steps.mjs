@@ -25,6 +25,7 @@ const base = (over = {}) => ({
   payments: over.payments || [],
   callSteps: over.callSteps || [],
   counts: over.counts || {},
+  overrides: over.overrides || [],
   today: TODAY,
 })
 const keys = (r) => r.steps.map((s) => s.key)
@@ -168,6 +169,26 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
 check('phases are in launch order', PHASES, ['Sign up', 'Access', 'Build', 'Launch', 'Run'])
 check('currentPhase of nothing is Run', currentPhase([]), 'Run')
 check('nextLine names the client wait', nextLine(nextSteps(base())), 'Setup fee paid (waiting on the client)')
+
+// --- the packages (src/lib/clientTiers.js) ---------------------------------
+{
+  const r1 = nextSteps(base({ client: { tier: 1 } }))
+  check('tier 1: GHL is in every package, so the GHL steps show without ghl_plan', keys(r1).filter((k) => k.startsWith('ghl')), ['ghl-form', 'ghl-build', 'ghl-live'])
+  check('tier 1: Meta only, no Google steps, no extras', keys(r1).filter((k) => /google|lsa|gbp|past-customers|ai-brain|automations/.test(k)), ['gbp-access'])
+  check('tier 1: the result says the tier', r1.tier, 1)
+  const r2 = nextSteps(base({ client: { tier: 2 } }))
+  check('tier 2: Google Ads access and campaign, LSA live, GBP and the past customer list', keys(r2).filter((k) => /google|lsa|gbp|past-customers/.test(k)), ['gbp-access', 'google-ads-access', 'past-customers', 'google-publish', 'lsa-live'])
+  check('tier 2: LSA waits on Google Ads access', r2.steps.find((s) => s.key === 'lsa-live').blockedBy, 'google-ads-access')
+  check('tier 2: the past customer list waits on the GHL build', r2.steps.find((s) => s.key === 'past-customers').blockedBy, 'ghl-build')
+  const r3 = nextSteps(base({ client: { tier: 3, ghl_active: true, ghl_plan: true, google_ads_customer_id: '1234567890', lsa_active: true } }))
+  check('tier 3: the AI and the automations too', keys(r3).filter((k) => /ai-brain|automations/.test(k)), ['ai-brain', 'automations'])
+  check('tier 3: LSA live reads the flag', r3.steps.find((s) => s.key === 'lsa-live').done, true)
+  check('tier 3: the AI waits on the call, the automations on the GHL build (built here)', [r3.steps.find((s) => s.key === 'ai-brain').blockedBy, r3.steps.find((s) => s.key === 'automations').blockedBy], ['onboarding-call', null])
+  const guessed = nextSteps(base({ client: { monthly_fee: 2500 } }))
+  check('a $2,500 fee with no tier set is read as the Whole Chain', [guessed.tier, keys(guessed).includes('past-customers')], [2, true])
+  const marked = nextSteps(base({ client: { tier: 3 }, overrides: [{ step_key: 'ai-brain', done_by: 'Kyle', done_at: '2026-09-10T00:00:00Z' }] }))
+  check('a manual-only step is done when marked, and says who', [marked.steps.find((s) => s.key === 'ai-brain').done, marked.steps.find((s) => s.key === 'ai-brain').detail.includes('Kyle')], [true, true])
+}
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)
 process.exit(failures === 0 ? 0 : 1)

@@ -12,12 +12,14 @@ import { supabase } from './supabaseClient'
 const FLAG_STEPS = {
   'ghl-live': { ghl_active: true },
   'go-live': { meta_ads_active: true },
+  'lsa-live': { lsa_active: true },
   'gbp-access': { gbp_optimized: true },
 }
 
 const FLAG_UNDO = {
   'ghl-live': { ghl_active: false },
   'go-live': { meta_ads_active: false },
+  'lsa-live': { lsa_active: false },
   'gbp-access': { gbp_optimized: false },
 }
 

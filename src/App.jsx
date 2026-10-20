@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 // The pages a client opens load with the first file: a phone on a slow
 // connection gets the dashboard or a script in one trip, with no second
 // download to wait for.
@@ -23,7 +23,7 @@ import { isPublicPath, onPublicSite } from './lib/publicSite'
 const HomePage = lazy(() => import('./pages/HomePage'))
 const ClientsPage = lazy(() => import('./pages/ClientsPage'))
 const ClientDetailPage = lazy(() => import('./pages/ClientDetailPage'))
-const DeliverablesPage = lazy(() => import('./pages/DeliverablesPage'))
+const ClientStatusPage = lazy(() => import('./pages/ClientStatusPage'))
 const TasksPage = lazy(() => import('./pages/TasksPage'))
 const ContentPage = lazy(() => import('./pages/ContentPage'))
 const DrivePhotosPage = lazy(() => import('./pages/DrivePhotosPage'))
@@ -116,7 +116,12 @@ export default function App() {
         <Route path="/publish/:clientId" element={<PublishPage />} />
         <Route path="/funnel/:clientId" element={<FunnelPage />} />
         <Route path="/client/:clientId" element={<ClientDetailPage />} />
-        <Route path="/deliverables" element={<DeliverablesPage />} />
+        {/* The Client status board: every client in their package's bucket,
+            what they are owed, what is done, and who needs a call. It took
+            over from the Onboarding Progress board; the old address still
+            lands here. */}
+        <Route path="/status" element={<ClientStatusPage />} />
+        <Route path="/deliverables" element={<Navigate to="/status" replace />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/payments" element={<PaymentsPage />} />
         <Route path="/reports" element={<ReportsPage />} />

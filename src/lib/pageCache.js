@@ -118,4 +118,5 @@ export const keys = {
   clientTasks: (id) => `client:${id}:tasks`,
   dashboard: () => 'dashboard:main',
   nextSteps: () => 'nextsteps:all',
+  clientStatus: () => 'clientstatus:all',
 }

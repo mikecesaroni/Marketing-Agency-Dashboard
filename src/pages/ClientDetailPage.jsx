@@ -161,7 +161,10 @@ export default function ClientDetailPage() {
     if (want === 'studio') openStudio('design', '', Number(new URLSearchParams(pageLocation.search).get('make')) || 0)
     else if (want === 'publish') openStudio('publish', new URLSearchParams(pageLocation.search).get('video') || '')
     else if (want === 'kpis') setShowKPIsModal(true)
-    else if (want === 'funnel') {
+    else if (want === 'chat') {
+      setChatSeed(null)
+      setShowChatModal(true)
+    } else if (want === 'funnel') {
       setFunnelOpen(true)
       // After the card has rendered open, so the scroll lands on the builder.
       setTimeout(() => scrollTo('funnel'), 150)
@@ -393,10 +396,16 @@ export default function ClientDetailPage() {
         return setSetupModal('gbp')
       case 'ghl-toggle':
       case 'meta-toggle':
+      case 'lsa-toggle':
         // The toggle row is gone; the step's own flag is written directly.
         return markStepDone(client, step, { by: whoAmI() })
           .then(loadClientData)
           .catch((err) => setError(err.message))
+      case 'chat':
+        setChatSeed(null)
+        return setShowChatModal(true)
+      case 'client':
+        return scrollTo('snapshot')
       case 'studio':
         return openStudio('design')
       case 'publish':
@@ -408,7 +417,7 @@ export default function ClientDetailPage() {
       case 'google-report':
         return navigate(`/reports/client/${client.id}?channel=google`)
       default:
-        return navigate('/deliverables')
+        return navigate('/status')
     }
   }
 

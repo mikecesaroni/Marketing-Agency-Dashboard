@@ -13,7 +13,14 @@ export function stepHref(clientId, step) {
     // the dashboard, land on the client page where the plan is.
     case 'ghl-toggle':
     case 'meta-toggle':
+    case 'lsa-toggle':
       return `/client/${clientId}`
+    // The work happens outside the CRM (in GoHighLevel, on the AI); the
+    // client page is where it is marked done.
+    case 'client':
+      return `/client/${clientId}`
+    case 'chat':
+      return `/client/${clientId}?open=chat`
     case 'studio':
       return `/client/${clientId}?open=studio`
     case 'publish':

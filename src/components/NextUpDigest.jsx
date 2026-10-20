@@ -54,7 +54,7 @@ export default function NextUpDigest() {
         <p className="text-sm font-semibold text-slate-900">What is next, per client</p>
         <p className="text-xs text-slate-600">
           {running > 0 && `${running} running and quiet · `}
-          <Link to="/deliverables" className="text-blue-600 hover:underline">
+          <Link to="/status" className="text-blue-600 hover:underline">
             Open the board →
           </Link>
         </p>

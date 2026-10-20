@@ -18,6 +18,7 @@
 
 import { GHL_BACKEND_KEYS } from './adsReady.js'
 import { dashedId, isAccessError } from './googleAdsId.js'
+import { tierOf } from './clientTiers.js'
 
 export const OWNER = { us: 'us', client: 'client' }
 
@@ -90,7 +91,12 @@ export function nextSteps(ctx) {
   const dlDone = (key) => dl.some((d) => d.template_key === key && d.status === 'done')
   const dlOpen = (keys) => keys.filter((k) => dl.some((d) => d.template_key === k) && !dlDone(k))
 
-  const onPlan = Boolean(c.ghl_plan)
+  // The package (src/lib/clientTiers.js) decides what the client is owed:
+  // every package includes the GoHighLevel build; the Whole Chain and up add
+  // Google (Search, Local Services, the Business Profile) and the past
+  // customer list; Runs Without You adds the AI and the automations.
+  const { tier } = tierOf(c)
+  const onPlan = Boolean(c.ghl_plan) || tier > 0
   const setupRows = pay.filter((p) => p.payment_type === 'setup')
   const setupPaid = setupRows.some((p) => p.status === 'paid')
   const setupApplies = setupRows.length > 0 || Number(c.setup_fee) > 0
@@ -107,8 +113,8 @@ export function nextSteps(ctx) {
   const creativesDone = (dlDone('meta-statics') && dlDone('meta-video')) || counts.savedAds >= 3
   const publishedDone = counts.publishedAds > 0 || Boolean(c.meta_ads_active) || dlDone('meta-live')
   const liveDone = Boolean(c.meta_ads_active)
-  const lsaApplies = Number(c.lsa_budget_per_day) > 0 || Boolean(c.lsa_active) || filled(intake?.lsa_status) || Number(intake?.lsa_ad_budget_per_day) > 0
-  const gbpApplies = intake ? intake.has_google_business !== false : true
+  const lsaApplies = tier >= 2 || Number(c.lsa_budget_per_day) > 0 || Boolean(c.lsa_active) || filled(intake?.lsa_status) || Number(intake?.lsa_ad_budget_per_day) > 0
+  const gbpApplies = tier >= 2 || (intake ? intake.has_google_business !== false : true)
   // One Google Ads login covers Search and Local Services, so either one
   // planned means asking for Google Ads access.
   const googleId = String(c.google_ads_customer_id || '').replace(/\D/g, '')
@@ -282,6 +288,44 @@ export function nextSteps(ctx) {
         : 'Nothing built yet. The chat can write the first set from the brief.',
   })
 
+  if (tier >= 2) {
+    add({
+      key: 'past-customers',
+      phase: 'Build',
+      title: 'Past customer list loaded and re-engaged',
+      owner: OWNER.us,
+      applies: true,
+      done: false,
+      blockedBy: onPlan && !ghlBuilt ? 'ghl-build' : null,
+      action: { kind: 'client', label: 'Open the client page' },
+      detail: 'Their past customers into GoHighLevel, then the re-engagement campaign on. Mark done when it is running.',
+    })
+  }
+  if (tier >= 3) {
+    add({
+      key: 'ai-brain',
+      phase: 'Build',
+      title: 'Second-brain AI built on the business',
+      owner: OWNER.us,
+      applies: true,
+      done: false,
+      blockedBy: callDone ? null : 'onboarding-call',
+      action: { kind: 'chat', label: 'Open the chat' },
+      detail: 'Trained on the brief, the call and their files. Mark done when the owner has it.',
+    })
+    add({
+      key: 'automations',
+      phase: 'Build',
+      title: 'Custom automations built',
+      owner: OWNER.us,
+      applies: true,
+      done: false,
+      blockedBy: onPlan && !ghlBuilt ? 'ghl-build' : null,
+      action: { kind: 'client', label: 'Open the client page' },
+      detail: 'The day-to-day processes agreed on the call, running in GoHighLevel. Mark done when they are live.',
+    })
+  }
+
   // ---- LAUNCH -----------------------------------------------------------------
   add({
     key: 'publish',
@@ -326,6 +370,20 @@ export function nextSteps(ctx) {
     })
   }
 
+  if (lsaApplies) {
+    add({
+      key: 'lsa-live',
+      phase: 'Launch',
+      title: 'Local Services Ads live',
+      owner: OWNER.us,
+      applies: true,
+      done: Boolean(c.lsa_active),
+      blockedBy: googleDone ? null : 'google-ads-access',
+      action: { kind: 'lsa-toggle', label: 'Mark LSA live' },
+      detail: c.lsa_active ? 'Live.' : 'Verified, the budget set and the ads on in Local Services, then mark live here.',
+    })
+  }
+
   // ---- RUN --------------------------------------------------------------------
   if (liveDone) {
     add({
@@ -360,9 +418,15 @@ export function nextSteps(ctx) {
     }
   }
 
+  // How long a client-side step has been theirs to do: the link steps know
+  // their own date; for the rest (access, photos) it is since onboarding
+  // began, the day the link went out or, failing that, the day they were
+  // added. Nothing else records when the ask was made.
+  const began = link?.created_at || c.contract_start_date || c.date_added || null
   const isBlocked = (s) => Boolean(s.blockedBy) && !active.find((x) => x.key === s.blockedBy)?.done
   for (const s of active) {
     s.blocked = !s.done && isBlocked(s)
+    if (!s.done && !s.blocked && s.owner === OWNER.client && !s.waitingSince && began) s.waitingSince = began
     s.waitingDays = s.waitingSince ? daysBetween(s.waitingSince, today) : null
   }
 
@@ -376,6 +440,7 @@ export function nextSteps(ctx) {
   const next = ours[0] || theirs[0] || null
 
   return {
+    tier,
     steps: active,
     next,
     ours,

@@ -24,7 +24,7 @@ import { IconLaunch } from './ui'
 const TILES = {
   '/clients': { blurb: 'Every client, where they stand, and their page.', tone: 'from-blue-600 to-sky-400' },
   '/content': { blurb: 'Ad Studio, Google Drive folders, and the weekly video board.', tone: 'from-orange-500 to-amber-400' },
-  '/deliverables': { blurb: 'Who is set up, who is waiting on what.', tone: 'from-violet-600 to-fuchsia-400' },
+  '/status': { blurb: 'Every client by package: what is done, what is owed, who needs a call.', tone: 'from-violet-600 to-fuchsia-400' },
   '/tasks': { blurb: 'The team’s tasks, by person and by client.', tone: 'from-slate-800 to-slate-600' },
   '/payments': { blurb: 'Invoices, Stripe, what is paid and what is late.', tone: 'from-emerald-600 to-teal-400' },
   '/reports': { blurb: 'Weekly numbers per client and across the book.', tone: 'from-cyan-600 to-blue-400' },

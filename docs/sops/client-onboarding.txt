@@ -1,6 +1,6 @@
 WHAT THIS IS
 
-How we take a new client from signed to ads running, step by step. Follow it in order. The CRM tracks every step for you: open the client page and the Next up bar at the top shows what is next and has the button for it. Onboarding Progress shows every client's steps on one board.
+How we take a new client from signed to ads running, step by step. Follow it in order. The CRM tracks every step for you: open the client page and the Next up bar at the top shows what is next and has the button for it. Client status shows every client's steps on one board, in the bucket of the package they pay for, with the flags that mean a call.
 
 Goal: every new client has access handed over, their system built and their first Meta ads live, with nothing forgotten and nothing asked for twice.
 
@@ -146,7 +146,7 @@ THE FIRST 30 DAYS
 WHERE THINGS ARE IN THE CRM
 
 - What is next for one client: the client page, Next up bar at the top
-- Every client's onboarding steps: Onboarding Progress
+- Every client's onboarding steps, package checklist and flags: Client status
 - Every copy and paste message: the client page Next up bar, or Quick copy on the Dashboard
 - The live onboarding call script: the client page, "Open the call script"
 - Payments and setup fees: Payments

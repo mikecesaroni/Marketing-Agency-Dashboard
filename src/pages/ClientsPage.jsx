@@ -17,6 +17,7 @@ import {
   Th,
   Td,
 } from '../components/ui'
+import { TIER_BY_NUMBER, tierLabel, tierOf } from '../lib/clientTiers'
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -77,10 +78,23 @@ function MonthlySubBadge({ subscribed }) {
   )
 }
 
+/** The package, from the column or guessed from the fee (amber when guessed). */
+function TierBadge({ client }) {
+  const { tier, guessed } = tierOf(client)
+  if (!tier) return null
+  return (
+    <Badge tone={guessed ? 'warning' : 'info'} className="whitespace-nowrap" title={guessed ? 'Guessed from the monthly fee; confirm it on Client status' : TIER_BY_NUMBER[tier].name}>
+      {tierLabel(tier)}
+      {guessed ? '?' : ''}
+    </Badge>
+  )
+}
+
 function ChannelBadges({ client }) {
   const ghl = client.ghlStage
   return (
     <span className="inline-flex flex-wrap gap-1.5">
+      <TierBadge client={client} />
       <LiveBadge live={client.meta_ads_active} label="Meta" />
       <LiveBadge live={client.lsa_active} label="LSA" />
       <LiveBadge live={client.gbp_optimized} label="GBP" />
