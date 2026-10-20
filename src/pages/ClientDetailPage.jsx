@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useParams, useLocation, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { cacheBust, cached, keys } from '../lib/pageCache'
@@ -31,6 +31,7 @@ import ClientTasksPanel from '../components/ClientTasksPanel'
 import SetupMessageModal from '../components/SetupMessageModal'
 import OnboardingLinkPanel from '../components/OnboardingLinkPanel'
 import ScriptStudioCard from '../components/ScriptStudioCard'
+import ClientJumpBar from '../components/ClientJumpBar'
 import { fetchNextStepsFor } from '../lib/nextStepsData'
 import { markStepDone, undoStepDone, whoAmI } from '../lib/completeStep'
 import { Button, Card } from '../components/ui'
@@ -68,6 +69,25 @@ export default function ClientDetailPage() {
   const { clientId } = useParams()
   const navigate = useNavigate()
   const { role } = useAuth()
+  // The jump bar's pills, in page order. Payments is admin-only on the page,
+  // so its pill is too. Memoised: the bar watches the list for changes.
+  const admin = isAdmin(role)
+  const jumpSections = useMemo(() => [
+    { id: 'snapshot', label: 'Snapshot' },
+    { id: 'forms', label: 'Forms' },
+    { id: 'scripts', label: 'Scripts' },
+    { id: 'onboarding-call', label: 'Call' },
+    { id: 'tasks', label: 'Tasks' },
+    { id: 'kpis', label: 'KPIs' },
+    { id: 'meta', label: 'Meta' },
+    { id: 'ad-performance', label: 'Ads' },
+    { id: 'ad-doctor', label: 'Ad Doctor' },
+    { id: 'funnel', label: 'Funnel' },
+    { id: 'google-search', label: 'Google' },
+    { id: 'landing-pages', label: 'Landing pages' },
+    { id: 'files', label: 'Files' },
+    ...(admin ? [{ id: 'payments', label: 'Payments' }] : []),
+  ], [admin])
   const [client, setClient] = useState(null)
   // This client's rows from the Tasks tab, as the task panel last loaded
   // them, for the open-task count up top. tasksKey remounts the panel when
@@ -419,6 +439,7 @@ export default function ClientDetailPage() {
     )
   }
 
+
   const intakeButton = (
     <div className="flex flex-col md:flex-row gap-2">
       {/* Orange, blue, green, indigo and white, previously, which told a
@@ -466,6 +487,11 @@ export default function ClientDetailPage() {
         >
           ← All clients
         </Link>
+
+        {/* THE JUMP BAR: one pill per section, pinned under the header, so
+            Files or Payments is a click and not a scroll past everything
+            above it. Every section below carries the id it names. */}
+        <ClientJumpBar sections={jumpSections} />
 
         {client.paused_at && !client.archived && (
           <div className="mb-3 flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 sm:flex-row sm:items-center">
@@ -564,31 +590,37 @@ export default function ClientDetailPage() {
             request a review; finish the identity step within 30 days or the restriction becomes permanent.
           </div>
         )}
-        <ClientSnapshot client={client} intake={intake} tasks={tasks} showMoney={isAdmin(role)} />
+        <div id="snapshot" className="scroll-mt-28 md:scroll-mt-32">
+          <ClientSnapshot client={client} intake={intake} tasks={tasks} showMoney={isAdmin(role)} />
+        </div>
 
         {/* CLIENT FORMS — what they have sent back, and how to chase the rest.
             High up on purpose: at the start of a client this is the whole job,
             and it was previously three buttons in the header that gave no hint
             whether anything had come back. */}
-        <ClientFormsPanel client={client} intake={intake} onDataChanged={loadClientData} />
+        <div id="forms" className="scroll-mt-28 md:scroll-mt-32">
+          <ClientFormsPanel client={client} intake={intake} onDataChanged={loadClientData} />
+        </div>
 
         {/* The client's own video script page, on their dashboard token. */}
-        <div className="mt-6">
+        <div id="scripts" className="mt-6 scroll-mt-28 md:scroll-mt-32">
           <ScriptStudioCard client={client} />
         </div>
 
         {/* THE LIVE ONBOARDING CALL. The forms above are what the client sends
             back; this is the Zoom where the agency gets every access done on
             the owner's own screen, worked as a sheet. */}
-        <div id="onboarding-call" className="scroll-mt-40">
+        <div id="onboarding-call" className="scroll-mt-28 md:scroll-mt-32">
           <OnboardingCallPanel client={client} intake={intake} />
         </div>
 
         {/* TASKS, straight from the Tasks tab: one list, not two. */}
-        <ClientTasksPanel key={tasksKey} client={client} onAsk={handleAskAboutTask} onChange={setTasks} />
+        <div id="tasks" className="scroll-mt-28 md:scroll-mt-32">
+          <ClientTasksPanel key={tasksKey} client={client} onAsk={handleAskAboutTask} onChange={setTasks} />
+        </div>
 
         {/* WEEKLY KPIs */}
-        <Card padding="none" className="mb-6 p-4 md:mb-8 md:p-6">
+        <Card id="kpis" padding="none" className="mb-6 p-4 md:mb-8 md:p-6 scroll-mt-28 md:scroll-mt-32">
           <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
             <h2 className="text-lg md:text-xl font-bold text-slate-900">Weekly KPI History</h2>
             <Button
@@ -636,7 +668,7 @@ export default function ClientDetailPage() {
         </Card>
 
         {/* META ADS SYNC */}
-        <div className="mt-6 md:mt-8">
+        <div id="meta" className="mt-6 md:mt-8 scroll-mt-28 md:scroll-mt-32">
           <MetaAdAccountCard
             client={client}
             weeklyKPIs={weeklyKPIs}
@@ -645,12 +677,12 @@ export default function ClientDetailPage() {
         </div>
 
         {/* AD PERFORMANCE */}
-        <div id="ad-performance" className="mt-6 md:mt-8 scroll-mt-4">
+        <div id="ad-performance" className="mt-6 md:mt-8 scroll-mt-28 md:scroll-mt-32">
           <AdPerformanceSection clientId={clientId} />
         </div>
 
         {/* AD DOCTOR — the playbook's kill/scale rules run on the sync data */}
-        <Card id="ad-doctor" padding="none" className="mt-6 p-4 md:mt-8 md:p-6 scroll-mt-4">
+        <Card id="ad-doctor" padding="none" className="mt-6 p-4 md:mt-8 md:p-6 scroll-mt-28 md:scroll-mt-32">
           <h2 className="text-lg md:text-xl font-bold text-slate-900 mb-3">Ad Doctor Agent</h2>
           <AdDoctorPanel client={client} />
         </Card>
@@ -659,25 +691,25 @@ export default function ClientDetailPage() {
             with no creative. Here rather than only inside publish, because the
             structure is supposed to exist before there is anything to put in
             it, and publish lives inside the creative tool. */}
-        <div id="funnel" className="mt-6 scroll-mt-4 md:mt-8">
+        <div id="funnel" className="mt-6 md:mt-8 scroll-mt-28 md:scroll-mt-32">
           <FunnelPanel key={funnelOpen ? 'open' : 'closed'} client={client} intake={intake} initialOpen={funnelOpen} />
         </div>
 
         {/* GOOGLE SEARCH — keywords and search terms, from the nightly sync.
             Below Ad Doctor because it is the same job for the other channel:
             what is losing money and what to switch off. */}
-        <div id="google-search" className="mt-6 scroll-mt-4 md:mt-8">
+        <div id="google-search" className="mt-6 md:mt-8 scroll-mt-28 md:scroll-mt-32">
           <GoogleSearchPanel client={client} onUpdate={loadClientData} />
         </div>
 
         {/* LANDING PAGES: where the ads send people. Next to the channels
             because that is what the pages are for. */}
-        <div className="mt-6 scroll-mt-4 md:mt-8">
+        <div id="landing-pages" className="mt-6 md:mt-8 scroll-mt-28 md:scroll-mt-32">
           <LandingPagesPanel client={client} />
         </div>
 
         {/* CLIENT FILES */}
-        <div className="mt-6 md:mt-8 mb-6 md:mb-8">
+        <div id="files" className="mt-6 md:mt-8 mb-6 md:mb-8 scroll-mt-28 md:scroll-mt-32">
           <ClientFilesSection
             clientId={clientId}
             clientName={client.name}
@@ -689,7 +721,7 @@ export default function ClientDetailPage() {
             anyway (row-level security on payments), and an empty money panel
             reads as "this client has never paid". */}
         {isAdmin(role) && (
-          <div id="payments" className="mb-6 scroll-mt-40 md:mb-8">
+          <div id="payments" className="mb-6 md:mb-8 scroll-mt-28 md:scroll-mt-32">
             <PaymentTracker client={client} onClientUpdate={loadClientData} />
           </div>
         )}
