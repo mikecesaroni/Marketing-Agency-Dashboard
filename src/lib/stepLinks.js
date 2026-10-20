@@ -3,7 +3,7 @@
 // step lands in the same place from either.
 
 /** Steps whose action is a message to copy, done in a modal wherever the button is. */
-export const MODAL_KINDS = new Set(['send-onboarding', 'send-ghl', 'meta-access', 'google-ads-access', 'gbp'])
+export const MODAL_KINDS = new Set(['send-onboarding', 'send-ghl', 'meta-access', 'google-ads-access'])
 
 export function stepHref(clientId, step) {
   switch (step?.action?.kind) {
@@ -39,7 +39,6 @@ export function stepHref(clientId, step) {
     case 'send-ghl':
     case 'meta-access':
     case 'google-ads-access':
-    case 'gbp':
       return `/client/${clientId}`
     default:
       return `/client/${clientId}#deliverables`

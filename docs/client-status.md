@@ -18,7 +18,7 @@ Every package includes the GoHighLevel build, so `nextSteps()` treats a client w
 
 The same launch pipeline the client page's Next-up bar shows (`src/lib/nextSteps.js`, pinned by `scripts/check-next-steps.mjs`), so the two never disagree. The tier adds steps:
 
-- Tier 2 and up: Google Ads access, the Google campaign published, **Local Services Ads live** (`lsa-live`, reads and writes `clients.lsa_active`), Google Business Profile access, **Past customer list loaded and re-engaged** (`past-customers`, marked by hand).
+- Tier 2 and up: Google Ads access, the Google campaign published, **Local Services Ads live** (`lsa-live`, reads and writes `clients.lsa_active`), **Past customer list loaded and re-engaged** (`past-customers`, marked by hand). The Business Profile is sold with the package but is not a step (taken off the list 2026-10-20 on request; the GBP access message is still on the client page's copy panel).
 - Tier 3: **Second-brain AI built on the business** (`ai-brain`, after the onboarding call) and **Custom automations built** (`automations`, after the GHL build), both marked by hand.
 
 A tick comes from the data where the data knows (an ad account connected, a campaign running, a flag flipped) and from a person otherwise (`step_overrides`, with who and when; `src/lib/completeStep.js`), and can be taken back. Client-side steps count how long they have been waiting: the link steps from their own stamp, the rest (access, photos) from the day the onboarding link went out, or the day the client was added.

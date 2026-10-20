@@ -459,9 +459,9 @@ export default function ClientStatusPage() {
         </div>
       )}
 
-      {modalRow && ['meta-access', 'google-ads-access', 'gbp'].includes(modalKind) && (
+      {modalRow && ['meta-access', 'google-ads-access'].includes(modalKind) && (
         <SetupMessageModal
-          channel={modalKind === 'meta-access' ? 'meta' : modalKind === 'google-ads-access' ? 'googleads' : 'gbp'}
+          channel={modalKind === 'meta-access' ? 'meta' : 'googleads'}
           client={modalRow.client}
           intake={modalRow.intake}
           onClose={() => setModal(null)}

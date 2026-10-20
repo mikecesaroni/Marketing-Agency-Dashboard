@@ -93,8 +93,9 @@ export function nextSteps(ctx) {
 
   // The package (src/lib/clientTiers.js) decides what the client is owed:
   // every package includes the GoHighLevel build; the Whole Chain and up add
-  // Google (Search, Local Services, the Business Profile) and the past
-  // customer list; Runs Without You adds the AI and the automations.
+  // Google (Search and Local Services) and the past customer list; Runs
+  // Without You adds the AI and the automations. (The Business Profile is
+  // sold with the package but is not a step: taken off the list 2026-10-20.)
   const { tier } = tierOf(c)
   const onPlan = Boolean(c.ghl_plan) || tier > 0
   const setupRows = pay.filter((p) => p.payment_type === 'setup')
@@ -113,12 +114,15 @@ export function nextSteps(ctx) {
   const creativesDone = (dlDone('meta-statics') && dlDone('meta-video')) || counts.savedAds >= 3
   const publishedDone = counts.publishedAds > 0 || Boolean(c.meta_ads_active) || dlDone('meta-live')
   const liveDone = Boolean(c.meta_ads_active)
-  const lsaApplies = tier >= 2 || Number(c.lsa_budget_per_day) > 0 || Boolean(c.lsa_active) || filled(intake?.lsa_status) || Number(intake?.lsa_ad_budget_per_day) > 0
-  const gbpApplies = tier >= 2 || (intake ? intake.has_google_business !== false : true)
+  // Google is the Whole Chain and up. On Maintenance there are no Google
+  // steps whatever stray LSA fields or a Google Ads id say ("1500 is just
+  // Meta"); only a client with no package yet falls back to those clues.
+  const lsaClues = Number(c.lsa_budget_per_day) > 0 || Boolean(c.lsa_active) || filled(intake?.lsa_status) || Number(intake?.lsa_ad_budget_per_day) > 0
+  const lsaApplies = tier >= 2 || (tier === 0 && lsaClues)
   // One Google Ads login covers Search and Local Services, so either one
   // planned means asking for Google Ads access.
   const googleId = String(c.google_ads_customer_id || '').replace(/\D/g, '')
-  const googleApplies = lsaApplies || Boolean(googleId)
+  const googleApplies = tier >= 2 || (tier === 0 && (lsaApplies || Boolean(googleId)))
   const googleRefused = Boolean(googleId) && isAccessError(c.google_ads_sync_error)
   const googleDone = Boolean(googleId) && !googleRefused
 
@@ -211,18 +215,6 @@ export function nextSteps(ctx) {
           ? `${ctx.ghlMissing.length} required field${ctx.ghlMissing.length === 1 ? '' : 's'} still blank.`
           : 'Not started.',
       waitingSince: !ghlFormDone && link?.created_at ? link.created_at : null,
-    })
-  }
-  if (gbpApplies) {
-    add({
-      key: 'gbp-access',
-      phase: 'Access',
-      title: 'Google Business Profile access',
-      owner: OWNER.client,
-      applies: true,
-      done: Boolean(c.gbp_optimized),
-      action: { kind: 'gbp', label: 'Copy the GBP access message' },
-      detail: c.gbp_optimized ? 'Optimized.' : 'Ask for manager access, then run the GBP agent brief.',
     })
   }
   if (googleApplies) {

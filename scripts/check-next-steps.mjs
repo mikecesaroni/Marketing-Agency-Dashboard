@@ -54,7 +54,7 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
   )
   check('form and fee done', r.steps.filter((s) => s.done).map((s) => s.key), ['setup-fee', 'onboarding-form'])
   check('next is the call, which is ours', [r.next.key, r.next.owner], ['onboarding-call', 'us'])
-  check('the client-side waits are listed separately', r.theirs.map((s) => s.key), ['meta-access', 'photos', 'gbp-access'])
+  check('the client-side waits are listed separately', r.theirs.map((s) => s.key), ['meta-access', 'photos'])
   check('phase still Sign up while the call is open', r.phase, 'Sign up')
 }
 
@@ -148,7 +148,7 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
       [true, false, 'us'])
     check('it ticks itself off once the sync sees a running campaign', [pub(conn).done, pub(conn, { googleCampaigns: 2 }).done, pub(conn, { googleCampaigns: 2 }).detail], [false, true, '2 campaigns running.'])
   }
-  check('no GBP step when the intake says no profile', keys(nextSteps(base({ intake: { has_google_business: false } }))).includes('gbp-access'), false)
+  check('no Business Profile step at all (taken off the list 2026-10-20)', keys(nextSteps(base({ client: { tier: 2 } }))).includes('gbp-access'), false)
 }
 
 // --- marked done by hand -------------------------------------------------------------
@@ -174,10 +174,16 @@ check('nextLine names the client wait', nextLine(nextSteps(base())), 'Setup fee 
 {
   const r1 = nextSteps(base({ client: { tier: 1 } }))
   check('tier 1: GHL is in every package, so the GHL steps show without ghl_plan', keys(r1).filter((k) => k.startsWith('ghl')), ['ghl-form', 'ghl-build', 'ghl-live'])
-  check('tier 1: Meta only, no Google steps, no extras', keys(r1).filter((k) => /google|lsa|gbp|past-customers|ai-brain|automations/.test(k)), ['gbp-access'])
+  check('tier 1: Meta only, no Google steps, no extras', keys(r1).filter((k) => /google|lsa|gbp|past-customers|ai-brain|automations/.test(k)), [])
   check('tier 1: the result says the tier', r1.tier, 1)
+  const stray = nextSteps(base({ client: { tier: 1, lsa_active: true, lsa_budget_per_day: 20, google_ads_customer_id: '1234567890' }, intake: { lsa_status: 'verified' } }))
+  check('tier 1: no Google or LSA steps even with LSA fields and a Google Ads id on the client', keys(stray).filter((k) => /google|lsa/.test(k)), [])
+  const fee1 = nextSteps(base({ client: { monthly_fee: 1500, lsa_active: true } }))
+  check('a $1,500 fee with no tier set is Maintenance: no Google steps either', keys(fee1).filter((k) => /google|lsa/.test(k)), [])
+  const unknown = nextSteps(base({ client: { lsa_active: true } }))
+  check('no package at all still reads the LSA clues', keys(unknown).filter((k) => /google|lsa/.test(k)), ['google-ads-access', 'google-publish', 'lsa-live'])
   const r2 = nextSteps(base({ client: { tier: 2 } }))
-  check('tier 2: Google Ads access and campaign, LSA live, GBP and the past customer list', keys(r2).filter((k) => /google|lsa|gbp|past-customers/.test(k)), ['gbp-access', 'google-ads-access', 'past-customers', 'google-publish', 'lsa-live'])
+  check('tier 2: Google Ads access and campaign, LSA live and the past customer list', keys(r2).filter((k) => /google|lsa|gbp|past-customers/.test(k)), ['google-ads-access', 'past-customers', 'google-publish', 'lsa-live'])
   check('tier 2: LSA waits on Google Ads access', r2.steps.find((s) => s.key === 'lsa-live').blockedBy, 'google-ads-access')
   check('tier 2: the past customer list waits on the GHL build', r2.steps.find((s) => s.key === 'past-customers').blockedBy, 'ghl-build')
   const r3 = nextSteps(base({ client: { tier: 3, ghl_active: true, ghl_plan: true, google_ads_customer_id: '1234567890', lsa_active: true } }))

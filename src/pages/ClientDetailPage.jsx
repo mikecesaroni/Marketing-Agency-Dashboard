@@ -392,8 +392,6 @@ export default function ClientDetailPage() {
         return setSetupModal('meta')
       case 'google-ads-access':
         return setSetupModal('googleads')
-      case 'gbp':
-        return setSetupModal('gbp')
       case 'ghl-toggle':
       case 'meta-toggle':
       case 'lsa-toggle':
