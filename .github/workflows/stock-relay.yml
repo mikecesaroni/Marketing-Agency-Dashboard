@@ -1,5 +1,6 @@
 # Copies the twelve real equipment photos (and the ChatGPT sample ads, from
-# ai-ads/samples/) from the public stock library into
+# ai-ads/samples/, and the ChatGPT template art, from stock/template-art/)
+# from the public stock library into
 # a throwaway branch (relay/stock-units), so a build or a review session that
 # cannot reach the Supabase bucket directly can still fetch them from GitHub.
 # Run it by hand (Actions > Relay the stock unit photos > Run workflow), or
@@ -40,12 +41,21 @@ jobs:
             done
           done
           ls -la relay/ai-samples
+      - name: Fetch the ChatGPT template art too
+        run: |
+          mkdir -p relay/template-art
+          for k in burst burst_red pop coral deep snow leaves sun fresh glow night holiday paper brand sun_deal clunkers rebate_burst; do
+            for s in square tall; do
+              curl -fsSL -o "relay/template-art/$k-$s.jpg" "https://zjtwqpaaejrkurtuakdz.supabase.co/storage/v1/object/public/client-files/stock/template-art/$k-$s.jpg" || rm -f "relay/template-art/$k-$s.jpg"
+            done
+          done
+          ls -la relay/template-art
       - name: Put them on the relay branch
         run: |
           git config user.name "stock-relay"
           git config user.email "stock-relay@users.noreply.github.com"
           git checkout --orphan relay/stock-units
           git rm -rf --cached . >/dev/null 2>&1 || true
-          git add -f relay/units relay/ai-samples
+          git add -f relay/units relay/ai-samples relay/template-art
           git commit -m "Relay: the stock unit photos as of $(date -u +%Y-%m-%dT%H:%MZ)"
           git push -f origin relay/stock-units
