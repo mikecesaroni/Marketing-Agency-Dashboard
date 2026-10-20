@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { OWNER, PHASES } from '../lib/nextSteps'
+import { OWNER } from '../lib/nextSteps'
 import { canUndo } from '../lib/completeStep'
 
 /**
@@ -25,40 +25,6 @@ function OwnerChip({ owner }) {
     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">client</span>
   ) : (
     <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800">us</span>
-  )
-}
-
-function Dot({ step }) {
-  const cls = step.done
-    ? 'bg-green-500'
-    : step.blocked
-      ? 'bg-slate-200'
-      : step.owner === OWNER.client
-        ? 'bg-amber-400'
-        : 'bg-blue-500'
-  return <span title={`${step.title}: ${step.done ? 'done' : step.blocked ? 'blocked' : 'open'}`} className={`inline-block h-2 w-2 rounded-full ${cls}`} />
-}
-
-export function PipelineStrip({ result, compact = false }) {
-  if (!result) return null
-  return (
-    <div className={`flex flex-wrap items-center ${compact ? 'gap-x-2 gap-y-0.5' : 'gap-x-3 gap-y-1'}`}>
-      {PHASES.map((p) => {
-        const steps = result.steps.filter((s) => s.phase === p)
-        if (steps.length === 0) return null
-        const current = result.phase === p
-        return (
-          <span key={p} className="flex items-center gap-1">
-            <span className={`text-[10px] uppercase tracking-wide ${current ? 'font-semibold text-slate-900' : 'text-slate-400'}`}>{p}</span>
-            <span className="flex items-center gap-0.5">
-              {steps.map((s) => (
-                <Dot key={s.key} step={s} />
-              ))}
-            </span>
-          </span>
-        )
-      })}
-    </div>
   )
 }
 
@@ -106,7 +72,7 @@ export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDo
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Next up · {result.phase} · {progress.done}/{progress.total} done
+              Next up · {progress.done}/{progress.total} done
             </p>
             {next ? (
               <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-sm">
@@ -170,9 +136,6 @@ export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDo
             </button>
           </div>
 
-          <div className="basis-full">
-            <PipelineStrip result={result} />
-          </div>
         </div>
 
         {open && (
@@ -186,9 +149,7 @@ export default function NextUpBar({ result, assignedTo, onAssign, onAction, onDo
                     s.done ? 'border-green-100 bg-green-50/60' : s.blocked ? 'border-slate-100 bg-slate-50 text-slate-500' : 'border-slate-200 bg-white'
                   }`}
                 >
-                  <span className="mt-0.5">
-                    <Dot step={s} />
-                  </span>
+                  <span className={`mt-1.5 inline-block h-2 w-2 flex-shrink-0 rounded-full ${s.done ? 'bg-green-500' : s.blocked ? 'bg-slate-200' : s.owner === OWNER.client ? 'bg-amber-400' : 'bg-blue-500'}`} />
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-baseline gap-x-1.5">
                       <span className={`font-medium ${s.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{s.title}</span>

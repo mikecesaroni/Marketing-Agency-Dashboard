@@ -4,7 +4,6 @@ import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import SetupMessageModal from '../components/SetupMessageModal'
 import OnboardingLinkPanel from '../components/OnboardingLinkPanel'
-import { PipelineStrip } from '../components/NextUpBar'
 import { supabase } from '../lib/supabaseClient'
 import { cacheBust, cached, keys } from '../lib/pageCache'
 import { fetchClientStatus, setClientTier } from '../lib/clientStatusData'
@@ -81,7 +80,7 @@ function Tick({ step, onDone, onUndo }) {
         type="button"
         onClick={() => canUndo(step) && onUndo(step)}
         title={canUndo(step) ? `${step.detail} Click to take it back.` : step.detail}
-        className={`mt-0.5 grid h-5 w-5 flex-shrink-0 place-items-center rounded-md border text-[11px] font-bold ${canUndo(step) ? 'cursor-pointer border-green-500 bg-green-500 text-white hover:bg-green-600' : 'cursor-default border-green-500 bg-green-500 text-white'}`}
+        className={`mt-0.5 grid h-5 w-5 flex-shrink-0 place-items-center rounded-md border border-green-500 bg-green-500 text-[11px] font-bold text-white ${canUndo(step) ? 'cursor-pointer hover:bg-green-600' : 'cursor-default'}`}
         data-tick="done"
       >
         ✓
@@ -94,7 +93,7 @@ function Tick({ step, onDone, onUndo }) {
       type="button"
       disabled={!canMark}
       onClick={() => canMark && onDone(step)}
-      title={step.blocked ? 'Waits on an earlier step' : NOT_MARKABLE.has(step.key) ? 'Recorded on the Payments page' : 'Mark done'}
+      title={step.blocked ? `Waits on: ${step.blockedTitle || 'an earlier step'}` : NOT_MARKABLE.has(step.key) ? 'Recorded on the Payments page' : 'Mark done'}
       className={`mt-0.5 h-5 w-5 flex-shrink-0 rounded-md border ${step.blocked ? 'border-slate-200 bg-slate-100' : 'border-slate-400 bg-white hover:border-green-500 hover:bg-green-50'}`}
       data-tick={step.blocked ? 'blocked' : 'open'}
     />
@@ -107,13 +106,13 @@ function TierPicker({ row, onChange }) {
       value={row.tier || ''}
       onChange={(e) => onChange(row.client, Number(e.target.value) || null)}
       title={row.guessed ? 'Guessed from the monthly fee. Pick it to confirm.' : 'The package this client is on'}
-      className={`rounded-lg border px-2 py-1 text-xs font-medium ${row.guessed ? 'border-amber-300 bg-amber-50 text-amber-900' : row.tier ? 'border-slate-300 bg-white text-slate-800' : 'border-red-300 bg-red-50 text-red-800'}`}
+      className={`max-w-[11rem] rounded-lg border px-2 py-1 text-xs font-medium ${row.guessed ? 'border-amber-300 bg-amber-50 text-amber-900' : row.tier ? 'border-slate-300 bg-white text-slate-800' : 'border-red-300 bg-red-50 text-red-800'}`}
       data-tier-picker
     >
       <option value="">No package</option>
       {TIERS.map((t) => (
         <option key={t.tier} value={t.tier}>
-          {t.short} · {tierPrice(t.tier)}
+          {t.short}
           {row.guessed && row.tier === t.tier ? ' (guessed)' : ''}
         </option>
       ))}
@@ -121,145 +120,113 @@ function TierPicker({ row, onChange }) {
   )
 }
 
+/**
+ * One client. Closed, it is four things: the name and one status word, the
+ * flags as short lines, the next step with its one button, and "More". Open,
+ * the checklist (one plain list, in order), the owner and the links.
+ */
 function ClientCard({ row, open, onToggle, onModal, onDone, onUndo, onTier, onAssign }) {
   const { client, result, flags, intake } = row
   const next = result.next
-  const phone = telHref(intake?.contact_phone || '')
+  const phone = telHref(intact(intake?.contact_phone))
+  const status = row.red ? ['Call them', 'danger'] : row.amber ? ['Chase', 'warning'] : client.paused_at ? ['Paused', 'dim'] : result.launched ? ['Running', 'success'] : ['Onboarding', 'info']
   const stripe = row.red ? 'bg-red-500' : row.amber ? 'bg-amber-400' : result.launched ? 'bg-green-500' : 'bg-slate-300'
-  const phases = [...new Set(result.steps.map((s) => s.phase))]
+  const byKey = new Map(result.steps.map((st) => [st.key, st]))
 
   return (
     <Card padding="none" className="overflow-hidden" data-status-card={client.id} data-needs-contact={row.needsContact ? 'yes' : 'no'}>
       <div className="flex">
         <div className={`w-1.5 flex-shrink-0 ${stripe}`} />
         <div className="min-w-0 flex-1 p-4">
-          {/* Who, what package, who owns them, how to reach them. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <Link to={`/client/${client.id}`} className="text-base font-bold text-slate-900 hover:text-blue-700 hover:underline">
+          <div className="flex items-center gap-2">
+            <Link to={`/client/${client.id}`} className="min-w-0 flex-1 truncate text-base font-bold text-slate-900 hover:text-blue-700 hover:underline">
               {client.name}
             </Link>
-            {row.needsContact && (
-              <Badge tone={row.red ? 'danger' : 'warning'} className="whitespace-nowrap">
-                {row.red ? 'Call them' : 'Chase'}
-              </Badge>
-            )}
-            {!row.needsContact && result.launched && <Badge tone="success">Running</Badge>}
-            {client.paused_at && <Badge tone="dim">Paused</Badge>}
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
             {phone && (
-              <a href={phone} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50" title={intake.contact_phone}>
-                📞 Call
+              <a href={phone} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50" title={`Call ${intake.contact_phone}`}>
+                📞
               </a>
             )}
-            <input
-              defaultValue={client.assigned_to || ''}
-              onBlur={(e) => e.target.value.trim() !== (client.assigned_to || '') && onAssign(client, e.target.value.trim())}
-              placeholder="Owner"
-              list="team-names"
-              title="Who on the team owns this client"
-              className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-xs"
-            />
-            <TierPicker row={row} onChange={onTier} />
+            <Badge tone={status[1]} className="whitespace-nowrap">
+              {status[0]}
+            </Badge>
           </div>
 
-          {/* THE FLAGS: the reasons to act today, worst first. */}
-          {flags.length > 0 ? (
-            <ul className="mt-3 space-y-1.5" data-flags>
-              {flags.map((f) => {
-                const sev = SEVERITY[f.severity]
-                return (
-                  <li key={f.key} className={`rounded-lg border px-2.5 py-1.5 ${sev.bg}`} data-flag={f.key}>
-                    <Link to={f.href || `/client/${client.id}`} className="flex items-start gap-2">
-                      <span className={`mt-1.5 inline-block h-2 w-2 flex-shrink-0 rounded-full ${sev.dot}`} />
-                      <span className="min-w-0 flex-1">
-                        <span className={`block text-sm font-semibold ${sev.text}`}>{f.label}</span>
-                        {f.detail && <span className="block text-xs text-slate-600">{f.detail}</span>}
-                      </span>
-                    </Link>
-                  </li>
-                )
-              })}
+          {/* THE FLAGS: the reasons to act today, worst first, one line each. */}
+          {flags.length > 0 && (
+            <ul className="mt-3 space-y-1" data-flags>
+              {flags.map((f) => (
+                <li key={f.key} data-flag={f.key}>
+                  <Link to={f.href || `/client/${client.id}`} title={f.detail} className="flex items-start gap-2 text-sm hover:underline">
+                    <span className={`mt-1.5 inline-block h-2 w-2 flex-shrink-0 rounded-full ${SEVERITY[f.severity].dot}`} />
+                    <span className={`min-w-0 flex-1 ${SEVERITY[f.severity].text}`}>{f.label}</span>
+                  </Link>
+                  {open && f.detail && <p className="ml-4 text-xs text-slate-500">{f.detail}</p>}
+                </li>
+              ))}
             </ul>
-          ) : (
-            <p className="mt-3 text-xs text-slate-500">Nothing flagged.</p>
           )}
 
-          {/* Where they are and what is next. */}
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <PipelineStrip result={result} compact />
-            <span className="text-[11px] tabular-nums text-slate-400">
-              {result.progress.done}/{result.progress.total} · {result.phase}
+          {/* THE NEXT STEP, and the one button that does it. */}
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            {next ? (
+              <>
+                <span className="min-w-0 flex-1">
+                  <span className="text-slate-500">Next: </span>
+                  <span className="font-medium text-slate-900">{next.title}</span>
+                  {next.owner === OWNER.client && <span className="text-slate-500"> (their move{next.waitingDays > 0 ? `, ${next.waitingDays}d` : ''})</span>}
+                </span>
+                <StepButton clientId={client.id} step={next} onModal={onModal} strong />
+              </>
+            ) : (
+              <span className="text-slate-600">{result.launched ? 'Everything on the plan is done.' : 'Nothing outstanding.'}</span>
+            )}
+          </div>
+
+          <div className="mt-3 flex items-center gap-3">
+            <button type="button" onClick={onToggle} aria-expanded={open} className="text-xs font-medium text-slate-500 hover:text-slate-900" data-checklist-toggle>
+              {open ? 'Less' : `More · ${result.progress.done} of ${result.progress.total} done`}
+            </button>
+            <span className="ml-auto">
+              <TierPicker row={row} onChange={onTier} />
             </span>
           </div>
-          {next ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-slate-500">Next:</span>
-              <span className="font-medium text-slate-900">{next.title}</span>
-              <OwnerChip owner={next.owner} />
-              {next.waitingDays > 0 && <span className="text-xs text-amber-700">{next.waitingDays}d waiting</span>}
-              <span className="ml-auto flex items-center gap-2">
-                <StepButton clientId={client.id} step={next} onModal={onModal} strong />
-                {!NOT_MARKABLE.has(next.key) && (
-                  <button type="button" onClick={() => onDone(next)} className="rounded-lg border border-green-300 bg-white px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50">
-                    ✓ Done
-                  </button>
-                )}
-              </span>
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-slate-600">{result.launched ? 'Everything on the plan is done.' : 'Nothing outstanding.'}</p>
-          )}
 
-          {/* THE CHECKLIST: everything this package owes them, tick by tick. */}
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={open}
-            className="mt-3 flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900"
-            data-checklist-toggle
-          >
-            <span className={`text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-            {open ? 'Hide the checklist' : `Checklist · ${result.progress.done} of ${result.progress.total} done`}
-          </button>
           {open && (
-            <div className="mt-2 space-y-2" data-checklist>
-              {phases.map((phase) => (
-                <div key={phase}>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">{phase}</p>
-                  <ol className="space-y-1">
-                    {result.steps
-                      .filter((s) => s.phase === phase)
-                      .map((s) => (
-                        <li key={s.key} className={`flex items-start gap-2 rounded-lg px-2 py-1.5 text-xs ${s.done ? 'bg-green-50/60' : s.blocked ? 'text-slate-400' : 'bg-white'}`} data-step={s.key}>
-                          <Tick step={s} onDone={onDone} onUndo={onUndo} />
-                          <span className="min-w-0 flex-1">
-                            <span className="flex flex-wrap items-baseline gap-x-1.5">
-                              <span className={`font-medium ${s.done ? 'text-slate-500 line-through' : s.blocked ? 'text-slate-500' : 'text-slate-900'}`}>{s.title}</span>
-                              {!s.done && !s.blocked && <OwnerChip owner={s.owner} />}
-                              {s.waitingDays > 0 && !s.done && <span className="text-amber-700">{s.waitingDays}d</span>}
-                              {s.blocked && <span className="text-slate-400">after: {result.steps.find((x) => x.key === s.blockedBy)?.title || s.blockedBy}</span>}
-                            </span>
-                            <span className="block text-slate-500">{s.detail}</span>
-                            {!s.done && !s.blocked && (
-                              <span className="mt-0.5 block">
-                                <StepButton clientId={client.id} step={s} onModal={onModal} />
-                              </span>
-                            )}
-                          </span>
-                        </li>
-                      ))}
-                  </ol>
-                </div>
-              ))}
-              <p className="flex flex-wrap gap-x-3 pt-1 text-[11px] text-slate-500">
+            <div className="mt-3 border-t border-slate-100 pt-3" data-checklist>
+              <ol className="space-y-1.5">
+                {result.steps.map((st) => (
+                  <li key={st.key} className="flex items-start gap-2 text-sm" data-step={st.key}>
+                    <Tick step={{ ...st, blockedTitle: byKey.get(st.blockedBy)?.title }} onDone={onDone} onUndo={onUndo} />
+                    <span className="min-w-0 flex-1" title={st.detail}>
+                      <span className={st.done ? 'text-slate-400 line-through' : st.blocked ? 'text-slate-400' : 'text-slate-900'}>{st.title}</span>
+                      {!st.done && !st.blocked && st.owner === OWNER.client && <span className="ml-1.5 text-xs text-amber-700">their move{st.waitingDays > 0 ? ` · ${st.waitingDays}d` : ''}</span>}
+                      {!st.done && !st.blocked && (
+                        <span className="block">
+                          <StepButton clientId={client.id} step={st} onModal={onModal} />
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                <label className="flex items-center gap-1">
+                  Owner
+                  <input
+                    defaultValue={client.assigned_to || ''}
+                    onBlur={(e) => e.target.value.trim() !== (client.assigned_to || '') && onAssign(client, e.target.value.trim())}
+                    placeholder="Nobody yet"
+                    list="team-names"
+                    className="w-24 rounded-lg border border-slate-300 px-2 py-0.5 text-xs text-slate-800"
+                  />
+                </label>
                 <Link to={`/client/${client.id}`} className="hover:underline">Client page</Link>
                 <Link to={`/client/${client.id}#files`} className="hover:underline">Files</Link>
                 <Link to={`/client/${client.id}#ad-performance`} className="hover:underline">Ads</Link>
                 <Link to={`/client/${client.id}?open=studio`} className="hover:underline">Ad Studio</Link>
                 <Link to="/content" className="hover:underline">Video board</Link>
-                <Link to={`/reports/client/${client.id}`} className="hover:underline">Live KPIs</Link>
-              </p>
+              </div>
             </div>
           )}
         </div>
@@ -268,27 +235,26 @@ function ClientCard({ row, open, onToggle, onModal, onDone, onUndo, onTier, onAs
   )
 }
 
-/** A package's bucket: its name, price and what it owes, then the cards. */
+/** A package's bucket: its name and price, how many need a call, then the cards. What it includes is on hover. */
 function Bucket({ tier, rows, children }) {
   const t = TIERS.find((x) => x.tier === tier)
   const calls = rows.filter((r) => r.needsContact).length
   return (
     <section className="min-w-0" data-bucket={tier}>
-      <header className="mb-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <h2 className="text-base font-bold text-slate-900">{t ? t.name : 'No package set'}</h2>
-          {t && <span className="text-sm font-semibold text-slate-500">{tierPrice(tier)}</span>}
-          <span className="ml-auto text-xs tabular-nums text-slate-500">
-            {rows.length} client{rows.length === 1 ? '' : 's'}
-            {calls > 0 && <span className="ml-2 font-semibold text-red-700">{calls} to call</span>}
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-slate-500">{t ? t.includes.join(' · ') : 'Pick a package on each card so the checklist knows what they are owed.'}</p>
+      <header className="mb-3 flex flex-wrap items-baseline gap-x-2 px-1" title={t ? t.includes.join(' · ') : 'Pick a package on each card so the checklist knows what they are owed.'} data-bucket-head>
+        <h2 className="text-base font-bold text-slate-900">{t ? t.short : 'No package set'}</h2>
+        {t && <span className="text-sm text-slate-500">{tierPrice(tier)}</span>}
+        <span className="ml-auto text-xs tabular-nums text-slate-500">
+          {rows.length}
+          {calls > 0 && <span className="ml-2 font-semibold text-red-700">{calls} to call</span>}
+        </span>
       </header>
       <div className="space-y-3">{children}</div>
     </section>
   )
 }
+
+const intact = (v) => (typeof v === 'string' ? v : '')
 
 export default function ClientStatusPage() {
   const [rows, setRows] = useState(null)
@@ -390,7 +356,7 @@ export default function ClientStatusPage() {
       subtitle={rows ? `${counts.contact} need a call · ${counts.client} waiting on a client · ${counts.clean} running clean` : 'Loading…'}
       actions={
         <Button variant="outline" size="lg" onClick={() => setOpenAll((o) => !o)} className="w-full md:w-auto" data-open-all>
-          {openAll ? 'Close the checklists' : 'Open every checklist'}
+          {openAll ? 'Close all' : 'Open all'}
         </Button>
       }
     >
