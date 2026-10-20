@@ -97,6 +97,7 @@ check('the art path and its parse agree; junk is ignored', [parseTemplateArtName
 const artPrompt = buildArtPrompt({ key: 'brand', shape: 'tall' })
 check('the art has no words, no product, no logo, no boxes', [artPrompt.includes('Absolutely no words, letters, numbers, price, logo, product'), artPrompt.includes('boxes, frames or bars')], [true, true])
 check('the brand art is grey, to be tinted with each client’s colour', [artPrompt.includes('only shades of grey'), buildArtPrompt({ key: 'snow' }).includes('only shades of grey')], [true, false])
+check('the plain backgrounds get a plain brief, and no art prompt names the trade (it gets written on the art)', [buildArtPrompt({ key: 'paper' }).includes('plain, quiet background texture'), buildArtPrompt({ key: 'burst' }).includes('loud retail poster'), TEMPLATE_ART_KEYS.filter((k) => /heating|cooling|hvac/i.test(buildArtPrompt({ key: k })))], [true, true, []])
 check('no em dashes in the art prompts', TEMPLATE_ART_KEYS.filter((k) => /[—–]/.test(buildArtPrompt({ key: k, shape: 'tall' }))), [])
 check('the function paints the art from the words alone and keeps one picture per key and shape', [fn.includes("if (action === 'art')"), fn.includes("'https://api.openai.com/v1/images/generations'"), fn.includes('templateArtPath(key, shape)')], [true, true, true])
 check(

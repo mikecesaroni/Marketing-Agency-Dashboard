@@ -213,8 +213,8 @@ export const TEMPLATE_ART = {
   glow: { look: 'a warm glow: cream at the top fading into orange, soft realistic flames rising along the bottom fifth' },
   night: { look: 'near-black and urgent, deep charcoal with streaks of red light sweeping diagonally, a faint red glow at the lower right' },
   holiday: { look: 'festive deep red with gentle falling snow, a few pine branches and red and gold ornaments along the top corners and edges, the middle calm' },
-  paper: { look: 'a clean warm-white poster paper with a very subtle grain and a faint soft shadow toward the edges' },
-  brand: { look: 'a light grey studio backdrop, almost white: soft diagonal light streaks and a gentle vignette, entirely without colour (pure greys), so it can be tinted with any brand colour', grey: true },
+  paper: { look: 'clean warm-white poster paper with a very subtle grain and a faint soft shadow toward the edges, and nothing else on it', calm: true },
+  brand: { look: 'a light grey studio backdrop, almost white: soft diagonal light streaks and a gentle vignette, entirely without colour (pure greys), so it can be tinted with any brand colour', grey: true, calm: true },
   sun_deal: { look: 'a bright sky-blue sunburst: rays fanning out from a soft white glow just above the middle, the corners deepening to blue, and fluffy realistic white clouds piled along the bottom fifth, edge to edge', theme: 'burst' },
   clunkers: { look: 'a bright blue sunburst: rays fanning out from a soft white glow in the middle, with torn black paper covering the top left corner (its ripped edge running from the top middle down to the left side, a fifth of the way down) and the bottom right corner (ripped edge from the bottom middle up to the right side), a few black ink flecks along the tears', theme: 'burst' },
   rebate_burst: { look: 'a vivid red sunburst: rays fanning out from a soft warm glow just above the middle, with torn navy paper covering the top left corner (its ripped edge running from the top middle down to the left side, a fifth of the way down) and the bottom right corner, a few navy ink flecks along the tears', theme: 'burst_red' },
@@ -243,8 +243,13 @@ export function buildArtPrompt({ key, shape = 'square' } = {}) {
   const d = TEMPLATE_ART[key]
   if (!d) throw new Error(`No template art for ${key}.`)
   const parts = []
+  // The plain ones get a plain brief: told "loud retail poster" and "heating
+  // and cooling", the white paper came back as a sunburst with HEATING and
+  // COOLING written on it.
   parts.push(
-    'Paint the background art for a loud retail poster ad for a local heating and cooling company: the finished, print-quality backdrop a designer would put behind the words, the price and the product. Rich, saturated, polished, with real depth and light.'
+    d.calm
+      ? 'Paint a plain, quiet background texture: the surface a clean, minimal poster is printed on. Nothing on it but the surface itself.'
+      : 'Paint the background art for a loud retail poster ad: the finished, print-quality backdrop a designer would put behind the words, the price and the product. Rich, saturated, polished, with real depth and light.'
   )
   parts.push(`The background: ${d.look}.`)
   parts.push(
