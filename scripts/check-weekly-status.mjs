@@ -77,6 +77,8 @@ check('ads off leads, then the stale ad, three at most', pts({ flags: [{ key: 'a
 check('no leads while spending says the money, and does not repeat the down trend', pts({ flags: [{ key: 'no-leads', label: 'No leads for 9 days' }], leads: { spend14: 620 } }, { key: 'running' }, { key: 'fresh' }, { key: 'down', why: 'No leads two weeks running' }), ['No leads for 9 days, $620 spent in two weeks'])
 check('onboarding names the next step', pts({ result: { launched: false, next: { title: 'Meta ad account and Page connected' } } }, { key: 'onboarding', label: 'Onboarding' }, { key: 'none' }, { key: 'none', why: '' }, w(0, 0), w(0, 0)), ['Next: Meta ad account and Page connected'])
 check('a clip waiting is a point', pts({ drop: { daysSince: 2 } }, { key: 'running' }, { key: 'clip', label: '1 clip waiting to publish', needAd: false }, { key: 'up', why: 'Leads up 50% on the week' }), ['Leads up 50% on the week', 'A clip is waiting to publish'])
+check('a chase on a running client is not a point', pts({ flags: [{ key: 'waiting', label: 'Waiting on them 47 days', detail: 'GHL account details sent back' }] }, { key: 'running' }, { key: 'fresh' }, { key: 'flat', why: '' }, w(0, 0), w(0, 0)), ['Running clean'])
+check('a chase while onboarding is the point', pts({ flags: [{ key: 'waiting', label: 'Waiting on them 12 days', detail: 'Onboarding form filled in' }], result: { launched: false, next: { title: 'Onboarding form filled in' } } }, { key: 'onboarding', label: 'Onboarding' }, { key: 'none' }, { key: 'none', why: '' }, w(0, 0), w(0, 0)), ['Waiting on them 12 days: Onboarding form filled in'])
 
 // --- the whole report -------------------------------------------------------------
 const TODAY = '2026-10-21'

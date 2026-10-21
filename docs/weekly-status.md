@@ -5,10 +5,10 @@ Added 2026-10-21, after "I want a weekly report for us to see how all clients ar
 ## The questions, and the answers built in
 
 - **What should ping the moment it happens?** Only what costs money or a day if it waits for morning: an ad account disabled, ads gone quiet (two days without spend on a live account), a new edit dropped in (so it is published the same day), a client crossing ten days without a new ad. Once per client per episode, never repeated. One line when the ads are delivering again.
-- **What waits for the morning?** No leads while spending, a payment overdue or a card failing, a chase a week old, a Google sync failing, KPIs not logged, a package not set. All in the brief, one line each.
+- **What waits for the morning?** No leads while spending, a Google sync failing, the payments, who is onboarding. One line each. Payments are ONE line for everyone (who is overdue for how much, whose card is failing). A chase (waiting on the client) is not a flag in the brief at all: it is a day count on the onboarding line, because the first real brief had twelve "waiting on them N days" lines for clients whose ads were running fine. Housekeeping (KPIs not logged, a package not set) stays on the Client status board.
 - **How many messages a day?** One brief on weekday mornings at 7am Eastern. Alerts only when something is new, and never between 9pm and 7am. A quiet day is one message.
 - **How long is the brief?** One line per thing, no explanations: the flag names the problem, the link goes to the place to fix it. The clients running clean are one line with their leads for the week ("Acme 8↑, Belk 5, ..."). Onboarding clients are one line each with their next step.
-- **What is green?** A live client with no red or amber flag, with their leads this week and whether that is up or down on the week before.
+- **What is green?** A live client whose ads have no flag (account, ads stopped, no leads, no new ad, Google sync), with their leads this week and whether that is up or down on the week before. Money does not take a client off that line; it has its own.
 - **Email or Slack?** Slack is the channel. Email is opt in (addresses on the Weekly status page) and needs the same two secrets the client reports use, `RESEND_API_KEY` and `REPORT_FROM`. Nothing is sent twice: the brief is once a day unless "Send now" is pressed.
 - **What about the weekly?** Monday's brief carries the week's totals and the clients that need a decision, in full, plus who is trending up. The whole table is the Weekly status page.
 

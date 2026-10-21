@@ -33,7 +33,7 @@ const mk = (id, name, over = {}) => ({
 const rows = [
   mk('a', 'Acme Heating', { leads: { leads7: 8, leads14: 13, spend7: 410, spend14: 800 } }),
   mk('b', 'Belk Plumbing', { flags: [{ key: 'ads-off', severity: 'red', label: 'Meta ads stopped: 3 days without spend', detail: 'Nothing has spent since 2026-10-17.', href: '/client/b#meta' }, { key: 'kpis', severity: 'blue', label: 'KPIs not logged this week' }], needsContact: true }),
-  mk('c', 'Cool Air', { flags: [{ key: 'waiting', severity: 'amber', label: 'Waiting on them 9 days', detail: 'Meta ad account and Page connected' }], needsContact: true, client: { id: 'c', name: 'Cool Air', meta_ads_active: false, archived: false, is_internal: false }, result: { launched: false, next: { title: 'Meta ad account and Page connected', owner: 'client' } } }),
+  mk('c', 'Cool Air', { flags: [{ key: 'waiting', severity: 'amber', label: 'Waiting on them 9 days', detail: 'Meta ad account and Page connected' }], needsContact: true, client: { id: 'c', name: 'Cool Air', meta_ads_active: false, archived: false, is_internal: false }, result: { launched: false, next: { title: 'Meta ad account and Page connected', owner: 'client', waitingDays: 9 } } }),
   mk('d', 'Drain Kings', { drop: { hasMeta: true, state: 'ready', behind: false, daysSince: 2, waiting: [{ path: 'd/clip2.mp4', name: 'clip2.mp4', at: '2026-10-20T09:00:00Z', by: 'Kyle', ready: true }, { path: 'd/clip1.mp4', name: 'clip1.mp4', at: '2026-10-19T09:00:00Z', by: '', ready: false }] }, flags: [{ key: 'clip-waiting', severity: 'blue', label: '2 new clips waiting to go out' }], leads: { leads7: 3, leads14: 9, spend7: 200, spend14: 400 } }),
   mk('e', 'Ex Co', { client: { id: 'e', name: 'Ex Co', archived: true } }),
   mk('f', 'Us Internal', { client: { id: 'f', name: 'Us Internal', is_internal: true } }),
@@ -47,14 +47,28 @@ check('only the ads coming back is worth a cleared line', [...CLEAR_WORTHY].sort
 const brief = buildBrief({ statusRows: rows, day: TODAY, appUrl: 'https://crm.example/' })
 check('archived and internal are left out', brief.counts.clients, 4)
 check('the day in words', brief.label, 'Tuesday, Oct 20')
-check('attention: red first, then amber', brief.attention.map((a) => [a.client.name, a.severity, a.key]), [['Belk Plumbing', 'red', 'ads-off'], ['Cool Air', 'amber', 'waiting']])
+check('attention: the ad flags only; a chase is not one', brief.attention.map((a) => [a.client.name, a.severity, a.key]), [['Belk Plumbing', 'red', 'ads-off']])
 check('blue flags are not attention', brief.attention.some((a) => a.key === 'kpis'), false)
 check('every waiting clip, newest first, naming the editor and whether it is in Meta', brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle', 'clip1.mp4, not in Meta yet'])
-check('running clean: live, no red or amber, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
-check('onboarding names the next step and whose move', brief.onboarding.map((o) => o.label), ['Meta ad account and Page connected (their move)'])
-check('the counts', brief.counts, { clients: 4, red: 1, amber: 1, toCall: 2, clips: 2, green: 2, greenLeads: 11, onboarding: 1 })
-check('the subject', briefSubject(brief), 'Morning brief · Tuesday, Oct 20 · 2 to call, 2 clips to publish, 2 running clean')
-check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (2)', 'To publish (2)', 'Running clean (2), leads this week', 'Onboarding (1)'])
+check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
+check('onboarding names the next step, whose move, and how long they have had it', brief.onboarding.map((o) => o.label), ['Meta ad account and Page connected (their move, 9 days)'])
+check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, money: 0, clips: 2, green: 2, greenLeads: 11, onboarding: 1 })
+check('the subject', briefSubject(brief), 'Morning brief · Tuesday, Oct 20 · 1 to call, 2 clips to publish, 2 running clean')
+check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week', 'Onboarding (1)'])
+
+// Money is one line, and does not take a client off the running-clean line.
+const moneyRows = [
+  mk('m1', 'Belk Plumbing', { flags: [{ key: 'payment', severity: 'red', label: 'Payment overdue: $2,500' }], needsContact: true, leads: { leads7: 4, leads14: 7, spend7: 100, spend14: 200 } }),
+  mk('m2', 'MBD Washing', { flags: [{ key: 'payment', severity: 'red', label: 'Card failing' }], needsContact: true }),
+  mk('m3', 'MCL Construction', { flags: [{ key: 'payment', severity: 'red', label: 'Card failing' }, { key: 'waiting', severity: 'amber', label: 'Waiting on them 33 days', detail: 'Photos' }], needsContact: true }),
+  mk('m4', 'Pillar HVAC', { flags: [{ key: 'payment', severity: 'red', label: 'Payment overdue: $998' }], needsContact: true }),
+]
+const moneyBrief = buildBrief({ statusRows: moneyRows, day: TODAY })
+check('payments are one line: who is overdue for how much, whose card is failing', briefSections(moneyBrief).find((s) => s.key === 'money'), { key: 'money', title: 'Payments (4)', lines: [{ emoji: '💳', text: 'Overdue: Belk Plumbing $2,500, Pillar HVAC $998 · Card failing: MBD Washing, MCL Construction', href: '/payments' }] })
+check('a client behind on money still counts as running clean when the ads are', moneyBrief.green.map((g) => g.client.name), ['Belk Plumbing', 'MBD Washing', 'MCL Construction', 'Pillar HVAC'])
+check('a chase on a running client is nowhere in the brief', briefText(moneyBrief).includes('Waiting on them'), false)
+check('the subject counts the payment issues', briefSubject(moneyBrief), 'Morning brief · Tuesday, Oct 20 · 4 payment issues, 4 running clean')
+check('nothing to flag but money still leads with the all-clear', briefSections(moneyBrief)[0].title, 'Nothing needs attention')
 check('running clean is ONE line, names and leads with an arrow for the week', briefSections(brief)[2].lines, [{ emoji: '🟢', text: 'Acme Heating 8↑, Drain Kings 3↓', href: '/status' }])
 check('no explanations: a flag line is the label alone', briefSections(brief)[0].lines[0], { emoji: '🔴', client: { id: 'b', name: 'Belk Plumbing' }, text: 'Meta ads stopped: 3 days without spend', href: '/client/b#meta' })
 check('the trailing slash on the app url is dropped', brief.appUrl, 'https://crm.example')
@@ -72,7 +86,7 @@ const long = buildBrief({ statusRows: Array.from({ length: 60 }, (_, i) => mk(`k
 check('slack: sixty flags are chunked into several sections, none over the cap', [briefSlack(long).blocks.filter((b) => b.type === 'section').length > 1, briefSlack(long).blocks.every((b) => !b.text || b.text.text.length <= 3000)], [true, true])
 
 const html = briefHtml(brief)
-check('html: a document with the sections and a link to the client', ['<!doctype html>', 'Needs attention (2)', 'href="https://crm.example/client/b#meta"', 'clip2.mp4 from Kyle'].every((s) => html.includes(s)), true)
+check('html: a document with the sections and a link to the client', ['<!doctype html>', 'Needs attention (1)', 'href="https://crm.example/client/b#meta"', 'clip2.mp4 from Kyle'].every((s) => html.includes(s)), true)
 check('html escapes what it prints', briefHtml(buildBrief({ statusRows: [mk('x', 'Bad <script>', { flags: [{ key: 'payment', severity: 'red', label: 'Card failing & more' }], needsContact: true })], day: TODAY })).includes('&lt;script&gt;'), true)
 
 const empty = buildBrief({ statusRows: [mk('a', 'Acme', { client: { id: 'a', name: 'Acme', meta_ads_active: false, archived: false }, result: { launched: true } })], day: TODAY })

@@ -117,9 +117,11 @@ export function keyPoints({ row, ads, creative, trend, now, prev }) {
   if (creative.key === 'clip') out.push(creative.needAd ? `A clip is waiting and the last ad was ${row.drop?.daysSince} days ago` : `${creative.label.replace(/^1 clip waiting/, 'A clip is waiting')}`)
   const pay = byKey('payment')
   if (pay) out.push(pay.label)
+  // A chase is a point only while they are onboarding. On a running client
+  // an open client-side step is housekeeping, not this week's news.
   const waiting = byKey('waiting')
-  if (waiting) out.push(`${waiting.label}: ${waiting.detail}`)
-  if (ads.key === 'onboarding' && row.result?.next) out.push(`Next: ${row.result.next.title}`)
+  if (waiting && ads.key === 'onboarding') out.push(`${waiting.label}: ${waiting.detail}`)
+  else if (ads.key === 'onboarding' && row.result?.next) out.push(`Next: ${row.result.next.title}`)
   if (ads.key === 'nospend' && prev.spend > 0) out.push(`Spent ${money(prev.spend)} the week before, nothing last week`)
   if (out.length === 0) out.push(ads.key === 'running' ? 'Running clean' : ads.label)
   return out.slice(0, 3)

@@ -29,6 +29,14 @@ import { money, weeklyLine } from './weeklyStatus.js'
 
 /** The flags that get their own post the moment they appear. Clips are keyed separately (one per drop). */
 export const IMMEDIATE = new Set(['account', 'ads-off', 'video-stale'])
+/**
+ * The ad flags: the brief's attention list, and what "running clean" is the
+ * absence of. Money is its own one line; a chase (waiting on the client) is
+ * not a flag in the brief at all but a day count on the onboarding line.
+ * The first real brief had twelve "waiting on them" lines for clients whose
+ * ads were running fine, and nobody reads a list like that twice.
+ */
+export const AD_FLAGS = new Set(['account', 'ads-off', 'no-leads', 'video-stale', 'google-sync'])
 /** The ones worth a line when they clear: the ads are back. */
 export const CLEAR_WORTHY = new Set(['account', 'ads-off'])
 
@@ -62,25 +70,32 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
   const clips = []
   const green = []
   const onboarding = []
+  const overdue = []
+  const failing = []
   for (const r of rows) {
     const client = pick(r.client)
-    for (const f of r.flags || []) {
-      if (f.severity === 'red' || f.severity === 'amber') {
+    const flags = r.flags || []
+    for (const f of flags) {
+      if (AD_FLAGS.has(f.key)) {
         attention.push({ client, severity: f.severity, key: f.key, label: f.label, detail: f.detail || '', href: f.href || `/client/${client.id}` })
       }
     }
+    const pay = flags.find((f) => f.key === 'payment')
+    if (pay) (pay.label === 'Card failing' ? failing : overdue).push({ client, label: pay.label.replace('Payment overdue: ', '') })
     for (const w of r.drop?.waiting || []) {
       clips.push({ client, key: 'clip', label: `${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}`, href: '/content', at: w.at })
     }
     const live = Boolean(r.client.meta_ads_active) && !r.client.paused_at
-    if (live && !r.needsContact) {
+    if (live && !flags.some((f) => AD_FLAGS.has(f.key))) {
       const leads7 = r.leads?.leads7 || 0
       const before = Math.max(0, (r.leads?.leads14 || 0) - leads7)
       green.push({ client, leads7, before, spend7: r.leads?.spend7 || 0 })
     }
     if (!r.result?.launched && !r.client.paused_at) {
       const next = r.result?.next
-      onboarding.push({ client, label: next ? `${next.title}${next.owner === 'client' ? ' (their move)' : ''}` : 'nothing open', theirs: next?.owner === 'client' })
+      const days = Number(next?.waitingDays) || 0
+      const theirs = next?.owner === 'client'
+      onboarding.push({ client, label: next ? `${next.title}${theirs ? ` (their move${days >= 7 ? `, ${days} days` : ''})` : ''}` : 'nothing open', theirs, days })
     }
   }
   const sev = { red: 0, amber: 1 }
@@ -88,10 +103,19 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
   clips.sort((a, b) => (a.at < b.at ? 1 : -1))
   green.sort((a, b) => b.leads7 - a.leads7 || a.client.name.localeCompare(b.client.name))
   const red = attention.filter((a) => a.severity === 'red').length
+  const money =
+    overdue.length || failing.length
+      ? {
+          overdue,
+          failing,
+          label: [overdue.length ? `Overdue: ${overdue.map((o) => `${o.client.name} ${o.label}`).join(', ')}` : '', failing.length ? `Card failing: ${failing.map((f) => f.client.name).join(', ')}` : ''].filter(Boolean).join(' · '),
+        }
+      : null
   return {
     day,
     label: longDay(day),
     attention,
+    money,
     clips,
     green,
     onboarding,
@@ -100,6 +124,7 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       red,
       amber: attention.length - red,
       toCall: new Set(attention.map((a) => a.client.id)).size,
+      money: overdue.length + failing.length,
       clips: clips.length,
       green: green.length,
       greenLeads: green.reduce((n, g) => n + g.leads7, 0),
@@ -115,6 +140,7 @@ export function briefSubject(model) {
   const c = model.counts
   const bits = []
   if (c.toCall) bits.push(`${c.toCall} to call`)
+  if (c.money) bits.push(`${c.money} payment issue${c.money === 1 ? '' : 's'}`)
   if (c.clips) bits.push(`${c.clips} clip${c.clips === 1 ? '' : 's'} to publish`)
   bits.push(`${c.green} running clean`)
   return `${model.weekly ? 'Monday brief and weekly status' : 'Morning brief'} · ${model.label} · ${bits.join(', ')}`
@@ -145,6 +171,9 @@ export function briefSections(model) {
       title: `Needs attention (${model.attention.length})`,
       lines: model.attention.map((a) => ({ emoji: EMOJI[a.key] || (a.severity === 'red' ? '🔴' : '🟠'), client: a.client, text: a.label, href: a.href })),
     })
+  }
+  if (model.money) {
+    out.push({ key: 'money', title: `Payments (${model.counts.money})`, lines: [{ emoji: EMOJI.payment, text: model.money.label, href: '/payments' }] })
   }
   if (model.clips.length) {
     out.push({ key: 'clips', title: `To publish (${model.clips.length})`, lines: model.clips.map((c) => ({ emoji: EMOJI.clip, client: c.client, text: c.label, href: c.href })) })
