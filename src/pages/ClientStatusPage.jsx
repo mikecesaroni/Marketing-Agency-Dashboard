@@ -352,7 +352,7 @@ export default function ClientStatusPage() {
 
   return (
     <Layout
-      title="Client status"
+      title="Client tiers"
       subtitle={rows ? `${counts.contact} need a call · ${counts.client} waiting on a client · ${counts.clean} running clean` : 'Loading…'}
       actions={
         <Button variant="outline" size="lg" onClick={() => setOpenAll((o) => !o)} className="w-full md:w-auto" data-open-all>

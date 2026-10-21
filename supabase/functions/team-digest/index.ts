@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
         text: 'The CRM is connected to this channel.',
         blocks: [
           { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *The CRM is connected to this channel.*\nMorning briefs land here on weekdays at 7am Eastern. Alerts come the moment they appear (an ad account disabled, ads gone quiet, a new edit dropped in, ten days without an ad) and once when the ads are back. Nothing between 9pm and 7am.` } },
-          { type: 'context', elements: [{ type: 'mrkdwn', text: `<${appUrl}/weekly|Weekly status> · <${appUrl}/status|Client status>` }] },
+          { type: 'context', elements: [{ type: 'mrkdwn', text: `<${appUrl}/weekly|Weekly status> · <${appUrl}/status|Client tiers>` }] },
         ],
       })
       await record({ day, kind: 'test', status: 'sent', slack_status: 'sent', subject: 'Connection test' })

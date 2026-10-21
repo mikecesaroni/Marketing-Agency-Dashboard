@@ -1,4 +1,4 @@
-# Client status
+# Client tiers (the Client tiers board)
 
 Added 2026-10-20, after "organize all clients in 3 buckets based on which tier they are in and what they need us to do ... flag any clients who haven't had videos in 10 days or they have not been getting leads". It took over from the Onboarding Progress board (`/deliverables`, which still lands here).
 

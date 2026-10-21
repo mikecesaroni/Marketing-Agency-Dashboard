@@ -177,13 +177,13 @@ export default function WeeklyStatusPage() {
   return (
     <Layout
       title="Weekly status"
-      subtitle={report ? `${report.label}, against ${report.prevLabel}. Meta and Google ad days plus LSA logged by hand; data through yesterday.` : 'Loading…'}
+      subtitle={report ? `${weeksBack === 0 ? 'Last 7 days' : `The 7 days ${weeksBack === 1 ? 'before last' : `${weeksBack} weeks back`}`}, ${report.label}, against the 7 before, ${report.prevLabel}. Meta and Google plus LSA logged by hand; through yesterday.` : 'Loading…'}
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setWeeksBack((w) => w + 1)} title="The week before" data-week-back>
+          <Button variant="outline" size="sm" onClick={() => setWeeksBack((w) => w + 1)} title="7 days earlier" data-week-back>
             ‹
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setWeeksBack((w) => Math.max(0, w - 1))} disabled={weeksBack === 0} title="The week after" data-week-forward>
+          <Button variant="outline" size="sm" onClick={() => setWeeksBack((w) => Math.max(0, w - 1))} disabled={weeksBack === 0} title="7 days later" data-week-forward>
             ›
           </Button>
           <Button variant="primary" size="sm" onClick={copy} disabled={!report} data-copy-report>
@@ -215,7 +215,7 @@ export default function WeeklyStatusPage() {
             <span>
               {t.needCall} need a call ·{' '}
               <Link to="/status" className="text-blue-700 hover:underline">
-                Client status
+                Client tiers
               </Link>
             </span>
           </p>

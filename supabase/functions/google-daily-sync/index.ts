@@ -37,10 +37,43 @@
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
-// Overridable by secret on purpose. Google ships a major version every few
-// months and retires old ones on a schedule; when this one is turned off the
-// fix is a secret, not a deploy, so whoever is on call can do it.
-const DEFAULT_API_VERSION = 'v22'
+// The floor, not the version: Google ships a major version every few months
+// and retires old ones on a schedule, and on 2026-10-21 every client's sync
+// failed with "Version v22 is deprecated. Requests to this version will be
+// blocked" (UNSUPPORTED_VERSION). So apiVersion() below probes upward from
+// here until Google answers, and remembers the one that did. A secret
+// (GOOGLE_ADS_API_VERSION) can still pin the starting point.
+const DEFAULT_API_VERSION = 'v23'
+
+let liveVersion: string | null = null
+
+/**
+ * The newest API version Google still answers, probed once per instance:
+ * the floor, then the next, and so on, until listAccessibleCustomers stops
+ * saying "unsupported version" or "not found". Any other answer (a refusal,
+ * a rate limit) means the version exists, and the caller gets the real
+ * error from its own call.
+ */
+async function apiVersion(token: string): Promise<string> {
+  if (liveVersion) return liveVersion
+  const start = Deno.env.get('GOOGLE_ADS_API_VERSION') || DEFAULT_API_VERSION
+  let n = Number(start.replace(/\D/g, '')) || 23
+  for (let i = 0; i < 8; i++, n++) {
+    const v = `v${n}`
+    const res = await fetch(`https://googleads.googleapis.com/${v}/customers:listAccessibleCustomers`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) {
+      liveVersion = v
+      return v
+    }
+    const text = await res.text().catch(() => '')
+    if (res.status === 404 || /UNSUPPORTED_VERSION|is deprecated/i.test(text)) continue
+    liveVersion = v
+    return v
+  }
+  return start
+}
 
 // How far back each run re-reads. Conversions keep landing against the day of
 // the CLICK for a long time after it — a call that comes in on Thursday from
@@ -144,7 +177,7 @@ async function accessToken(): Promise<string> {
  * an obvious way rather than truncating quietly.
  */
 async function gaql(customerId: string, query: string, token: string, loginAs?: string): Promise<any[]> {
-  const version = Deno.env.get('GOOGLE_ADS_API_VERSION') || DEFAULT_API_VERSION
+  const version = await apiVersion(token)
   // The manager account is how one credential reaches every client account.
   // The check passes its own login for accounts the login holds directly.
   const loginCustomerId = loginAs || bareId(Deno.env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID'))
@@ -251,7 +284,7 @@ async function linkedAccounts(token: string, manager: string): Promise<LinkedAcc
  * manager. Named one by one; an account that refuses is left out.
  */
 async function directAccounts(token: string, manager: string, skip: Set<string>): Promise<LinkedAccount[]> {
-  const version = Deno.env.get('GOOGLE_ADS_API_VERSION') || DEFAULT_API_VERSION
+  const version = await apiVersion(token)
   const res = await fetch(`https://googleads.googleapis.com/${version}/customers:listAccessibleCustomers`, {
     headers: { Authorization: `Bearer ${token}` },
   })
@@ -510,9 +543,9 @@ async function serve(req: Request): Promise<Response> {
   // the accounts linked under the manager. Each failure names its step.
   if (body.check) {
     try {
-      const version = Deno.env.get('GOOGLE_ADS_API_VERSION') || DEFAULT_API_VERSION
       const manager = bareId(Deno.env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID'))
       const token = await accessToken()
+      const version = await apiVersion(token)
       const acc = await fetch(`https://googleads.googleapis.com/${version}/customers:listAccessibleCustomers`, {
         headers: { Authorization: `Bearer ${token}` },
       })

@@ -28,7 +28,7 @@ export const NAV_GROUPS = [
       { to: '/content', label: 'Content', short: 'Content', Icon: IconContent },
       // Off the phone bar (mobile: false): the home screen's tiles reach
       // everything, so the bar keeps the four a thumb goes to all day.
-      { to: '/status', label: 'Client status', short: 'Status', Icon: IconDeliverables, mobile: false },
+      { to: '/status', label: 'Client tiers', short: 'Tiers', Icon: IconDeliverables, mobile: false },
       { to: '/weekly', label: 'Weekly status', short: 'Weekly', Icon: IconTrendUp, mobile: false },
       { to: '/tasks', label: 'Tasks', short: 'Tasks', Icon: IconTasks },
     ],

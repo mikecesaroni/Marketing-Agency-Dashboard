@@ -103,9 +103,9 @@ const weekly = buildWeeklyStatus({ statusRows: rows, metaRows, day: TODAY })
 const monday = buildBrief({ statusRows: rows, weekly, day: TODAY, appUrl: 'https://crm.example' })
 check('a Monday brief is named so', briefSubject(monday).startsWith('Monday brief and weekly status'), true)
 const mondaySlack = briefSlack(monday)
-check('slack on Monday carries the weekly totals and the full report link', [mondaySlack.blocks.some((b) => b.text?.text?.includes('*Weekly status · Oct 12 to 18*')), mondaySlack.blocks.some((b) => b.elements?.[0]?.text?.includes('/weekly|Weekly status in the CRM'))], [true, true])
-check('text on Monday carries the weekly status', briefText(monday).includes('WEEKLY STATUS · Oct 12 to 18'), true)
-check('html on Monday too', briefHtml(monday).includes('Weekly status · Oct 12 to 18'), true)
+check('slack on Monday carries the weekly totals and the full report link', [mondaySlack.blocks.some((b) => b.text?.text?.includes('*Weekly status · Oct 13 to 19*')), mondaySlack.blocks.some((b) => b.elements?.[0]?.text?.includes('/weekly|Weekly status in the CRM'))], [true, true])
+check('text on Monday carries the weekly status', briefText(monday).includes('WEEKLY STATUS · Oct 13 to 19'), true)
+check('html on Monday too', briefHtml(monday).includes('Weekly status · Oct 13 to 19'), true)
 
 // --- the alerts ----------------------------------------------------------------------
 const noisy = [...rows, mk('g', 'Gaps LLC', { flags: [{ key: 'no-leads', severity: 'red', label: 'No leads for 9 days' }, { key: 'payment', severity: 'red', label: 'Card failing' }, { key: 'video-stale', severity: 'red', label: 'No new video or ad in 12 days' }], needsContact: true })]

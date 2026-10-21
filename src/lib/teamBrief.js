@@ -248,7 +248,7 @@ export function briefSlack(model) {
     blocks.push(...slackSections(`Weekly status · ${model.weekly.label}`, lines))
     if (model.appUrl) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `Full report: ${link(model, '/weekly', 'Weekly status in the CRM')}` }] })
   }
-  if (model.appUrl) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, '/status', 'Client status')} · ${link(model, '/content', 'Video board')} · ${link(model, '/tasks', 'Tasks')}` }] })
+  if (model.appUrl) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, '/status', 'Client tiers')} · ${link(model, '/content', 'Video board')} · ${link(model, '/tasks', 'Tasks')}` }] })
   return { text: briefSubject(model), blocks }
 }
 
@@ -279,7 +279,7 @@ export function briefHtml(model, { agencyName = 'The Working Class Marketing' } 
 </td></tr>
 ${briefSections(model).map(section).join('')}
 ${weekly}
-<tr><td style="padding:18px 28px 24px;border-top:1px solid ${LINE};font-size:12px;color:${MUTED};">${model.appUrl ? `${link(model, '/status', 'Client status', 'html')} · ${link(model, '/content', 'Video board', 'html')} · ${link(model, '/tasks', 'Tasks', 'html')} · ` : ''}${esc(agencyName)}</td></tr>
+<tr><td style="padding:18px 28px 24px;border-top:1px solid ${LINE};font-size:12px;color:${MUTED};">${model.appUrl ? `${link(model, '/status', 'Client tiers', 'html')} · ${link(model, '/content', 'Video board', 'html')} · ${link(model, '/tasks', 'Tasks', 'html')} · ` : ''}${esc(agencyName)}</td></tr>
 </table>
 </td></tr>
 </table>

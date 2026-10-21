@@ -83,7 +83,7 @@ function TierBadge({ client }) {
   const { tier, guessed } = tierOf(client)
   if (!tier) return null
   return (
-    <Badge tone={guessed ? 'warning' : 'info'} className="whitespace-nowrap" title={guessed ? 'Guessed from the monthly fee; confirm it on Client status' : TIER_BY_NUMBER[tier].name}>
+    <Badge tone={guessed ? 'warning' : 'info'} className="whitespace-nowrap" title={guessed ? 'Guessed from the monthly fee; confirm it on Client tiers' : TIER_BY_NUMBER[tier].name}>
       {tierLabel(tier)}
       {guessed ? '?' : ''}
     </Badge>

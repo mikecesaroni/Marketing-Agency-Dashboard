@@ -5,7 +5,7 @@ Added 2026-10-21, after "I want a weekly report for us to see how all clients ar
 ## The questions, and the answers built in
 
 - **What should ping the moment it happens?** Only what costs money or a day if it waits for morning: an ad account disabled, ads gone quiet (two full days without spend on a live account; Meta restates the last day or two, so one quiet day is not trusted, and a second sync at 1pm Eastern corrects the morning's numbers), a new edit dropped in (so it is published the same day), a client crossing ten days without a new ad, a card failing. Once per client per episode, never repeated. One line when the ads are delivering again.
-- **What waits for the morning?** No leads while spending, a Google sync failing, who is onboarding. One line each. Money is not in the brief at all ("just tell us when a card fails, and don't keep showing it"): a card failing is one alert when it happens, an overdue invoice is the Payments page's business. A chase (waiting on the client) is not a flag in the brief either: it is a day count on the onboarding line, because the first real brief had twelve "waiting on them N days" lines for clients whose ads were running fine. Housekeeping (KPIs not logged, a package not set) stays on the Client status board.
+- **What waits for the morning?** No leads while spending, a Google sync failing, who is onboarding. One line each. Money is not in the brief at all ("just tell us when a card fails, and don't keep showing it"): a card failing is one alert when it happens, an overdue invoice is the Payments page's business. A chase (waiting on the client) is not a flag in the brief either: it is a day count on the onboarding line, because the first real brief had twelve "waiting on them N days" lines for clients whose ads were running fine. Housekeeping (KPIs not logged, a package not set) stays on the Client tiers board.
 - **How many messages a day?** One brief on weekday mornings at 7am Eastern. Alerts only when something is new, and never between 9pm and 7am. A quiet day is one message.
 - **How long is the brief?** One line per thing, no explanations: the flag names the problem, the link goes to the place to fix it. The clients running clean are one line with their leads for the week ("Acme 8↑, Belk 5, ..."). Onboarding clients are one line each with their next step.
 - **What is green?** A live client whose ads have no flag (account, ads stopped, no leads, no new ad, Google sync), with their leads this week and whether that is up or down on the week before. Money does not take a client off that line; it has its own.
@@ -17,7 +17,7 @@ Added 2026-10-21, after "I want a weekly report for us to see how all clients ar
 
 `src/pages/WeeklyStatusPage.jsx`, logic in `src/lib/weeklyStatus.js` (pinned by `scripts/check-weekly-status.mjs`), data from `src/lib/weeklyStatusData.js`.
 
-The last complete Monday-to-Sunday week against the week before, the same week the client reports cover, from the same ad days (`ad_daily` for Meta, `google_campaign_daily` for Google, `weekly_kpis` rows with channel LSA for the leads logged by hand). Data runs through yesterday. The arrows move a week back.
+The last 7 days through yesterday against the 7 before ("make this last 7 days, not week by week dates"): rolling windows, not calendar weeks, so on any day it is the most recent full week of data. Four windows back to back make the trend. From the same ad days the client reports use (`ad_daily` for Meta, `google_campaign_daily` for Google, `weekly_kpis` rows with channel LSA for the leads logged by hand; an LSA week lands in the window holding its Monday). The arrows move 7 days back.
 
 | Column | What |
 |---|---|
@@ -33,7 +33,7 @@ Worst first: ads off, then a down trend, then a new ad needed, then no spend, th
 
 ## The team brief (`supabase/functions/team-digest`)
 
-The function runs the CRM's own code: `src/lib/statusRows.js` (the same queries and the same `clientStatus()` the Client status board uses), `src/lib/weeklyStatus.js` and `src/lib/teamBrief.js`, bundled into `model.js` by `npm run brief` (rolldown). **Edit the modules, rebuild, redeploy.** `scripts/check-team-brief.mjs` pins the brief, the three renderings and the alert rules.
+The function runs the CRM's own code: `src/lib/statusRows.js` (the same queries and the same `clientStatus()` the Client tiers board uses), `src/lib/weeklyStatus.js` and `src/lib/teamBrief.js`, bundled into `model.js` by `npm run brief` (rolldown). **Edit the modules, rebuild, redeploy.** `scripts/check-team-brief.mjs` pins the brief, the three renderings and the alert rules.
 
 Actions: `brief` (the morning run; once a day unless `force`; skipped on weekends unless forced), `alerts` (the quarter-hour run; skipped in quiet hours unless forced), `preview` (today's brief: subject, text, html, the Slack message), `status`, `test_slack`. The Weekly status page has a button for each.
 
@@ -45,7 +45,7 @@ Schedule (pg_cron, `supabase/team-brief.sql`): `team-morning-brief` weekdays 11:
 
 An incoming webhook, one channel. In Slack: api.slack.com/apps, create an app (or open ours), Incoming Webhooks, switch it on, Add New Webhook to Workspace, pick the channel, copy the URL. Paste it on the Weekly status page (admins only). The URL is a secret, so it lives in the database vault: `set_slack_webhook(url)` writes it (admin check inside), `slack_webhook()` reads it and is callable only with the service key, `slack_connected()` tells the CRM whether one is set and never the URL. "Send a test" posts a hello.
 
-Messages are Block Kit: a header, one section per group (chunked under Slack's 3000-character cap), client names linking to their page and flags to the place to fix them, a footer with Client status, the video board and Tasks.
+Messages are Block Kit: a header, one section per group (chunked under Slack's 3000-character cap), client names linking to their page and flags to the place to fix them, a footer with Client tiers, the video board and Tasks.
 
 ## What is needed once
 
