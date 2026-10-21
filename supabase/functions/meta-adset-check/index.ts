@@ -30,9 +30,19 @@
 // 70KB of ad-creating code and this does not belong inside it. It is called
 // first, from the publish panel.
 //
+// IT ALSO SAYS WHAT THE AD SET'S OWN ADS USE. A verdict carries `uses`: the
+// instant form the ads already in the ad set open, or the link they send
+// people to, read off the newest delivering ad's creative (_shared/
+// adsetUses.js). The publish screen picks that form on its own, so adding an
+// ad to a running ad set is no longer "click back, choose the form the other
+// ads use, come back". Best effort: an ad set with no ads yet has nothing to
+// read, and a failure to read them is not a reason to refuse the ad set.
+//
 // Secrets: META_ACCESS_TOKEN.
 //
 // Body: {client_id, adset_id}
+
+import { usesFromAds } from '../_shared/adsetUses.js'
 
 const META_API_VERSION = 'v21.0'
 
@@ -49,10 +59,10 @@ function json(body: unknown, status = 200) {
 
 const bareId = (v: unknown) => String(v || '').replace(/^act_/i, '')
 
-async function graphGet(path: string, fields: string, token: string) {
+async function graphGet(path: string, fields: string, token: string, extra = '') {
   const res = await fetch(
     `https://graph.facebook.com/${META_API_VERSION}/${path}` +
-      `?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`
+      `?fields=${encodeURIComponent(fields)}${extra ? `&${extra}` : ''}&access_token=${encodeURIComponent(token)}`
   )
   const body = await res.json()
   if (!res.ok) throw new Error(body?.error?.message || `Meta API returned ${res.status}`)
@@ -132,6 +142,33 @@ Deno.serve(async (req) => {
     const hasPromoted =
       adset.promoted_object && Object.keys(adset.promoted_object).length > 0
 
+    // What the ads already in here carry, so the new one can match them.
+    // Newest first is how Meta lists them; a delivering ad wins over a paused
+    // one. Read best effort: an ad set with no ads has nothing to say, and a
+    // failed read must not turn into a refusal of a perfectly good ad set.
+    let uses: Record<string, unknown> | null = null
+    try {
+      const found = await graphGet(
+        `${adsetId}/ads`,
+        'id,name,effective_status,creative{object_story_spec,asset_feed_spec}',
+        token,
+        'limit=25'
+      )
+      uses = usesFromAds(found?.data || [])
+      // Named, so the screen can say "the form the other ads use" by name
+      // rather than by a sixteen-digit id.
+      if (uses?.lead_form_id) {
+        try {
+          const form = await graphGet(String(uses.lead_form_id), 'id,name', token)
+          uses.lead_form_name = form?.name || ''
+        } catch {
+          uses.lead_form_name = ''
+        }
+      }
+    } catch {
+      uses = null
+    }
+
     const report: Record<string, unknown> = {
       adset_id: adset.id,
       adset_name: adset.name,
@@ -139,6 +176,7 @@ Deno.serve(async (req) => {
       destination_type: adset.destination_type || null,
       needs: need.kind,
       had_promoted_object: Boolean(hasPromoted),
+      uses,
     }
 
     if (need.kind === 'none' || hasPromoted) {

@@ -211,6 +211,17 @@ On success the panel links straight to the new ad set in Ads Manager, which is
 where the human approval step happens. Nothing spends until somebody switches it
 on there.
 
+### Publishing into ad sets that already exist: the ad sets decide
+
+Added 2026-10-21, after "it's making me click lead form when it's a website ad set". The objective buttons on the publish screen only count for a new ad set. Once ad sets are picked ("Add to all live ad sets", or a hand pick), `src/lib/publishDestination.js` reads them the way `meta-publish` always has: an ad set optimising for `LEAD_GENERATION` (or with `destination_type` `ON_AD`) opens an instant form, anything else sends people to a link. So:
+
+- Website ad sets: no "The instant form" section, no "no instant form picked" blocker. The Objective section says so in a sentence.
+- Form ad sets: the form is **picked for you**. `meta-adset-check` now returns `uses`, read off the newest delivering ad already in the ad set (`supabase/functions/_shared/adsetUses.js`: the `lead_gen_form_id` on the creative's button, or the link it carries, in the single-image, video and per-placement shapes), with the form's name. The screen puts that form in the picker and says where it came from. A form picked by hand stays. An ad set with no ads yet has nothing to copy, so the picker asks as before.
+- The link the ad set's ads already use goes in the landing page box the same way, over a link the CRM filled in itself. A typed link is never replaced.
+- A mixed pick (one form ad set, one website) needs both the form and the link; each ad is built against its own ad set, which the function has always done.
+
+Pinned by `scripts/check-publish-destination.mjs` and checked in the browser (website, form, mixed, and an empty form ad set).
+
 ### When it fails partway
 
 The chain is four API calls. If, say, the creative is rejected after the

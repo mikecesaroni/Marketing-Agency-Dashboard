@@ -16,6 +16,7 @@ import { isPublishable } from '../lib/adVideos'
 import { looseMatch } from '../lib/helpActions'
 import { useHelpActions } from '../lib/useHelpActions'
 import { feedCopyFromOptions, feedCopyInstruction, mergeWritten, needsFeedCopy, nextToWrite, staticCurrent } from '../lib/publishCopy'
+import { creativeNeeds, describeAdsetDestination, formFromChecks, linkFromChecks } from '../lib/publishDestination'
 import {
   describeLaunch,
   launchSnapshot,
@@ -869,6 +870,9 @@ export default function PublishToMetaPanel({
   // What the CRM put in the link box on its own (the website default, then
   // the saved landing page). A link somebody typed is never replaced.
   const autoLink = useRef(websiteFromIntake(intake, client))
+  // The box as it stands, for the effect that fills it to read.
+  const linkNow = useRef(linkUrl)
+  linkNow.current = linkUrl
   // Landing pages saved on the client, offered as one-click choices below.
   const [savedPages, setSavedPages] = useState([])
   useEffect(() => {
@@ -930,6 +934,16 @@ export default function PublishToMetaPanel({
   const [result, setResult] = useState(null)
 
   const chosenObjective = OBJECTIVES.find((o) => o.value === objective)
+  const chosenCampaign = reuseCampaign ? campaigns?.find((c) => c.id === campaignId) : null
+  const chosenAdsets = reuseAdset ? (adsets || []).filter((a) => adsetIds.includes(a.id)) : []
+
+  // WHAT THE CREATIVE HAS TO CARRY. Publishing into ad sets that already
+  // exist, the ad sets decide: a form only when one of them opens a form, a
+  // link always. The objective buttons decide only for a new ad set. This
+  // used to read the buttons regardless, so "All live ad sets" on an account
+  // whose ads go to a website still demanded an instant form, and the way
+  // out was clicking back, choosing Website, and choosing "All live" again.
+  const needs = creativeNeeds({ reuseAdset, adsets: chosenAdsets, objective: chosenObjective })
 
   // Where the last launch for this client went, from this browser. Offered,
   // never applied on its own: publishing into the wrong live ad set costs
@@ -1007,7 +1021,7 @@ export default function PublishToMetaPanel({
         why: 'an ad creative is a Page post, so Meta rejects one without it',
       })
     }
-    if (chosenObjective?.needsPixel && !client.meta_pixel_id) {
+    if (needs.needsPixel && !client.meta_pixel_id) {
       gaps.push({
         field: 'meta_pixel_id',
         label: 'Pixel ID',
@@ -1015,29 +1029,57 @@ export default function PublishToMetaPanel({
       })
     }
     return gaps
-  }, [client, chosenObjective])
+  }, [client, needs.needsPixel])
 
-  // Switching objective can strand a form on an ad that no longer uses one.
-  useEffect(() => {
-    if (!chosenObjective?.needsForm) setLeadForm(null)
-  }, [chosenObjective?.needsForm])
+  // THE FORM THE OTHER ADS USE. A picked ad set that opens an instant form
+  // says which one in its check verdict (meta-adset-check reads it off the
+  // ads already in there), and it is picked here on its own, once per form,
+  // over nothing: a form somebody chose by hand stays.
+  const autoForm = useRef('')
+  const [autoFormFrom, setAutoFormFrom] = useState(null)
 
-  // Website leads or traffic: the ad sends people somewhere, so the saved
-  // landing page (Landing pages panel, Meta ads) goes in the box on its own.
-  // Only over a link the CRM filled in itself; a typed one stays.
+  // Switching objective, or picking ad sets that go to a website, can strand
+  // a form on an ad that no longer uses one.
   useEffect(() => {
-    const pick = defaultMetaLink(savedPages, { needsLink: Boolean(chosenObjective?.needsLink) })
+    if (!needs.needsForm) {
+      setLeadForm(null)
+      autoForm.current = ''
+    }
+  }, [needs.needsForm])
+
+  useEffect(() => {
+    if (!reuseAdset || !needs.needsForm) return
+    const found = formFromChecks(adsetChecks, adsetIds, adsets || [])
+    if (!found || autoForm.current === found.id) return
+    autoForm.current = found.id
+    setAutoFormFrom(found)
+    setLeadForm((cur) => cur || { id: found.id, name: found.name || 'the form the other ads use' })
+  }, [reuseAdset, needs.needsForm, adsetChecks, adsetIds, adsets])
+
+  // THE LINK THE OTHER ADS USE, the same way. It goes in the box over a link
+  // the CRM filled in itself; a typed one stays (the effect below).
+  const adsetLink = reuseAdset ? linkFromChecks(adsetChecks, adsetIds, adsets || []) : null
+
+  // Website leads or traffic: the ad sends people somewhere, so the link the
+  // ad set's own ads carry, or else the saved landing page (Landing pages
+  // panel, Meta ads), goes in the box on its own. Only over a link the CRM
+  // filled in itself; a typed one stays.
+  useEffect(() => {
+    const pick = adsetLink?.url || defaultMetaLink(savedPages, { needsLink: needs.needsLink })
     if (!pick) return
     // The website default can be re-applied when the intake arrives, with or
     // without a trailing slash, so "did the CRM fill this" compares loosely.
     const same = (a, b) => String(a || '').trim().replace(/\/$/, '') === String(b || '').trim().replace(/\/$/, '')
-    setLinkUrl((cur) => {
-      const ours = !cur.trim() || same(cur, autoLink.current) || same(cur, websiteFromIntake(intake, client))
-      if (!ours) return cur
-      autoLink.current = pick
-      return pick
-    })
-  }, [chosenObjective?.needsLink, savedPages, intake, client])
+    // Read off a ref rather than inside the updater: React runs an updater
+    // twice in development, and the first run moving autoLink made the
+    // second run read the CRM's own fill as typed, so the ad set's link
+    // never landed.
+    const cur = linkNow.current
+    const ours = !cur.trim() || same(cur, autoLink.current) || same(cur, websiteFromIntake(intake, client))
+    if (!ours) return
+    autoLink.current = pick
+    setLinkUrl(pick)
+  }, [needs.needsLink, adsetLink?.url, savedPages, intake, client])
 
   // Lazily: this is a live call to Meta, not worth making unless the existing
   // campaigns are actually being looked at.
@@ -1141,9 +1183,6 @@ export default function PublishToMetaPanel({
   useEffect(() => {
     if (!reuseCampaign) setReuseAdset(false)
   }, [reuseCampaign])
-
-  const chosenCampaign = reuseCampaign ? campaigns?.find((c) => c.id === campaignId) : null
-  const chosenAdsets = reuseAdset ? (adsets || []).filter((a) => adsetIds.includes(a.id)) : []
 
   // WHERE THE ADS GO, as one choice. "All live ad sets" is the first and the
   // default whenever the account has any: a new creative belongs in every ad
@@ -1273,8 +1312,8 @@ export default function PublishToMetaPanel({
     blockers.push('a video has no primary text')
   if (pickedSets.some((s) => !copies[String(s.stamp)]?.primary_text?.trim()))
     blockers.push('a creative has no primary text')
-  if (chosenObjective?.needsLink && !linkUrl.trim()) blockers.push('no landing page')
-  if (chosenObjective?.needsForm && !leadForm) blockers.push('no instant form picked')
+  if (needs.needsLink && !linkUrl.trim()) blockers.push('no landing page')
+  if (needs.needsForm && !leadForm) blockers.push('no instant form picked')
   if (reuseCampaign && !reuseAdset && !campaignId) blockers.push('no campaign picked')
   if (reuseAdset && adsetIds.length === 0) blockers.push('no ad set picked')
   // Waiting on the verdict counts as a blocker too, so a fast click cannot
@@ -1430,7 +1469,8 @@ export default function PublishToMetaPanel({
       writeLaunchMemory(
         client.id,
         launchSnapshot({
-          objective,
+          // What actually went out: into existing ad sets, their objective.
+          objective: needs.from === 'adsets' ? chosenAdset?.objective || objective : objective,
           cta,
           linkUrl,
           leadForm,
@@ -1502,9 +1542,10 @@ export default function PublishToMetaPanel({
       button: cta,
       button_options: CTA_OPTIONS.map((o) => o.value),
       link_url: linkUrl,
-      objective,
+      objective: needs.from === 'adsets' ? `${chosenAdset?.objective || objective} (decided by the picked ad sets: ${describeAdsetDestination(chosenAdsets)})` : objective,
       objective_options: OBJECTIVES.map((o) => `${o.value} (${o.label})`),
       instant_form: leadForm?.name || null,
+      instant_form_from: autoFormFrom && leadForm?.id === autoFormFrom.id ? `the ads already in ${autoFormFrom.adsetName || 'the ad set'}` : null,
       destination: where,
       live_ad_sets: liveAdsets.map((a) => a.name),
       campaign: reuseCampaign ? chosenCampaign?.name || '(none picked)' : `new: ${campaignName}`,
@@ -1551,7 +1592,7 @@ export default function PublishToMetaPanel({
           const changed = []
           if (i.button) { setCta(i.button); changed.push('button') }
           if (typeof i.link_url === 'string') { setLinkUrl(i.link_url); changed.push('link') }
-          if (i.objective) { setObjective(i.objective); changed.push('objective') }
+          if (i.objective) { setObjective(i.objective); changed.push(needs.from === 'adsets' ? 'objective (for a new ad set only: the picked ad sets decide their own)' : 'objective') }
           if (i.destination) {
             if (i.destination === 'live' && liveIds.length === 0) return { error: 'No ad set is live on this account; pick "existing" or "new".' }
             chooseDestination(i.destination)
@@ -1682,7 +1723,7 @@ export default function PublishToMetaPanel({
     )
   }
 
-  const step = (n) => (chosenObjective?.needsForm ? n : n - 1)
+  const step = (n) => (needs.needsForm ? n : n - 1)
   // Section numbers: videos and statics used to be sections 1 and 2 and are
   // now one creative step, so everything after it moves up one.
   const num = (n) => String(n > 2 ? n - 1 : n)
@@ -1885,13 +1926,15 @@ export default function PublishToMetaPanel({
               put. It used to say "no landing page" here and publishing failed
               at the very last step because of it. */}
           <Text
-            label={chosenObjective?.needsForm ? 'Website (required by Meta)' : 'Landing page'}
+            label={needs.needsForm ? 'Website (required by Meta)' : 'Landing page'}
             value={linkUrl}
             onChange={setLinkUrl}
             placeholder="https://…"
             hint={
-              chosenObjective?.needsForm
-                ? 'Nobody follows it — the form opens in place. Meta rejects lead ads that link to a Facebook Page.'
+              adsetLink && linkUrl.trim() === adsetLink.url
+                ? `the same link the ads already in ${adsetLink.adsetName || 'that ad set'} use`
+                : needs.needsForm
+                ? 'Nobody follows it: the form opens in place. Meta rejects lead ads that link to a Facebook Page.'
                 : savedPages.some((p) => p.url === linkUrl.trim())
                   ? `from the client's saved landing pages (${purposeMeta(savedPages.find((p) => p.url === linkUrl.trim())?.purpose).label})`
                   : client.website_url
@@ -1923,10 +1966,13 @@ export default function PublishToMetaPanel({
       </Section>
 
       <Section step={num(4)} title="Objective">
-        {reuseAdset && chosenAdset ? (
-          <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded px-3 py-2">
-            Set by the ad set you picked, not here — objectives belong to the campaign. Meta reads it
-            back as <strong>{OBJECTIVES.find((o) => o.value === chosenAdset.objective)?.label || chosenAdset.objective}</strong>.
+        {needs.from === 'adsets' ? (
+          <p
+            data-adset-destination={needs.needsForm ? (needs.webAdsets.length ? 'mixed' : 'form') : 'website'}
+            className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded px-3 py-2"
+          >
+            Decided by the ad set{chosenAdsets.length === 1 ? '' : 's'} you picked, not here.{' '}
+            {describeAdsetDestination(chosenAdsets)}
           </p>
         ) : (
           <>
@@ -1973,11 +2019,15 @@ export default function PublishToMetaPanel({
         )}
       </Section>
 
-      {chosenObjective?.needsForm && (
+      {needs.needsForm && (
         <Section
           step={num(5)}
           title="The instant form"
-          hint="Where the leads actually land. Reuse one where you can — a form owns its leads."
+          hint={
+            autoFormFrom && leadForm?.id === autoFormFrom.id
+              ? `Picked for you: the form the ads already in ${autoFormFrom.adsetName || 'that ad set'} use. Change it only if you mean to.`
+              : 'Where the leads actually land. Reuse one where you can: a form owns its leads.'
+          }
         >
           <LeadFormPicker client={client} value={leadForm} onChange={setLeadForm} />
         </Section>
