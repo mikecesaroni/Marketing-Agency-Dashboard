@@ -27,14 +27,21 @@
 import { longDay } from './dates.js'
 import { money, weeklyLine } from './weeklyStatus.js'
 
-/** The flags that get their own post the moment they appear. Clips are keyed separately (one per drop). */
-export const IMMEDIATE = new Set(['account', 'ads-off', 'video-stale'])
+/**
+ * The flags that get their own post the moment they appear. Clips are keyed
+ * separately (one per drop). `payment` counts only when it is a card
+ * failing: "just tell us when a card fails, and don't keep showing it", so
+ * it is said once, when it happens, and never again in a brief. An overdue
+ * invoice is the Payments page's business and goes nowhere in Slack.
+ */
+export const IMMEDIATE = new Set(['account', 'ads-off', 'video-stale', 'payment'])
+const isImmediate = (f) => (f.key === 'payment' ? f.label === 'Card failing' : IMMEDIATE.has(f.key))
 /**
  * The ad flags: the brief's attention list, and what "running clean" is the
- * absence of. Money is its own one line; a chase (waiting on the client) is
- * not a flag in the brief at all but a day count on the onboarding line.
- * The first real brief had twelve "waiting on them" lines for clients whose
- * ads were running fine, and nobody reads a list like that twice.
+ * absence of. A chase (waiting on the client) is not a flag in the brief at
+ * all but a day count on the onboarding line. The first real brief had
+ * twelve "waiting on them" lines for clients whose ads were running fine,
+ * and nobody reads a list like that twice.
  */
 export const AD_FLAGS = new Set(['account', 'ads-off', 'no-leads', 'video-stale', 'google-sync'])
 /** The ones worth a line when they clear: the ads are back. */
@@ -70,8 +77,6 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
   const clips = []
   const green = []
   const onboarding = []
-  const overdue = []
-  const failing = []
   for (const r of rows) {
     const client = pick(r.client)
     const flags = r.flags || []
@@ -80,8 +85,6 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
         attention.push({ client, severity: f.severity, key: f.key, label: f.label, detail: f.detail || '', href: f.href || `/client/${client.id}` })
       }
     }
-    const pay = flags.find((f) => f.key === 'payment')
-    if (pay) (pay.label === 'Card failing' ? failing : overdue).push({ client, label: pay.label.replace('Payment overdue: ', '') })
     for (const w of r.drop?.waiting || []) {
       clips.push({ client, key: 'clip', label: `${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}`, href: '/content', at: w.at })
     }
@@ -103,19 +106,10 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
   clips.sort((a, b) => (a.at < b.at ? 1 : -1))
   green.sort((a, b) => b.leads7 - a.leads7 || a.client.name.localeCompare(b.client.name))
   const red = attention.filter((a) => a.severity === 'red').length
-  const money =
-    overdue.length || failing.length
-      ? {
-          overdue,
-          failing,
-          label: [overdue.length ? `Overdue: ${overdue.map((o) => `${o.client.name} ${o.label}`).join(', ')}` : '', failing.length ? `Card failing: ${failing.map((f) => f.client.name).join(', ')}` : ''].filter(Boolean).join(' · '),
-        }
-      : null
   return {
     day,
     label: longDay(day),
     attention,
-    money,
     clips,
     green,
     onboarding,
@@ -124,7 +118,6 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       red,
       amber: attention.length - red,
       toCall: new Set(attention.map((a) => a.client.id)).size,
-      money: overdue.length + failing.length,
       clips: clips.length,
       green: green.length,
       greenLeads: green.reduce((n, g) => n + g.leads7, 0),
@@ -140,7 +133,6 @@ export function briefSubject(model) {
   const c = model.counts
   const bits = []
   if (c.toCall) bits.push(`${c.toCall} to call`)
-  if (c.money) bits.push(`${c.money} payment issue${c.money === 1 ? '' : 's'}`)
   if (c.clips) bits.push(`${c.clips} clip${c.clips === 1 ? '' : 's'} to publish`)
   bits.push(`${c.green} running clean`)
   return `${model.weekly ? 'Monday brief and weekly status' : 'Morning brief'} · ${model.label} · ${bits.join(', ')}`
@@ -171,9 +163,6 @@ export function briefSections(model) {
       title: `Needs attention (${model.attention.length})`,
       lines: model.attention.map((a) => ({ emoji: EMOJI[a.key] || (a.severity === 'red' ? '🔴' : '🟠'), client: a.client, text: a.label, href: a.href })),
     })
-  }
-  if (model.money) {
-    out.push({ key: 'money', title: `Payments (${model.counts.money})`, lines: [{ emoji: EMOJI.payment, text: model.money.label, href: '/payments' }] })
   }
   if (model.clips.length) {
     out.push({ key: 'clips', title: `To publish (${model.clips.length})`, lines: model.clips.map((c) => ({ emoji: EMOJI.clip, client: c.client, text: c.label, href: c.href })) })
@@ -309,7 +298,7 @@ export function alertKeys(statusRows = []) {
   for (const r of statusRows.filter(active)) {
     const client = pick(r.client)
     for (const f of r.flags || []) {
-      if (!IMMEDIATE.has(f.key)) continue
+      if (!isImmediate(f)) continue
       out.push({ key: `${client.id}:${f.key}`, client, kind: f.key, label: f.label, detail: f.key === 'account' ? f.detail || '' : '', href: f.href || `/client/${client.id}` })
     }
     for (const w of r.drop?.waiting || []) {

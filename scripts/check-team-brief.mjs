@@ -40,7 +40,7 @@ const rows = [
 ]
 
 // --- the quiet rules ---------------------------------------------------------------
-check('only ads off, the account, and ten days without an ad post the moment they appear', [...IMMEDIATE].sort(), ['account', 'ads-off', 'video-stale'])
+check('only ads off, the account, ten days without an ad, and a card failing post the moment they appear', [...IMMEDIATE].sort(), ['account', 'ads-off', 'payment', 'video-stale'])
 check('only the ads coming back is worth a cleared line', [...CLEAR_WORTHY].sort(), ['account', 'ads-off'])
 
 // --- the brief ---------------------------------------------------------------------
@@ -52,11 +52,12 @@ check('blue flags are not attention', brief.attention.some((a) => a.key === 'kpi
 check('every waiting clip, newest first, naming the editor and whether it is in Meta', brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle', 'clip1.mp4, not in Meta yet'])
 check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
 check('onboarding names the next step, whose move, and how long they have had it', brief.onboarding.map((o) => o.label), ['Meta ad account and Page connected (their move, 9 days)'])
-check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, money: 0, clips: 2, green: 2, greenLeads: 11, onboarding: 1 })
+check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, green: 2, greenLeads: 11, onboarding: 1 })
 check('the subject', briefSubject(brief), 'Morning brief · Tuesday, Oct 20 · 1 to call, 2 clips to publish, 2 running clean')
 check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week', 'Onboarding (1)'])
 
-// Money is one line, and does not take a client off the running-clean line.
+// Money is not in the brief at all: a card failing is said once, when it
+// happens (the alerts); an overdue invoice is the Payments page's business.
 const moneyRows = [
   mk('m1', 'Belk Plumbing', { flags: [{ key: 'payment', severity: 'red', label: 'Payment overdue: $2,500' }], needsContact: true, leads: { leads7: 4, leads14: 7, spend7: 100, spend14: 200 } }),
   mk('m2', 'MBD Washing', { flags: [{ key: 'payment', severity: 'red', label: 'Card failing' }], needsContact: true }),
@@ -64,11 +65,14 @@ const moneyRows = [
   mk('m4', 'Pillar HVAC', { flags: [{ key: 'payment', severity: 'red', label: 'Payment overdue: $998' }], needsContact: true }),
 ]
 const moneyBrief = buildBrief({ statusRows: moneyRows, day: TODAY })
-check('payments are one line: who is overdue for how much, whose card is failing', briefSections(moneyBrief).find((s) => s.key === 'money'), { key: 'money', title: 'Payments (4)', lines: [{ emoji: '💳', text: 'Overdue: Belk Plumbing $2,500, Pillar HVAC $998 · Card failing: MBD Washing, MCL Construction', href: '/payments' }] })
+check('no payments anywhere in the brief', [briefText(moneyBrief).includes('overdue'), briefText(moneyBrief).includes('Card failing'), briefSections(moneyBrief).some((s) => s.key === 'money')], [false, false, false])
 check('a client behind on money still counts as running clean when the ads are', moneyBrief.green.map((g) => g.client.name), ['Belk Plumbing', 'MBD Washing', 'MCL Construction', 'Pillar HVAC'])
 check('a chase on a running client is nowhere in the brief', briefText(moneyBrief).includes('Waiting on them'), false)
-check('the subject counts the payment issues', briefSubject(moneyBrief), 'Morning brief · Tuesday, Oct 20 · 4 payment issues, 4 running clean')
-check('nothing to flag but money still leads with the all-clear', briefSections(moneyBrief)[0].title, 'Nothing needs attention')
+check('the subject does not count money', briefSubject(moneyBrief), 'Morning brief · Tuesday, Oct 20 · 4 running clean')
+check('nothing to flag but money leads with the all-clear', briefSections(moneyBrief)[0].title, 'Nothing needs attention')
+check('a card failing is an alert, once; an overdue invoice is not', alertKeys(moneyRows).map((k) => [k.key, k.label]), [['m2:payment', 'Card failing'], ['m3:payment', 'Card failing']])
+check('a card that stops failing clears quietly', diffAlerts([], [{ key: 'm2:payment', kind: 'payment', label: 'Card failing', client_id: 'm2', client_name: 'MBD Washing' }]), { fresh: [], gone: [{ key: 'm2:payment', kind: 'payment', label: 'Card failing', client_id: 'm2', client_name: 'MBD Washing' }], cleared: [] })
+check('the card alert line', alertsSlack({ fresh: alertKeys(moneyRows).slice(0, 1), cleared: [] }, { appUrl: 'https://crm.example' }).blocks[0].text.text, '*New*\n💳 <https://crm.example/payments|MBD Washing>: Card failing')
 check('running clean is ONE line, names and leads with an arrow for the week', briefSections(brief)[2].lines, [{ emoji: '🟢', text: 'Acme Heating 8↑, Drain Kings 3↓', href: '/status' }])
 check('no explanations: a flag line is the label alone', briefSections(brief)[0].lines[0], { emoji: '🔴', client: { id: 'b', name: 'Belk Plumbing' }, text: 'Meta ads stopped: 3 days without spend', href: '/client/b#meta' })
 check('the trailing slash on the app url is dropped', brief.appUrl, 'https://crm.example')
