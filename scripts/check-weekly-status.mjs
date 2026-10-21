@@ -65,6 +65,7 @@ check('live with nothing spent last week', adStatusOf(row(), w(0, 0)).key, 'nosp
 check('no Meta account: nothing to say', creativeOf(row({ drop: { hasMeta: false } })).key, 'none')
 check('ten days without an ad needs one', creativeOf(row({ drop: { hasMeta: true, state: 'stale', behind: true, daysSince: 15, waiting: [] } })), { key: 'need', label: 'New ad needed: 15 days', tone: 'red', needAd: true })
 check('never an ad needs one', creativeOf(row({ drop: { hasMeta: true, state: 'never', behind: true, daysSince: null, waiting: [] } })).label, 'No ad yet')
+check('never an ad on a client not live yet is nothing: they are onboarding', creativeOf(row({ client: { ...live, meta_ads_active: false }, drop: { hasMeta: true, state: 'never', behind: true, daysSince: null, waiting: [] } })).key, 'none')
 check('a clip waiting, and not behind', creativeOf(row({ drop: { hasMeta: true, state: 'ready', behind: false, daysSince: 3, waiting: [{ at: 'x' }] } })), { key: 'clip', label: '1 clip waiting to publish', tone: 'purple', needAd: false })
 check('a clip waiting while behind is still a new ad needed', creativeOf(row({ drop: { hasMeta: true, state: 'ready', behind: true, daysSince: 12, waiting: [{ at: 'x' }, { at: 'y' }] } })), { key: 'clip', label: '2 clips waiting, 12 days since an ad', tone: 'red', needAd: true })
 check('fresh', creativeOf(row({ drop: { hasMeta: true, state: 'done', behind: false, daysSince: 4, waiting: [] } })).label, 'New ad 4d ago')

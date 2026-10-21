@@ -116,7 +116,10 @@ export function clientFlags(ctx) {
   }
 
   // The video promise: a new ad every ten days (src/lib/videoLaunch.js).
-  if (drop && !c.paused_at && drop.hasMeta && (drop.state === 'stale' || drop.state === 'never' || (drop.state === 'ready' && drop.behind))) {
+  // Only once their Meta ads are live: a client added this afternoon with an
+  // ad account and no ad on record is not behind, they are onboarding, and
+  // "No ad has gone out yet" in the Slack channel was a false alarm.
+  if (drop && live && drop.hasMeta && (drop.state === 'stale' || drop.state === 'never' || (drop.state === 'ready' && drop.behind))) {
     add({
       key: 'video-stale',
       severity: 'red',

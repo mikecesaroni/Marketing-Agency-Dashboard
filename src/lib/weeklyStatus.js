@@ -90,7 +90,8 @@ export function adStatusOf(row, now) {
 /** Whether a new ad is needed, from the video board's row. */
 export function creativeOf(row) {
   const d = row.drop
-  if (!d || !d.hasMeta || d.paused) return { key: 'none', label: '', tone: 'slate', needAd: false }
+  // Only a live client owes a fresh ad; one still onboarding has nothing to be behind on.
+  if (!d || !d.hasMeta || d.paused || !row.client?.meta_ads_active) return { key: 'none', label: '', tone: 'slate', needAd: false }
   const waiting = d.waiting?.length || 0
   if (waiting > 0) {
     return d.behind
