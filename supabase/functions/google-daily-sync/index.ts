@@ -178,9 +178,20 @@ async function gaql(customerId: string, query: string, token: string, loginAs?: 
     )
     const body = await res.json().catch(() => null)
     if (!res.ok) {
+      const top = body?.error || body?.[0]?.error
+      // "Request contains an invalid argument." is all the top line says; the
+      // reason (which field, which query) is in GoogleAdsFailure under
+      // details. Read it out, or every rejected query reads the same.
+      const failures = (top?.details || [])
+        .flatMap((d: any) => d?.errors || [])
+        .map((e: any) => {
+          const code = e?.errorCode ? Object.entries(e.errorCode).map(([k, v]) => `${k}: ${v}`).join(', ') : ''
+          const path = (e?.location?.fieldPathElements || []).map((p: any) => p.fieldName).join('.')
+          return [e?.message, code, path ? `at ${path}` : '', e?.trigger?.stringValue ? `(${e.trigger.stringValue})` : ''].filter(Boolean).join(' ')
+        })
+        .filter(Boolean)
       const detail =
-        body?.error?.message ||
-        body?.[0]?.error?.message ||
+        (failures.length ? `${top?.message || 'Google Ads API error'}: ${failures.join(' | ')}` : top?.message) ||
         `Google Ads API returned ${res.status}`
       if (res.status === 404) {
         throw new Error(
