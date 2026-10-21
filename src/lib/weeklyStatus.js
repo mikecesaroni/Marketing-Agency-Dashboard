@@ -8,11 +8,13 @@
 // is needed, and up to three key points in plain words. Worst first, so the
 // Monday meeting starts with what needs a decision and ends with the wins.
 //
-// The week is the LAST 7 DAYS through yesterday against the 7 before, not a
-// calendar week ("make this last 7 days, not week by week dates"): looked at
-// on any day, it is the most recent full week of data. Four such windows
-// back to back make the trend. scripts/check-weekly-status.mjs runs it in
-// Node; the team-digest Edge Function folds it into Monday's brief.
+// The week is the LAST 7 DAYS up to and including today against the 7
+// before, not a calendar week ("make this last 7 days, not week by week
+// dates", then "up to present"). Today is still filling in (the Meta sync
+// runs at 4am and 1pm Eastern), and that is accepted: the page is read for
+// the shape of the week, not the cents. Four such windows back to back make
+// the trend. scripts/check-weekly-status.mjs runs it in Node; the
+// team-digest Edge Function folds it into Monday's brief.
 
 import { addDays, weekRangeLabel } from './dates.js'
 import { tierLabel } from './clientTiers.js'
@@ -25,12 +27,11 @@ const round = (n) => Math.round(Math.abs(n))
 
 /**
  * The first day of the report window and of the three windows before it,
- * oldest first. Each window is 7 days; the report window ends yesterday
- * (today's numbers are never complete). weeksBack 0 is the last 7 days,
- * 1 is the 7 before that, and so on.
+ * oldest first. Each window is 7 days; the report window ends TODAY.
+ * weeksBack 0 is the last 7 days, 1 is the 7 before that, and so on.
  */
 export function reportWeeks(day, weeksBack = 0) {
-  const last = addDays(day, -7 * (1 + weeksBack))
+  const last = addDays(day, -6 - 7 * weeksBack)
   return [3, 2, 1, 0].map((i) => addDays(last, -7 * i))
 }
 

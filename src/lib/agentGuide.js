@@ -190,11 +190,11 @@ export const ROUTES = [
     name: 'Weekly status',
     nav: 'Weekly status',
     purpose:
-      'The weekly executive status: every client on one page, the last 7 days (through yesterday) against the 7 before, worst first, with the big points only. Under it, the team brief and the Slack channel: what the CRM posts to the team and when.',
+      'The weekly executive status: every client on one page, the last 7 days (up to and including today) against the 7 before, worst first, with the big points only. Under it, the team brief and the Slack channel: what the CRM posts to the team and when.',
     contains: [
       'Four numbers across the book for the week: spent, leads, cost per lead, how many clients are running, each against the week before. Then the counts: trending up, down, need a new ad, ads off, need a call.',
       'One row per client: the package, how the ads stand (Running, Ads stopped, Account disabled, No spend last week, Onboarding, Not running, Paused), spent, leads and cost per lead with the change, the trend over four weeks (Up, Down, Steady: leads up or down a fifth on the week, three weeks in one direction, or cost per lead moving a fifth; two weeks of spend with no lead is Down), whether a new ad is needed (ten days without one, or a clip waiting), and up to three key points in plain words. Worst first: ads off, then a down trend, then a new ad needed, then the rest, the wins last.',
-      'The same Meta and Google ad days the client reports use, plus LSA weeks logged by hand. Rolling 7-day windows rather than calendar weeks, so on any day it is the most recent full week of data; it runs through yesterday because today is never complete.',
+      'The same Meta and Google ad days the client reports use, plus LSA weeks logged by hand. Rolling 7-day windows rather than calendar weeks, ending today; today is still filling in (the Meta sync runs at 4am and 1pm Eastern), which is accepted.',
       'Team brief and alerts: one short message on weekday mornings at 7am Eastern to the Slack channel (and by email, opt in), with what needs attention, clips to publish, who is running clean with their leads for the week, who is onboarding; Mondays carry the weekly status. Between briefs the channel hears only what cannot wait: an ad account disabled, ads gone quiet, a new edit dropped in, ten days without an ad, once each, and one line when the ads are back. Nothing between 9pm and 7am. The Slack webhook is kept in the database vault; an admin connects it here.',
     ],
     actions: [

@@ -17,7 +17,7 @@ Added 2026-10-21, after "I want a weekly report for us to see how all clients ar
 
 `src/pages/WeeklyStatusPage.jsx`, logic in `src/lib/weeklyStatus.js` (pinned by `scripts/check-weekly-status.mjs`), data from `src/lib/weeklyStatusData.js`.
 
-The last 7 days through yesterday against the 7 before ("make this last 7 days, not week by week dates"): rolling windows, not calendar weeks, so on any day it is the most recent full week of data. Four windows back to back make the trend. From the same ad days the client reports use (`ad_daily` for Meta, `google_campaign_daily` for Google, `weekly_kpis` rows with channel LSA for the leads logged by hand; an LSA week lands in the window holding its Monday). The arrows move 7 days back.
+The last 7 days up to and including today against the 7 before ("make this last 7 days, not week by week dates", then "up to present"): rolling windows, not calendar weeks. Today is still filling in and that is accepted. Four windows back to back make the trend. From the same ad days the client reports use (`ad_daily` for Meta, `google_campaign_daily` for Google, `weekly_kpis` rows with channel LSA for the leads logged by hand; an LSA week lands in the window holding its Monday). The arrows move 7 days back.
 
 | Column | What |
 |---|---|

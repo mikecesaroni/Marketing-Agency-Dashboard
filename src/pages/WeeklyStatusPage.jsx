@@ -177,7 +177,7 @@ export default function WeeklyStatusPage() {
   return (
     <Layout
       title="Weekly status"
-      subtitle={report ? `${weeksBack === 0 ? 'Last 7 days' : `The 7 days ${weeksBack === 1 ? 'before last' : `${weeksBack} weeks back`}`}, ${report.label}, against the 7 before, ${report.prevLabel}. Meta and Google plus LSA logged by hand; through yesterday.` : 'Loading…'}
+      subtitle={report ? `${weeksBack === 0 ? 'Last 7 days' : `The 7 days ${weeksBack === 1 ? 'before last' : `${weeksBack} weeks back`}`}, ${report.label}, against the 7 before, ${report.prevLabel}. Meta and Google plus LSA logged by hand; today is still filling in.` : 'Loading…'}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setWeeksBack((w) => w + 1)} title="7 days earlier" data-week-back>

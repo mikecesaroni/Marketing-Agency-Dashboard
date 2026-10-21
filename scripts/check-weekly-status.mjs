@@ -19,9 +19,9 @@ const check = (name, got, want) => {
 
 // --- dates -----------------------------------------------------------------------
 check('Monday of a Wednesday, a Sunday and a Monday', [mondayOf('2026-10-21'), mondayOf('2026-10-25'), mondayOf('2026-10-19')], ['2026-10-19', '2026-10-19', '2026-10-19'])
-check('the report window is the last 7 days through yesterday, with three 7-day windows before it', reportWeeks('2026-10-21'), ['2026-09-23', '2026-09-30', '2026-10-07', '2026-10-14'])
-check('on a Monday it is still the 7 days through Sunday, not a calendar week', reportWeeks('2026-10-19')[3], '2026-10-12')
-check('weeksBack moves 7 days earlier', reportWeeks('2026-10-21', 1)[3], '2026-10-07')
+check('the report window is the last 7 days up to and including today, with three 7-day windows before it', reportWeeks('2026-10-21'), ['2026-09-24', '2026-10-01', '2026-10-08', '2026-10-15'])
+check('on a Monday it is the 7 days through that Monday, not a calendar week', reportWeeks('2026-10-19')[3], '2026-10-13')
+check('weeksBack moves 7 days earlier', reportWeeks('2026-10-21', 1)[3], '2026-10-08')
 check('the week label, inside a month and across one', [weekRangeLabel('2026-10-12'), weekRangeLabel('2026-10-26')], ['Oct 12 to 18', 'Oct 26 to Nov 1'])
 check('addDays across a year end', addDays('2026-12-30', 3), '2027-01-02')
 
@@ -102,7 +102,7 @@ const metaRows = [
 const googleRows = [{ client_id: 'up', date: addDays(reportWeeks(TODAY)[3], 4), conversions: 2, cost: 50 }]
 const lsaRows = [{ client_id: 'stale', week_of: reportWeeks(TODAY)[3], leads: 1, ad_spend: 10 }]
 const report = buildWeeklyStatus({ statusRows, metaRows, googleRows, lsaRows, day: TODAY })
-check('the report window and its label: the 7 days through yesterday', [report.week, report.label, report.prevLabel], ['2026-10-14', 'Oct 14 to 20', 'Oct 7 to 13'])
+check('the report window and its label: the 7 days through today', [report.week, report.label, report.prevLabel], ['2026-10-15', 'Oct 15 to 21', 'Oct 8 to 14'])
 check('archived clients are left out', report.rows.length, 5)
 check('worst first: ads off, the down trend, the stale one, onboarding, then the win', report.rows.map((r) => r.client.id), ['off', 'down', 'stale', 'new', 'up'])
 const up = report.rows.find((r) => r.client.id === 'up')
@@ -119,7 +119,7 @@ check('the totals across the book (the quiet client fell three weeks, so it coun
 check('the agency cost per lead and its change', [Math.round(report.totals.cpl), Math.round(report.totals.change.cpl)], [22, 5])
 check('a line per client', weeklyLine(up), 'Upward Plumbing: Running · $150 (up 50%), 10 leads (up 100%) at $15 (down 25%) · up · New ad 3d ago. Leads up three weeks running.')
 const text = weeklyText(report, { appUrl: 'https://crm.example' })
-check('the text leads with the window and the totals', text.split('\n')[0], 'WEEKLY STATUS · Oct 14 to 20')
+check('the text leads with the window and the totals', text.split('\n')[0], 'WEEKLY STATUS · Oct 15 to 21')
 check('the text groups the clients', ['NEEDS A DECISION (3)', 'NOT RUNNING YET (1)', 'TRENDING UP (1)', 'https://crm.example/weekly'].every((s) => text.includes(s)), true)
 check('agencyTotals on nothing', agencyTotals([]).clients, 0)
 
