@@ -60,8 +60,8 @@ check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs
 // happens (the alerts); an overdue invoice is the Payments page's business.
 const moneyRows = [
   mk('m1', 'Belk Plumbing', { flags: [{ key: 'payment', severity: 'red', label: 'Payment overdue: $2,500' }], needsContact: true, leads: { leads7: 4, leads14: 7, spend7: 100, spend14: 200 } }),
-  mk('m2', 'MBD Washing', { flags: [{ key: 'payment', severity: 'red', label: 'Card failing' }], needsContact: true }),
-  mk('m3', 'MCL Construction', { flags: [{ key: 'payment', severity: 'red', label: 'Card failing' }, { key: 'waiting', severity: 'amber', label: 'Waiting on them 33 days', detail: 'Photos' }], needsContact: true }),
+  mk('m2', 'MBD Washing', { flags: [{ key: 'payment', severity: 'red', label: 'Card failing', href: '/payments' }], needsContact: true }),
+  mk('m3', 'MCL Construction', { flags: [{ key: 'payment', severity: 'red', label: 'Card failing', href: '/payments' }, { key: 'waiting', severity: 'amber', label: 'Waiting on them 33 days', detail: 'Photos' }], needsContact: true }),
   mk('m4', 'Pillar HVAC', { flags: [{ key: 'payment', severity: 'red', label: 'Payment overdue: $998' }], needsContact: true }),
 ]
 const moneyBrief = buildBrief({ statusRows: moneyRows, day: TODAY })
@@ -110,7 +110,7 @@ check('html on Monday too', briefHtml(monday).includes('Weekly status · Oct 12 
 // --- the alerts ----------------------------------------------------------------------
 const noisy = [...rows, mk('g', 'Gaps LLC', { flags: [{ key: 'no-leads', severity: 'red', label: 'No leads for 9 days' }, { key: 'payment', severity: 'red', label: 'Card failing' }, { key: 'video-stale', severity: 'red', label: 'No new video or ad in 12 days' }], needsContact: true })]
 const keys = alertKeys(noisy)
-check('alert keys: ads off and ten days stale by key, each clip by its path; no leads, payments, chases and blue flags wait for the morning', keys.map((k) => k.key), ['b:ads-off', 'd:clip:d/clip2.mp4', 'd:clip:d/clip1.mp4', 'g:video-stale'])
+check('alert keys: ads off, a card failing and ten days stale by key, each clip by its path; no leads, chases and blue flags wait for the morning', keys.map((k) => k.key), ['b:ads-off', 'd:clip:d/clip2.mp4', 'd:clip:d/clip1.mp4', 'g:payment', 'g:video-stale'])
 check('a clip alert says who dropped it and whether it is in Meta', keys.find((k) => k.key === 'd:clip:d/clip2.mp4'), { key: 'd:clip:d/clip2.mp4', client: { id: 'd', name: 'Drain Kings' }, kind: 'clip', label: 'New edit dropped in: clip2.mp4 from Kyle', detail: '', href: '/content' })
 check('only the account flag keeps its detail (the balance owed is the instruction)', [keys.find((k) => k.kind === 'ads-off').detail, alertKeys([mk('h', 'H', { flags: [{ key: 'account', severity: 'red', label: 'Ad account disabled', detail: '$3.04 outstanding on the account.' }] })])[0].detail], ['', '$3.04 outstanding on the account.'])
 const open = [
@@ -121,12 +121,12 @@ const open = [
   { key: 'd:clip:d/old.mp4', kind: 'clip', label: 'New edit dropped in: old.mp4', client_id: 'd', client_name: 'Drain Kings' },
 ]
 const diff = diffAlerts(keys, open)
-check('fresh: what is live and was not open (the still-open ads-off is not repeated)', diff.fresh.map((f) => f.key), ['d:clip:d/clip2.mp4', 'g:video-stale'])
+check('fresh: what is live and was not open (the still-open ads-off is not repeated)', diff.fresh.map((f) => f.key), ['d:clip:d/clip2.mp4', 'g:payment', 'g:video-stale'])
 check('gone: every open key that is no longer live, to close in the log', diff.gone.map((g) => g.key), ['a:ads-off', 'a:video-stale', 'd:clip:d/old.mp4'])
 check('cleared: only the ads coming back is said out loud', diff.cleared.map((c) => c.key), ['a:ads-off'])
 const post = alertsSlack(diff, { appUrl: 'https://crm.example' })
-check('the alerts post: new then cleared, each client a link, one line each', [post.blocks.length, post.blocks[0].text.text, post.blocks[1].text.text], [2, '*New (2)*\n🎬 <https://crm.example/content|Drain Kings>: New edit dropped in: clip2.mp4 from Kyle\n📹 <https://crm.example/client/g|Gaps LLC>: No new video or ad in 12 days', '*Cleared*\n✅ <https://crm.example/client/a|Acme Heating>: ads delivering again (was "Meta ads stopped: 4 days without spend")'])
-check('the notification line names the first few', post.text, 'Drain Kings: New edit dropped in: clip2.mp4 from Kyle · Gaps LLC: No new video or ad in 12 days')
+check('the alerts post: new then cleared, each client a link, one line each', [post.blocks.length, post.blocks[0].text.text, post.blocks[1].text.text], [2, '*New (3)*\n🎬 <https://crm.example/content|Drain Kings>: New edit dropped in: clip2.mp4 from Kyle\n💳 <https://crm.example/client/g|Gaps LLC>: Card failing\n📹 <https://crm.example/client/g|Gaps LLC>: No new video or ad in 12 days', '*Cleared*\n✅ <https://crm.example/client/a|Acme Heating>: ads delivering again (was "Meta ads stopped: 4 days without spend")'])
+check('the notification line names the first few', post.text, 'Drain Kings: New edit dropped in: clip2.mp4 from Kyle · Gaps LLC: Card failing · Gaps LLC: No new video or ad in 12 days')
 check('nothing new, nothing cleared: nothing posted', alertsSlack({ fresh: [], cleared: [] }), null)
 check('only cleared still posts', alertsSlack({ fresh: [], cleared: open.slice(1, 2) }).text, 'Acme Heating: ads delivering again')
 
