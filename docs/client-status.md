@@ -38,7 +38,7 @@ A tick comes from the data where the data knows (an ad account connected, a camp
 | blue | New clip waiting to go out | the video board's "ready" state |
 | blue | KPIs not logged this week | live and no `weekly_kpis` row this week |
 | blue | No package set / Package guessed from the fee | the tier column empty |
-| blue | On pause | `paused_at` set; no ads expected, and nothing else is flagged for them |
+| blue | On pause | `paused_at` set; the only flag a paused client carries. No ads expected, no chase, and no money flag: a paused subscription's invoices fail by design, so a card failing on a paused client is not a call (added 2026-10-21 after MBD's failing card reached the Slack channel) |
 
 Each flag links to the place to fix it (the client page section, the Content board, Payments).
 

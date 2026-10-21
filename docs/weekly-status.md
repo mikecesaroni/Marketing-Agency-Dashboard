@@ -10,6 +10,7 @@ Added 2026-10-21, after "I want a weekly report for us to see how all clients ar
 - **How long is the brief?** One line per thing, no explanations: the flag names the problem, the link goes to the place to fix it. The clients running clean are one line with their leads for the week ("Acme 8↑, Belk 5, ..."). Onboarding clients are one line each with their next step.
 - **What is green?** A live client whose ads have no flag (account, ads stopped, no leads, no new ad, Google sync), with their leads this week and whether that is up or down on the week before. Money does not take a client off that line; it has its own.
 - **Email or Slack?** Slack is the channel. Email is opt in (addresses on the Weekly status page) and needs the same two secrets the client reports use, `RESEND_API_KEY` and `REPORT_FROM`. Nothing is sent twice: the brief is once a day unless "Send now" is pressed.
+- **Paused clients?** Nothing. A paused client carries only the "On pause" flag on the board, so no alert and no brief line: their invoices fail by design while paused, and no ads are expected.
 - **What about the weekly?** Monday's brief carries the week's totals and the clients that need a decision, in full, plus who is trending up. The whole table is the Weekly status page.
 
 ## The Weekly status page (`/weekly`)

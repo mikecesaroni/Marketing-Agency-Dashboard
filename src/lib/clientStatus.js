@@ -79,9 +79,14 @@ export function clientFlags(ctx) {
   const flags = []
   const add = (f) => flags.push(f)
 
-  // Nothing is expected of a paused client, and the pause itself is the news.
+  // Nothing is expected of a paused client, and the pause itself is the only
+  // news: no ads, no leads, no chase, and no money flag either. A paused
+  // subscription's invoices fail by design ("MBD is a paused client; it is
+  // normal for their card to fail"), so a card failing on a paused client is
+  // not a call, and the Slack channel never hears about it.
   if (c.paused_at) {
     add({ key: 'paused', severity: 'blue', label: 'On pause', detail: `Since ${String(c.paused_at).slice(0, 10)}. No ads expected until they are resumed.`, href: `/client/${c.id}` })
+    return flags
   }
 
   if (ctx.alert) {
