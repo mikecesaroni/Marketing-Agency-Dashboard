@@ -70,21 +70,26 @@ const check = (name, got, want) => {
   const clients = [client({ name: 'yesterday' })]
   check('one quiet day is not an outage',
     adDeliveryAlerts(clients, { yesterday: spend('2026-08-30') }, TODAY).length, 0)
-  check('QUIET_DAYS is 2 for exactly that reason', QUIET_DAYS, 2)
+  // Nor two: Meta restates the last day or two (Active Air's October 18 to
+  // 20 read as pennies at the morning sync and as $44, $40 and $33 by the
+  // afternoon), so one full quiet day is not trusted either.
+  check('two quiet days (one full day) is still not an outage',
+    adDeliveryAlerts(clients, { yesterday: spend('2026-08-29') }, TODAY).length, 0)
+  check('QUIET_DAYS is 3 for exactly that reason', QUIET_DAYS, 3)
 }
 
 // --- gone quiet with a healthy account -----------------------------------
 {
   const clients = [client({ name: 'quiet' })]
-  const two = adDeliveryAlerts(clients, { quiet: spend('2026-08-29') }, TODAY)
-  check('two quiet days is a warning', [two[0].kind, two[0].severity], ['quiet', 'warning'])
-  check('...and counts the days', two[0].quietDays, 2)
+  const three = adDeliveryAlerts(clients, { quiet: spend('2026-08-28') }, TODAY)
+  check('three quiet days (two full days) is a warning', [three[0].kind, three[0].severity], ['quiet', 'warning'])
+  check('...and counts the days', three[0].quietDays, 3)
 
   const four = adDeliveryAlerts(clients, { quiet: spend('2026-08-27') }, TODAY)
   check('four quiet days is critical', four[0].severity, 'critical')
 
   check('the detail points inside the account, not at Meta',
-    two[0].detail.includes('paused campaigns'), true)
+    three[0].detail.includes('paused campaigns'), true)
 }
 
 // --- who is deliberately left out ----------------------------------------

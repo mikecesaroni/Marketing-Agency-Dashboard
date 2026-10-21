@@ -92,6 +92,13 @@ alter table meta_ad_accounts disable row level security;
 -- means this block is safe to keep in the repo, which the service-role version
 -- never was. That is probably why the original was left un-run.
 -- ---------------------------------------------------------------------------
+-- A SECOND RUN AT 17:00 UTC (1pm Eastern), job `meta-afternoon-sync`, the
+-- same command, scheduled 2026-10-21: Meta restates the last day or two.
+-- Active Air's October 18 to 20 read as $0.15, $0.72 and $0 at the morning
+-- run and as $44, $40 and $33 by the afternoon, and the "ads stopped" alert
+-- fired on the morning's numbers. The afternoon run corrects them the same
+-- day; src/lib/adHealth.js waits for two full quiet days before alerting.
+--
 -- select cron.unschedule('meta-daily-sync')
 --   where exists (select 1 from cron.job where jobname = 'meta-daily-sync');
 --

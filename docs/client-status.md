@@ -29,7 +29,7 @@ A tick comes from the data where the data knows (an ad account connected, a camp
 
 | Severity | Flag | When |
 |---|---|---|
-| red | Meta ads stopped / ad account disabled | the delivery alert (`src/lib/adHealth.js`): no spend for two days on a live account, or Meta reports the account disabled |
+| red | Meta ads stopped / ad account disabled | the delivery alert (`src/lib/adHealth.js`): two full days without spend on a live account (three counting today; Meta restates the last day or two, so one quiet day is not trusted), or Meta reports the account disabled |
 | red | No leads for N days | live, spent in the last fourteen days, and no lead for seven days (or none in fourteen); Meta `ad_daily` leads and Google `google_campaign_daily` conversions together |
 | red | No new video or ad in N days | the video board's row (`videoDrops`): ten or more days since the last ad of any kind, or none ever, on a client with a Meta account |
 | red | Payment overdue / Card failing | an unpaid `payments` row past its date, marked overdue, or with a failure count |

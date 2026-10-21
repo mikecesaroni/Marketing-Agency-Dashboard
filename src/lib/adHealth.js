@@ -68,10 +68,14 @@ export function accountStatusOk(status) {
 
 // How many days of no spend before a live client counts as gone quiet.
 //
-// Two, not one: the sync runs each morning for the previous day, so a client
-// who spent yesterday can legitimately show nothing for today, and alerting on
-// that would fire every morning for everybody.
-export const QUIET_DAYS = 2
+// Three, not two: today is always empty at 4am when the sync runs, and
+// Meta's numbers for the last day or two are not to be trusted either. On
+// 2026-10-21 Active Air's October 18 to 20 read as $0.15, $0.72 and $0 at
+// the morning sync and as $44, $40 and $33 by the afternoon one, and "Meta
+// ads stopped: 2 days without spend" went to the Slack channel on the
+// strength of it. So: two FULL quiet days before it is a call, and the
+// afternoon sync (17:00 UTC) corrects the morning's numbers the same day.
+export const QUIET_DAYS = 3
 
 const daysBetween = (from, to) =>
   Math.round((new Date(`${to}T00:00:00Z`) - new Date(`${from}T00:00:00Z`)) / 86400000)
