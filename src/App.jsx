@@ -24,6 +24,7 @@ const HomePage = lazy(() => import('./pages/HomePage'))
 const ClientsPage = lazy(() => import('./pages/ClientsPage'))
 const ClientDetailPage = lazy(() => import('./pages/ClientDetailPage'))
 const ClientStatusPage = lazy(() => import('./pages/ClientStatusPage'))
+const WeeklyStatusPage = lazy(() => import('./pages/WeeklyStatusPage'))
 const TasksPage = lazy(() => import('./pages/TasksPage'))
 const ContentPage = lazy(() => import('./pages/ContentPage'))
 const DrivePhotosPage = lazy(() => import('./pages/DrivePhotosPage'))
@@ -121,6 +122,7 @@ export default function App() {
             over from the Onboarding Progress board; the old address still
             lands here. */}
         <Route path="/status" element={<ClientStatusPage />} />
+        <Route path="/weekly" element={<WeeklyStatusPage />} />
         <Route path="/deliverables" element={<Navigate to="/status" replace />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/payments" element={<PaymentsPage />} />

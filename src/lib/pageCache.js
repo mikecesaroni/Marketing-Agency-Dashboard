@@ -119,4 +119,5 @@ export const keys = {
   dashboard: () => 'dashboard:main',
   nextSteps: () => 'nextsteps:all',
   clientStatus: () => 'clientstatus:all',
+  weeklyStatus: (weeksBack = 0) => `weeklystatus:${weeksBack}`,
 }

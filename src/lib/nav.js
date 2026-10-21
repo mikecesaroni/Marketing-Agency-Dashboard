@@ -16,6 +16,7 @@ import {
   IconSops,
   IconTasks,
   IconTeam,
+  IconTrendUp,
 } from '../components/ui/icons'
 
 export const NAV_GROUPS = [
@@ -28,6 +29,7 @@ export const NAV_GROUPS = [
       // Off the phone bar (mobile: false): the home screen's tiles reach
       // everything, so the bar keeps the four a thumb goes to all day.
       { to: '/status', label: 'Client status', short: 'Status', Icon: IconDeliverables, mobile: false },
+      { to: '/weekly', label: 'Weekly status', short: 'Weekly', Icon: IconTrendUp, mobile: false },
       { to: '/tasks', label: 'Tasks', short: 'Tasks', Icon: IconTasks },
     ],
   },

@@ -23,40 +23,11 @@ export function hasInternalColumn() {
 }
 
 // ---------- date helpers ----------
-// Built from local date parts on purpose — toISOString() shifts to UTC and can
-// land on the wrong day for anyone west of Greenwich.
-export function formatDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-export function getMonday(date) {
-  const d = new Date(date)
-  const day = d.getDay()
-  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-export function today() {
-  return formatDate(new Date())
-}
-
-export function weeksAgoMonday(weeks) {
-  const monday = getMonday(new Date())
-  monday.setDate(monday.getDate() - weeks * 7)
-  return formatDate(monday)
-}
-
-export function shortWeekLabel(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  })
-}
+// They live in dates.js (no browser imports, so the pure modules and the
+// Edge Functions can share them) and are re-exported here for the many
+// callers that reach for them through queries.js.
+import { formatDate, getMonday, today, weeksAgoMonday, shortWeekLabel } from './dates'
+export { formatDate, getMonday, today, weeksAgoMonday, shortWeekLabel }
 
 export function money(n) {
   return `$${(n || 0).toLocaleString('en-US', {

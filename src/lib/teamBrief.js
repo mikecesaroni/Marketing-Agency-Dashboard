@@ -1,0 +1,325 @@
+// The team brief: what needs attention this morning, what is new since
+// the last look, and what is running clean. One model, three renderings
+// (Slack, email, plain text), and the alert keys the Slack channel is kept
+// in step with.
+//
+// Pure. The team-digest Edge Function feeds it the same Client status rows
+// the board shows (src/lib/statusRows.js) and, on a Monday, the weekly
+// status (src/lib/weeklyStatus.js); the CRM shows the same brief as a
+// preview. scripts/check-team-brief.mjs runs it in Node.
+//
+// THE QUIET RULES. "We don't want to be bombarded." So:
+//   * The BRIEF is one message a weekday morning. One line per thing, no
+//     explanations: the flag names the problem, the link goes to the fix.
+//     The clients running clean are one line with their leads for the week,
+//     so the good news is there without a paragraph each.
+//   * An ALERT goes out the moment it appears only when waiting for the
+//     morning costs money or a day: an ad account disabled, ads gone quiet,
+//     a new edit dropped in (so it gets published today), a client crossing
+//     ten days without an ad. Once per client per episode, never repeated,
+//     and one line when ads are delivering again. Everything else (no leads
+//     while spending, a payment, a chase a week old, housekeeping) waits
+//     for the brief.
+//   * No alert outside 7am to 9pm Eastern; the morning brief covers the
+//     night. The brief marks everything it carried as posted, so the first
+//     alert run of the day does not say it all again.
+
+import { longDay } from './dates.js'
+import { money, weeklyLine } from './weeklyStatus.js'
+
+/** The flags that get their own post the moment they appear. Clips are keyed separately (one per drop). */
+export const IMMEDIATE = new Set(['account', 'ads-off', 'video-stale'])
+/** The ones worth a line when they clear: the ads are back. */
+export const CLEAR_WORTHY = new Set(['account', 'ads-off'])
+
+const EMOJI = {
+  account: '🚨',
+  'ads-off': '🔴',
+  'no-leads': '🟠',
+  'video-stale': '📹',
+  payment: '💳',
+  waiting: '⏳',
+  'google-sync': '🟠',
+  clip: '🎬',
+  green: '🟢',
+  onboarding: '⚪',
+  cleared: '✅',
+}
+
+const pick = (c) => ({ id: c.id, name: c.name })
+const active = (r) => r?.client && !r.client.archived && !r.client.is_internal
+
+/**
+ * The morning brief.
+ *
+ *   statusRows  clientStatus() rows
+ *   weekly      buildWeeklyStatus() report, or null on any day but Monday
+ *   day         'YYYY-MM-DD'
+ */
+export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' }) {
+  const rows = statusRows.filter(active)
+  const attention = []
+  const clips = []
+  const green = []
+  const onboarding = []
+  for (const r of rows) {
+    const client = pick(r.client)
+    for (const f of r.flags || []) {
+      if (f.severity === 'red' || f.severity === 'amber') {
+        attention.push({ client, severity: f.severity, key: f.key, label: f.label, detail: f.detail || '', href: f.href || `/client/${client.id}` })
+      }
+    }
+    for (const w of r.drop?.waiting || []) {
+      clips.push({ client, key: 'clip', label: `${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}`, href: '/content', at: w.at })
+    }
+    const live = Boolean(r.client.meta_ads_active) && !r.client.paused_at
+    if (live && !r.needsContact) {
+      const leads7 = r.leads?.leads7 || 0
+      const before = Math.max(0, (r.leads?.leads14 || 0) - leads7)
+      green.push({ client, leads7, before, spend7: r.leads?.spend7 || 0 })
+    }
+    if (!r.result?.launched && !r.client.paused_at) {
+      const next = r.result?.next
+      onboarding.push({ client, label: next ? `${next.title}${next.owner === 'client' ? ' (their move)' : ''}` : 'nothing open', theirs: next?.owner === 'client' })
+    }
+  }
+  const sev = { red: 0, amber: 1 }
+  attention.sort((a, b) => sev[a.severity] - sev[b.severity] || a.client.name.localeCompare(b.client.name))
+  clips.sort((a, b) => (a.at < b.at ? 1 : -1))
+  green.sort((a, b) => b.leads7 - a.leads7 || a.client.name.localeCompare(b.client.name))
+  const red = attention.filter((a) => a.severity === 'red').length
+  return {
+    day,
+    label: longDay(day),
+    attention,
+    clips,
+    green,
+    onboarding,
+    counts: {
+      clients: rows.length,
+      red,
+      amber: attention.length - red,
+      toCall: new Set(attention.map((a) => a.client.id)).size,
+      clips: clips.length,
+      green: green.length,
+      greenLeads: green.reduce((n, g) => n + g.leads7, 0),
+      onboarding: onboarding.length,
+    },
+    weekly,
+    appUrl: String(appUrl || '').replace(/\/$/, ''),
+  }
+}
+
+/** The email subject and the Slack notification line. */
+export function briefSubject(model) {
+  const c = model.counts
+  const bits = []
+  if (c.toCall) bits.push(`${c.toCall} to call`)
+  if (c.clips) bits.push(`${c.clips} clip${c.clips === 1 ? '' : 's'} to publish`)
+  bits.push(`${c.green} running clean`)
+  return `${model.weekly ? 'Monday brief and weekly status' : 'Morning brief'} · ${model.label} · ${bits.join(', ')}`
+}
+
+function esc(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+const slackEsc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+const link = (model, href, text, kind = 'slack') => {
+  const url = `${model.appUrl}${href}`
+  // Slack text arrives escaped already; HTML is escaped here either way.
+  if (!model.appUrl) return kind === 'html' ? esc(text) : text
+  return kind === 'slack' ? `<${url}|${text}>` : kind === 'html' ? `<a href="${esc(url)}" style="color:#0f172a;font-weight:700;text-decoration:none;">${esc(text)}</a>` : text
+}
+
+/**
+ * The brief as sections of lines: [{ key, title, lines: [{ emoji, client?, text, href? }] }].
+ * Every rendering comes from this, so Slack, the email and the preview say
+ * the same thing. Running clean and onboarding are ONE line each.
+ */
+export function briefSections(model) {
+  const out = []
+  if (model.attention.length) {
+    out.push({
+      key: 'attention',
+      title: `Needs attention (${model.attention.length})`,
+      lines: model.attention.map((a) => ({ emoji: EMOJI[a.key] || (a.severity === 'red' ? '🔴' : '🟠'), client: a.client, text: a.label, href: a.href })),
+    })
+  }
+  if (model.clips.length) {
+    out.push({ key: 'clips', title: `To publish (${model.clips.length})`, lines: model.clips.map((c) => ({ emoji: EMOJI.clip, client: c.client, text: c.label, href: c.href })) })
+  }
+  if (model.green.length) {
+    const names = model.green.map((g) => `${g.client.name} ${g.leads7}${g.leads7 > g.before ? '↑' : g.leads7 < g.before ? '↓' : ''}`).join(', ')
+    out.push({ key: 'green', title: `Running clean (${model.green.length}), leads this week`, lines: [{ emoji: EMOJI.green, text: names, href: '/status' }] })
+  }
+  if (model.onboarding.length) {
+    out.push({ key: 'onboarding', title: `Onboarding (${model.onboarding.length})`, lines: model.onboarding.map((o) => ({ emoji: EMOJI.onboarding, client: o.client, text: o.label, href: `/client/${o.client.id}` })) })
+  }
+  if (model.attention.length === 0 && model.clips.length === 0) {
+    out.unshift({ key: 'clear', title: 'Nothing needs attention', lines: [{ emoji: '✅', text: 'No flags on any client this morning.' }] })
+  }
+  return out
+}
+
+/** Plain text, for the email's text part and the CRM preview. */
+export function briefText(model) {
+  const head = [`${model.weekly ? 'MONDAY BRIEF' : 'MORNING BRIEF'} · ${model.label}`, briefSubject(model).split(' · ').slice(2).join(' · ')]
+  const body = briefSections(model).map((s) => [s.title.toUpperCase(), ...s.lines.map((l) => `${l.emoji} ${l.client ? `${l.client.name}: ` : ''}${l.text}`)].join('\n'))
+  const weekly = model.weekly ? [weeklyTextShort(model.weekly)] : []
+  return [head.join('\n'), ...body, ...weekly, model.appUrl ? `${model.appUrl}/status` : ''].filter(Boolean).join('\n\n')
+}
+
+const pctWord = (v) => (v === null || v === undefined || !Number.isFinite(v) ? '' : Math.abs(v) < 0.5 ? ' (same)' : ` (${v > 0 ? 'up' : 'down'} ${Math.round(Math.abs(v))}%)`)
+
+/** The weekly status, short: the totals, the clients needing a decision in full, the rest by name. */
+export function weeklyTextShort(report) {
+  const t = report.totals
+  const lines = [
+    `WEEKLY STATUS · ${report.label}`,
+    `${money(t.spend)} spent${pctWord(t.change.spend)} · ${t.leads} leads${pctWord(t.change.leads)} · ${t.leads > 0 ? `${money(t.cpl)} per lead${pctWord(t.change.cpl)}` : 'no leads'} · ${t.running} of ${t.clients} running`,
+    `${t.up} trending up · ${t.down} down · ${t.needAds} need a new ad · ${t.adsOff} with ads off`,
+  ]
+  const decide = report.rows.filter((r) => r.rank <= 3)
+  if (decide.length) lines.push('', `NEEDS A DECISION (${decide.length})`, ...decide.map((r) => `• ${weeklyLine(r)}`))
+  const up = report.rows.filter((r) => r.rank === 8)
+  if (up.length) lines.push('', `TRENDING UP: ${up.map((r) => `${r.client.name} (${r.trend.why.toLowerCase()})`).join(', ')}`)
+  const steady = report.rows.filter((r) => r.rank === 7)
+  if (steady.length) lines.push(`STEADY: ${steady.map((r) => r.client.name).join(', ')}`)
+  return lines.join('\n')
+}
+
+// Slack caps a section's text at 3000 characters; lines are chunked under
+// that so a long morning never comes back as "invalid_blocks".
+const SLACK_SECTION_MAX = 2800
+
+function slackSections(title, lines) {
+  const blocks = []
+  let text = `*${title}*`
+  for (const l of lines) {
+    if (text.length + l.length + 1 > SLACK_SECTION_MAX) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text } })
+      text = l
+    } else {
+      text += `\n${l}`
+    }
+  }
+  blocks.push({ type: 'section', text: { type: 'mrkdwn', text } })
+  return blocks
+}
+
+/** The brief as a Slack message: { text, blocks }. */
+export function briefSlack(model) {
+  const blocks = [{ type: 'header', text: { type: 'plain_text', text: `${model.weekly ? '📊 Monday brief' : '☀️ Morning brief'} · ${model.label}`, emoji: true } }]
+  for (const s of briefSections(model)) {
+    const lines = s.lines.map((l) => `${l.emoji} ${l.client ? `${link(model, l.href || `/client/${l.client.id}`, slackEsc(l.client.name))}: ` : ''}${slackEsc(l.text)}`)
+    blocks.push(...slackSections(s.title, lines))
+  }
+  if (model.weekly) {
+    const t = model.weekly.totals
+    const pctMark = (v) => (v === null || v === undefined || !Number.isFinite(v) || Math.abs(v) < 0.5 ? '' : ` (${v > 0 ? '▲' : '▼'} ${Math.round(Math.abs(v))}%)`)
+    blocks.push({ type: 'divider' })
+    const lines = [
+      `${money(t.spend)} spent${pctMark(t.change.spend)} · *${t.leads} leads*${pctMark(t.change.leads)} · ${t.leads > 0 ? `${money(t.cpl)} per lead${pctMark(t.change.cpl)}` : 'no leads'} · ${t.running} of ${t.clients} running`,
+      `${t.up} trending up · ${t.down} down · ${t.needAds} need a new ad · ${t.adsOff} with ads off`,
+    ]
+    const decide = model.weekly.rows.filter((r) => r.rank <= 3)
+    for (const r of decide) lines.push(`• ${link(model, `/client/${r.client.id}`, slackEsc(r.client.name))}: ${slackEsc(weeklyLine(r).replace(`${r.client.name}: `, ''))}`)
+    const up = model.weekly.rows.filter((r) => r.rank === 8)
+    if (up.length) lines.push(`📈 Trending up: ${up.map((r) => slackEsc(r.client.name)).join(', ')}`)
+    blocks.push(...slackSections(`Weekly status · ${model.weekly.label}`, lines))
+    if (model.appUrl) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `Full report: ${link(model, '/weekly', 'Weekly status in the CRM')}` }] })
+  }
+  if (model.appUrl) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, '/status', 'Client status')} · ${link(model, '/content', 'Video board')} · ${link(model, '/tasks', 'Tasks')}` }] })
+  return { text: briefSubject(model), blocks }
+}
+
+const INK = '#0f172a'
+const MUTED = '#64748b'
+const LINE = '#e2e8f0'
+
+/** The brief as an email: inline-styled tables, no script, no web fonts. */
+export function briefHtml(model, { agencyName = 'The Working Class Marketing' } = {}) {
+  const section = (s) =>
+    `<tr><td style="padding:14px 28px 4px;"><div style="font-size:12px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:.4px;">${esc(s.title)}</div></td></tr>` +
+    s.lines
+      .map((l) => `<tr><td style="padding:5px 28px;font-size:14px;line-height:1.45;color:${INK};">${l.emoji} ${l.client ? `${link(model, l.href || `/client/${l.client.id}`, l.client.name, 'html')}: ` : ''}${esc(l.text)}</td></tr>`)
+      .join('')
+  const weekly = model.weekly
+    ? `<tr><td style="padding:18px 28px 4px;border-top:1px solid ${LINE};"><div style="font-size:12px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:.4px;">Weekly status · ${esc(model.weekly.label)}</div></td></tr>` +
+      `<tr><td style="padding:4px 28px 10px;font-size:13px;line-height:1.5;color:${INK};white-space:pre-wrap;">${esc(weeklyTextShort(model.weekly).split('\n').slice(1).join('\n'))}</td></tr>` +
+      (model.appUrl ? `<tr><td style="padding:0 28px 12px;font-size:13px;">${link(model, '/weekly', 'Open the weekly status', 'html')}</td></tr>` : '')
+    : ''
+  return `<!doctype html><html><body style="margin:0;padding:0;background:#F1F5F9;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F1F5F9;padding:24px 12px;">
+<tr><td align="center">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#FFFFFF;border-radius:12px;font-family:Arial,Helvetica,sans-serif;">
+<tr><td style="padding:26px 28px 6px;">
+  <div style="font-size:12px;color:#ea580c;font-weight:700;letter-spacing:.4px;text-transform:uppercase;">${model.weekly ? 'Monday brief' : 'Morning brief'}</div>
+  <div style="font-size:22px;font-weight:700;color:${INK};padding-top:4px;">${esc(model.label)}</div>
+  <div style="font-size:13px;color:${MUTED};padding-top:4px;">${esc(briefSubject(model).split(' · ').slice(2).join(' · '))}</div>
+</td></tr>
+${briefSections(model).map(section).join('')}
+${weekly}
+<tr><td style="padding:18px 28px 24px;border-top:1px solid ${LINE};font-size:12px;color:${MUTED};">${model.appUrl ? `${link(model, '/status', 'Client status', 'html')} · ${link(model, '/content', 'Video board', 'html')} · ${link(model, '/tasks', 'Tasks', 'html')} · ` : ''}${esc(agencyName)}</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`
+}
+
+// --- the alerts ------------------------------------------------------------------
+
+/**
+ * Everything that gets a post the moment it appears: one key per client per
+ * thing. The immediate flags by their key; each waiting clip by its path, so
+ * a second drop is a second post and a published one goes quiet.
+ */
+export function alertKeys(statusRows = []) {
+  const out = []
+  for (const r of statusRows.filter(active)) {
+    const client = pick(r.client)
+    for (const f of r.flags || []) {
+      if (!IMMEDIATE.has(f.key)) continue
+      out.push({ key: `${client.id}:${f.key}`, client, kind: f.key, label: f.label, detail: f.key === 'account' ? f.detail || '' : '', href: f.href || `/client/${client.id}` })
+    }
+    for (const w of r.drop?.waiting || []) {
+      out.push({ key: `${client.id}:clip:${w.path}`, client, kind: 'clip', label: `New edit dropped in: ${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}`, detail: '', href: '/content' })
+    }
+  }
+  return out
+}
+
+/**
+ * What to post: the keys live now that are not open in the log (fresh), and
+ * the open ones that are gone and worth a word (cleared: the ads are back).
+ * A clip going quiet or a stale client publishing is not news.
+ *
+ * open: [{ key, kind, label, client_id, client_name }] rows with cleared_at null
+ */
+export function diffAlerts(current = [], open = []) {
+  const openKeys = new Set(open.map((o) => o.key))
+  const nowKeys = new Set(current.map((c) => c.key))
+  return {
+    fresh: current.filter((c) => !openKeys.has(c.key)),
+    gone: open.filter((o) => !nowKeys.has(o.key)),
+    cleared: open.filter((o) => !nowKeys.has(o.key) && CLEAR_WORTHY.has(o.kind)),
+  }
+}
+
+/** The alerts as a Slack message, or null when there is nothing to say. */
+export function alertsSlack({ fresh = [], cleared = [] }, { appUrl = '' } = {}) {
+  if (fresh.length === 0 && cleared.length === 0) return null
+  const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
+  const blocks = []
+  if (fresh.length) {
+    const lines = fresh.map((f) => `${EMOJI[f.kind] || '🔴'} ${link(model, f.href || `/client/${f.client.id}`, slackEsc(f.client.name))}: ${slackEsc(f.label)}${f.detail ? ` _${slackEsc(f.detail).slice(0, 160)}_` : ''}`)
+    blocks.push(...slackSections(fresh.length === 1 ? 'New' : `New (${fresh.length})`, lines))
+  }
+  if (cleared.length) {
+    const lines = cleared.map((c) => `${EMOJI.cleared} ${link(model, `/client/${c.client_id}`, slackEsc(c.client_name || 'A client'))}: ads delivering again (was "${slackEsc(c.label)}")`)
+    blocks.push(...slackSections('Cleared', lines))
+  }
+  const text = fresh.length ? `${fresh.slice(0, 3).map((f) => `${f.client.name}: ${f.label}`).join(' · ')}${fresh.length > 3 ? ` · and ${fresh.length - 3} more` : ''}` : `${cleared.map((c) => c.client_name).join(', ')}: ads delivering again`
+  return { text, blocks }
+}

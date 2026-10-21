@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "guide": "node scripts/build-agent-guide.mjs",
+    "brief": "rolldown supabase/functions/team-digest/model.entry.js -o supabase/functions/team-digest/model.js -f esm -p neutral -m",
     "check": "oxlint && for f in scripts/check-*.mjs; do node \"$f\" || exit 1; done",
     "prebuild": "oxlint && npm run guide && node scripts/check-agent-guide.mjs",
     "build": "vite build",
