@@ -28,6 +28,11 @@
 //         force?, dry_run?, weekly?, weeks_back? }
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
+// model.js is the bundle in this folder (`npm run brief`), served here from
+// the public repo at a pinned commit through jsDelivr rather than uploaded
+// alongside: the deploy tool takes files inline, and 47 KB of minified code
+// does not survive being pasted. To ship a change: rebuild, commit, push,
+// put the new commit id here, deploy index.ts.
 import {
   alertKeys,
   alertsSlack,
@@ -42,7 +47,7 @@ import {
   fetchWeeklyRows,
   statusFromRows,
   weeklyText,
-} from './model.js'
+} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@1c1e063a224d663fb8a791bab9876a5b84770988/supabase/functions/team-digest/model.js'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
