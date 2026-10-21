@@ -146,7 +146,7 @@ const check = (name, got, want) => {
     client({ name: 'middle' }),
   ]
   const delivery = {
-    short: spend('2026-08-29'), long: spend('2026-08-10'), middle: spend('2026-08-25'),
+    short: spend('2026-08-28'), long: spend('2026-08-10'), middle: spend('2026-08-25'),
   }
   check('longest outage first',
     adDeliveryAlerts(clients, delivery, TODAY).map((a) => a.client.name),
