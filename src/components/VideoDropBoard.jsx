@@ -145,6 +145,19 @@ function DropIn({ clients, onDropped }) {
   const choices = (clients || []).filter((c) => !c.archived)
   const chosen = choices.find((c) => c.id === clientId)
 
+  // The name every drop is signed with, kept in this browser (the same
+  // "You" the Tasks page uses). It is shown on the box, because once a clip
+  // label got typed in here by mistake and every drop for a month read
+  // "from Active Air 2" on the board and in Slack.
+  const askMe = () => {
+    const name = String(window.prompt('Your name (the person dropping it in, not the client or the clip), so the board can say who it came from:', me) || '').trim()
+    if (name) {
+      saveMe(name)
+      setMe(name)
+    }
+    return name || me
+  }
+
   const ingest = async (incoming) => {
     const files = [...(incoming || [])].filter((f) => isVideoFile(f.name))
     setError('')
@@ -165,13 +178,7 @@ function DropIn({ clients, onDropped }) {
     // Read fresh: the name may have been set on another tab since this mounted.
     let who = readMe() || me
     if (who && who !== me) setMe(who)
-    if (!who) {
-      who = String(window.prompt('Your name, so the board can say who dropped it in:') || '').trim()
-      if (who) {
-        saveMe(who)
-        setMe(who)
-      }
-    }
+    if (!who) who = askMe()
     const dropped = []
     try {
       for (const [i, file] of files.entries()) {
@@ -217,7 +224,19 @@ function DropIn({ clients, onDropped }) {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-900">Drop a finished clip</p>
           <p className="text-[11px] text-slate-500">
-            For editors: pick the client, drop the .mp4 or .mov. It goes to Meta and shows up below as ready to publish.
+            For editors: pick the client, drop the .mp4 or .mov. It goes to Meta and shows up below as ready to publish.{' '}
+            <span data-drop-as>
+              {me ? (
+                <>
+                  Signed as <span className="font-semibold text-slate-700">{me}</span>.
+                </>
+              ) : (
+                'It will ask your name once.'
+              )}{' '}
+              <button type="button" onClick={askMe} className="text-blue-700 hover:underline">
+                {me ? 'Not you?' : 'Set it now'}
+              </button>
+            </span>
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
