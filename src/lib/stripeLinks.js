@@ -93,6 +93,8 @@ export async function assignUnmatched(row, clientId, { replaceCustomerId = false
     stripe_event_id: row.stripe_event_id,
     stripe_invoice_id: row.stripe_invoice_id,
     stripe_customer_id: row.stripe_customer_id,
+    // Who paid, so the row can say so on the Payments page.
+    payer_email: row.customer_email ? String(row.customer_email).trim().toLowerCase() : null,
     // WHAT STRIPE TOOK, not what the schedule guessed. Settling a scheduled
     // row without this records the CRM's own figure as though it were
     // collected: Summit Water Pros moved from $998 to $1,500 and the ledger

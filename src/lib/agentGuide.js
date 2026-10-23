@@ -235,7 +235,7 @@ export const ROUTES = [
       'Stripe reconciliation, which flags where Stripe charged a different amount to what the CRM expects. Stripe wins these: the fix is to correct the CRM.',
       'Stripe payment links and unmatched Stripe payments waiting to be assigned to a client.',
       '"Paid out to Ethan" — whether each collected payment has had its split paid on, which is a separate question from whether the client paid.',
-      'The payment ledger itself.',
+      'The payment ledger itself. A row Stripe paid shows the email that paid it (the address on the Stripe customer), after the date and the method.',
     ],
     actions: [
       'Filters: paid, overdue, upcoming, all. Views: By client or By date. A client dropdown.',

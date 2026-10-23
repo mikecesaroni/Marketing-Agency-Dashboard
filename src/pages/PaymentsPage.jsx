@@ -288,6 +288,14 @@ export default function PaymentsPage() {
               Due {p.due_date}
             </span>
             {p.status === 'paid' && ` · Paid ${p.paid_date} (${p.payment_method || '—'})`}
+            {p.status === 'paid' && p.payer_email && (
+              <>
+                {' · '}
+                <span className="text-slate-700" title="The email on the Stripe customer that paid this" data-payer-email>
+                  {p.payer_email}
+                </span>
+              </>
+            )}
             {paused && ' · not owed while paused'}
           </p>
           {/* The failure history, from its own columns rather than from a

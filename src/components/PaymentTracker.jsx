@@ -293,6 +293,14 @@ export default function PaymentTracker({ client, onClientUpdate }) {
             </span>
             {payment.status === 'paid' &&
               ` · Paid ${payment.paid_date} (${payment.payment_method || '—'})`}
+            {payment.status === 'paid' && payment.payer_email && (
+              <>
+                {' · '}
+                <span className="text-slate-700" title="The email on the Stripe customer that paid this" data-payer-email>
+                  {payment.payer_email}
+                </span>
+              </>
+            )}
             {onPause && ' · not owed while paused'}
           </p>
           {payment.notes && <p className="text-xs text-slate-600 mt-1">{payment.notes}</p>}

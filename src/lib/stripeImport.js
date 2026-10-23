@@ -235,6 +235,8 @@ export async function applyImportedPayment({ row, clientId, type }) {
     payment_method: 'card',
     stripe_charge_id: row.id,
     stripe_customer_id: row.customerId,
+    // Who paid, when the export carries it, so the row can say so.
+    payer_email: row.email ? String(row.email).trim().toLowerCase() : null,
   }
 
   if (due?.[0]) {

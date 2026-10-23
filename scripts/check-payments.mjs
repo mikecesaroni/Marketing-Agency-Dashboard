@@ -139,6 +139,17 @@ const settled = (rows) =>
   check('...and never touches the setup fee',
     log.some((l) => l.op === 'insert'), false)
   check('...and says so', r.note?.startsWith('monthly 1500'), true)
+  check('...and, with no email on the invoice, records none', rows.find((x) => x.status === 'paid').payer_email, null)
+}
+
+// Who paid, so the Payments page can say: the address on the Stripe
+// customer, kept lower-case, on the row the invoice settled.
+{
+  const { db, rows } = makeFake({ client: CLIENT, payments: structuredClone(SCHEDULE) })
+  const ev = invoice(150000)
+  ev.data.object.customer_email = ' Books@AcmeHVAC.com '
+  await handleEvent(db, ev)
+  check('the email that paid is kept on the settled row', rows.find((x) => x.status === 'paid').payer_email, 'books@acmehvac.com')
 }
 
 // Two invoices in one month, which is what a client on two Stripe

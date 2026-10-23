@@ -117,3 +117,10 @@ recording is what keeps months two through twelve attached. If both are
 missing, it falls back to matching the payer's email against `contact_email` on
 the intake form. If all three miss, the payment is parked in the unmatched list
 rather than dropped.
+
+Whichever way a payment lands, the email on the Stripe customer is kept on the
+row (`payments.payer_email`) and shown on the Payments page after the date and
+method, so "who actually paid this" (the bookkeeper, a spouse, a second
+business) is answered without opening Stripe. Rows from before 2026-10-23 were
+filled in from the stored Stripe events; a handful imported from a CSV before
+the webhook existed, and the ones marked paid by hand, have none.

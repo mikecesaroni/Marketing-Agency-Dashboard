@@ -193,6 +193,11 @@ export async function recordPayment(
     eventId: string
     invoiceId?: string | null
     customerId?: string | null
+    // The address on the Stripe customer, kept on the row so the Payments
+    // page can say who paid: a client's bookkeeper, the owner's spouse, a
+    // second business. "Make so we can see the email that paid each Stripe
+    // payment."
+    email?: string | null
     description?: string
   }
 ) {
@@ -220,6 +225,7 @@ export async function recordPayment(
     stripe_event_id: p.eventId,
     stripe_invoice_id: p.invoiceId || null,
     stripe_customer_id: p.customerId || null,
+    payer_email: p.email ? String(p.email).trim().toLowerCase() : null,
     // WHAT STRIPE TOOK, not what the schedule guessed twelve months ago.
     //
     // Missing this was the quietest money bug in the app: a client who moved
@@ -329,6 +335,7 @@ export async function handleEvent(db: Db, event: any) {
       method: methodFrom(obj.payment_method_types),
       eventId: event.id,
       customerId,
+      email,
       description: 'Stripe setup fee',
     })
     return {
@@ -370,6 +377,7 @@ export async function handleEvent(db: Db, event: any) {
       eventId: event.id,
       invoiceId: obj.id,
       customerId,
+      email,
       description: 'Stripe subscription payment',
     })
     return {
@@ -532,7 +540,7 @@ async function parkUnmatched(
 async function resolveUnmatchedForCustomer(db: Db, customerId: string, clientId: string) {
   const rows = await db.get(
     `stripe_unmatched?stripe_customer_id=eq.${encodeURIComponent(customerId)}` +
-      `&resolved_client_id=is.null&select=id,stripe_event_id,amount,payment_type,paid_date,payment_method,stripe_invoice_id`
+      `&resolved_client_id=is.null&select=id,stripe_event_id,amount,payment_type,paid_date,payment_method,stripe_invoice_id,customer_email`
   )
   for (const row of rows || []) {
     await recordPayment(db, {
@@ -544,6 +552,7 @@ async function resolveUnmatchedForCustomer(db: Db, customerId: string, clientId:
       eventId: row.stripe_event_id,
       invoiceId: row.stripe_invoice_id,
       customerId,
+      email: row.customer_email,
       description: 'Stripe payment matched after the customer was linked',
     })
     await db.patch(`stripe_unmatched?id=eq.${row.id}`, {
