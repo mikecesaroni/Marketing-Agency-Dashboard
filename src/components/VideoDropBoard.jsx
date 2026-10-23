@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ago } from '../lib/contentHub'
-import { DROP_STATES, dropStats } from '../lib/videoLaunch'
+import { DROP_STATES, dropStats, personName } from '../lib/videoLaunch'
 import { isVideoFile, validateVideo } from '../lib/adVideos'
 import { dismissClips, downloadUrl, uploadVideo } from '../lib/adVideoStore'
 import { registerAdVideo } from '../lib/metaPublish'
@@ -136,7 +136,15 @@ function Row({ row, onDismiss }) {
  */
 function DropIn({ clients, onDropped }) {
   const [clientId, setClientId] = useState('')
-  const [me, setMe] = useState(() => readMe())
+  // A saved name the CRM knows was a slip (personName's list) is repaired
+  // in the browser on the spot, so the fix does not depend on anyone
+  // noticing the line under the box.
+  const [me, setMe] = useState(() => {
+    const raw = readMe()
+    const fixed = personName(raw)
+    if (fixed && fixed !== raw) saveMe(fixed)
+    return fixed || raw
+  })
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [done, setDone] = useState(null)
@@ -150,12 +158,14 @@ function DropIn({ clients, onDropped }) {
   // label got typed in here by mistake and every drop for a month read
   // "from Active Air 2" on the board and in Slack.
   const askMe = () => {
-    const name = String(window.prompt('Your name (the person dropping it in, not the client or the clip), so the board can say who it came from:', me) || '').trim()
+    const current = readMe() || me
+    const hint = current && !personName(current) ? `"${current}" looks like a clip, not a person. ` : ''
+    const name = String(window.prompt(`${hint}Your name (the person dropping it in, not the client or the clip), so the board can say who it came from:`, personName(current)) || '').trim()
     if (name) {
       saveMe(name)
       setMe(name)
     }
-    return name || me
+    return name || current
   }
 
   const ingest = async (incoming) => {
@@ -178,12 +188,15 @@ function DropIn({ clients, onDropped }) {
     // Read fresh: the name may have been set on another tab since this mounted.
     let who = readMe() || me
     if (who && who !== me) setMe(who)
-    if (!who) who = askMe()
+    // No name, or one that is plainly not a person: ask. Whatever they
+    // answer is accepted, so a stubborn answer never blocks a drop; the
+    // board and Slack only print it when it reads as a name (personName).
+    if (!personName(who)) who = askMe()
     const dropped = []
     try {
       for (const [i, file] of files.entries()) {
         setBusy(files.length > 1 ? `Uploading ${i + 1} of ${files.length}…` : `Uploading ${file.name}…`)
-        const saved = await uploadVideo({ clientId: chosen.id, file, uploadedBy: who })
+        const saved = await uploadVideo({ clientId: chosen.id, file, uploadedBy: personName(who) || who })
         dropped.push(saved)
         if (chosen.meta_ad_account_id) {
           // Straight to Meta, best effort: a transcode that fails to start
@@ -226,15 +239,17 @@ function DropIn({ clients, onDropped }) {
           <p className="text-[11px] text-slate-500">
             For editors: pick the client, drop the .mp4 or .mov. It goes to Meta and shows up below as ready to publish.{' '}
             <span data-drop-as>
-              {me ? (
+              {!me ? (
+                'It will ask your name once.'
+              ) : personName(me) ? (
                 <>
                   Signed as <span className="font-semibold text-slate-700">{me}</span>.
                 </>
               ) : (
-                'It will ask your name once.'
+                <span className="font-semibold text-amber-700">Signed as “{me}”, which looks like a clip, not a person.</span>
               )}{' '}
               <button type="button" onClick={askMe} className="text-blue-700 hover:underline">
-                {me ? 'Not you?' : 'Set it now'}
+                {!me ? 'Set it now' : personName(me) ? 'Not you?' : 'Fix it'}
               </button>
             </span>
           </p>
@@ -281,7 +296,7 @@ function DropIn({ clients, onDropped }) {
         <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-violet-900">
           <span>
             ✓ {done.clips.length === 1 ? done.clips[0].file_name : `${done.clips.length} clips`} dropped in for {done.client.name}
-            {me ? ` by ${me}` : ''}.
+            {personName(me) ? ` by ${me}` : ''}.
           </span>
           {done.clips.map((c) => (
             <a key={c.storage_path} href={downloadUrl(c.storage_path, c.file_name)} download={c.file_name} className="text-violet-800 underline hover:text-violet-950" title={`Download ${c.file_name}`}>

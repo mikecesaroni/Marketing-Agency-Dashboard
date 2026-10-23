@@ -25,6 +25,25 @@ export const WAITING_WINDOW_MS = 30 * 86400000
 
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm)$/i
 
+// Names the CRM knows were typed wrong. Kyle, the editor, answered the
+// one-time "your name" prompt with the clip he was dropping, and a month of
+// drops read "from Active Air 2 - 19/18" on the board and in Slack. His
+// browser may still hold it, so it reads as Kyle wherever it turns up.
+const KNOWN_AS = { 'active air 2 - 19/18': 'Kyle' }
+
+/**
+ * The name a clip is signed with, if it is plainly a person's name: letters,
+ * spaces, apostrophes, dots and hyphens, or one of the known slips above. A
+ * digit or a slash means somebody typed a clip label into the prompt, and
+ * nothing is better than that.
+ */
+export function personName(value) {
+  const s = String(value || '').trim()
+  const known = KNOWN_AS[s.toLowerCase()]
+  if (known) return known
+  return s && s.length <= 40 && /^[\p{L}][\p{L}\p{M}'’. -]*$/u.test(s) ? s : ''
+}
+
 /**
  * A published ad that carried a video rather than artboards.
  *
@@ -133,7 +152,7 @@ export function waitingClips({ registered = [], files = [], ads = [], now = new 
     if (r.drop_dismissed_at || f.drop_dismissed_at) continue
     const at = f?.date_uploaded || r.created_at
     if (!fresh(at)) continue
-    out.push({ path: r.storage_path, name: r.file_name || f?.file_name || r.storage_path, at, by: f?.uploaded_by || '', ready: r.status === 'ready' && Boolean(r.thumb_url) })
+    out.push({ path: r.storage_path, name: r.file_name || f?.file_name || r.storage_path, at, by: personName(f?.uploaded_by), ready: r.status === 'ready' && Boolean(r.thumb_url) })
   }
   for (const f of files) {
     if (!f?.storage_path || seen.has(f.storage_path)) continue
@@ -141,7 +160,7 @@ export function waitingClips({ registered = [], files = [], ads = [], now = new 
     seen.add(f.storage_path)
     if (f.drop_dismissed_at) continue
     if (!fresh(f.date_uploaded)) continue
-    out.push({ path: f.storage_path, name: f.file_name || f.storage_path, at: f.date_uploaded, by: f.uploaded_by || '', ready: false })
+    out.push({ path: f.storage_path, name: f.file_name || f.storage_path, at: f.date_uploaded, by: personName(f.uploaded_by), ready: false })
   }
   return out.sort((a, b) => (a.at < b.at ? 1 : -1))
 }

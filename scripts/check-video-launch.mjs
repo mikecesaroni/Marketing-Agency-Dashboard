@@ -13,6 +13,7 @@ import {
   isVideoAd,
   launchSnapshot,
   launchSteps,
+  personName,
   videoAdName,
   syncedAdRows,
   videoDrops,
@@ -122,6 +123,19 @@ check('drops: reset threads through', videoDrops(CLIENTS, ADS, [...CLIPS, ...REG
 check('waiting: a dismissed upload is not new', waitingClips({ files: [{ storage_path: 'x.mp4', file_name: 'x.mp4', date_uploaded: '2026-09-24T09:00:00Z', drop_dismissed_at: '2026-09-24T10:00:00Z' }], now: NOW }).length, 0)
 check('waiting: a dismissed registered clip is not new', waitingClips({ registered: [{ storage_path: 'y.mp4', file_name: 'y.mp4', meta_video_id: 'v', status: 'ready', thumb_url: 't', created_at: '2026-09-24T09:00:00Z', drop_dismissed_at: '2026-09-24T10:00:00Z' }], now: NOW }).length, 0)
 check('waiting: a legacy video ad newer than the upload hides it', waitingClips({ files: [{ storage_path: 'x.mp4', file_name: 'x.mp4', date_uploaded: '2026-09-10T00:00:00Z' }], ads: [{ created_at: '2026-09-12T00:00:00Z', size_key: null }], now: NOW }).length, 0)
+
+// Who a clip is signed by: a person's name, never a clip label typed into
+// the prompt by mistake; the one slip the CRM knows reads as Kyle.
+check("signed as: a person's name is kept", personName(' Sam R. '), 'Sam R.')
+check("signed as: an apostrophe and a hyphen are a name", personName("Mary-Jo O'Brien"), "Mary-Jo O'Brien")
+check('signed as: a clip label is not a name', personName('Belk 10-22-2026 3-1'), '')
+check('signed as: a slash is not a name', personName('Kyle 19/18'), '')
+check('signed as: blank is blank', personName(null), '')
+check("signed as: Kyle's slip reads as Kyle", personName('Active Air 2 - 19/18'), 'Kyle')
+const signed = (uploaded_by) => waitingClips({ files: [{ storage_path: 'z.mp4', file_name: 'z.mp4', date_uploaded: '2026-09-24T09:00:00Z', uploaded_by }], now: NOW }).map((w) => w.by)
+check('waiting: a clip label in the name column is left off', signed('Active Air 2.mp4 1080x1350'), [''])
+check('waiting: the known slip reads as Kyle', signed('Active Air 2 - 19/18'), ['Kyle'])
+check('waiting: a registered clip is signed the same way', waitingClips({ registered: [{ storage_path: 'z.mp4', file_name: 'z.mp4', status: 'ready', thumb_url: 't', created_at: '2026-09-24T09:00:00Z' }], files: [{ storage_path: 'z.mp4', file_name: 'z.mp4', date_uploaded: '2026-09-24T09:00:00Z', uploaded_by: 'Active Air 2 - 19/18' }], now: NOW }).map((w) => w.by), ['Kyle'])
 
 const rows2 = videoDrops(CLIENTS, ADS, [...CLIPS, ...REGISTERED], NOW, FILES)
 const by2 = Object.fromEntries(rows2.map((r) => [r.id, r]))

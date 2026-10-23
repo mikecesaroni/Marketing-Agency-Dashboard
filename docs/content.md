@@ -61,9 +61,14 @@ goes through the bucket's download disposition, so the browser saves the
 file instead of playing it. The same links appear under the drop zone the
 moment a clip lands. The name comes from the "You:"
 the CRM keeps for tasks (asked once, kept in that browser) and is shown on
-the box as "Signed as Sam · Not you?", because in October 2026 an editor
-typed the clip's name into the one-time prompt and a month of drops then
-read "from Active Air 2" on the board and in Slack. "clear
+the box as "Signed as Kyle · Not you?", because in October 2026 Kyle (the
+editor) typed the clip's name into the one-time prompt and a month of drops
+then read "from Active Air 2 - 19/18" on the board and in Slack. Since then
+a signature is printed only when it reads as a person's name (letters,
+spaces, apostrophes, dots, hyphens; a digit or a slash is a clip label), the
+box asks again when the saved name does not, and that one slip is known to
+be Kyle (`personName` in `src/lib/videoLaunch.js`), so his browser repairs
+itself the next time the Content page opens. "clear
 new-clip flags" under the board starts fresh: everything already in the CRM
 stops counting as new (`app_settings.video_drops_reset_at`).
 
