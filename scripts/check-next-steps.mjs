@@ -36,7 +36,9 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
   const r = nextSteps(base())
   check('new client: setup fee, form and call lead the list', keys(r).slice(0, 3), ['setup-fee', 'onboarding-form', 'onboarding-call'])
   check('new client: no GHL steps when not on the plan', keys(r).some((k) => k.startsWith('ghl')), false)
-  check('new client: next is the chase, since nothing open is ours', r.next.key, 'setup-fee')
+  check('new client: next is ours, send the form, since nothing has gone out yet', [r.next.key, r.next.owner, r.next.title], ['onboarding-form', 'us', 'Send the onboarding form'])
+  check('new client: nothing is theirs to be late on before the message goes out', r.theirs.length > 0 && r.theirs.every((s) => s.waitingDays === null), true)
+  check('new client: the next line does not call it a wait', nextLine(r), 'Send the onboarding form')
   check('new client: the call is blocked by the form', r.steps.find((s) => s.key === 'onboarding-call').blocked, true)
   check('new client: creatives are blocked by Meta access', r.steps.find((s) => s.key === 'creatives').blockedBy, 'meta-access')
   check('new client: phase is Sign up', r.phase, 'Sign up')
@@ -63,6 +65,9 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
   const r = nextSteps(base({ link: { created_at: '2026-09-01' } }))
   const form = r.steps.find((s) => s.key === 'onboarding-form')
   check('days waiting counted from the link', form.waitingDays, 17)
+  check('with the link out, the form is theirs', [form.owner, form.title], ['client', 'Onboarding form filled in'])
+  check('the other asks in the message count from the link too', r.steps.find((s) => s.key === 'photos').waitingDays, 17)
+  check('a client added long ago but never written to has no wait', nextSteps(base({ client: { date_added: '2026-08-01', contract_start_date: '2026-08-01' } })).theirs.every((s) => s.waitingDays === null), true)
   check('urgency of a client-wait rises with days', urgency(r) > urgency(nextSteps(base({ link: { created_at: '2026-09-17' } }))), true)
 }
 
@@ -168,7 +173,7 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
 
 check('phases are in launch order', PHASES, ['Sign up', 'Access', 'Build', 'Launch', 'Run'])
 check('currentPhase of nothing is Run', currentPhase([]), 'Run')
-check('nextLine names the client wait', nextLine(nextSteps(base())), 'Setup fee paid (waiting on the client)')
+check('nextLine names the client wait', nextLine(nextSteps(base({ link: { created_at: '2026-09-10' } }))), 'Setup fee paid (waiting on the client)')
 
 // --- the packages (src/lib/clientTiers.js) ---------------------------------
 {

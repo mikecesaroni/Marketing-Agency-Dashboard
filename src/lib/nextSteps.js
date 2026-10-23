@@ -140,11 +140,17 @@ export function nextSteps(ctx) {
     action: { kind: 'payments', label: 'Open Payments' },
     detail: setupPaid ? 'Paid.' : setupRows.length ? `${setupRows.filter((p) => p.status !== 'paid').length} setup invoice open.` : 'No setup invoice on file yet.',
   })
+  // Nothing is asked of a client until the onboarding message goes out, and
+  // the link row is the record of that (the message carries the link). Until
+  // then the form is OUR move: send it. The brief once read "Deluxe Air:
+  // Onboarding form filled in (their move, 11 days)" for a client nobody
+  // had written to yet.
+  const asked = link?.created_at || null
   add({
     key: 'onboarding-form',
     phase: 'Sign up',
-    title: 'Onboarding form filled in',
-    owner: OWNER.client,
+    title: formDone || asked ? 'Onboarding form filled in' : 'Send the onboarding form',
+    owner: formDone || asked ? OWNER.client : OWNER.us,
     applies: true,
     done: formDone,
     action: { kind: 'send-onboarding', label: 'Copy the onboarding message' },
@@ -411,10 +417,13 @@ export function nextSteps(ctx) {
   }
 
   // How long a client-side step has been theirs to do: the link steps know
-  // their own date; for the rest (access, photos) it is since onboarding
-  // began, the day the link went out or, failing that, the day they were
-  // added. Nothing else records when the ask was made.
-  const began = link?.created_at || c.contract_start_date || c.date_added || null
+  // their own date; for the rest (access, photos) it is since the onboarding
+  // message went out, the day the link was made. Nothing else records when
+  // an ask was made, and before that one nothing has been asked, so nothing
+  // is theirs to be late on (it used to fall back to the day they were
+  // added, which is how a client nobody had written to showed as "their
+  // move, 11 days").
+  const began = asked
   const isBlocked = (s) => Boolean(s.blockedBy) && !active.find((x) => x.key === s.blockedBy)?.done
   for (const s of active) {
     s.blocked = !s.done && isBlocked(s)
