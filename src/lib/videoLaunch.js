@@ -37,6 +37,16 @@ const KNOWN_AS = { 'active air 2 - 19/18': 'Kyle' }
  * digit or a slash means somebody typed a clip label into the prompt, and
  * nothing is better than that.
  */
+/**
+ * The editor's note on a drop ("post these a day apart", "the 1:1 is for
+ * Meta only"), one line, trimmed, so it reads the same on the board, the
+ * publish screen, in Slack and in the brief. Kyle asked for it: the clips
+ * said nothing about how they were meant to run.
+ */
+export function dropNote(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 300)
+}
+
 export function personName(value) {
   const s = String(value || '').trim()
   const known = KNOWN_AS[s.toLowerCase()]
@@ -152,7 +162,7 @@ export function waitingClips({ registered = [], files = [], ads = [], now = new 
     if (r.drop_dismissed_at || f.drop_dismissed_at) continue
     const at = f?.date_uploaded || r.created_at
     if (!fresh(at)) continue
-    out.push({ path: r.storage_path, name: r.file_name || f?.file_name || r.storage_path, at, by: personName(f?.uploaded_by), ready: r.status === 'ready' && Boolean(r.thumb_url) })
+    out.push({ path: r.storage_path, name: r.file_name || f?.file_name || r.storage_path, at, by: personName(f?.uploaded_by), note: dropNote(f?.drop_note), ready: r.status === 'ready' && Boolean(r.thumb_url) })
   }
   for (const f of files) {
     if (!f?.storage_path || seen.has(f.storage_path)) continue
@@ -160,7 +170,7 @@ export function waitingClips({ registered = [], files = [], ads = [], now = new 
     seen.add(f.storage_path)
     if (f.drop_dismissed_at) continue
     if (!fresh(f.date_uploaded)) continue
-    out.push({ path: f.storage_path, name: f.file_name || f.storage_path, at: f.date_uploaded, by: personName(f.uploaded_by), ready: false })
+    out.push({ path: f.storage_path, name: f.file_name || f.storage_path, at: f.date_uploaded, by: personName(f.uploaded_by), note: dropNote(f.drop_note), ready: false })
   }
   return out.sort((a, b) => (a.at < b.at ? 1 : -1))
 }

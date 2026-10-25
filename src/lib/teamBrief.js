@@ -86,7 +86,7 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       }
     }
     for (const w of r.drop?.waiting || []) {
-      clips.push({ client, key: 'clip', label: `${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}`, href: '/content', at: w.at })
+      clips.push({ client, key: 'clip', label: `${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}${w.note ? ` · “${w.note}”` : ''}`, href: '/content', at: w.at })
     }
     const live = Boolean(r.client.meta_ads_active) && !r.client.paused_at
     if (live && !flags.some((f) => AD_FLAGS.has(f.key))) {
@@ -302,7 +302,9 @@ export function alertKeys(statusRows = []) {
       out.push({ key: `${client.id}:${f.key}`, client, kind: f.key, label: f.label, detail: f.key === 'account' ? f.detail || '' : '', href: f.href || `/client/${client.id}` })
     }
     for (const w of r.drop?.waiting || []) {
-      out.push({ key: `${client.id}:clip:${w.path}`, client, kind: 'clip', label: `New edit dropped in: ${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}`, detail: '', href: '/content' })
+      // The editor's note rides along: it is the one thing the publisher
+      // needs that the file name cannot say ("post these a day apart").
+      out.push({ key: `${client.id}:clip:${w.path}`, client, kind: 'clip', label: `New edit dropped in: ${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}${w.note ? ` · “${w.note}”` : ''}`, detail: '', href: '/content' })
     }
   }
   return out

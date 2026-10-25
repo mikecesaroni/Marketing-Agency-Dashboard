@@ -44,9 +44,15 @@ Meta sync reports (`client_newest_ad`), so an account run from Ads Manager
 counts too.
 
 **The editor's drop zone** sits at the top of the board: pick the client,
-drop the finished .mp4 or .mov. It goes to the bucket and on to Meta to
-transcode, and the client's row turns purple: "New clip dropped in ·
-tuneup.mp4 · dropped 2h ago by Sam · Click to publish". That click opens
+type a note if there is one ("post these a day apart", "the 1:1 is for Meta
+only"; Kyle asked for it after two Active Air clips went out together that
+were meant to run a day apart), drop the finished .mp4 or .mov. It goes to
+the bucket and on to Meta to transcode, and the client's row turns purple:
+"New clip dropped in · tuneup.mp4 · dropped 2h ago by Sam · Click to
+publish". The note (`client_files.drop_note`) goes everywhere the clip is
+mentioned: under the row on the board (with a "note" button to add or change
+it after the fact), beside the clip on the publish screen, in the Slack
+alert, in the morning brief and in the Client tiers flag. That click opens
 Publish on the client page with the clip already ticked (`?open=publish&video=`),
 so the transcript and the three versions of copy start on their own. A clip
 counts as waiting until a published ad carries its Meta video id, for 30

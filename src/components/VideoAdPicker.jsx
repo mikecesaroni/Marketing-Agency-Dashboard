@@ -699,6 +699,14 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-900 truncate">{v.file_name}</p>
+                    {/* The editor's note from the drop zone: the one thing
+                        the file name cannot say ("post these a day apart"). */}
+                    {v.note && (
+                      <p className="text-[11px] font-medium text-violet-800" data-clip-note>
+                        📝 {v.uploaded_by ? `${v.uploaded_by}: ` : 'Editor’s note: '}
+                        {v.note}
+                      </p>
+                    )}
                     <p className="text-[11px] text-slate-500 mb-1">
                       {megabytes(v.file_size)}MB
                       {isDrivePath(v.storage_path) && (

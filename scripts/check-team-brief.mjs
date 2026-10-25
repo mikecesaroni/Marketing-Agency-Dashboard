@@ -34,7 +34,7 @@ const rows = [
   mk('a', 'Acme Heating', { leads: { leads7: 8, leads14: 13, spend7: 410, spend14: 800 } }),
   mk('b', 'Belk Plumbing', { flags: [{ key: 'ads-off', severity: 'red', label: 'Meta ads stopped: 3 days without spend', detail: 'Nothing has spent since 2026-10-17.', href: '/client/b#meta' }, { key: 'kpis', severity: 'blue', label: 'KPIs not logged this week' }], needsContact: true }),
   mk('c', 'Cool Air', { flags: [{ key: 'waiting', severity: 'amber', label: 'Waiting on them 9 days', detail: 'Meta ad account and Page connected' }], needsContact: true, client: { id: 'c', name: 'Cool Air', meta_ads_active: false, archived: false, is_internal: false }, result: { launched: false, next: { title: 'Meta ad account and Page connected', owner: 'client', waitingDays: 9 } } }),
-  mk('d', 'Drain Kings', { drop: { hasMeta: true, state: 'ready', behind: false, daysSince: 2, waiting: [{ path: 'd/clip2.mp4', name: 'clip2.mp4', at: '2026-10-20T09:00:00Z', by: 'Kyle', ready: true }, { path: 'd/clip1.mp4', name: 'clip1.mp4', at: '2026-10-19T09:00:00Z', by: '', ready: false }] }, flags: [{ key: 'clip-waiting', severity: 'blue', label: '2 new clips waiting to go out' }], leads: { leads7: 3, leads14: 9, spend7: 200, spend14: 400 } }),
+  mk('d', 'Drain Kings', { drop: { hasMeta: true, state: 'ready', behind: false, daysSince: 2, waiting: [{ path: 'd/clip2.mp4', name: 'clip2.mp4', at: '2026-10-20T09:00:00Z', by: 'Kyle', ready: true }, { path: 'd/clip1.mp4', name: 'clip1.mp4', at: '2026-10-19T09:00:00Z', by: '', ready: false, note: 'post a day after clip2' }] }, flags: [{ key: 'clip-waiting', severity: 'blue', label: '2 new clips waiting to go out' }], leads: { leads7: 3, leads14: 9, spend7: 200, spend14: 400 } }),
   mk('e', 'Ex Co', { client: { id: 'e', name: 'Ex Co', archived: true } }),
   mk('f', 'Us Internal', { client: { id: 'f', name: 'Us Internal', is_internal: true } }),
 ]
@@ -49,7 +49,8 @@ check('archived and internal are left out', brief.counts.clients, 4)
 check('the day in words', brief.label, 'Tuesday, Oct 20')
 check('attention: the ad flags only; a chase is not one', brief.attention.map((a) => [a.client.name, a.severity, a.key]), [['Belk Plumbing', 'red', 'ads-off']])
 check('blue flags are not attention', brief.attention.some((a) => a.key === 'kpis'), false)
-check('every waiting clip, newest first, naming the editor and whether it is in Meta', brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle', 'clip1.mp4, not in Meta yet'])
+check("every waiting clip, newest first, naming the editor, whether it is in Meta and the editor's note", brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle', 'clip1.mp4, not in Meta yet · “post a day after clip2”'])
+check("a clip alert carries the editor's note too", alertKeys(rows).find((k) => k.key === 'd:clip:d/clip1.mp4')?.label, 'New edit dropped in: clip1.mp4, not in Meta yet · “post a day after clip2”')
 check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
 check('onboarding names the next step, whose move, and how long they have had it', brief.onboarding.map((o) => o.label), ['Meta ad account and Page connected (their move, 9 days)'])
 check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, green: 2, greenLeads: 11, onboarding: 1 })

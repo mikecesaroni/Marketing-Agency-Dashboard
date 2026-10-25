@@ -22,7 +22,7 @@ export async function fetchStatusRows(supabase, { internalColumn = true, day = t
     fetchAllRows(() => supabase.from('google_campaign_daily').select('id, client_id, date, conversions, cost').gte('date', addDays(day, -13)).order('id')).catch(() => []),
     fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name').order('created_at').order('id')).catch(() => []),
     supabase.from('ad_videos').select('client_id,created_at,status,meta_video_id,thumb_url,storage_path,file_name,drop_dismissed_at').then((r) => r.data || []),
-    supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by,drop_dismissed_at').ilike('file_type', 'video/%').then((r) => r.data || []),
+    supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by,drop_note,drop_dismissed_at').ilike('file_type', 'video/%').then((r) => r.data || []),
     supabase.from('app_settings').select('value').eq('key', DROPS_RESET_KEY).maybeSingle().then((r) => r.data?.value || ''),
     supabase.from('client_newest_ad').select('client_id,ad_id,ad_name,first_seen,is_video').then((r) => r.data || []),
     supabase.from('payments').select('client_id, payment_type, status, due_date, amount, failure_count').then((r) => r.data || []),

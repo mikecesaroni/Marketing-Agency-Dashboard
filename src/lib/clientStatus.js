@@ -133,7 +133,7 @@ export function clientFlags(ctx) {
       key: 'clip-waiting',
       severity: 'blue',
       label: `${drop.waiting.length} new clip${drop.waiting.length === 1 ? '' : 's'} waiting to go out`,
-      detail: 'Edited and dropped in, not published yet.',
+      detail: ['Edited and dropped in, not published yet.', ...drop.waiting.filter((w) => w.note).map((w) => `${w.name}: “${w.note}”`)].join(' '),
       href: '/content',
     })
   }

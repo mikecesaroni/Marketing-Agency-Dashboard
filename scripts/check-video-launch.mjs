@@ -135,6 +135,8 @@ check("signed as: Kyle's slip reads as Kyle", personName('Active Air 2 - 19/18')
 const signed = (uploaded_by) => waitingClips({ files: [{ storage_path: 'z.mp4', file_name: 'z.mp4', date_uploaded: '2026-09-24T09:00:00Z', uploaded_by }], now: NOW }).map((w) => w.by)
 check('waiting: a clip label in the name column is left off', signed('Active Air 2.mp4 1080x1350'), [''])
 check('waiting: the known slip reads as Kyle', signed('Active Air 2 - 19/18'), ['Kyle'])
+check("waiting: the editor's note rides with the clip, one line", waitingClips({ files: [{ storage_path: 'z.mp4', file_name: 'z.mp4', date_uploaded: '2026-09-24T09:00:00Z', uploaded_by: 'Kyle', drop_note: '  post these\n a day apart  ' }], now: NOW }).map((w) => [w.by, w.note]), [['Kyle', 'post these a day apart']])
+check('waiting: no note is an empty string, not undefined', signed('Kyle').length === 1 && waitingClips({ files: [{ storage_path: 'z.mp4', file_name: 'z.mp4', date_uploaded: '2026-09-24T09:00:00Z' }], now: NOW })[0].note, '')
 check('waiting: a registered clip is signed the same way', waitingClips({ registered: [{ storage_path: 'z.mp4', file_name: 'z.mp4', status: 'ready', thumb_url: 't', created_at: '2026-09-24T09:00:00Z' }], files: [{ storage_path: 'z.mp4', file_name: 'z.mp4', date_uploaded: '2026-09-24T09:00:00Z', uploaded_by: 'Active Air 2 - 19/18' }], now: NOW }).map((w) => w.by), ['Kyle'])
 
 const rows2 = videoDrops(CLIENTS, ADS, [...CLIPS, ...REGISTERED], NOW, FILES)

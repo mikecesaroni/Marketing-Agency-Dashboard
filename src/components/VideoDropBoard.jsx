@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ago } from '../lib/contentHub'
 import { DROP_STATES, dropStats, personName } from '../lib/videoLaunch'
 import { isVideoFile, validateVideo } from '../lib/adVideos'
-import { dismissClips, downloadUrl, uploadVideo } from '../lib/adVideoStore'
+import { dismissClips, downloadUrl, setDropNote, uploadVideo } from '../lib/adVideoStore'
 import { registerAdVideo } from '../lib/metaPublish'
 import { readMe, saveMe } from '../lib/tasksData'
 
@@ -54,8 +54,12 @@ const publishHref = (row, clips) => {
   return `/publish/${row.id}${list.length ? `?video=${list.map((c) => encodeURIComponent(c.path)).join(',')}` : ''}`
 }
 
-function Row({ row, onDismiss }) {
+function Row({ row, onDismiss, onNote }) {
   const clip = row.state === 'ready' ? row.waiting[0] : null
+  // The editor's notes, one line: "post these a day apart". Named per clip
+  // only when there is more than one, so a single clip reads clean.
+  const notes = clip ? row.waiting.filter((w) => w.note) : []
+  const noteLine = notes.map((w) => (row.waiting.length > 1 ? `${w.name}: ${w.note}` : w.note)).join(' · ')
   const last = row.lastAdAt
     ? `last ad ${row.daysSince === 0 ? 'today' : row.daysSince === 1 ? 'yesterday' : `${row.daysSince} days ago`}`
     : 'no ad yet'
@@ -83,6 +87,11 @@ function Row({ row, onDismiss }) {
         <span className="block truncate text-[11px] text-slate-500" title={clip ? row.waiting.map((w) => w.name).join(', ') : row.lastAdName}>
           {line}
         </span>
+        {noteLine && (
+          <span className="block text-[11px] font-medium text-violet-800" title={noteLine} data-drop-note>
+            📝 {noteLine}
+          </span>
+        )}
       </Link>
       <span className="flex flex-wrap items-center justify-end gap-2 text-[11px]">
         {clip ? (
@@ -102,6 +111,17 @@ function Row({ row, onDismiss }) {
                 ⬇ {row.waiting.length > 1 ? w.name : 'Download'}
               </a>
             ))}
+            {onNote && (
+              <button
+                type="button"
+                title={noteLine ? 'Change the editor’s note on this clip' : 'Add a note for whoever publishes this clip'}
+                onClick={() => onNote(row)}
+                className="rounded-md px-1.5 py-0.5 text-violet-700 hover:bg-white hover:text-violet-900"
+                data-edit-note
+              >
+                ✎ note
+              </button>
+            )}
             {onDismiss && (
               <button
                 type="button"
@@ -136,6 +156,10 @@ function Row({ row, onDismiss }) {
  */
 function DropIn({ clients, onDropped }) {
   const [clientId, setClientId] = useState('')
+  // One line for whoever publishes: "post these a day apart", "the 1:1 is
+  // for Meta only". Kyle asked for it: the file name cannot say how the
+  // clips are meant to run. Applies to every file in this drop.
+  const [note, setNote] = useState('')
   // A saved name the CRM knows was a slip (personName's list) is repaired
   // in the browser on the spot, so the fix does not depend on anyone
   // noticing the line under the box.
@@ -196,7 +220,7 @@ function DropIn({ clients, onDropped }) {
     try {
       for (const [i, file] of files.entries()) {
         setBusy(files.length > 1 ? `Uploading ${i + 1} of ${files.length}…` : `Uploading ${file.name}…`)
-        const saved = await uploadVideo({ clientId: chosen.id, file, uploadedBy: personName(who) || who })
+        const saved = await uploadVideo({ clientId: chosen.id, file, uploadedBy: personName(who) || who, note })
         dropped.push(saved)
         if (chosen.meta_ad_account_id) {
           // Straight to Meta, best effort: a transcode that fails to start
@@ -204,7 +228,8 @@ function DropIn({ clients, onDropped }) {
           await registerAdVideo({ clientId: chosen.id, storagePath: saved.storage_path, fileName: saved.file_name }).catch(() => {})
         }
       }
-      setDone({ client: chosen, clips: dropped })
+      setDone({ client: chosen, clips: dropped, note: note.trim() })
+      setNote('')
       onDropped?.()
     } catch (err) {
       setError(err.message)
@@ -270,6 +295,16 @@ function DropIn({ clients, onDropped }) {
             ))}
           </select>
           <input
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={300}
+            placeholder="Note for whoever publishes (optional): e.g. post these a day apart"
+            title="Goes with the clip to the board, the publish screen, Slack and the morning brief"
+            className="w-64 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
+            data-drop-note-input
+          />
+          <input
             ref={input}
             type="file"
             accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm"
@@ -296,7 +331,7 @@ function DropIn({ clients, onDropped }) {
         <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-violet-900">
           <span>
             ✓ {done.clips.length === 1 ? done.clips[0].file_name : `${done.clips.length} clips`} dropped in for {done.client.name}
-            {personName(me) ? ` by ${me}` : ''}.
+            {personName(me) ? ` by ${me}` : ''}.{done.note ? ` Note: “${done.note}”.` : ''}
           </span>
           {done.clips.map((c) => (
             <a key={c.storage_path} href={downloadUrl(c.storage_path, c.file_name)} download={c.file_name} className="text-violet-800 underline hover:text-violet-950" title={`Download ${c.file_name}`}>
@@ -330,6 +365,23 @@ export default function VideoDropBoard({ rows, clients, onDropped, onReset, comp
     try {
       await dismissClips({ clientId: row.id, storagePaths: row.waiting.map((w) => w.path) })
       onDropped?.()
+    } catch (err) {
+      setDismissError(err.message)
+    }
+  }
+  // Add or change the note after the fact, one prompt per waiting clip.
+  // Cancel leaves that clip's note alone; blank clears it.
+  const editNote = async (row) => {
+    setDismissError('')
+    let changed = false
+    try {
+      for (const w of row.waiting) {
+        const typed = window.prompt(`Note for whoever publishes ${w.name} (blank to clear):`, w.note || '')
+        if (typed === null) continue
+        await setDropNote({ clientId: row.id, storagePath: w.path, note: typed })
+        changed = true
+      }
+      if (changed) onDropped?.()
     } catch (err) {
       setDismissError(err.message)
     }
@@ -380,7 +432,7 @@ export default function VideoDropBoard({ rows, clients, onDropped, onReset, comp
       ) : (
         <ul className="mt-3 divide-y divide-slate-100">
           {shown.map((r) => (
-            <Row key={r.id} row={r} onDismiss={dismiss} />
+            <Row key={r.id} row={r} onDismiss={dismiss} onNote={editNote} />
           ))}
         </ul>
       )}

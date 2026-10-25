@@ -147,6 +147,9 @@ export function mergeVideos(files, registered, account) {
         file_size: f.file_size,
         uploaded_at: f.date_uploaded,
         uploaded_by: f.uploaded_by || '',
+        // The editor's note from the drop zone ("post these a day apart"),
+        // shown beside the clip on the publish screen.
+        note: f.drop_note || '',
         meta_video_id: meta?.meta_video_id || '',
         thumb_url: meta?.thumb_url || '',
         // 'new' is the absence of a registration, which is different from
