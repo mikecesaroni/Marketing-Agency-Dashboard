@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import { announceForm } from '../lib/teamBriefClient'
 import DriveFolderStep from '../components/DriveFolderStep'
 import { Button, Input, Select, Textarea } from '../components/ui'
 import {
@@ -233,6 +234,7 @@ export default function ClientOnboardingPage() {
       const { error: e } = await supabase.rpc('onboarding_link_save_ghl', { p_token: token, p_data: ghl, p_submit: submit })
       if (e) throw e
     }
+    return { intake: wantsIntake, ghl: wantsGhl }
   }
 
   const go = async (toIndex, { submit = false, force = false } = {}) => {
@@ -249,10 +251,13 @@ export default function ClientOnboardingPage() {
     }
     setSaving(true)
     try {
-      await saveStep(step, submit)
+      const sent = await saveStep(step, submit)
       setSavedSteps((prev) => new Set([...prev, step.key]))
       if (submit) {
         setDone(true)
+        // The team's channel hears it now. Best effort: the answers are
+        // saved either way, and the quarter-hour sweep catches a miss.
+        for (const form of ['intake', 'ghl']) if (sent[form]) announceForm(token, form).catch(() => {})
       } else {
         // Carry the business answers into the account step the first time
         // it is opened, so the EIN is about the only thing left to type.

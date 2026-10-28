@@ -43,6 +43,13 @@ export const announceClient = (clientId) => call({ action: 'client_added', clien
  */
 export const announceAccount = (clientId, channel) => call({ action: 'account_connected', client_id: clientId, channel })
 
+/**
+ * From the client's own form page, the moment they submit: tell the channel.
+ * By the link's token, since the client has no login. Once per submission;
+ * the quarter-hour alert run catches any the page failed to send.
+ */
+export const announceForm = (token, form) => call({ action: 'form_submitted', token, form })
+
 /** Set, replace or clear the Slack incoming webhook. Admins only; the URL goes to the vault, never to a table the CRM reads. */
 export async function setSlackWebhook(url) {
   const { data, error } = await supabase.rpc('set_slack_webhook', { url: String(url || '').trim() })

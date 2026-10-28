@@ -33,6 +33,11 @@
 //   account_connected  from the CRM the moment a Meta or Google ad account is
 //                      attached to a client (channel: 'meta' | 'google'): one
 //                      post per account, naming it and who did it.
+//   form_submitted     from the client's form page the moment they submit
+//                      (token, form: 'intake' | 'ghl'): one post per
+//                      submission. The alerts run also sweeps the last three
+//                      days of submissions, so one the page failed to send
+//                      (or one marked done by hand) still gets its line.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 // model.js is the bundle in this folder (`npm run brief`), served here from
@@ -53,6 +58,7 @@ import {
   clientAddedSlack,
   diffAlerts,
   fetchStatusRows,
+  formSubmittedSlack,
   fetchWeeklyRows,
   liveClientIds,
   statusFromRows,
@@ -81,7 +87,7 @@ function eastern(d = new Date()) {
 const QUIET_FROM = 21
 const QUIET_TO = 7
 
-type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string; channel?: string }
+type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string; channel?: string; token?: string; form?: string }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return json({}, 200)
@@ -223,6 +229,65 @@ Deno.serve(async (req) => {
       return announce('account', `account:${id}:${channel}:${accountId}`, accountConnectedSlack(client, { channel, account: { id: accountId, name: accountName }, appUrl, by }), { by, channel, account: accountId })
     }
 
+    // Forms a client filled in that the channel has not heard about: one
+    // subject per submission (form:<link id>:<form>). `only` narrows it to
+    // one link, for the form page's own call; otherwise the last three days.
+    const formsToPost = async (only?: { linkId: string; form: string }) => {
+      const since = new Date(Date.now() - 3 * 86400000).toISOString()
+      let q = supabase.from('onboarding_links').select('id, client_id, intake_submitted_at, ghl_submitted_at, clients(id, name, archived)')
+      q = only ? q.eq('id', only.linkId) : q.or(`intake_submitted_at.gte.${since},ghl_submitted_at.gte.${since}`)
+      const { data: links } = await q
+      const items: { subject: string; client: { id: string; name: string }; form: string; at: string }[] = []
+      for (const l of links || []) {
+        const c = (l as any).clients
+        if (!c || c.archived) continue
+        for (const form of ['intake', 'ghl']) {
+          const at = form === 'intake' ? l.intake_submitted_at : l.ghl_submitted_at
+          if (!at) continue
+          if (only && only.form !== form) continue
+          if (!only && at < since) continue
+          items.push({ subject: `form:${l.id}:${form}`, client: { id: c.id, name: c.name }, form, at })
+        }
+      }
+      if (!items.length) return []
+      const { data: done } = await supabase.from('team_digests').select('subject').eq('kind', 'form').in('subject', items.map((i) => i.subject))
+      const seen = new Set((done || []).map((d) => d.subject))
+      return items.filter((i) => !seen.has(i.subject))
+    }
+    const postForms = async (items: { subject: string; client: { id: string; name: string }; form: string; at: string }[]) => {
+      if (!items.length) return { posted: false, count: 0 }
+      const message = formSubmittedSlack(items, { appUrl })
+      const url = await slackUrl()
+      let posted = false
+      let error = ''
+      if (message && url) {
+        try {
+          await postSlack(url, message)
+          posted = true
+        } catch (err) {
+          error = err instanceof Error ? err.message : String(err)
+        }
+      }
+      // One row per submission, so each is announced once whatever run
+      // carried it; a failed post is recorded too and not retried, the
+      // brief log shows why.
+      await supabase.from('team_digests').insert(
+        items.map((i) => ({ day, kind: 'form', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: i.subject, model: { client: i.client, form: i.form, at: i.at } }))
+      )
+      return { posted, count: items.length, error: error || undefined }
+    }
+
+    if (action === 'form_submitted') {
+      const token = String(body.token || '').trim()
+      const form = body.form === 'ghl' ? 'ghl' : 'intake'
+      if (!token) return json({ error: 'token is needed.' }, 400)
+      const { data: link } = await supabase.from('onboarding_links').select('id').eq('token', token).eq('revoked', false).maybeSingle()
+      if (!link) return json({ error: 'No such link.' }, 404)
+      const items = await formsToPost({ linkId: link.id, form })
+      if (!items.length) return json({ day, skipped: 'nothing new to say' })
+      return json({ day, ...(await postForms(items)) })
+    }
+
     const statusRows = statusFromRows(await fetchStatusRows(supabase, { internalColumn: true, day }))
 
     if (action === 'alerts') {
@@ -233,7 +298,11 @@ Deno.serve(async (req) => {
       // paused or archived client's open alerts close without a word.
       const diff = diffAlerts(current, open || [], { live: liveClientIds(statusRows) })
       const message = alertsSlack(diff, { appUrl })
-      if (body.dry_run) return json({ day, dry_run: true, fresh: diff.fresh, cleared: diff.cleared, message })
+      const forms = await formsToPost()
+      if (body.dry_run) return json({ day, dry_run: true, fresh: diff.fresh, cleared: diff.cleared, message, forms })
+      // Forms first: a client who just filled theirs in is the best news of
+      // the quarter hour. Posted on their own, recorded per submission.
+      const formResult = await postForms(forms)
 
       const url = await slackUrl()
       let posted = false
@@ -265,7 +334,7 @@ Deno.serve(async (req) => {
           model: { fresh: diff.fresh, cleared: diff.cleared },
         })
       }
-      return json({ day, fresh: diff.fresh.length, cleared: diff.cleared.length, posted, error: error || undefined })
+      return json({ day, fresh: diff.fresh.length, cleared: diff.cleared.length, posted, forms: formResult.count, error: error || formResult.error || undefined })
     }
 
     // brief and preview

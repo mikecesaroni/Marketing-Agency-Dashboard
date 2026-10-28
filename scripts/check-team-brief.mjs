@@ -7,7 +7,7 @@
 // WAITING COSTS MONEY OR A DAY. The morning brief is the whole picture in
 // one short message; the alerts are the changes that cannot wait.
 
-import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, liveClientIds } from '../src/lib/teamBrief.js'
+import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds } from '../src/lib/teamBrief.js'
 import { buildWeeklyStatus, reportWeeks } from '../src/lib/weeklyStatus.js'
 import { addDays } from '../src/lib/dates.js'
 
@@ -164,6 +164,12 @@ check('account connected: Meta, by name and id, who by first name, linking the M
 const google = accountConnectedSlack({ id: 'c9', name: 'Acme' }, { channel: 'google', account: { id: '1234567890' }, appUrl: 'https://crm.example' })
 check('account connected: Google, the id dashed, no name needed', [google.text, google.blocks[0].text.text], ['Ad account connected: Acme, Google Ads account 123-456-7890', '🔗 *Ad account connected*\n<https://crm.example/client/c9#google|Acme>: Google Ads account 123-456-7890'])
 check('account connected: a Meta account the CRM has no name for is the id alone', accountConnectedSlack({ id: 'c9', name: 'Acme' }, { channel: 'meta', account: { id: '777' } }).blocks[0].text.text.endsWith('Acme: Meta ad account 777'), true)
+
+// --- a form filled in ------------------------------------------------------------------
+const forms = formSubmittedSlack([{ client: { id: 'f1', name: 'Acme & Sons' }, form: 'intake', at: '2026-10-28T14:00:00Z' }, { client: { id: 'f2', name: 'Belk' }, form: 'ghl', at: '2026-10-28T15:00:00Z' }], { appUrl: 'https://crm.example/' })
+check('forms in: one line each, the client linked, the form named in words', [forms.text, forms.blocks[0].text.text], ['Acme &amp; Sons filled in their onboarding form · Belk sent back their GHL account details', '*Forms in (2)*\n📝 <https://crm.example/client/f1|Acme &amp; Sons> filled in their onboarding form\n📝 <https://crm.example/client/f2|Belk> sent back their GHL account details'])
+check('one form is a singular title', formSubmittedSlack([{ client: { id: 'f1', name: 'Acme' }, form: 'intake' }]).blocks[0].text.text.startsWith('*Form in*\n'), true)
+check('no forms, no message', formSubmittedSlack([]), null)
 check('new client: the top tier carries its setup fee', clientAddedSlack({ id: 'n2', name: 'Top Co', tier: 3, monthly_fee: 3500, setup_fee: 500 }).blocks[0].text.text.includes('Runs Without You Marketing ($3,500/mo, $500 setup)'), true)
 check('new client: no tier picked still posts, with the fee', clientAddedSlack({ id: 'n3', name: 'Odd Co', tier: null, monthly_fee: 1200 }).text, 'New client: Odd Co, $1,200/mo')
 

@@ -432,6 +432,32 @@ export function accountConnectedSlack(client, { channel = 'meta', account = {}, 
   }
 }
 
+export const FORM_WORDS = {
+  intake: 'filled in their onboarding form',
+  ghl: 'sent back their GHL account details',
+}
+
+/**
+ * The channel hears when a client fills in a form ("make so CRM updates
+ * sends message when client fills out onboarding form"): one line per
+ * submission, the client linked to their page where the answers are.
+ *
+ * items: [{ client: { id, name }, form: 'intake' | 'ghl', at }]
+ */
+export function formSubmittedSlack(items = [], { appUrl = '' } = {}) {
+  if (!items.length) return null
+  const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
+  const line = (it) => `${slackEsc(it.client?.name || 'A client')} ${FORM_WORDS[it.form] || 'filled in a form'}`
+  const lines = items.map((it) => `📝 ${link(model, `/client/${it.client?.id || ''}`, slackEsc(it.client?.name || 'A client'))} ${FORM_WORDS[it.form] || 'filled in a form'}`)
+  return {
+    text: items.map(line).join(' · '),
+    blocks: [
+      ...slackSections(items.length === 1 ? 'Form in' : `Forms in (${items.length})`, lines),
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, '/status', 'Client tiers')} · the answers are on each client’s page` }] },
+    ],
+  }
+}
+
 /** The alerts as a Slack message, or null when there is nothing to say. */
 export function alertsSlack({ fresh = [], cleared = [] }, { appUrl = '' } = {}) {
   if (fresh.length === 0 && cleared.length === 0) return null
