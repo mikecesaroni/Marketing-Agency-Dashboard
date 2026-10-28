@@ -68,7 +68,7 @@ function Row({ row, onDismiss, onNote }) {
     ? `${row.waiting.length > 1 ? `${row.waiting.length} new clips: ` : ''}${row.waiting.map((w) => w.name).join(', ')} · dropped ${ago(clip.at)}${clip.by ? ` by ${clip.by}` : ''}`
     : `${last}${row.lastAdName ? ` · ${row.lastAdName}` : ''}${row.thisWeek > 1 ? ` · ${row.thisWeek} this week` : ''}`
   const href = publishHref(row, clip ? row.waiting : null)
-  // The row is a grid, not one big link: the download links and "not new"
+  // The row is a grid, not one big link: the download links and "uploaded manually"
   // sit beside the publish link rather than inside it (an anchor cannot
   // hold another anchor), and the whole row still reads as one line.
   return (
@@ -125,11 +125,12 @@ function Row({ row, onDismiss, onNote }) {
             {onDismiss && (
               <button
                 type="button"
-                title="Not new: take this clip off the board without publishing it"
+                title="This clip went up by hand (Ads Manager or elsewhere): take it off the board without publishing it here"
                 onClick={() => onDismiss(row)}
                 className="rounded-md px-1.5 py-0.5 text-slate-400 hover:bg-white hover:text-slate-700"
+                data-uploaded-manually
               >
-                not new ×
+                uploaded manually ×
               </button>
             )}
             <Link to={href} className="rounded-lg bg-violet-700 px-2.5 py-1 font-semibold text-white shadow-sm transition hover:bg-violet-800">
@@ -357,7 +358,7 @@ function DropIn({ clients, onDropped }) {
 export default function VideoDropBoard({ rows, clients, onDropped, onReset, compact = false }) {
   const [showAll, setShowAll] = useState(false)
   const [dismissError, setDismissError] = useState('')
-  // Every waiting clip on the row, not just the one shown: "not new" means
+  // Every waiting clip on the row, not just the one shown: "uploaded manually" means
   // this client has nothing new, and the next clip down would only take
   // the flag's place.
   const dismiss = async (row) => {
