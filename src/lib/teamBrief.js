@@ -99,7 +99,8 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
     for (const w of r.drop?.waiting || []) {
       clips.push({ client, key: 'clip', label: `${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}${w.note ? ` · “${w.note}”` : ''}`, href: '/content', at: w.at })
     }
-    const live = Boolean(r.client.meta_ads_active) && !r.client.paused_at
+    // Live on any channel: Meta, Google Search or Local Services.
+    const live = Boolean(r.result?.launched ?? r.client.meta_ads_active) && !r.client.paused_at
     if (live && !flags.some((f) => AD_FLAGS.has(f.key))) {
       const leads7 = r.leads?.leads7 || 0
       const before = Math.max(0, (r.leads?.leads14 || 0) - leads7)

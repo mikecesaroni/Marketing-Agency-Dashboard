@@ -33,6 +33,7 @@ A tick comes from the data where the data knows (an ad account connected, a camp
 | red | No leads for N days | live, spent in the last fourteen days, and no lead for seven days (or none in fourteen); Meta `ad_daily` leads and Google `google_campaign_daily` conversions together |
 | red | No new video or ad in N days | the video board's row (`videoDrops`): ten or more days since the last ad of any kind, or none ever, on a client with a Meta account |
 | red | Payment overdue / Card failing | an unpaid `payments` row past its date, marked overdue, or with a failure count |
+| | Live on any channel | "Running" means live on Meta (the switch), Google Search (the nightly sync sees a running campaign) or Local Services (its switch). A client who had Meta live, switched it off and runs Google or LSA has left Meta ("MCL is not doing Meta anymore, just Google"): running, the Meta steps come off their plan, no Meta delivery alert and no video promise; spending with no leads is still a call. A client who has not been through Meta yet keeps the Meta steps whatever else is live, because every package includes Meta. |
 | amber | Waiting on them N days | a client-side step open seven days or more, naming the steps; counted from the day the onboarding message went out (the link's date), so a client nobody has written to yet has no wait: their first step is ours, "Send the onboarding form" |
 | amber | Google Ads sync failing | tier 2 and up with a customer id and `google_ads_sync_error` |
 | blue | New clip waiting to go out | the video board's "ready" state |

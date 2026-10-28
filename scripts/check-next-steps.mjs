@@ -171,6 +171,33 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
   check('an override for a step that does not apply is ignored', nextSteps({ ...ctx, overrides: [{ step_key: 'google-ads-access', done_at: '2026-09-18' }] }).steps.some((s) => s.key === 'google-ads-access'), false)
 }
 
+// --- live on any channel ----------------------------------------------------------
+{
+  // MCL: had Meta ads, switched them off, runs Google Search now. Running,
+  // with no Meta steps left on the plan and no Meta ads to be behind on.
+  const left = nextSteps(
+    base({
+      client: { tier: 2, meta_ad_account_id: '1', meta_page_id: '2', drive_folder_id: 'f', meta_ads_active: false, google_ads_customer_id: '1234567890' },
+      link: { created_at: '2026-09-01', intake_submitted_at: '2026-09-02' },
+      payments: [{ payment_type: 'setup', status: 'paid' }],
+      callSteps: [{ step_key: 'x' }],
+      deliverables: [dl('meta-live')],
+      counts: { googleCampaigns: 1 },
+    })
+  )
+  check('left Meta for Google: launched, live on Google only', [left.launched, left.live, left.leftMeta], [true, { meta: false, google: true, lsa: false }, true])
+  check('left Meta: the Meta steps come off the plan', keys(left).filter((k) => ['meta-access', 'creatives', 'publish', 'go-live'].includes(k)), [])
+  check('left Meta: the Run step is there', keys(left).includes('weekly-kpis'), true)
+  // Google went live first on a client who has not been through Meta yet:
+  // launched, but every package includes Meta, so the Meta steps stay.
+  const early = nextSteps(base({ client: { tier: 2, google_ads_customer_id: '1234567890' }, link: { created_at: '2026-09-01' }, counts: { googleCampaigns: 1 } }))
+  check('Google first, Meta still to come: launched and the Meta steps stay', [early.launched, early.leftMeta, keys(early).includes('go-live')], [true, false, true])
+  // Local Services only, never a Meta account: launched, Meta steps stay.
+  const lsa = nextSteps(base({ client: { tier: 2, lsa_active: true, google_ads_customer_id: '1234567890' } }))
+  check('Local Services live counts as launched', [lsa.launched, lsa.live.lsa], [true, true])
+  check('nothing live is not launched, whatever is connected', nextSteps(base({ client: { google_ads_customer_id: '1234567890' } })).launched, false)
+}
+
 check('phases are in launch order', PHASES, ['Sign up', 'Access', 'Build', 'Launch', 'Run'])
 check('currentPhase of nothing is Run', currentPhase([]), 'Run')
 check('nextLine names the client wait', nextLine(nextSteps(base({ link: { created_at: '2026-09-10' } }))), 'Setup fee paid (waiting on the client)')

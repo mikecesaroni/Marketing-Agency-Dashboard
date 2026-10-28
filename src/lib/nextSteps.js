@@ -126,6 +126,23 @@ export function nextSteps(ctx) {
   const googleRefused = Boolean(googleId) && isAccessError(c.google_ads_sync_error)
   const googleDone = Boolean(googleId) && !googleRefused
 
+  // LIVE ON ANY CHANNEL. Meta is the switch on the client; Google Search is
+  // live when the nightly sync sees a running campaign; Local Services is
+  // its own switch. "Launched" means any of them, so a client who moved off
+  // Meta onto Google ("MCL is not doing Meta anymore, just Google") is
+  // running, not onboarding, and a client who only ever ran Local Services
+  // is not forever "Meta not live yet".
+  const metaLive = liveDone
+  const googleLive = googleDone && (counts.googleCampaigns || 0) > 0
+  const lsaLive = Boolean(c.lsa_active)
+  const launched = metaLive || googleLive || lsaLive
+  // A client who HAD Meta ads and switched them off while running elsewhere
+  // has left Meta: the Meta steps come off their plan. A client who has not
+  // been through Meta yet keeps them, whatever else is live, because every
+  // package includes Meta.
+  const leftMeta = !metaLive && publishedDone && (googleLive || lsaLive)
+  const wantsMeta = !leftMeta
+
   const steps = []
   const add = (s) => steps.push(s)
 
@@ -179,7 +196,7 @@ export function nextSteps(ctx) {
     phase: 'Access',
     title: 'Meta ad account and Page connected',
     owner: OWNER.client,
-    applies: true,
+    applies: wantsMeta,
     done: metaDone,
     action: { kind: 'meta-access', label: 'Copy the Meta access message' },
     detail: metaDone
@@ -275,7 +292,7 @@ export function nextSteps(ctx) {
     phase: 'Build',
     title: 'Ads built (statics and video)',
     owner: OWNER.us,
-    applies: true,
+    applies: wantsMeta,
     done: creativesDone,
     blockedBy: !metaDone ? 'meta-access' : !photosDone ? 'photos' : null,
     action: { kind: 'studio', label: 'Open the Ad Studio' },
@@ -330,7 +347,7 @@ export function nextSteps(ctx) {
     phase: 'Launch',
     title: 'Published to Meta',
     owner: OWNER.us,
-    applies: true,
+    applies: wantsMeta,
     done: publishedDone,
     blockedBy: !creativesDone ? 'creatives' : onPlan && !c.ghl_active ? 'ghl-live' : null,
     action: { kind: 'publish', label: 'Open the Publish tab' },
@@ -341,7 +358,7 @@ export function nextSteps(ctx) {
     phase: 'Launch',
     title: 'Meta ads live',
     owner: OWNER.us,
-    applies: true,
+    applies: wantsMeta,
     done: liveDone,
     blockedBy: publishedDone ? null : 'publish',
     action: { kind: 'meta-toggle', label: 'Mark Meta live' },
@@ -383,7 +400,7 @@ export function nextSteps(ctx) {
   }
 
   // ---- RUN --------------------------------------------------------------------
-  if (liveDone) {
+  if (launched) {
     add({
       key: 'weekly-kpis',
       phase: 'Run',
@@ -448,7 +465,12 @@ export function nextSteps(ctx) {
     theirs,
     progress: { done, total: active.length, percent: active.length ? Math.round((done / active.length) * 100) : 0 },
     phase: currentPhase(active),
-    launched: liveDone,
+    launched,
+    // Which channels are live now, and whether Meta has ever been published
+    // to: the boards read these rather than the Meta switch alone.
+    live: { meta: metaLive, google: googleLive, lsa: lsaLive },
+    leftMeta,
+    published: publishedDone,
   }
 }
 

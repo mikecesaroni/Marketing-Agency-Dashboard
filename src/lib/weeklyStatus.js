@@ -87,8 +87,13 @@ export function adStatusOf(row, now) {
   if (flags.some((f) => f.key === 'account')) return { key: 'account', label: 'Account disabled', tone: 'red' }
   const quiet = flags.find((f) => f.key === 'ads-off')
   if (quiet) return { key: 'quiet', label: 'Ads stopped', tone: 'red', detail: quiet.label }
-  if (!c.meta_ads_active && !(now.spend > 0)) {
-    return row.result?.launched ? { key: 'off', label: 'Not running', tone: 'slate' } : { key: 'onboarding', label: 'Onboarding', tone: 'slate' }
+  // Live on any channel (Meta, Google Search, Local Services), per the
+  // pipeline; the Meta switch alone is the fallback for an old row.
+  const launched = Boolean(row.result?.launched ?? c.meta_ads_active)
+  if (!launched && !(now.spend > 0)) {
+    // Been through Meta and switched everything off: not running. Never
+    // launched anywhere: still onboarding.
+    return row.result?.published ? { key: 'off', label: 'Not running', tone: 'slate' } : { key: 'onboarding', label: 'Onboarding', tone: 'slate' }
   }
   if (!(now.spend > 0)) return { key: 'nospend', label: 'No spend last week', tone: 'amber' }
   return { key: 'running', label: 'Running', tone: 'green' }

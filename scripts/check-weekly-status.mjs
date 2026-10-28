@@ -58,7 +58,9 @@ check('a disabled account', adStatusOf(row({ flags: [{ key: 'account', severity:
 check('ads gone quiet', adStatusOf(row({ flags: [{ key: 'ads-off', severity: 'red', label: 'Meta ads stopped: 3 days without spend' }] }), w(0, 0)), { key: 'quiet', label: 'Ads stopped', tone: 'red', detail: 'Meta ads stopped: 3 days without spend' })
 check('paused beats everything', adStatusOf(row({ client: { ...live, paused_at: '2026-10-01' }, flags: [{ key: 'account' }] }), w(0, 0)).key, 'paused')
 check('not live and not launched is onboarding', adStatusOf(row({ client: { ...live, meta_ads_active: false }, result: { launched: false } }), w(0, 0)).label, 'Onboarding')
-check('launched but switched off is not running', adStatusOf(row({ client: { ...live, meta_ads_active: false } }), w(0, 0)).label, 'Not running')
+check('live somewhere but nothing spent last week is no spend, not off', adStatusOf(row({ client: { ...live, meta_ads_active: false } }), w(0, 0)).label, 'No spend last week')
+check('been through Meta and switched everything off is not running', adStatusOf(row({ client: { ...live, meta_ads_active: false }, result: { launched: false, published: true } }), w(0, 0)).label, 'Not running')
+check('a Google-only client with spend is running', adStatusOf(row({ client: { ...live, meta_ads_active: false }, result: { launched: true, live: { meta: false, google: true, lsa: false } } }), w(300, 4)).label, 'Running')
 check('live with nothing spent last week', adStatusOf(row(), w(0, 0)).key, 'nospend')
 
 // --- a new ad needed? --------------------------------------------------------------

@@ -75,7 +75,12 @@ export function clientFlags(ctx) {
   const leads = ctx.leads || leadTotals([], ctx.today)
   const today = ctx.today || new Date().toISOString().slice(0, 10)
   const { tier, guessed } = tierOf(c)
-  const live = Boolean(c.meta_ads_active) && !c.paused_at
+  // Live on any channel (the pipeline knows Google and Local Services too),
+  // and live on Meta in particular, which is what the video promise and the
+  // Meta delivery alert are about. A client who left Meta for Google is live
+  // without being live on Meta.
+  const metaLive = (result.live ? Boolean(result.live.meta) : Boolean(c.meta_ads_active)) && !c.paused_at
+  const live = (Boolean(result.launched) || metaLive) && !c.paused_at
   const flags = []
   const add = (f) => flags.push(f)
 
@@ -119,7 +124,7 @@ export function clientFlags(ctx) {
   // Only once their Meta ads are live: a client added this afternoon with an
   // ad account and no ad on record is not behind, they are onboarding, and
   // "No ad has gone out yet" in the Slack channel was a false alarm.
-  if (drop && live && drop.hasMeta && (drop.state === 'stale' || drop.state === 'never' || (drop.state === 'ready' && drop.behind))) {
+  if (drop && metaLive && drop.hasMeta && (drop.state === 'stale' || drop.state === 'never' || (drop.state === 'ready' && drop.behind))) {
     add({
       key: 'video-stale',
       severity: 'red',

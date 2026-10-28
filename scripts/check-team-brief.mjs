@@ -48,6 +48,7 @@ const brief = buildBrief({ statusRows: rows, day: TODAY, appUrl: 'https://crm.ex
 check('archived and internal are left out', brief.counts.clients, 4)
 check('the day in words', brief.label, 'Tuesday, Oct 20')
 check('attention: the ad flags only; a chase is not one', brief.attention.map((a) => [a.client.name, a.severity, a.key]), [['Belk Plumbing', 'red', 'ads-off']])
+check('running clean counts a client live on Google with Meta off', buildBrief({ statusRows: [mk('m', 'MCL', { client: { id: 'm', name: 'MCL', meta_ads_active: false, paused_at: null, archived: false, is_internal: false }, result: { launched: true, next: null, live: { meta: false, google: true, lsa: false } }, leads: { leads7: 5, leads14: 8, spend7: 300, spend14: 600 } })], day: TODAY }).green.map((g) => g.client.name), ['MCL'])
 check('blue flags are not attention', brief.attention.some((a) => a.key === 'kpis'), false)
 check("every waiting clip, newest first, naming the editor, whether it is in Meta and the editor's note", brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle', 'clip1.mp4, not in Meta yet · “post a day after clip2”'])
 check("a clip alert carries the editor's note too", alertKeys(rows).find((k) => k.key === 'd:clip:d/clip1.mp4')?.label, 'New edit dropped in: clip1.mp4, not in Meta yet · “post a day after clip2”')

@@ -98,6 +98,11 @@ export function adsReady({ clients = [], deliverables = [] } = {}) {
     if (client.archived) continue
     // Already running. This is a queue of work to start, not a status board.
     if (client.meta_ads_active) continue
+    // Left Meta: had it live, switched it off, and runs Google Search or
+    // Local Services instead ("MCL is not doing Meta anymore, just Google").
+    // Not work to start.
+    const hadMeta = deliverables.some((d) => d.client_id === client.id && d.template_key === 'meta-live' && d.status === 'done')
+    if (hadMeta && (client.lsa_active || client.google_ads_customer_id)) continue
 
     // Not on GoHighLevel: there is no backend of ours to wait for, so a
     // connected Meta account with the ads off is the whole story. They used
