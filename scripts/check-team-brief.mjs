@@ -7,7 +7,7 @@
 // WAITING COSTS MONEY OR A DAY. The morning brief is the whole picture in
 // one short message; the alerts are the changes that cannot wait.
 
-import { CLEAR_WORTHY, IMMEDIATE, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, liveClientIds } from '../src/lib/teamBrief.js'
+import { CLEAR_WORTHY, IMMEDIATE, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, liveClientIds } from '../src/lib/teamBrief.js'
 import { buildWeeklyStatus, reportWeeks } from '../src/lib/weeklyStatus.js'
 import { addDays } from '../src/lib/dates.js'
 
@@ -152,7 +152,9 @@ check('only cleared still posts', alertsSlack({ fresh: [], cleared: open.slice(1
 // --- a new client ---------------------------------------------------------------------
 const added = clientAddedSlack({ id: 'n1', name: 'New & Co', tier: 2, monthly_fee: 2500, setup_fee: 0 }, { appUrl: 'https://crm.example/', by: 'ethan@example.com' })
 check('new client: the notification line names the tier and the price', added.text, 'New client: New & Co, Whole Chain tier at $2,500/mo')
-check('new client: the post links the client, names the package, the price and who added them', added.blocks[0].text.text, '🎉 *New client added to the agency*\n<https://crm.example/client/n1|New &amp; Co>: The Whole Chain Marketing ($2,500/mo) · added by ethan@example.com')
+check('new client: the post links the client, names the package, the price and who added them, by first name', added.blocks[0].text.text, '🎉 *New client added to the agency*\n<https://crm.example/client/n1|New &amp; Co>: The Whole Chain Marketing ($2,500/mo) · added by Ethan')
+check('first name: from a name, a full name, an email, a dotted email, nothing', ['Ethan', 'Mary Jo Smith', 'ethan@horizonhvacinc.com', 'mary.jo+crm@example.com', '', null].map(firstName), ['Ethan', 'Mary', 'Ethan', 'Mary', '', ''])
+check('new client: a profile name wins over the email it came with', clientAddedSlack({ id: 'n4', name: 'Co', tier: 1 }, { by: 'Josh' }).blocks[0].text.text.endsWith('· added by Josh'), true)
 check('new client: the top tier carries its setup fee', clientAddedSlack({ id: 'n2', name: 'Top Co', tier: 3, monthly_fee: 3500, setup_fee: 500 }).blocks[0].text.text.includes('Runs Without You Marketing ($3,500/mo, $500 setup)'), true)
 check('new client: no tier picked still posts, with the fee', clientAddedSlack({ id: 'n3', name: 'Odd Co', tier: null, monthly_fee: 1200 }).text, 'New client: Odd Co, $1,200/mo')
 

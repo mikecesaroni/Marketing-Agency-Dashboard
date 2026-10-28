@@ -168,12 +168,17 @@ Deno.serve(async (req) => {
       const { data: client } = await supabase.from('clients').select('id, name, tier, monthly_fee, setup_fee').eq('id', id).maybeSingle()
       if (!client) return json({ error: 'No such client.' }, 404)
       // Who added them: the login behind the call, when there is one (the
-      // CRM calls with the user's token; a cron ping carries none).
+      // CRM calls with the user's token; a cron ping carries none). Their
+      // name from profiles, else the email; the post shows a first name.
       let by = ''
       const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
       if (token) {
         const { data: who } = await supabase.auth.getUser(token).catch(() => ({ data: null }))
-        by = who?.user?.email || ''
+        const user = who?.user
+        if (user) {
+          const { data: profile } = await supabase.from('profiles').select('name').eq('user_id', user.id).maybeSingle()
+          by = profile?.name || user.email || ''
+        }
       }
       // Once per client: a second call (a retry, a double click) is silent.
       const { data: already } = await supabase.from('team_digests').select('id').eq('kind', 'client').eq('subject', `client:${id}`).limit(1)

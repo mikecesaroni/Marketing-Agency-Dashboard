@@ -363,12 +363,26 @@ export function diffAlerts(current = [], open = [], { live } = {}) {
 }
 
 /**
+ * A person's first name, from a name ("Ethan", "Mary Jo Smith") or, failing
+ * that, from an email ("ethan@horizonhvacinc.com"). The channel says "added
+ * by Ethan", never "added by ethan@…" ("make all messages say by users
+ * first name rather than their email").
+ */
+export function firstName(value) {
+  const s = String(value || '').trim()
+  if (!s) return ''
+  const base = s.includes('@') ? s.split('@')[0].split(/[._+-]/)[0] : s.split(/\s+/)[0]
+  const word = base.replace(/[^\p{L}'’-]/gu, '')
+  return word ? word[0].toUpperCase() + word.slice(1) : ''
+}
+
+/**
  * The channel hears about a new client the moment they are added ("new
  * client added to agency for x dollars tier"): who, which package, what it
  * costs, and who added them. One message, never repeated.
  *
  * client: { id, name, tier, monthly_fee, setup_fee }
- * by: the email or name of whoever added them, or ''
+ * by: the name (or email) of whoever added them, or ''; shown as a first name
  */
 export function clientAddedSlack(client, { appUrl = '', by = '' } = {}) {
   const t = TIER_BY_NUMBER[Number(client?.tier)] || null
@@ -378,7 +392,7 @@ export function clientAddedSlack(client, { appUrl = '', by = '' } = {}) {
   const tierWords = t ? `${t.name} (${price}${setup ? `, $${setup.toLocaleString()} setup` : ''})` : `no tier picked yet (${price})`
   const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
   const name = String(client?.name || 'A client')
-  const who = String(by || '').trim()
+  const who = firstName(by)
   return {
     text: `New client: ${name}, ${t ? `${t.short} tier at ${price}` : price}`,
     blocks: [
