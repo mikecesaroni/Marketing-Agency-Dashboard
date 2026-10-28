@@ -418,12 +418,29 @@ export function parseScript(text) {
 }
 
 /** The script as plain text, for Copy, Share and Print. */
+/**
+ * How to record it, the same seven lines under every script: on the page,
+ * and at the bottom of the copied, texted and printed text, so the owner
+ * who pastes the script into Notes has the tips with it ("when copy pasting
+ * video scripts it also includes the how to record tips at bottom").
+ */
+export const HOW_TO_RECORD = [
+  'Phone upright, propped on something steady at eye level. Not held out at arm’s length.',
+  'Face the light: a window in front of you, or outside in the shade. Never with the sun or a window behind you.',
+  'Somewhere quiet. No truck idling, no radio. The phone’s own mic is fine.',
+  'Look at the lens, not at yourself on the screen.',
+  'Hit the first line with energy. The first three seconds decide whether people keep watching.',
+  'Count one second before you start and one after you finish, so nothing gets cut off.',
+  'Do two or three takes and send them all. Mistakes are fine: pause, say the line again, keep going. We edit.',
+]
+
 export function scriptToText(script, { name = '' } = {}) {
   const s = stripScript(script)
   const out = [s.title.toUpperCase(), `About ${s.seconds || secondsFor(s.lines)} seconds${name ? ` · ${name}` : ''}`, '']
   s.lines.forEach((l, i) => out.push(`${i + 1}. ${l.say}`))
   if (s.film_it) out.push('', `Film it: ${s.film_it}`)
   if (s.caption) out.push('', 'Caption to post:', s.caption)
+  out.push('', 'HOW TO RECORD', ...HOW_TO_RECORD.map((t) => `• ${t}`))
   return out.join('\n')
 }
 

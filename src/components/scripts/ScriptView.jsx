@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CHANGES, askLabel, scriptToText, secondsFor } from '../../../supabase/functions/_shared/scriptStudio.js'
+import { CHANGES, HOW_TO_RECORD, askLabel, scriptToText, secondsFor } from '../../../supabase/functions/_shared/scriptStudio.js'
 import Teleprompter from './Teleprompter'
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -127,6 +127,20 @@ export default function ScriptView({ row, clientName, busy, onBack, onChange, on
           </p>
         </section>
       )}
+
+      {/* The same lines that go at the bottom of the copied text, so what
+          they read here and what they paste into Notes match. */}
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4" data-how-to-record>
+        <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-slate-600">How to record</p>
+        <ul className="mt-2 space-y-1.5 text-[15px] text-slate-700">
+          {HOW_TO_RECORD.map((t) => (
+            <li key={t} className="flex gap-2">
+              <span aria-hidden>•</span>
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       {s.caption && (
         <section className="rounded-2xl border border-slate-200 bg-white p-4">
