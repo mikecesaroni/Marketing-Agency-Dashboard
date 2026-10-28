@@ -36,6 +36,13 @@ export const testSlack = () => call({ action: 'test_slack' })
  */
 export const announceClient = (clientId) => call({ action: 'client_added', client_id: clientId })
 
+/**
+ * Tell the channel an ad account was just connected to a client (Meta or
+ * Google). Once per account; a retry is harmless. Best effort: callers
+ * swallow a failure, the connection itself is already saved.
+ */
+export const announceAccount = (clientId, channel) => call({ action: 'account_connected', client_id: clientId, channel })
+
 /** Set, replace or clear the Slack incoming webhook. Admins only; the URL goes to the vault, never to a table the CRM reads. */
 export async function setSlackWebhook(url) {
   const { data, error } = await supabase.rpc('set_slack_webhook', { url: String(url || '').trim() })

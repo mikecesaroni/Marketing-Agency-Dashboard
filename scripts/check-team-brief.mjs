@@ -7,7 +7,7 @@
 // WAITING COSTS MONEY OR A DAY. The morning brief is the whole picture in
 // one short message; the alerts are the changes that cannot wait.
 
-import { CLEAR_WORTHY, IMMEDIATE, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, liveClientIds } from '../src/lib/teamBrief.js'
+import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, liveClientIds } from '../src/lib/teamBrief.js'
 import { buildWeeklyStatus, reportWeeks } from '../src/lib/weeklyStatus.js'
 import { addDays } from '../src/lib/dates.js'
 
@@ -156,6 +156,14 @@ check('new client: the notification line names the tier and the price', added.te
 check('new client: the post links the client, names the package, the price and who added them, by first name', added.blocks[0].text.text, '🎉 *New client added to the agency*\n<https://crm.example/client/n1|New &amp; Co>: The Whole Chain Marketing ($2,500/mo) · added by Ethan')
 check('first name: from a name, a full name, an email, a dotted email, nothing', ['Ethan', 'Mary Jo Smith', 'ethan@horizonhvacinc.com', 'mary.jo+crm@example.com', '', null].map(firstName), ['Ethan', 'Mary', 'Ethan', 'Mary', '', ''])
 check('new client: a profile name wins over the email it came with', clientAddedSlack({ id: 'n4', name: 'Co', tier: 1 }, { by: 'Josh' }).blocks[0].text.text.endsWith('· added by Josh'), true)
+check('new client: an ad account picked on the form rides along in the same post', clientAddedSlack({ id: 'n5', name: 'Co', tier: 1, meta_ad_account_id: '123456' }, { by: 'Josh' }).blocks[0].text.text.endsWith('· added by Josh\n🔗 Meta ad account 123456 connected'), true)
+
+// --- an ad account connected ----------------------------------------------------------
+const meta = accountConnectedSlack({ id: 'c9', name: 'Acme & Sons' }, { channel: 'meta', account: { id: '123456', name: 'Acme Ads' }, appUrl: 'https://crm.example', by: 'ken@workingclassgroup.com' })
+check('account connected: Meta, by name and id, who by first name, linking the Meta panel', [meta.text, meta.blocks[0].text.text], ['Ad account connected: Acme & Sons, Meta ad account Acme Ads (123456)', '🔗 *Ad account connected*\n<https://crm.example/client/c9#meta|Acme &amp; Sons>: Meta ad account *Acme Ads* (123456) · by Ken'])
+const google = accountConnectedSlack({ id: 'c9', name: 'Acme' }, { channel: 'google', account: { id: '1234567890' }, appUrl: 'https://crm.example' })
+check('account connected: Google, the id dashed, no name needed', [google.text, google.blocks[0].text.text], ['Ad account connected: Acme, Google Ads account 123-456-7890', '🔗 *Ad account connected*\n<https://crm.example/client/c9#google|Acme>: Google Ads account 123-456-7890'])
+check('account connected: a Meta account the CRM has no name for is the id alone', accountConnectedSlack({ id: 'c9', name: 'Acme' }, { channel: 'meta', account: { id: '777' } }).blocks[0].text.text.endsWith('Acme: Meta ad account 777'), true)
 check('new client: the top tier carries its setup fee', clientAddedSlack({ id: 'n2', name: 'Top Co', tier: 3, monthly_fee: 3500, setup_fee: 500 }).blocks[0].text.text.includes('Runs Without You Marketing ($3,500/mo, $500 setup)'), true)
 check('new client: no tier picked still posts, with the fee', clientAddedSlack({ id: 'n3', name: 'Odd Co', tier: null, monthly_fee: 1200 }).text, 'New client: Odd Co, $1,200/mo')
 

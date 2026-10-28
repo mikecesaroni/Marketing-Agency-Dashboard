@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { refreshAdAccounts, runMetaSync, summariseSync } from '../lib/metaSync'
 import { discoverAssets } from '../lib/metaPublish'
 import { pickPage } from '../lib/pickPage'
+import { announceAccount } from '../lib/teamBriefClient'
 
 export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate }) {
   const [editing, setEditing] = useState(false)
@@ -182,6 +183,10 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
       setSaving(false)
       return
     }
+
+    // A new account on this client: the channel hears it. Best effort, and
+    // only on a change, so re-saving the Page or pixel says nothing.
+    if (cleaned && cleaned !== String(client.meta_ad_account_id || '')) announceAccount(client.id, 'meta').catch(() => {})
 
     // Connecting the account is enough. The Page an account advertises as is
     // something Meta already knows, so making somebody press a button to go

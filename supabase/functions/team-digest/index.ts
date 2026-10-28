@@ -24,12 +24,15 @@
 // APP_URL, REPORT_AGENCY_NAME. The Slack webhook lives in the vault
 // (public.slack_webhook()).
 //
-// Body: { action: 'brief' | 'alerts' | 'preview' | 'status' | 'test_slack' | 'client_added',
-//         force?, dry_run?, weekly?, weeks_back?, client_id? }
+// Body: { action: 'brief' | 'alerts' | 'preview' | 'status' | 'test_slack' | 'client_added' | 'account_connected',
+//         force?, dry_run?, weekly?, weeks_back?, client_id?, channel? }
 //
-//   client_added  from the CRM the moment a client is created: one post
-//                 naming the client, the package and the price, and who
-//                 added them (the caller's login).
+//   client_added       from the CRM the moment a client is created: one post
+//                      naming the client, the package and the price, and who
+//                      added them (the caller's login).
+//   account_connected  from the CRM the moment a Meta or Google ad account is
+//                      attached to a client (channel: 'meta' | 'google'): one
+//                      post per account, naming it and who did it.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 // model.js is the bundle in this folder (`npm run brief`), served here from
@@ -38,6 +41,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 // does not survive being pasted. To ship a change: rebuild, commit, push,
 // put the new commit id here, deploy index.ts.
 import {
+  accountConnectedSlack,
   alertKeys,
   alertsSlack,
   briefHtml,
@@ -77,7 +81,7 @@ function eastern(d = new Date()) {
 const QUIET_FROM = 21
 const QUIET_TO = 7
 
-type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string }
+type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string; channel?: string }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return json({}, 200)
@@ -162,28 +166,22 @@ Deno.serve(async (req) => {
       return json({ ok: true })
     }
 
-    if (action === 'client_added') {
-      const id = String(body.client_id || '')
-      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'client_id is needed.' }, 400)
-      const { data: client } = await supabase.from('clients').select('id, name, tier, monthly_fee, setup_fee').eq('id', id).maybeSingle()
-      if (!client) return json({ error: 'No such client.' }, 404)
-      // Who added them: the login behind the call, when there is one (the
-      // CRM calls with the user's token; a cron ping carries none). Their
-      // name from profiles, else the email; the post shows a first name.
-      let by = ''
+    // Who is behind the call: the login's profile name, else the email (the
+    // CRM calls with the user's token; a cron ping carries none). The posts
+    // show a first name.
+    const caller = async () => {
       const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-      if (token) {
-        const { data: who } = await supabase.auth.getUser(token).catch(() => ({ data: null }))
-        const user = who?.user
-        if (user) {
-          const { data: profile } = await supabase.from('profiles').select('name').eq('user_id', user.id).maybeSingle()
-          by = profile?.name || user.email || ''
-        }
-      }
-      // Once per client: a second call (a retry, a double click) is silent.
-      const { data: already } = await supabase.from('team_digests').select('id').eq('kind', 'client').eq('subject', `client:${id}`).limit(1)
+      if (!token) return ''
+      const { data: who } = await supabase.auth.getUser(token).catch(() => ({ data: null }))
+      const user = who?.user
+      if (!user) return ''
+      const { data: profile } = await supabase.from('profiles').select('name').eq('user_id', user.id).maybeSingle()
+      return profile?.name || user.email || ''
+    }
+    // One post per subject: a retry or a double click is silent.
+    const announce = async (kind: string, subject: string, message: { text: string; blocks?: unknown[] }, extra: Record<string, unknown> = {}) => {
+      const { data: already } = await supabase.from('team_digests').select('id').eq('kind', kind).eq('subject', subject).limit(1)
       if (already?.length) return json({ day, skipped: 'already announced' })
-      const message = clientAddedSlack(client, { appUrl, by })
       const url = await slackUrl()
       let posted = false
       let error = ''
@@ -195,8 +193,34 @@ Deno.serve(async (req) => {
           error = err instanceof Error ? err.message : String(err)
         }
       }
-      await record({ day, kind: 'client', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: `client:${id}`, model: { text: message.text, by } })
+      await record({ day, kind, status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject, model: { text: message.text, ...extra } })
       return json({ day, posted, text: message.text, error: error || undefined })
+    }
+
+    if (action === 'client_added') {
+      const id = String(body.client_id || '')
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'client_id is needed.' }, 400)
+      const { data: client } = await supabase.from('clients').select('id, name, tier, monthly_fee, setup_fee, meta_ad_account_id').eq('id', id).maybeSingle()
+      if (!client) return json({ error: 'No such client.' }, 404)
+      const by = await caller()
+      return announce('client', `client:${id}`, clientAddedSlack(client, { appUrl, by }), { by })
+    }
+
+    if (action === 'account_connected') {
+      const id = String(body.client_id || '')
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'client_id is needed.' }, 400)
+      const channel = body.channel === 'google' ? 'google' : 'meta'
+      const { data: client } = await supabase.from('clients').select('id, name, meta_ad_account_id, google_ads_customer_id').eq('id', id).maybeSingle()
+      if (!client) return json({ error: 'No such client.' }, 404)
+      const accountId = String((channel === 'google' ? client.google_ads_customer_id : client.meta_ad_account_id) || '')
+      if (!accountId) return json({ day, skipped: 'no account on the client' })
+      let accountName = ''
+      if (channel === 'meta') {
+        const { data: acct } = await supabase.from('meta_ad_accounts').select('name, business_name').eq('ad_account_id', accountId).maybeSingle()
+        accountName = acct?.name || acct?.business_name || ''
+      }
+      const by = await caller()
+      return announce('account', `account:${id}:${channel}:${accountId}`, accountConnectedSlack(client, { channel, account: { id: accountId, name: accountName }, appUrl, by }), { by, channel, account: accountId })
     }
 
     const statusRows = statusFromRows(await fetchStatusRows(supabase, { internalColumn: true, day }))

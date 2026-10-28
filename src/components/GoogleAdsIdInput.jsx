@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { readFunctionError } from '../lib/functionError'
 import { cleanCustomerId, dashedId, explainSyncError } from '../lib/googleAdsId'
+import { announceAccount } from '../lib/teamBriefClient'
 
 /**
  * The one place a Google Ads customer ID is typed in.
@@ -45,6 +46,8 @@ export default function GoogleAdsIdInput({ client, onSaved, compact = false, dar
       return
     }
     setValue(dashedId(valid))
+    // A new account on this client: the channel hears it. Best effort.
+    if (!unchanged) announceAccount(client.id, 'google').catch(() => {})
     setState('syncing')
     try {
       const { data, error: fnErr } = await supabase.functions.invoke('google-daily-sync', {

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { announceAccount } from './teamBriefClient'
 
 export async function fetchUnmappedAccounts() {
   const { data, error } = await supabase
@@ -28,6 +29,9 @@ export async function mapAccountToClient(account, clientId) {
     .update({ status: 'mapped', mapped_client_id: clientId })
     .eq('ad_account_id', account.ad_account_id)
   if (error) throw error
+
+  // The channel hears it. Best effort: the account is mapped either way.
+  announceAccount(clientId, 'meta').catch(() => {})
 }
 
 // Ignored accounts stay ignored: the sync's upsert never writes status, so a

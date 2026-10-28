@@ -9,6 +9,7 @@ import CopySetupMessageButton from './CopySetupMessageButton'
 import GoogleAdsIdInput from './GoogleAdsIdInput'
 import { dashedId, explainSyncError, isAccessError } from '../lib/googleAdsId'
 import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from '../lib/agencyEmail'
+import { announceAccount } from '../lib/teamBriefClient'
 
 /**
  * Google Search, for one client: where the money went and what to switch off.
@@ -80,7 +81,11 @@ function FindAccount({ client, onUpdate }) {
     if (err) {
       setError(err.message)
       setState('shown')
-    } else onUpdate?.()
+    } else {
+      // The channel hears it. Best effort: the account is saved either way.
+      announceAccount(client.id, 'google').catch(() => {})
+      onUpdate?.()
+    }
   }
 
   const mine = found?.candidates?.[client.id] || []

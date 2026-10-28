@@ -26,6 +26,7 @@
 
 import { TIER_BY_NUMBER } from './clientTiers.js'
 import { daysBetween, longDay, shortDay } from './dates.js'
+import { dashedId } from './googleAdsId.js'
 import { money, weeklyLine } from './weeklyStatus.js'
 
 /**
@@ -394,11 +395,39 @@ export function clientAddedSlack(client, { appUrl = '', by = '' } = {}) {
   const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
   const name = String(client?.name || 'A client')
   const who = firstName(by)
+  // An ad account picked on the add form rides along, so there is one post
+  // for a new client, not two.
+  const account = client?.meta_ad_account_id ? `\n🔗 Meta ad account ${slackEsc(String(client.meta_ad_account_id))} connected` : ''
   return {
     text: `New client: ${name}, ${t ? `${t.short} tier at ${price}` : price}`,
     blocks: [
-      { type: 'section', text: { type: 'mrkdwn', text: `🎉 *New client added to the agency*\n${link(model, `/client/${client?.id || ''}`, slackEsc(name))}: ${slackEsc(tierWords)}${who ? ` · added by ${slackEsc(who)}` : ''}` } },
+      { type: 'section', text: { type: 'mrkdwn', text: `🎉 *New client added to the agency*\n${link(model, `/client/${client?.id || ''}`, slackEsc(name))}: ${slackEsc(tierWords)}${who ? ` · added by ${slackEsc(who)}` : ''}${account}` } },
       { type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, `/client/${client?.id || ''}`, 'Their page')} · ${link(model, '/status', 'Client tiers')}` }] },
+    ],
+  }
+}
+
+/**
+ * The channel hears when an ad account is connected to a client ("make CRM
+ * update message when new ad account is connected to a client"): which
+ * client, which channel, which account, who did it. Once per account.
+ *
+ * channel: 'meta' | 'google'
+ * account: { id, name } (the Meta account name when the CRM knows it)
+ */
+export function accountConnectedSlack(client, { channel = 'meta', account = {}, appUrl = '', by = '' } = {}) {
+  const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
+  const name = String(client?.name || 'A client')
+  const id = String(account?.id || '')
+  const which = channel === 'google' ? `Google Ads account ${dashedId(id) || id}` : `Meta ad account ${account?.name ? `*${slackEsc(account.name)}* (${slackEsc(id)})` : slackEsc(id)}`
+  const plain = channel === 'google' ? `Google Ads account ${dashedId(id) || id}` : `Meta ad account ${account?.name ? `${account.name} (${id})` : id}`
+  const who = firstName(by)
+  const href = channel === 'google' ? `/client/${client?.id || ''}#google` : `/client/${client?.id || ''}#meta`
+  return {
+    text: `Ad account connected: ${name}, ${plain}`,
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: `🔗 *Ad account connected*\n${link(model, href, slackEsc(name))}: ${which}${who ? ` · by ${slackEsc(who)}` : ''}` } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, href, 'Their page')} · ${link(model, '/status', 'Client tiers')}` }] },
     ],
   }
 }
