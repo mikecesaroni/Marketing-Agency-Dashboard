@@ -24,7 +24,7 @@
 //     night. The brief marks everything it carried as posted, so the first
 //     alert run of the day does not say it all again.
 
-import { longDay } from './dates.js'
+import { daysBetween, longDay, shortDay } from './dates.js'
 import { money, weeklyLine } from './weeklyStatus.js'
 
 /**
@@ -58,6 +58,7 @@ const EMOJI = {
   clip: '🎬',
   green: '🟢',
   onboarding: '⚪',
+  paused: '⏸️',
   cleared: '✅',
 }
 
@@ -77,9 +78,18 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
   const clips = []
   const green = []
   const onboarding = []
+  // Paused clients: one line, so nobody forgets them ("can we show paused
+  // clients in the morning brief"). No flags, no alerts: the pause is the
+  // only news, and how long it has run is the only question.
+  const paused = []
   for (const r of rows) {
     const client = pick(r.client)
     const flags = r.flags || []
+    if (r.client.paused_at) {
+      const since = String(r.client.paused_at).slice(0, 10)
+      paused.push({ client, since, days: daysBetween(since, day) })
+      continue
+    }
     for (const f of flags) {
       if (AD_FLAGS.has(f.key)) {
         attention.push({ client, severity: f.severity, key: f.key, label: f.label, detail: f.detail || '', href: f.href || `/client/${client.id}` })
@@ -105,6 +115,7 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
   attention.sort((a, b) => sev[a.severity] - sev[b.severity] || a.client.name.localeCompare(b.client.name))
   clips.sort((a, b) => (a.at < b.at ? 1 : -1))
   green.sort((a, b) => b.leads7 - a.leads7 || a.client.name.localeCompare(b.client.name))
+  paused.sort((a, b) => b.days - a.days || a.client.name.localeCompare(b.client.name))
   const red = attention.filter((a) => a.severity === 'red').length
   return {
     day,
@@ -113,6 +124,7 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
     clips,
     green,
     onboarding,
+    paused,
     counts: {
       clients: rows.length,
       red,
@@ -122,6 +134,7 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       green: green.length,
       greenLeads: green.reduce((n, g) => n + g.leads7, 0),
       onboarding: onboarding.length,
+      paused: paused.length,
     },
     weekly,
     appUrl: String(appUrl || '').replace(/\/$/, ''),
@@ -173,6 +186,10 @@ export function briefSections(model) {
   }
   if (model.onboarding.length) {
     out.push({ key: 'onboarding', title: `Onboarding (${model.onboarding.length})`, lines: model.onboarding.map((o) => ({ emoji: EMOJI.onboarding, client: o.client, text: o.label, href: `/client/${o.client.id}` })) })
+  }
+  if (model.paused?.length) {
+    const names = model.paused.map((p) => `${p.client.name} (since ${shortDay(p.since)}, ${p.days} day${p.days === 1 ? '' : 's'})`).join(', ')
+    out.push({ key: 'paused', title: `On pause (${model.paused.length})`, lines: [{ emoji: EMOJI.paused, text: names, href: '/status' }] })
   }
   if (model.attention.length === 0 && model.clips.length === 0) {
     out.unshift({ key: 'clear', title: 'Nothing needs attention', lines: [{ emoji: '✅', text: 'No flags on any client this morning.' }] })

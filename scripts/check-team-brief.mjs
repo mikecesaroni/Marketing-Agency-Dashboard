@@ -53,7 +53,16 @@ check("every waiting clip, newest first, naming the editor, whether it is in Met
 check("a clip alert carries the editor's note too", alertKeys(rows).find((k) => k.key === 'd:clip:d/clip1.mp4')?.label, 'New edit dropped in: clip1.mp4, not in Meta yet · “post a day after clip2”')
 check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
 check('onboarding names the next step, whose move, and how long they have had it', brief.onboarding.map((o) => o.label), ['Meta ad account and Page connected (their move, 9 days)'])
-check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, green: 2, greenLeads: 11, onboarding: 1 })
+check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, green: 2, greenLeads: 11, onboarding: 1, paused: 0 })
+
+// Paused clients: one line with how long, nothing else about them.
+{
+  const pausedRow = mk('p', 'Pause Co', { client: { id: 'p', name: 'Pause Co', meta_ads_active: true, paused_at: '2026-10-03T14:00:00Z', archived: false, is_internal: false }, flags: [{ key: 'paused', severity: 'blue', label: 'On pause' }, { key: 'payment', severity: 'red', label: 'Card failing' }], result: { launched: false, next: { title: 'Setup fee paid', owner: 'client', waitingDays: 40 } } })
+  const withPause = buildBrief({ statusRows: [...rows, pausedRow], day: TODAY, appUrl: 'https://crm.example/' })
+  check('a paused client is one line, oldest pause first, with the date and the days', briefSections(withPause).find((s) => s.key === 'paused'), { key: 'paused', title: 'On pause (1)', lines: [{ emoji: '⏸️', text: 'Pause Co (since Oct 3, 17 days)', href: '/status' }] })
+  check('...and is in nothing else: not attention, not onboarding, not green', [withPause.attention.some((a) => a.client.id === 'p'), withPause.onboarding.some((o) => o.client.id === 'p'), withPause.green.some((g) => g.client.id === 'p'), withPause.counts.paused], [false, false, false, 1])
+  check('...and the plain text carries the line', briefText(withPause).includes('ON PAUSE (1)\n⏸️ Pause Co (since Oct 3, 17 days)'), true)
+}
 check('the subject', briefSubject(brief), 'Morning brief · Tuesday, Oct 20 · 1 to call, 2 clips to publish, 2 running clean')
 check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week', 'Onboarding (1)'])
 
