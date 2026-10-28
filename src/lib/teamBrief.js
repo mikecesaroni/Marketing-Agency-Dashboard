@@ -24,6 +24,7 @@
 //     night. The brief marks everything it carried as posted, so the first
 //     alert run of the day does not say it all again.
 
+import { TIER_BY_NUMBER } from './clientTiers.js'
 import { daysBetween, longDay, shortDay } from './dates.js'
 import { money, weeklyLine } from './weeklyStatus.js'
 
@@ -358,6 +359,32 @@ export function diffAlerts(current = [], open = [], { live } = {}) {
     fresh: current.filter((c) => !openKeys.has(c.key)),
     gone: open.filter((o) => !nowKeys.has(o.key)),
     cleared: open.filter((o) => !nowKeys.has(o.key) && CLEAR_WORTHY.has(o.kind) && stillLive(o)),
+  }
+}
+
+/**
+ * The channel hears about a new client the moment they are added ("new
+ * client added to agency for x dollars tier"): who, which package, what it
+ * costs, and who added them. One message, never repeated.
+ *
+ * client: { id, name, tier, monthly_fee, setup_fee }
+ * by: the email or name of whoever added them, or ''
+ */
+export function clientAddedSlack(client, { appUrl = '', by = '' } = {}) {
+  const t = TIER_BY_NUMBER[Number(client?.tier)] || null
+  const monthly = Number(client?.monthly_fee) || t?.price || 0
+  const setup = Number(client?.setup_fee) || 0
+  const price = monthly ? `$${monthly.toLocaleString()}/mo` : 'no monthly fee set'
+  const tierWords = t ? `${t.name} (${price}${setup ? `, $${setup.toLocaleString()} setup` : ''})` : `no tier picked yet (${price})`
+  const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
+  const name = String(client?.name || 'A client')
+  const who = String(by || '').trim()
+  return {
+    text: `New client: ${name}, ${t ? `${t.short} tier at ${price}` : price}`,
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: `🎉 *New client added to the agency*\n${link(model, `/client/${client?.id || ''}`, slackEsc(name))}: ${slackEsc(tierWords)}${who ? ` · added by ${slackEsc(who)}` : ''}` } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, `/client/${client?.id || ''}`, 'Their page')} · ${link(model, '/status', 'Client tiers')}` }] },
+    ],
   }
 }
 

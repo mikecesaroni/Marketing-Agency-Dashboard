@@ -30,6 +30,12 @@ export const briefStatus = () => call({ action: 'status' })
 /** Post a hello to the channel. */
 export const testSlack = () => call({ action: 'test_slack' })
 
+/**
+ * Tell the channel a client was just added: name, package, price, who. The
+ * function announces each client once, so a retry is harmless.
+ */
+export const announceClient = (clientId) => call({ action: 'client_added', client_id: clientId })
+
 /** Set, replace or clear the Slack incoming webhook. Admins only; the URL goes to the vault, never to a table the CRM reads. */
 export async function setSlackWebhook(url) {
   const { data, error } = await supabase.rpc('set_slack_webhook', { url: String(url || '').trim() })

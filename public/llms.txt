@@ -43,7 +43,7 @@ What is on it:
 What you can do:
   - Search box, matching business, client, industry or market.
   - Filter buttons: All, Meta live, Meta not yet, LSA optimized, LSA not yet, GBP optimized, GBP not yet, and two for GHL.
-  - A "New Client" button in the page header opens a form in a modal.
+  - A "New Client" button in the page header opens a form in a modal: the business name, the package they signed for (required; it sets their monthly and setup fees) and, optionally, their Meta ad account. The moment the client is created the Slack channel hears "New client added to the agency" with the package, the price and who added them.
   - Clicking any row opens that client's page.
 
 Publish   /publish/:clientId

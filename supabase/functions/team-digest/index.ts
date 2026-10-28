@@ -24,8 +24,12 @@
 // APP_URL, REPORT_AGENCY_NAME. The Slack webhook lives in the vault
 // (public.slack_webhook()).
 //
-// Body: { action: 'brief' | 'alerts' | 'preview' | 'status' | 'test_slack',
-//         force?, dry_run?, weekly?, weeks_back? }
+// Body: { action: 'brief' | 'alerts' | 'preview' | 'status' | 'test_slack' | 'client_added',
+//         force?, dry_run?, weekly?, weeks_back?, client_id? }
+//
+//   client_added  from the CRM the moment a client is created: one post
+//                 naming the client, the package and the price, and who
+//                 added them (the caller's login).
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 // model.js is the bundle in this folder (`npm run brief`), served here from
@@ -42,6 +46,7 @@ import {
   briefText,
   buildBrief,
   buildWeeklyStatus,
+  clientAddedSlack,
   diffAlerts,
   fetchStatusRows,
   fetchWeeklyRows,
@@ -72,7 +77,7 @@ function eastern(d = new Date()) {
 const QUIET_FROM = 21
 const QUIET_TO = 7
 
-type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number }
+type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return json({}, 200)
@@ -155,6 +160,38 @@ Deno.serve(async (req) => {
       })
       await record({ day, kind: 'test', status: 'sent', slack_status: 'sent', subject: 'Connection test' })
       return json({ ok: true })
+    }
+
+    if (action === 'client_added') {
+      const id = String(body.client_id || '')
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'client_id is needed.' }, 400)
+      const { data: client } = await supabase.from('clients').select('id, name, tier, monthly_fee, setup_fee').eq('id', id).maybeSingle()
+      if (!client) return json({ error: 'No such client.' }, 404)
+      // Who added them: the login behind the call, when there is one (the
+      // CRM calls with the user's token; a cron ping carries none).
+      let by = ''
+      const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+      if (token) {
+        const { data: who } = await supabase.auth.getUser(token).catch(() => ({ data: null }))
+        by = who?.user?.email || ''
+      }
+      // Once per client: a second call (a retry, a double click) is silent.
+      const { data: already } = await supabase.from('team_digests').select('id').eq('kind', 'client').eq('subject', `client:${id}`).limit(1)
+      if (already?.length) return json({ day, skipped: 'already announced' })
+      const message = clientAddedSlack(client, { appUrl, by })
+      const url = await slackUrl()
+      let posted = false
+      let error = ''
+      if (url) {
+        try {
+          await postSlack(url, message)
+          posted = true
+        } catch (err) {
+          error = err instanceof Error ? err.message : String(err)
+        }
+      }
+      await record({ day, kind: 'client', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: `client:${id}`, model: { text: message.text, by } })
+      return json({ day, posted, text: message.text, error: error || undefined })
     }
 
     const statusRows = statusFromRows(await fetchStatusRows(supabase, { internalColumn: true, day }))

@@ -1,12 +1,24 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { TIERS, TIER_BY_NUMBER } from '../lib/clientTiers'
+import { announceClient } from '../lib/teamBriefClient'
 
+/**
+ * A new client: the name, the package they signed for, and their Meta ad
+ * account if it is already known. The package is picked here rather than
+ * guessed later from the fee ("when we add a new client we pick which tier
+ * they are on"), it sets the monthly and setup fees, and the moment the
+ * client lands the Slack channel hears "new client added to the agency",
+ * with the tier and the dollars.
+ */
 export default function AddClientForm({ onSuccess, onClose }) {
   const [name, setName] = useState('')
+  const [tier, setTier] = useState('')
   const [adAccountId, setAdAccountId] = useState('')
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
 
   // Offered here so a client can be pointed at their ad account during
   // onboarding rather than having to come back for it later.
@@ -26,17 +38,43 @@ export default function AddClientForm({ onSuccess, onClose }) {
     setError('')
     setLoading(true)
 
+    const picked = TIER_BY_NUMBER[Number(tier)]
+    if (!picked) {
+      setError('Pick the package they signed for.')
+      setLoading(false)
+      return
+    }
+
     try {
-      const { error: err } = await supabase.from('clients').insert({
-        name: name.trim(),
-        meta_budget_per_day: 0,
-        lsa_budget_per_day: 0,
-        meta_ad_account_id: adAccountId || null,
-      })
+      const { data: row, error: err } = await supabase
+        .from('clients')
+        .insert({
+          name: name.trim(),
+          tier: picked.tier,
+          // The package IS the price. Changeable on their page if the deal
+          // differs; the pipeline and the brief read the tier, not the fee.
+          monthly_fee: picked.price,
+          setup_fee: picked.setup,
+          meta_budget_per_day: 0,
+          lsa_budget_per_day: 0,
+          meta_ad_account_id: adAccountId || null,
+        })
+        .select('id')
+        .single()
 
       if (err) throw err
 
+      // The channel hears it now. Best effort: the client exists either way,
+      // and a channel that is not connected is not a reason to block the form.
+      try {
+        const out = await announceClient(row.id)
+        if (out?.posted === false && out?.error) setNotice(`Added. Slack did not take the post: ${out.error}`)
+      } catch (postErr) {
+        setNotice(`Added. The channel was not told: ${postErr.message}`)
+      }
+
       setName('')
+      setTier('')
       setAdAccountId('')
       onSuccess()
       onClose()
@@ -60,6 +98,32 @@ export default function AddClientForm({ onSuccess, onClose }) {
           autoFocus
           required
         />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-2">Package *</label>
+        <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Package">
+          {TIERS.map((t) => {
+            const on = Number(tier) === t.tier
+            return (
+              <label
+                key={t.tier}
+                className={`cursor-pointer rounded-lg border px-3 py-2.5 text-sm transition ${on ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-slate-300 hover:border-slate-400'}`}
+                title={t.includes.join(' · ')}
+                data-tier-option={t.tier}
+              >
+                <input type="radio" name="tier" value={t.tier} checked={on} onChange={() => setTier(String(t.tier))} className="sr-only" required />
+                <span className="block font-semibold text-slate-900">{t.short}</span>
+                <span className="block text-xs text-slate-600">
+                  ${t.price.toLocaleString()}/mo{t.setup ? ` + $${t.setup.toLocaleString()} setup` : ''}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+        <p className="text-xs text-slate-500 mt-1">
+          Sets their monthly fee and the steps on their plan. The channel is told the moment they are added.
+        </p>
       </div>
 
       {accounts.length > 0 && (
@@ -96,6 +160,7 @@ export default function AddClientForm({ onSuccess, onClose }) {
           {error}
         </div>
       )}
+      {notice && <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">{notice}</div>}
 
       <div className="flex gap-2 pt-4">
         <button
