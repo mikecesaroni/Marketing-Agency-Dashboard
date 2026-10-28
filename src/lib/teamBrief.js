@@ -328,19 +328,36 @@ export function alertKeys(statusRows = []) {
 }
 
 /**
+ * The clients whose ads are live now: active, on Meta, not paused. Only
+ * these can be said to have their ads "delivering again".
+ */
+export function liveClientIds(statusRows = []) {
+  return new Set(statusRows.filter((r) => active(r) && r.client.meta_ads_active && !r.client.paused_at).map((r) => r.client.id))
+}
+
+/**
  * What to post: the keys live now that are not open in the log (fresh), and
  * the open ones that are gone and worth a word (cleared: the ads are back).
  * A clip going quiet or a stale client publishing is not news.
  *
+ * An alert can also vanish because the CLIENT did: paused, archived, made
+ * internal. Pausing takes every flag off a client, so its open "account in
+ * grace period" disappeared and the channel read "Tito's Appliances: ads
+ * delivering again" on the day they were paused. With `live` given, a gone
+ * key is announced only when that client's ads are live; the rest close in
+ * the log without a word.
+ *
  * open: [{ key, kind, label, client_id, client_name }] rows with cleared_at null
+ * live: Set of client ids whose ads are live (liveClientIds); omitted = all
  */
-export function diffAlerts(current = [], open = []) {
+export function diffAlerts(current = [], open = [], { live } = {}) {
   const openKeys = new Set(open.map((o) => o.key))
   const nowKeys = new Set(current.map((c) => c.key))
+  const stillLive = (o) => !live || live.has(o.client_id)
   return {
     fresh: current.filter((c) => !openKeys.has(c.key)),
     gone: open.filter((o) => !nowKeys.has(o.key)),
-    cleared: open.filter((o) => !nowKeys.has(o.key) && CLEAR_WORTHY.has(o.kind)),
+    cleared: open.filter((o) => !nowKeys.has(o.key) && CLEAR_WORTHY.has(o.kind) && stillLive(o)),
   }
 }
 

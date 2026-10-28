@@ -7,7 +7,7 @@
 // WAITING COSTS MONEY OR A DAY. The morning brief is the whole picture in
 // one short message; the alerts are the changes that cannot wait.
 
-import { CLEAR_WORTHY, IMMEDIATE, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, diffAlerts } from '../src/lib/teamBrief.js'
+import { CLEAR_WORTHY, IMMEDIATE, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, diffAlerts, liveClientIds } from '../src/lib/teamBrief.js'
 import { buildWeeklyStatus, reportWeeks } from '../src/lib/weeklyStatus.js'
 import { addDays } from '../src/lib/dates.js'
 
@@ -136,6 +136,13 @@ const diff = diffAlerts(keys, open)
 check('fresh: what is live and was not open (the still-open ads-off is not repeated)', diff.fresh.map((f) => f.key), ['d:clip:d/clip2.mp4', 'g:payment', 'g:video-stale'])
 check('gone: every open key that is no longer live, to close in the log', diff.gone.map((g) => g.key), ['a:ads-off', 'a:video-stale', 'd:clip:d/old.mp4'])
 check('cleared: only the ads coming back is said out loud', diff.cleared.map((c) => c.key), ['a:ads-off'])
+// The Tito's case: the alert vanished because the client was paused, not
+// because the ads came back. Closed in the log, not announced.
+check('live clients: on Meta, not paused, not archived, not internal', [...liveClientIds(noisy)].sort(), ['a', 'b', 'd', 'g'])
+const pausedAcme = noisy.map((r) => (r.client.id === 'a' ? { ...r, client: { ...r.client, paused_at: '2026-10-20T10:00:00Z' }, flags: [{ key: 'paused', severity: 'blue', label: 'On pause' }] } : r))
+const quiet = diffAlerts(alertKeys(pausedAcme), open, { live: liveClientIds(pausedAcme) })
+check('a paused client\'s open alerts close without "ads delivering again"', [quiet.gone.map((g) => g.key), quiet.cleared.map((c) => c.key)], [['a:ads-off', 'a:video-stale', 'd:clip:d/old.mp4'], []])
+check('...while a live client\'s ads coming back is still said', diffAlerts(keys, open, { live: liveClientIds(noisy) }).cleared.map((c) => c.key), ['a:ads-off'])
 const post = alertsSlack(diff, { appUrl: 'https://crm.example' })
 check('the alerts post: new then cleared, each client a link, one line each', [post.blocks.length, post.blocks[0].text.text, post.blocks[1].text.text], [2, '*New (3)*\n🎬 <https://crm.example/content|Drain Kings>: New edit dropped in: clip2.mp4 from Kyle\n💳 <https://crm.example/client/g|Gaps LLC>: Card failing\n📹 <https://crm.example/client/g|Gaps LLC>: No new video or ad in 12 days', '*Cleared*\n✅ <https://crm.example/client/a|Acme Heating>: ads delivering again (was "Meta ads stopped: 4 days without spend")'])
 check('the notification line names the first few', post.text, 'Drain Kings: New edit dropped in: clip2.mp4 from Kyle · Gaps LLC: Card failing · Gaps LLC: No new video or ad in 12 days')

@@ -45,6 +45,7 @@ import {
   diffAlerts,
   fetchStatusRows,
   fetchWeeklyRows,
+  liveClientIds,
   statusFromRows,
   weeklyText,
 } from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@0209505ede7b812203632773b31fe4dc398fccbe/supabase/functions/team-digest/model.js'
@@ -162,7 +163,9 @@ Deno.serve(async (req) => {
       if (!body.force && (hour >= QUIET_FROM || hour < QUIET_TO)) return json({ day, skipped: 'quiet hours', hour })
       const current = alertKeys(statusRows)
       const { data: open } = await supabase.from('team_alerts').select('key, kind, label, client_id, client_name').is('cleared_at', null)
-      const diff = diffAlerts(current, open || [])
+      // "Ads delivering again" only for a client whose ads are live: a
+      // paused or archived client's open alerts close without a word.
+      const diff = diffAlerts(current, open || [], { live: liveClientIds(statusRows) })
       const message = alertsSlack(diff, { appUrl })
       if (body.dry_run) return json({ day, dry_run: true, fresh: diff.fresh, cleared: diff.cleared, message })
 
