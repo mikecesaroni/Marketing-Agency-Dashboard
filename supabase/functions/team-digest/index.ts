@@ -47,7 +47,7 @@ import {
   fetchWeeklyRows,
   statusFromRows,
   weeklyText,
-} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@32ac01f8d30cf43951e9494e0660b105c7557143/supabase/functions/team-digest/model.js'
+} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@0209505ede7b812203632773b31fe4dc398fccbe/supabase/functions/team-digest/model.js'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
