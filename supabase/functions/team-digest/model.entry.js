@@ -5,4 +5,6 @@
 export { fetchStatusRows, statusFromRows } from '../../../src/lib/statusRows.js'
 export { fetchWeeklyRows } from '../../../src/lib/weeklyRows.js'
 export { buildWeeklyStatus, weeklyText } from '../../../src/lib/weeklyStatus.js'
-export { alertKeys, alertsSlack, briefHtml, briefSlack, briefSubject, briefText, buildBrief, diffAlerts } from '../../../src/lib/teamBrief.js'
+// Every name index.ts imports must be listed here: a name missing from the
+// bundle fails the function at boot (BOOT_ERROR), not at the call.
+export { alertKeys, alertsSlack, briefHtml, briefSlack, briefSubject, briefText, buildBrief, diffAlerts, liveClientIds } from '../../../src/lib/teamBrief.js'
