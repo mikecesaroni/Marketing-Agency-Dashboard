@@ -188,7 +188,7 @@ export function briefSections(model) {
     out.push({ key: 'onboarding', title: `Onboarding (${model.onboarding.length})`, lines: model.onboarding.map((o) => ({ emoji: EMOJI.onboarding, client: o.client, text: o.label, href: `/client/${o.client.id}` })) })
   }
   if (model.paused?.length) {
-    const names = model.paused.map((p) => `${p.client.name} (since ${shortDay(p.since)}, ${p.days} day${p.days === 1 ? '' : 's'})`).join(', ')
+    const names = model.paused.map((p) => `${p.client.name} (${p.days === 0 ? 'paused today' : `since ${shortDay(p.since)}, ${p.days} day${p.days === 1 ? '' : 's'}`})`).join(', ')
     out.push({ key: 'paused', title: `On pause (${model.paused.length})`, lines: [{ emoji: EMOJI.paused, text: names, href: '/status' }] })
   }
   if (model.attention.length === 0 && model.clips.length === 0) {

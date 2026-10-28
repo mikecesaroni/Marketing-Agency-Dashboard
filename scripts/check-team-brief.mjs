@@ -62,6 +62,8 @@ check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, cli
   check('a paused client is one line, oldest pause first, with the date and the days', briefSections(withPause).find((s) => s.key === 'paused'), { key: 'paused', title: 'On pause (1)', lines: [{ emoji: '⏸️', text: 'Pause Co (since Oct 3, 17 days)', href: '/status' }] })
   check('...and is in nothing else: not attention, not onboarding, not green', [withPause.attention.some((a) => a.client.id === 'p'), withPause.onboarding.some((o) => o.client.id === 'p'), withPause.green.some((g) => g.client.id === 'p'), withPause.counts.paused], [false, false, false, 1])
   check('...and the plain text carries the line', briefText(withPause).includes('ON PAUSE (1)\n⏸️ Pause Co (since Oct 3, 17 days)'), true)
+  const today = mk('t', 'Today Co', { client: { id: 't', name: 'Today Co', meta_ads_active: true, paused_at: `${TODAY}T15:00:00Z`, archived: false, is_internal: false } })
+  check('paused today says so instead of "0 days"', briefSections(buildBrief({ statusRows: [today], day: TODAY })).find((s) => s.key === 'paused').lines[0].text, 'Today Co (paused today)')
 }
 check('the subject', briefSubject(brief), 'Morning brief · Tuesday, Oct 20 · 1 to call, 2 clips to publish, 2 running clean')
 check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week', 'Onboarding (1)'])
