@@ -48,7 +48,7 @@ import {
   liveClientIds,
   statusFromRows,
   weeklyText,
-} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@abb810dc071be2f53d8c92a02d67ca1fa4971c50/supabase/functions/team-digest/model.js'
+} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@c2082da6ed688ac23851683b57e7f62535660d65/supabase/functions/team-digest/model.js'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
