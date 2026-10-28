@@ -17,7 +17,9 @@
 create table if not exists public.team_digests (
   id uuid primary key default gen_random_uuid(),
   day date not null,
-  kind text not null check (kind in ('brief', 'alerts', 'test')),
+  -- brief, alerts and the connection test; 'client' is the one post when a
+  -- client is added; 'note' is a line posted by hand (a correction).
+  kind text not null check (kind in ('brief', 'alerts', 'test', 'client', 'note')),
   status text not null check (status in ('sent', 'ready', 'failed', 'skipped')),
   reason text,
   slack_status text,
@@ -102,3 +104,8 @@ grant execute on function public.slack_connected() to service_role;
 -- weekly-report: net.http_post with the project's anon key. The alerts
 -- job posts nothing between 9pm and 7am Eastern (the function skips), and
 -- nothing at all unless something is new.
+
+-- 2026-10-28: two more kinds of post in the log. Applied as:
+--   alter table public.team_digests drop constraint team_digests_kind_check;
+--   alter table public.team_digests add constraint team_digests_kind_check
+--     check (kind in ('brief', 'alerts', 'test', 'client', 'note'));
