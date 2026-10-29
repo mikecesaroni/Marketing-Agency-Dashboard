@@ -6,14 +6,15 @@ Added 2026-10-20, after "organize all clients in 3 buckets based on which tier t
 
 `clients.tier` (supabase/client-tiers.sql), 1 to 3, null until somebody picks it. The pure half is `src/lib/clientTiers.js` (`TIERS`, `tierOf`, `tierFromFee`).
 
-| Tier | Name | A month | Includes |
-|---|---|---|---|
-| 1 | CRM / Marketing Maintenance | $1,500 | Meta ads managed, creative from their job photos, leads followed up in GoHighLevel, monthly cost-per-lead reporting |
-| | | | The $2,500 package's short name on every board, badge and brief line is "Meta and Google" (changed from "Whole Chain" 2026-10-29: "instead of saying Whole Chain say Meta and Google"); its full name stays The Whole Chain Marketing. |
-| 2 | The Whole Chain Marketing | $2,500 | Everything in 1, plus Google Search ads, Local Services Ads, the Business Profile, re-engaging their past customer list |
-| 3 | Runs Without You Marketing | $3,500 plus $500 setup | Everything in 2, plus a second-brain AI built on the business and custom automations |
+| Tier | Name | Shown as | A month | Includes |
+|---|---|---|---|---|
+| 1 | CRM / Marketing Maintenance | $1,500 plan | $1,500 | Meta ads managed, creative from their job photos, leads followed up in GoHighLevel, monthly cost-per-lead reporting |
+| 2 | The Whole Chain Marketing | Meta and Google | $2,500 | Everything in 1, plus Google Search ads, Local Services Ads, the Business Profile, re-engaging their past customer list |
+| 3 | Runs Without You Marketing | $3,500 plan | $3,500 plus $500 setup | Everything in 2, plus a second-brain AI built on the business and custom automations |
 
-Every package includes the GoHighLevel build, so `nextSteps()` treats a client with a tier as on the GHL plan, and the migration switched `ghl_plan` on for every active client. Until the tier is set it is **guessed from `monthly_fee`** (within $100 of a package price) and shown as a guess: an amber picker on the card, a blue "Package guessed from the fee" flag, a `Maintenance?` badge on the Clients list. Pick it on the card to confirm; it writes the column and the card moves bucket.
+"Shown as" is the short name on every board, badge, picker and brief line (2026-10-29: "instead of saying Whole Chain say Meta and Google", then "change Maintenance to Meta or Google or call it $1500 plan and Runs Without You the 3500 plan"); the full names stay on the add form's package descriptions.
+
+Every package includes the GoHighLevel build, so `nextSteps()` treats a client with a tier as on the GHL plan, and the migration switched `ghl_plan` on for every active client. Until the tier is set it is **read from `monthly_fee`** (within $100 of a package price) and that reading is the package: no question mark, no amber picker, no "guessed" flag ("get rid of the question marks"); only "No package set" remains, when the fee matches nothing. The card's picker changes it; it writes the column and the card moves bucket. On 2026-10-29 the column was written for every client whose fee said a package, so none is read from the fee today.
 
 ## What the package owes: the checklist
 

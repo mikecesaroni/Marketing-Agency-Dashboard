@@ -89,7 +89,7 @@ export function clientFlags(ctx) {
   const drop = ctx.drop || null
   const leads = ctx.leads || leadTotals([], ctx.today)
   const today = ctx.today || new Date().toISOString().slice(0, 10)
-  const { tier, guessed } = tierOf(c)
+  const { tier } = tierOf(c)
   // Live on any channel (the pipeline knows Google and Local Services too),
   // and live on Meta in particular, which is what the video promise and the
   // Meta delivery alert are about. A client who left Meta for Google is live
@@ -210,9 +210,9 @@ export function clientFlags(ctx) {
 
   if (!tier) {
     add({ key: 'tier', severity: 'blue', label: 'No package set', detail: 'Pick their tier on this card so the checklist knows what they are owed.', href: `/client/${c.id}` })
-  } else if (guessed) {
-    add({ key: 'tier', severity: 'blue', label: 'Package guessed from the fee', detail: 'Confirm the tier on this card.', href: `/client/${c.id}` })
   }
+  // A package read from the fee is the package: no "guessed" flag, no
+  // question mark ("get rid of the question marks"). The card can change it.
 
   flags.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
   return flags

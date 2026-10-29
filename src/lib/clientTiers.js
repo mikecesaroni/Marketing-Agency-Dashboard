@@ -1,10 +1,15 @@
 // The three packages, and which one a client is on.
 //
-// The tier is a column on the client (supabase/client-tiers.sql), set by
-// hand on the Client status page. Until it is, it is guessed from what the
-// client pays a month, because the price IS the package: $1,500 is
-// Maintenance, $2,500 is the Whole Chain, $3,500 is Runs Without You. A
-// guess is shown as a guess, so somebody confirms it.
+// The tier is a column on the client (supabase/client-tiers.sql), picked on
+// the add form or the Client status page. Until it is, it is read from what
+// the client pays a month, because the price IS the package: $1,500 is
+// Maintenance, $2,500 is the Whole Chain, $3,500 is Runs Without You. That
+// reading is the package, not a guess to confirm ("get rid of the question
+// marks"): nothing marks it, and it can be changed on the card.
+//
+// The short names are what the boards, badges and the brief say: the
+// price for the first and last, "Meta and Google" for the middle one, the
+// way the team talks about them ("the 2500 tier needs Google and Meta").
 //
 // Pure, with no imports: nextSteps.js reads it and scripts/check-client-status.mjs
 // runs it in Node.
@@ -14,7 +19,7 @@ export const TIERS = [
     tier: 1,
     key: 'maintenance',
     name: 'CRM / Marketing Maintenance',
-    short: 'Maintenance',
+    short: '$1,500 plan',
     price: 1500,
     setup: 0,
     line: 'Get your ads running and your leads followed up.',
@@ -36,7 +41,7 @@ export const TIERS = [
     tier: 3,
     key: 'runs-without-you',
     name: 'Runs Without You Marketing',
-    short: 'Runs Without You',
+    short: '$3,500 plan',
     price: 3500,
     setup: 500,
     line: 'The whole chain, with AI built around their business.',
@@ -57,7 +62,8 @@ export function tierFromFee(fee) {
 
 /**
  * Which package a client is on: { tier, guessed }. The column when it is set;
- * else the guess from the fee (guessed: true); else tier 0, unknown.
+ * else the one the fee says (guessed: true, which nothing on screen marks
+ * any more); else tier 0, unknown.
  */
 export function tierOf(client) {
   const set = Number(client?.tier)

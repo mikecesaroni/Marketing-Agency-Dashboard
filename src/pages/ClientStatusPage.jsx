@@ -105,15 +105,14 @@ function TierPicker({ row, onChange }) {
     <select
       value={row.tier || ''}
       onChange={(e) => onChange(row.client, Number(e.target.value) || null)}
-      title={row.guessed ? 'Guessed from the monthly fee. Pick it to confirm.' : 'The package this client is on'}
-      className={`max-w-[11rem] rounded-lg border px-2 py-1 text-xs font-medium ${row.guessed ? 'border-amber-300 bg-amber-50 text-amber-900' : row.tier ? 'border-slate-300 bg-white text-slate-800' : 'border-red-300 bg-red-50 text-red-800'}`}
+      title="The package this client is on"
+      className={`max-w-[11rem] rounded-lg border px-2 py-1 text-xs font-medium ${row.tier ? 'border-slate-300 bg-white text-slate-800' : 'border-red-300 bg-red-50 text-red-800'}`}
       data-tier-picker
     >
       <option value="">No package</option>
       {TIERS.map((t) => (
         <option key={t.tier} value={t.tier}>
           {t.short}
-          {row.guessed && row.tier === t.tier ? ' (guessed)' : ''}
         </option>
       ))}
     </select>

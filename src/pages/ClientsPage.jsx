@@ -113,14 +113,13 @@ function MonthlySubBadge({ subscribed }) {
   )
 }
 
-/** The package, from the column or guessed from the fee (amber when guessed). */
+/** The package, from the column or read from the fee; no mark either way. */
 function TierBadge({ client }) {
-  const { tier, guessed } = tierOf(client)
+  const { tier } = tierOf(client)
   if (!tier) return null
   return (
-    <Badge tone={guessed ? 'warning' : 'info'} className="whitespace-nowrap" title={guessed ? 'Guessed from the monthly fee; confirm it on Client tiers' : TIER_BY_NUMBER[tier].name}>
+    <Badge tone="info" className="whitespace-nowrap" title={TIER_BY_NUMBER[tier].name}>
       {tierLabel(tier)}
-      {guessed ? '?' : ''}
     </Badge>
   )
 }

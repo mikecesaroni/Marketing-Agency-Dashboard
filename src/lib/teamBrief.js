@@ -491,7 +491,7 @@ export function clientAddedSlack(client, { appUrl = '', by = '' } = {}) {
   // for a new client, not two.
   const account = client?.meta_ad_account_id ? `\n🔗 Meta ad account ${slackEsc(String(client.meta_ad_account_id))} connected` : ''
   return {
-    text: `New client: ${name}, ${t ? `${t.short} tier at ${price}` : price}`,
+    text: `New client: ${name}, ${t ? t.short : price}`,
     blocks: [
       { type: 'section', text: { type: 'mrkdwn', text: `🎉 *New client added to the agency*\n${link(model, `/client/${client?.id || ''}`, slackEsc(name))}: ${slackEsc(tierWords)}${who ? ` · added by ${slackEsc(who)}` : ''}${account}` } },
       { type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, `/client/${client?.id || ''}`, 'Their page')} · ${link(model, '/status', 'Client tiers')}` }] },
