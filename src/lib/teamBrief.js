@@ -9,7 +9,7 @@
 // preview. scripts/check-team-brief.mjs runs it in Node.
 //
 // THE QUIET RULES. "We don't want to be bombarded." So:
-//   * The BRIEF is one message a weekday morning. One line per thing, no
+//   * The BRIEF is one message a morning, weekends too. One line per thing, no
 //     explanations: the flag names the problem, the link goes to the fix.
 //     The clients running clean are one line with their leads for the week,
 //     so the good news is there without a paragraph each.

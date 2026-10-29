@@ -3,7 +3,8 @@
 // Two jobs, both from pg_cron (supabase/team-brief.sql), both runnable by
 // hand from the Weekly status page:
 //
-//   brief    weekdays at 7am Eastern. Everything flagged on every client,
+//   brief    every morning at 7am Eastern, weekends too ("can you also
+//            send morning briefs on weekends"). Everything flagged on every client,
 //            the clips waiting to publish, who is running clean with their
 //            leads for the week, who is still onboarding. Mondays carry the
 //            weekly status. To Slack when a webhook is set; by email when
@@ -71,7 +72,7 @@ import {
   taskAssignedSlack,
   taskDoneSlack,
   weeklyText,
-} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@38aff6a5b86b754ae7acfd025ca57d9c9cf0c65a/supabase/functions/team-digest/model.js'
+} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@bff293d22b40d9381a505c6004ee179a50415cf0/supabase/functions/team-digest/model.js'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -161,7 +162,7 @@ Deno.serve(async (req) => {
         slack: Boolean(url),
         email: canEmail,
         recipients: to,
-        schedule: { brief: 'weekdays at 7am Eastern', alerts: 'every 15 minutes, 7am to 9pm Eastern, only when something is new' },
+        schedule: { brief: 'every morning at 7am Eastern', alerts: 'every 15 minutes, 7am to 9pm Eastern, only when something is new' },
         log: last || [],
       })
     }
@@ -172,7 +173,7 @@ Deno.serve(async (req) => {
       await postSlack(url, {
         text: 'The CRM is connected to this channel.',
         blocks: [
-          { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *The CRM is connected to this channel.*\nMorning briefs land here on weekdays at 7am Eastern. Alerts come the moment they appear (an ad account disabled, ads gone quiet, a new edit dropped in, ten days without an ad) and once when the ads are back. Nothing between 9pm and 7am.` } },
+          { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *The CRM is connected to this channel.*\nMorning briefs land here every day at 7am Eastern. Alerts come the moment they appear (an ad account disabled, ads gone quiet, a new edit dropped in, ten days without an ad) and once when the ads are back. Nothing between 9pm and 7am.` } },
           { type: 'context', elements: [{ type: 'mrkdwn', text: `<${appUrl}/weekly|Weekly status> · <${appUrl}/status|Client tiers>` }] },
         ],
       })
@@ -419,8 +420,8 @@ Deno.serve(async (req) => {
     if (!body.force) {
       const { data: already } = await supabase.from('team_digests').select('id').eq('day', day).eq('kind', 'brief').eq('status', 'sent').limit(1)
       if (already?.length) return json({ day, skipped: 'already sent today' })
-      // Weekends: the Monday brief covers them. A forced send still goes.
-      if (dow === 0 || dow === 6) return json({ day, skipped: 'weekend' })
+      // Weekends get a brief too (since 2026-10-29); Monday's still carries
+      // the weekly status.
     }
 
     const [url, to] = await Promise.all([slackUrl(), recipients()])

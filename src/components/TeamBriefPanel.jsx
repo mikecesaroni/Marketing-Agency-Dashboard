@@ -75,7 +75,7 @@ export default function TeamBriefPanel() {
         <div>
           <h3 className="text-sm font-semibold text-slate-900">Team brief and alerts</h3>
           <p className="text-xs text-slate-600">
-            One short message on weekday mornings at 7am Eastern: what needs attention, clips to publish, who is running clean, who is onboarding. Mondays carry the weekly status.
+            One short message every morning at 7am Eastern, weekends too: what needs attention, clips to publish, who is running clean, who is onboarding. Mondays carry the weekly status.
           </p>
           <p className="text-xs text-slate-600">
             Between briefs the channel hears only what cannot wait: an ad account disabled, ads gone quiet, a new edit dropped in, ten days without an ad. Once each, with one line when the ads are back. Nothing from 9pm to 7am.

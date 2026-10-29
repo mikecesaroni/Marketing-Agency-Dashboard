@@ -98,7 +98,9 @@ grant execute on function public.slack_connected() to authenticated;
 grant execute on function public.slack_connected() to service_role;
 
 -- The schedule (pg_cron, already on this project):
---   team-morning-brief  weekdays 11:00 UTC (7am Eastern)   {"action":"brief"}
+--   team-morning-brief  every day 11:00 UTC (7am Eastern)  {"action":"brief"}
+--                       (weekdays only until 2026-10-29; changed with
+--                        cron.alter_job(9, schedule := '0 11 * * *'))
 --   team-alerts         every 15 minutes                   {"action":"alerts"}
 -- Both call the team-digest function the way weekly-client-reports calls
 -- weekly-report: net.http_post with the project's anon key. The alerts
