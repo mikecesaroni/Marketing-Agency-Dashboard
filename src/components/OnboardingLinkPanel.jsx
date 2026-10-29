@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { copyText } from '../lib/intakeSummary'
-import { driveServiceAccount } from '../lib/driveAssets'
+import { onboardingMessage } from '../lib/onboardingMessage'
 import { publicLink } from '../lib/publicSite'
 
 // Creates and shows the client's onboarding link. This is the delivery half of
@@ -28,7 +28,6 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
   // with us, and marching one of those through a form full of EIN and
   // registration questions is a good way to lose them.
   const [mode, setMode] = useState(fixedMode || 'both')
-  const [serviceEmail, setServiceEmail] = useState('')
 
   const load = async () => {
     const { data, error: readError } = await supabase
@@ -49,17 +48,6 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client.id])
-
-  // Who the client should share their photo folder with. Fetched rather than
-  // hardcoded so rotating the service account does not silently leave the
-  // wrong address in every message we send.
-  useEffect(() => {
-    driveServiceAccount()
-      .then(setServiceEmail)
-      // Without it the message just omits the Drive step rather than telling a
-      // client to share a folder with nobody.
-      .catch(() => setServiceEmail(''))
-  }, [])
 
   const generate = async () => {
     setWorking(true)
@@ -102,79 +90,16 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
   const activeUrl = url ? `${url}${MODES[mode].param}` : ''
 
   /**
-   * The whole message, ready to paste into an email or a text.
-   *
-   * Copying the bare URL left the two things a client has to be told
-   * unwritten: that the form saves as you go, and that we need a Drive folder
-   * rather than photos attached to a reply. Both were being retyped from
-   * memory every time, which is how one of them ends up left out.
-   *
-   * The folder link is asked for explicitly. Sharing the folder grants us
-   * access but tells us nothing about where it is -- without the link back
-   * there is no folder ID to put in the CRM, and the share sits unused.
+   * The whole message, ready to paste into an email or a text: the form link
+   * and the Drive folder WE made for them (linked on the client page under
+   * Files), in the owner's words (src/lib/onboardingMessage.js). Copying the
+   * bare URL left the things a client has to be told unwritten, and they were
+   * being retyped from memory every time.
    */
-  const message = useMemo(() => {
-    if (!activeUrl) return ''
-
-    // The account setup on its own is a different ask to a different person on
-    // a different day: it is registration paperwork, not "tell us about your
-    // business", and none of the photo instructions belong anywhere near it.
-    if (mode === 'ghl') {
-      return [
-        `Hi ${client.name} team,`,
-        '',
-        'To get your account and text messaging set up, we need a few details',
-        'off your business registration: your EIN, business address and who the',
-        'authorised contact is.',
-        '',
-        activeUrl,
-        '',
-        'It saves as you go, so you can stop and come back if you need to look',
-        'something up.',
-        '',
-        'Thanks!',
-      ].join('\n')
-    }
-
-    const lines = [
-      `Hi ${client.name} team,`,
-      '',
-      'Two quick things and we can get your ads moving.',
-      '',
-      '1) Fill out your onboarding form (about ten minutes):',
-      activeUrl,
-      'It saves as you go, so you can stop and come back to it.',
-    ]
-
-    // Said out loud only when it is true. The onboarding-only link ends at the
-    // end of the onboarding, and promising a second part that never arrives is
-    // its own small broken promise.
-    if (mode === 'both') {
-      lines.push('The last step asks for your EIN and business address, so have those handy.')
-    }
-
-    if (serviceEmail) {
-      lines.push(
-        '',
-        '2) Photos for your ads. Make one folder in Google Drive with your best',
-        'job photos, your logo and any team pictures. Then share that folder with:',
-        '',
-        `    ${serviceEmail}`,
-        '',
-        'Set it to "Viewer" and send. Google may warn that it is not a regular',
-        'Google account. That is expected, it is our system, and Viewer means we',
-        'can only look at the folder, never change or delete anything in it.',
-        '',
-        'Then reply with the folder link (Share > Copy link) so we can connect it.',
-        '',
-        'After that, anything you drop into that folder we can use in your ads',
-        'straight away, with no emailing pictures back and forth.'
-      )
-    }
-
-    lines.push('', 'Thanks!')
-    return lines.join('\n')
-  }, [activeUrl, mode, client.name, serviceEmail])
+  const message = useMemo(
+    () => onboardingMessage({ url: activeUrl, mode, driveFolderId: client.drive_folder_id || '', clientName: client.name }),
+    [activeUrl, mode, client.name, client.drive_folder_id]
+  )
 
   const handleCopy = async () => {
     const ok = await copyText(activeUrl)
@@ -281,11 +206,12 @@ export default function OnboardingLinkPanel({ client, fixedMode }) {
               onFocus={(e) => e.target.select()}
               className="w-full px-2 py-1.5 border border-slate-300 rounded text-[11px] font-mono bg-slate-50 leading-relaxed resize-y"
             />
-            {!serviceEmail && (
-              <p className="text-[11px] text-amber-700 mt-1">
-                The Drive folder step is missing because the service account address could
-                not be read. Deploy drive-assets and set GOOGLE_SERVICE_ACCOUNT_JSON, or
-                add the folder request to the message by hand.
+            {mode !== 'ghl' && !client.drive_folder_id && (
+              <p className="text-[11px] text-amber-700 mt-1" data-no-drive-folder>
+                No Drive folder linked yet, so the message has a placeholder where the folder link
+                goes. Make the folder in Google Drive, share it with the client (Anyone with the
+                link, Editor), then link it on this client&rsquo;s page under Files, and the link
+                fills in here.
               </p>
             )}
           </div>

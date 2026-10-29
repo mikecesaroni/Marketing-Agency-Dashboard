@@ -33,6 +33,7 @@ const FILTERS = [
   { key: 'google-not', label: 'Google not yet' },
   { key: 'missing', label: 'Missing a channel' },
   { key: 'no-landing', label: 'No landing page' },
+  { key: 'no-drive', label: 'No Drive folder' },
   // Two GHL filters rather than the live/not-yet pair the others use. "Not
   // live" is meaningless for an opt-in service -- most clients are not on it at
   // all -- so the useful questions are "who is on the plan" and "whose build is
@@ -136,6 +137,17 @@ function ChannelBadges({ client }) {
         <ChannelBadge key={ch.key} channel={ch} />
       ))}
       <LandingBadge pages={client.landingPages} />
+      {/* The Google Drive folder we make for their photos, linked on their
+          page under Files ("add the Google Drive linked status under
+          Channels"). */}
+      <Badge
+        tone={client.drive_folder_id ? 'success' : 'dim'}
+        className="whitespace-nowrap"
+        title={client.drive_folder_id ? 'Their Google Drive photo folder is linked' : 'No Google Drive folder linked yet: make one, share it with the client, link it under Files'}
+        data-drive={client.drive_folder_id ? 'linked' : 'none'}
+      >
+        {client.drive_folder_id ? '● Drive linked' : '○ No Drive folder'}
+      </Badge>
       {client.paused_at && (
         <Badge tone="warning" className="whitespace-nowrap" title="On pause: no ads alerts, no 10+ days flag">
           ⏸ Paused
@@ -194,6 +206,7 @@ export default function ClientsPage() {
         if (statusFilter === 'google-not' && !(google && !google.extra && google.state !== 'live')) return false
         if (statusFilter === 'missing' && !missingChannel(c, opts)) return false
         if (statusFilter === 'no-landing' && (c.landingPages || []).length > 0) return false
+        if (statusFilter === 'no-drive' && c.drive_folder_id) return false
         if (statusFilter === 'ghl-plan' && !c.ghl_plan) return false
         // Everything on the plan that is not yet live, whether it is blocked on
         // the client or sitting in our queue.

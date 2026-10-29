@@ -183,6 +183,9 @@ export default function ClientOnboardingPage() {
   const [savedSteps, setSavedSteps] = useState(() => new Set())
   const [missing, setMissing] = useState([])
   const [driveConnected, setDriveConnected] = useState(false)
+  // The folder we made for them, when there is one: the photos step hands
+  // them the link instead of asking them to make and share a folder.
+  const [driveFolderUrl, setDriveFolderUrl] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -197,6 +200,7 @@ export default function ClientOnboardingPage() {
       setClientName(data.client_name || '')
       setAnswers((prev) => mergeAnswers(prev, data.intake, data.ghl))
       setDriveConnected(Boolean(data.drive_connected))
+      setDriveFolderUrl(String(data.drive_folder_url || ''))
       setSubmittedBefore(Boolean(data.intake_submitted_at && (only === 'intake' || data.ghl_submitted_at)))
       // A returning visitor who already sent the business half lands on the
       // account step rather than at the top.
@@ -361,7 +365,7 @@ export default function ClientOnboardingPage() {
 
           {step.drive ? (
             <div className="mt-5">
-              <DriveFolderStep token={token} connected={driveConnected} />
+              <DriveFolderStep token={token} connected={driveConnected} folderUrl={driveFolderUrl} />
             </div>
           ) : (
             <div className="mt-5 grid gap-4 sm:grid-cols-2">

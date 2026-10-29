@@ -43,8 +43,12 @@ Every ask of a client has a copy button where the step is:
 - Meta access, LSA access, GBP access: the stored messages with our IDs filled
   in, in a modal on the client page and the board. The GBP modal also carries
   the per-client agent brief.
-- Photos: the onboarding message's Drive folder ask; the Studio's photo picker
-  reads the folder live.
+- Photos: we make the client's Google Drive folder, share it with them and
+  link it on their page under Files; the onboarding message and the photos
+  step of their form hand them that link ("I made one folder in Google Drive.
+  Please add in your best job photos/videos..."). The Studio's photo picker
+  reads the folder live. The Clients list shows "Drive linked" or "No Drive
+  folder" under Channels, and the brief's onboarding line carries a Drive mark.
 
 The agency-wide sweep (who still needs each channel, and the Meta access
 report) is folded under the board for the weekly pass.

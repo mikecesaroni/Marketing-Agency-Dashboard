@@ -91,9 +91,11 @@ const CHANNEL_KEYS = ['meta-access', 'creatives', 'publish', 'go-live', 'google-
  * so a Maintenance client on Google has no Meta marks at all.
  *
  * ("See where we are at with clients: if their ad accounts are connected,
- * live yet, the form submitted or sent, knowing the tiers.")
+ * live yet, the form submitted or sent, knowing the tiers.") With the client
+ * row, the Google Drive folder we make for their photos is a mark too
+ * ("add the Drive linked status in the brief for onboarding clients").
  */
-export function setupStrip(result) {
+export function setupStrip(result, client = null) {
   const steps = Array.isArray(result?.steps) ? result.steps : []
   if (!steps.length) return ''
   const by = new Map(steps.map((s) => [s.key, s]))
@@ -106,6 +108,7 @@ export function setupStrip(result) {
   if (meta) bits.push(`Meta acct ${mark(meta)}`)
   const google = by.get('google-ads-access')
   if (google) bits.push(`Google acct ${mark(google)}`)
+  if (client) bits.push(`Drive ${client.drive_folder_id ? '✓' : '○'}`)
   const ghlForm = by.get('ghl-form')
   const ghlBuild = by.get('ghl-build')
   const ghlLive = by.get('ghl-live')
@@ -182,7 +185,7 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       const days = Number(next?.waitingDays) || 0
       const theirs = next?.owner === 'client'
       const move = next ? `${next.title}${theirs ? ` (their move${days >= 7 ? `, ${days} days` : ''})` : ''}` : 'nothing open'
-      const strip = setupStrip(r.result)
+      const strip = setupStrip(r.result, r.client)
       // The package and the day of onboarding they are on, so "day 40 and
       // Google still not connected" reads at a glance.
       const added = r.client.date_added ? String(r.client.date_added).slice(0, 10) : ''

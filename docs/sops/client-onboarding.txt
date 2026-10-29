@@ -28,8 +28,9 @@ GROUND RULES
 1. Add the client in the CRM (Clients, then + New Client). Put in their name, trade, market and monthly fee.
 2. Confirm the daily ad budget from the sales call is written down. If it is not agreed before the onboarding call, the call turns into a sales call.
 3. Start one email thread with the owner.
-4. Send the pre-call email: the onboarding form link and the photos folder link, nothing else. Do not send a list of access requests. That is what the call is for.
-   - In the CRM: client page, Next up bar, "Copy the onboarding message".
+4. Make the client's photo folder in Google Drive, share it with them (Anyone with the link, Editor), and link it in the CRM: client page, Files, "Link a folder".
+5. Send the pre-call email: the onboarding form link and the photos folder link, nothing else. Do not send a list of access requests. That is what the call is for.
+   - In the CRM: client page, Next up bar, "Copy the onboarding message". It carries the form link and the Drive folder link from step 4.
 5. Book a 60 to 90 minute Zoom and ask them to join from the Zoom app, not a browser. From the app you can request control of their screen, which turns a two hour call into one hour.
 
 ## PHASE 2: SIGN UP

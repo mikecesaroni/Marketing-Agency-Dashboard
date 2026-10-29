@@ -15,7 +15,12 @@ import { copyText } from '../lib/intakeSummary'
 // folder was shared. Saving goes through the same token-gated function the rest
 // of this page uses; the client never touches a table directly.
 
-export default function DriveFolderStep({ token, connected: initialConnected }) {
+// `folderUrl` is the folder WE made for them (shared with them, linked on the
+// client page), when there is one: then the step hands them the link, the
+// same one the onboarding message carried, and asks for nothing. The make-
+// and-share instructions below are the fallback for a client nobody has made
+// a folder for.
+export default function DriveFolderStep({ token, connected: initialConnected, folderUrl = '' }) {
   const [connected, setConnected] = useState(Boolean(initialConnected))
   const [url, setUrl] = useState('')
   const [email, setEmail] = useState('')
@@ -66,15 +71,34 @@ export default function DriveFolderStep({ token, connected: initialConnected }) 
       <div>
         <h3 className="font-bold text-slate-900">Photos for your ads</h3>
         <p className="text-sm text-slate-600 mt-1">
-          Share one Google Drive folder with us and we can pull photos straight from it. Anything
-          you add later shows up automatically, so you never have to email us pictures.
+          {folderUrl
+            ? 'Your photos go in the Google Drive folder we set up for you. Anything you add later shows up automatically, so you never have to email us pictures.'
+            : 'Share one Google Drive folder with us and we can pull photos straight from it. Anything you add later shows up automatically, so you never have to email us pictures.'}
         </p>
       </div>
 
       {connected ? (
-        <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
-          <strong>Folder connected.</strong> Add photos to it any time and we can use them right
-          away. Send us a message if you want to swap it for a different folder.
+        <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800" data-drive-step={folderUrl ? 'ours' : 'connected'}>
+          {folderUrl ? (
+            <>
+              <strong>We made a Google Drive folder for your photos.</strong> Please add your best
+              job photos and videos, your logo and any team pictures there. Photos straight off a
+              phone are fine.
+              <a
+                href={folderUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 block break-all font-medium underline"
+              >
+                {folderUrl}
+              </a>
+            </>
+          ) : (
+            <>
+              <strong>Folder connected.</strong> Add photos to it any time and we can use them
+              right away. Send us a message if you want to swap it for a different folder.
+            </>
+          )}
         </div>
       ) : (
         <>
