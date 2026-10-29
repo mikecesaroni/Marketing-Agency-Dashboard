@@ -7,7 +7,9 @@
 
 import { supabase } from './supabaseClient'
 import { fetchAllRows } from './pagedQuery'
-import { announceTaskDone } from './teamBriefClient'
+import { announceTaskAssigned, announceTaskDone } from './teamBriefClient'
+
+const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
 
 export async function fetchBoard() {
   const [tasks, lists, clients, members] = await Promise.all([
@@ -76,6 +78,11 @@ export async function createTask(fields) {
     .select()
     .single()
   if (error) throw error
+  // Made for somebody else: the channel hears who got what ("when someone
+  // adds a task for someone else, it sends a message on Slack"). A task
+  // for yourself says nothing. Best effort; the task exists either way.
+  const me = readMe() || fields.created_by || ''
+  if ((data?.assignees || []).some((a) => !sameName(a, me))) announceTaskAssigned(data.id, me).catch(() => {})
   return data
 }
 
@@ -89,6 +96,9 @@ export async function updateTask(id, patch) {
   // effort; the task is done either way. Signed with the "You" name this
   // page keeps, which is the person at the keyboard even on a shared login.
   if (patch?.status === 'done') announceTaskDone(id, readMe()).catch(() => {})
+  // Handed to somebody (new assignees on an existing task): same post. The
+  // function announces each person once per task, so a re-save is silent.
+  if (Array.isArray(patch?.assignees) && patch.assignees.some((a) => !sameName(a, readMe()))) announceTaskAssigned(id, readMe()).catch(() => {})
   return data
 }
 

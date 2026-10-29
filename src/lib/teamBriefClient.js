@@ -57,6 +57,13 @@ export const announceForm = (token, form) => call({ action: 'form_submitted', to
  */
 export const announceTaskDone = (taskId, by) => call({ action: 'task_done', task_id: taskId, by: by || '' })
 
+/**
+ * A task created for, or handed to, someone other than the person at the
+ * keyboard: tell the channel who got what. The function announces each
+ * person once per task, so a re-save of the same assignees is silent.
+ */
+export const announceTaskAssigned = (taskId, by) => call({ action: 'task_assigned', task_id: taskId, by: by || '' })
+
 /** Set, replace or clear the Slack incoming webhook. Admins only; the URL goes to the vault, never to a table the CRM reads. */
 export async function setSlackWebhook(url) {
   const { data, error } = await supabase.rpc('set_slack_webhook', { url: String(url || '').trim() })

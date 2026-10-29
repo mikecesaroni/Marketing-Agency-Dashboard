@@ -41,6 +41,9 @@
 //   task_done          from the Tasks page the moment a task is ticked done
 //                      (task_id, by): one line, who and what, once per
 //                      completion.
+//   task_assigned      from the Tasks page when a task is made for, or handed
+//                      to, somebody other than the giver (task_id, by): one
+//                      line naming them; each person once per task.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 // model.js is the bundle in this folder (`npm run brief`), served here from
@@ -65,6 +68,7 @@ import {
   fetchWeeklyRows,
   liveClientIds,
   statusFromRows,
+  taskAssignedSlack,
   taskDoneSlack,
   weeklyText,
 } from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@685da508bc38cc7e05e02c0b69f70333aeb06c25/supabase/functions/team-digest/model.js'
@@ -249,6 +253,44 @@ Deno.serve(async (req) => {
       // Once per completion: a task reopened and finished again is news again.
       const stamp = String(task.completed_at || task.updated_at || day).slice(0, 19)
       return announce('task', `task:${id}:${stamp}`, taskDoneSlack({ task, client, list, by, appUrl }), { by, task: task.title, client: client?.name || null })
+    }
+
+    if (action === 'task_assigned') {
+      const id = String(body.task_id || '')
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'task_id is needed.' }, 400)
+      const { data: task } = await supabase.from('tasks').select('id, title, status, assignees, client_id, list_id, due_date, created_by').eq('id', id).maybeSingle()
+      if (!task) return json({ error: 'No such task.' }, 404)
+      if (task.status === 'done') return json({ day, skipped: 'already done' })
+      const by = String(body.by || '').trim() || String(task.created_by || '').trim() || (await caller())
+      const same = (a: unknown, b: unknown) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
+      // Everyone on it who is not the giver, minus anyone already told.
+      const others = (Array.isArray(task.assignees) ? task.assignees : []).map((a: unknown) => String(a || '').trim()).filter((a: string) => a && !same(a, by))
+      if (!others.length) return json({ day, skipped: 'nobody else on it' })
+      const subjects = others.map((n: string) => `task:${id}:assigned:${n.toLowerCase()}`)
+      const { data: told } = await supabase.from('team_digests').select('subject').eq('kind', 'task').in('subject', subjects)
+      const seen = new Set((told || []).map((t) => t.subject))
+      const fresh = others.filter((_: string, i: number) => !seen.has(subjects[i]))
+      if (!fresh.length) return json({ day, skipped: 'already announced' })
+      const [{ data: client }, { data: list }] = await Promise.all([
+        task.client_id ? supabase.from('clients').select('id, name').eq('id', task.client_id).maybeSingle() : Promise.resolve({ data: null }),
+        task.list_id ? supabase.from('task_lists').select('name').eq('id', task.list_id).maybeSingle() : Promise.resolve({ data: null }),
+      ])
+      const message = taskAssignedSlack({ task, client, list, by, to: fresh, appUrl })
+      const url = await slackUrl()
+      let posted = false
+      let error = ''
+      if (url) {
+        try {
+          await postSlack(url, message)
+          posted = true
+        } catch (err) {
+          error = err instanceof Error ? err.message : String(err)
+        }
+      }
+      await supabase.from('team_digests').insert(
+        fresh.map((n: string) => ({ day, kind: 'task', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: `task:${id}:assigned:${n.toLowerCase()}`, model: { text: message.text, by, to: n, task: task.title } }))
+      )
+      return json({ day, posted, to: fresh, text: message.text, error: error || undefined })
     }
 
     // Forms a client filled in that the channel has not heard about: one

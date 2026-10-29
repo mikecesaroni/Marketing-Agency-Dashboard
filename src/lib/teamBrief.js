@@ -457,6 +457,30 @@ export function taskDoneSlack({ task = {}, client = null, list = null, by = '', 
   }
 }
 
+/**
+ * A task given to someone else ("when someone adds a task in Tasks for
+ * someone else, it sends a message on Slack"): who gave it, to whom, the
+ * task, the client, the list and when it is due. One line.
+ *
+ * task: { id, title, due_date }; to: the names it went to (not the giver)
+ */
+export function taskAssignedSlack({ task = {}, client = null, list = null, by = '', to = [], appUrl = '' } = {}) {
+  const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
+  const who = firstName(by) || 'Someone'
+  const names = (Array.isArray(to) ? to : [to]).map((n) => firstName(n)).filter(Boolean)
+  const whom = names.length === 0 ? 'someone' : names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  const title = String(task.title || 'a task').trim()
+  const due = task.due_date ? `due ${shortDay(String(task.due_date).slice(0, 10))}` : ''
+  const where = [client ? link(model, `/client/${client.id}`, slackEsc(client.name)) : '', list?.name ? slackEsc(list.name) : '', due].filter(Boolean).join(' · ')
+  const plainWhere = [client?.name, list?.name, due].filter(Boolean).join(' · ')
+  return {
+    text: `${who} gave ${whom} a task: ${title}${plainWhere ? ` (${plainWhere})` : ''}`,
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: `📋 *${slackEsc(who)}* gave *${slackEsc(whom)}* a task: ${link(model, '/tasks', slackEsc(title))}${where ? ` · ${where}` : ''}` } },
+    ],
+  }
+}
+
 export const FORM_WORDS = {
   intake: 'filled in their onboarding form',
   ghl: 'sent back their GHL account details',

@@ -7,7 +7,7 @@
 // WAITING COSTS MONEY OR A DAY. The morning brief is the whole picture in
 // one short message; the alerts are the changes that cannot wait.
 
-import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds, taskDoneSlack } from '../src/lib/teamBrief.js'
+import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds, taskAssignedSlack, taskDoneSlack } from '../src/lib/teamBrief.js'
 import { buildWeeklyStatus, reportWeeks } from '../src/lib/weeklyStatus.js'
 import { addDays } from '../src/lib/dates.js'
 
@@ -179,6 +179,12 @@ check('no forms, no message', formSubmittedSlack([]), null)
 const done = taskDoneSlack({ task: { id: 't1', title: 'Build the <GHL> template' }, client: { id: 'c1', name: 'Acme & Sons' }, list: { name: 'Onboarding' }, by: 'Mike Jones', appUrl: 'https://crm.example' })
 check('task done: who, what, for whom, on which list, linked', [done.text, done.blocks[0].text.text], ['Mike finished: Build the <GHL> template (Acme & Sons · Onboarding)', '✅ *Mike* finished: <https://crm.example/tasks|Build the &lt;GHL&gt; template> · <https://crm.example/client/c1|Acme &amp; Sons> · Onboarding'])
 check('task done: no client, no list, no name still reads', taskDoneSlack({ task: { id: 't2', title: 'Call the printer' } }).text, 'Someone finished: Call the printer')
+
+// --- a task given to someone else -----------------------------------------------------
+const given = taskAssignedSlack({ task: { id: 't3', title: 'Chase the <photos>', due_date: '2026-11-03' }, client: { id: 'c1', name: 'Acme & Sons' }, list: { name: 'Onboarding' }, by: 'Ethan', to: ['Mike'], appUrl: 'https://crm.example' })
+check('task given: who, to whom, what, where and when, linked', [given.text, given.blocks[0].text.text], ['Ethan gave Mike a task: Chase the <photos> (Acme & Sons · Onboarding · due Nov 3)', '📋 *Ethan* gave *Mike* a task: <https://crm.example/tasks|Chase the &lt;photos&gt;> · <https://crm.example/client/c1|Acme &amp; Sons> · Onboarding · due Nov 3'])
+check('task given to two people reads as a pair', taskAssignedSlack({ task: { id: 't4', title: 'Shoot list' }, by: 'Ethan', to: ['Mike', 'Josh'] }).text, 'Ethan gave Mike and Josh a task: Shoot list')
+check('task given, nothing known: still a sentence', taskAssignedSlack({ task: { title: 'Call back' } }).text, 'Someone gave someone a task: Call back')
 check('new client: the top tier carries its setup fee', clientAddedSlack({ id: 'n2', name: 'Top Co', tier: 3, monthly_fee: 3500, setup_fee: 500 }).blocks[0].text.text.includes('Runs Without You Marketing ($3,500/mo, $500 setup)'), true)
 check('new client: no tier picked still posts, with the fee', clientAddedSlack({ id: 'n3', name: 'Odd Co', tier: null, monthly_fee: 1200 }).text, 'New client: Odd Co, $1,200/mo')
 
