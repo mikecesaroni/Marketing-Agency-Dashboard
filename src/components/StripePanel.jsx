@@ -108,7 +108,7 @@ export default function StripePanel() {
     // Says exactly what it does. The old wording promised that future payments
     // from them would stop appearing -- which was true, and was the bug: it hid
     // a real $998 client invoice. One payment, one dismissal, no memory.
-    if (!confirm(`Dismiss this ${money(row.amount)} payment? If they pay again it shows up again.`)) return
+    if (!confirm(`Dismiss this ${money(row.amount)} ${row.failed ? 'decline' : 'payment'}? If they ${row.failed ? 'are charged' : 'pay'} again it shows up again.`)) return
     setBusy(row.id)
     setError('')
     try {
@@ -196,16 +196,24 @@ export default function StripePanel() {
                 {unmatched.map((row) => (
                   <div
                     key={row.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg"
+                    data-unmatched={row.failed ? 'decline' : 'payment'}
+                    className={`flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 rounded-lg border ${row.failed ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-900">
+                        {/* A decline is shown as one. Assigning it records the
+                            decline on the client's schedule, never a payment. */}
+                        {row.failed && <span className="text-red-700">Card declined · </span>}
                         {money(row.amount)}{' '}
                         <span className="font-normal text-slate-500">{row.payment_type}</span>
                       </p>
                       <p className="text-[11px] text-slate-600 truncate">
                         {row.customer_email || row.stripe_customer_id || 'no email on the payment'}
                         {row.paid_date && ` · ${row.paid_date}`}
+                        {row.failed &&
+                          (row.next_attempt_at
+                            ? ` · Stripe retries ${String(row.next_attempt_at).slice(0, 10)}`
+                            : ' · Stripe has stopped retrying')}
                       </p>
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">
@@ -234,6 +242,13 @@ export default function StripePanel() {
                     </div>
                   </div>
                 ))}
+                {unmatched.some((row) => row.failed) && (
+                  <p className="text-[11px] text-slate-500">
+                    A declined card lands here too when nobody is linked to the customer. Assigning
+                    it records the decline on that client&rsquo;s schedule, not a payment; it clears
+                    on its own when the money arrives.
+                  </p>
+                )}
               </div>
             )}
           </div>

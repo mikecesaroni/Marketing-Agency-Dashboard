@@ -175,6 +175,37 @@ function asPaymentType(v: unknown): PaymentType {
 }
 
 /**
+ * The money for an invoice is in, so any OTHER open month still carrying that
+ * invoice's decline is clear: back to pending, the failure columns off. A
+ * decline can sit on a different row than the money settles (a month marked
+ * paid by hand, a decline that arrived before the customer was linked), and
+ * "the card failed" must not outlive the payment that answered it ("when a
+ * payment declines but then is successful, it goes away in the failed
+ * payments section").
+ */
+async function clearDeclinesFor(db: Db, clientId: string, invoiceId: string | null | undefined, settledId: string) {
+  if (!invoiceId) return 0
+  const rows = await db.get(
+    `payments?client_id=eq.${clientId}&stripe_invoice_id=eq.${encodeURIComponent(invoiceId)}` +
+      `&status=in.(pending,overdue)&select=id`
+  )
+  let cleared = 0
+  for (const r of rows || []) {
+    if (r.id === settledId) continue
+    await db.patch(`payments?id=eq.${r.id}`, {
+      status: 'pending',
+      last_failed_at: null,
+      failure_count: 0,
+      next_attempt_at: null,
+      stripe_invoice_id: null,
+      stripe_hosted_invoice_url: null,
+    })
+    cleared++
+  }
+  return cleared
+}
+
+/**
  * Marks money as received.
  *
  * The CRM already generates a 12-month schedule of pending rows, so the right
@@ -244,6 +275,7 @@ export async function recordPayment(
 
   if (due?.[0]) {
     await db.patch(`payments?id=eq.${due[0].id}`, patch)
+    await clearDeclinesFor(db, p.clientId, p.invoiceId, due[0].id)
     return { matchedScheduledRow: due[0].id, inserted: false }
   }
 
@@ -404,8 +436,28 @@ export async function handleEvent(db: Db, event: any) {
         method: methodFrom(obj.payment_settings?.payment_method_types),
         invoiceId: obj.id,
         description: 'Failed payment from someone with no matching client',
+        // Parked AS A DECLINE, so the queue shows it as one and assigning it
+        // records the decline, not a payment. It used to park like money, and
+        // assigning it marked a month paid that Stripe was still retrying.
+        failed: true,
+        attempts: Number(obj.attempt_count) || 1,
+        nextAttemptAt: isoTimestamp(obj.next_payment_attempt),
+        hostedUrl: obj.hosted_invoice_url || null,
       })
       return { status: 'unmatched', note: 'no client for failed invoice' }
+    }
+
+    // A decline for an invoice the books already show paid is stale: Stripe
+    // delivers out of order and retries, and a month marked paid by hand can
+    // sit ahead of the retry. Marking the NEXT open month overdue for money
+    // that arrived is how a paid October put a phantom failure on November.
+    if (obj.id) {
+      const settled = await db.get(
+        `payments?stripe_invoice_id=eq.${encodeURIComponent(obj.id)}&status=eq.paid&limit=1&select=id`
+      )
+      if (settled?.[0]) {
+        return { status: 'ignored', note: `decline for ${obj.id}, already paid on the books (${client.name})` }
+      }
     }
 
     // Already stamped with this invoice, before falling back to the oldest
@@ -495,22 +547,40 @@ async function parkUnmatched(
     method: string
     invoiceId?: string | null
     description: string
+    // A DECLINE rather than money: parked so a person can say whose card it
+    // was, never recorded as a payment. With Stripe's attempt count and retry
+    // date, so the queue can say whether Stripe is still trying.
+    failed?: boolean
+    attempts?: number | null
+    nextAttemptAt?: string | null
+    hostedUrl?: string | null
   }
 ) {
   const paidDate = isoDate(event?.data?.object?.created)
+  const failed = Boolean(d.failed)
 
   if (d.customerId) {
     const open = await db.get(
       `stripe_unmatched?stripe_customer_id=eq.${encodeURIComponent(d.customerId)}` +
         `&resolved_client_id=is.null&amount=eq.${d.amount}` +
-        `&select=id,stripe_invoice_id,description`
+        `&select=id,stripe_invoice_id,description,failed`
     )
     const twin = (open || []).find((r: any) => r.id)
     if (twin) {
+      // A decline arriving after the money for the same amount is already
+      // parked adds nothing: the twin IS the payment.
+      if (failed && !twin.failed) return
       await db.patch(`stripe_unmatched?id=eq.${twin.id}`, {
         // Keep whichever id we have; the invoice is the more useful one.
         stripe_invoice_id: d.invoiceId || twin.stripe_invoice_id || null,
         paid_date: paidDate,
+        // Money arriving turns a parked decline into a parked payment; a
+        // repeat decline refreshes the attempt count and the retry date.
+        failed,
+        failure_count: failed ? d.attempts ?? null : null,
+        next_attempt_at: failed ? d.nextAttemptAt ?? null : null,
+        hosted_invoice_url: d.hostedUrl || null,
+        description: d.description,
       })
       return
     }
@@ -527,6 +597,10 @@ async function parkUnmatched(
     payment_method: d.method,
     stripe_invoice_id: d.invoiceId || null,
     description: d.description,
+    failed,
+    failure_count: failed ? d.attempts ?? null : null,
+    next_attempt_at: failed ? d.nextAttemptAt ?? null : null,
+    hosted_invoice_url: d.hostedUrl || null,
   })
 
   // 409 is this exact event arriving twice, which is fine and idempotent.

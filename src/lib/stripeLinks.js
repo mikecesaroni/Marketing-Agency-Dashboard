@@ -86,26 +86,46 @@ export async function assignUnmatched(row, clientId, { replaceCustomerId = false
     .order('due_date', { ascending: true })
     .limit(1)
 
-  const paid = {
-    status: 'paid',
-    paid_date: row.paid_date,
-    payment_method: row.payment_method || 'card',
-    stripe_event_id: row.stripe_event_id,
-    stripe_invoice_id: row.stripe_invoice_id,
-    stripe_customer_id: row.stripe_customer_id,
-    // Who paid, so the row can say so on the Payments page.
-    payer_email: row.customer_email ? String(row.customer_email).trim().toLowerCase() : null,
-    // WHAT STRIPE TOOK, not what the schedule guessed. Settling a scheduled
-    // row without this records the CRM's own figure as though it were
-    // collected: Summit Water Pros moved from $998 to $1,500 and the ledger
-    // went on saying $998, so $502 of real money was missing from the books
-    // and from the profit split, and the reconcile panel could not see it
-    // because both sides of its comparison were the same wrong number.
-    amount: row.amount,
-  }
+  // A parked DECLINE is not money. Assigning it says whose card bounced: the
+  // decline lands on their oldest open month the way the webhook would have
+  // put it (overdue, the failure columns filled, the invoice stamped so the
+  // retry or the next decline finds that same row), nothing is marked paid,
+  // and the Payments page shows it under failed payments until the money
+  // arrives. It used to be booked as a payment: Classic Home Services'
+  // October 2026 decline read as paid for ten days while Stripe was still
+  // retrying, and the later declines landed on November.
+  const write = row.failed
+    ? {
+        status: 'overdue',
+        last_failed_at: row.paid_date ? `${row.paid_date}T12:00:00Z` : new Date().toISOString(),
+        failure_count: Number(row.failure_count) || 1,
+        next_attempt_at: row.next_attempt_at || null,
+        stripe_event_id: row.stripe_event_id,
+        stripe_invoice_id: row.stripe_invoice_id,
+        stripe_customer_id: row.stripe_customer_id,
+        stripe_hosted_invoice_url: row.hosted_invoice_url || null,
+        amount: row.amount,
+      }
+    : {
+        status: 'paid',
+        paid_date: row.paid_date,
+        payment_method: row.payment_method || 'card',
+        stripe_event_id: row.stripe_event_id,
+        stripe_invoice_id: row.stripe_invoice_id,
+        stripe_customer_id: row.stripe_customer_id,
+        // Who paid, so the row can say so on the Payments page.
+        payer_email: row.customer_email ? String(row.customer_email).trim().toLowerCase() : null,
+        // WHAT STRIPE TOOK, not what the schedule guessed. Settling a scheduled
+        // row without this records the CRM's own figure as though it were
+        // collected: Summit Water Pros moved from $998 to $1,500 and the ledger
+        // went on saying $998, so $502 of real money was missing from the books
+        // and from the profit split, and the reconcile panel could not see it
+        // because both sides of its comparison were the same wrong number.
+        amount: row.amount,
+      }
 
   if (due?.[0]) {
-    const { error } = await supabase.from('payments').update(paid).eq('id', due[0].id)
+    const { error } = await supabase.from('payments').update(write).eq('id', due[0].id)
     if (error) throw error
   } else {
     const { error } = await supabase.from('payments').insert({
@@ -113,8 +133,8 @@ export async function assignUnmatched(row, clientId, { replaceCustomerId = false
       payment_type: type,
       amount: row.amount,
       due_date: row.paid_date,
-      notes: 'Assigned from an unmatched Stripe payment',
-      ...paid,
+      notes: row.failed ? 'Assigned from an unmatched Stripe decline' : 'Assigned from an unmatched Stripe payment',
+      ...write,
     })
     if (error) throw error
   }

@@ -78,6 +78,23 @@ check(
     row({ status: 'paid', paid_date: '2026-08-31', last_failed_at: '2026-08-30 19:42:24+00', failure_count: 1 }),
   ], TODAY).length === 0
 )
+// The money can settle a different row than the decline sits on (a month
+// marked paid by hand, a decline parked before the customer was linked). The
+// paid row is the proof, whichever row carries the decline.
+check(
+  'a decline whose invoice is paid on another row is resolved too',
+  unresolvedFailures([
+    row({ status: 'paid', paid_date: '2026-10-18', stripe_invoice_id: 'in_oct' }),
+    row({ status: 'overdue', due_date: '2026-11-18', last_failed_at: '2026-10-28 23:48:06+00', failure_count: 6, next_attempt_at: '2026-10-30 09:48:01+00', stripe_invoice_id: 'in_oct' }),
+  ], TODAY).length === 0
+)
+check(
+  'but a decline on an invoice nobody has paid stays',
+  unresolvedFailures([
+    row({ status: 'paid', paid_date: '2026-10-18', stripe_invoice_id: 'in_sept' }),
+    row({ status: 'overdue', due_date: '2026-11-18', last_failed_at: '2026-10-28 23:48:06+00', failure_count: 6, next_attempt_at: '2026-10-30 09:48:01+00', stripe_invoice_id: 'in_oct' }),
+  ], TODAY).length === 1
+)
 
 // --- unresolved, Stripe still trying --------------------------------------
 const retrying = failureState(

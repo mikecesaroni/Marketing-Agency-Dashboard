@@ -81,8 +81,13 @@ export function failureState(payment, today = new Date().toISOString().slice(0, 
  * what happened, which is where that belongs.
  */
 export function unresolvedFailures(payments = [], today = new Date().toISOString().slice(0, 10)) {
+  // The money for an invoice can settle a different row than its decline sits
+  // on (a month marked paid by hand, a decline parked before the customer was
+  // linked). A paid row is proof the money came in, so a decline whose invoice
+  // is paid anywhere on the books is resolved, whichever row carries it.
+  const paidInvoices = new Set(payments.filter((p) => p.status === 'paid' && p.stripe_invoice_id).map((p) => p.stripe_invoice_id))
   const rows = payments
-    .map((p) => failureState(p, today))
+    .map((p) => (p.stripe_invoice_id && paidInvoices.has(p.stripe_invoice_id) ? null : failureState(p, today)))
     .filter((f) => f && !f.recovered)
 
   const rank = { critical: 0, warning: 1 }

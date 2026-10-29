@@ -67,8 +67,11 @@ function makeFake({ client, payments, parked = [], ignored = [], parkFails = fal
       }
       if (path.startsWith('payments')) {
         // Three shapes now: by invoice id, by payment type, or both. The
-        // invoice lookup is what keeps a retry on the row it failed on.
-        const statuses = path.includes('status=eq.pending') ? ['pending'] : ['pending', 'overdue']
+        // invoice lookup is what keeps a retry on the row it failed on. The
+        // status filter is read as written (eq.paid, in.(pending,overdue)).
+        const one = /status=eq\.(\w+)/.exec(path)?.[1]
+        const many = /status=in\.\(([^)]+)\)/.exec(path)?.[1]
+        const statuses = one ? [one] : many ? many.split(',') : ['pending', 'overdue']
         const invoice = /stripe_invoice_id=eq\.([^&]+)/.exec(path)?.[1]
         const type = /payment_type=eq\.(\w+)/.exec(path)?.[1]
         return rows
@@ -630,6 +633,76 @@ const WITH_ARREARS = [
     [['2026-09-01', 2]])
   check('and does not mark the older month overdue',
     rows.find((r) => r.due_date === '2026-07-01').status, 'pending')
+}
+
+// --- a decline is not money ------------------------------------------------
+// Classic Home Services' October 2026 invoice was declined before their Stripe
+// customer was linked. The decline was parked like a payment, assigning it
+// marked October PAID with no money behind it, and the later declines landed
+// on November. A parked decline is now a decline: marked, with Stripe's retry
+// date, and turned into a payment only by the money arriving. ("Make so when
+// a payment declines but then is successful, it goes away in the failed
+// payments section.")
+{
+  const stranger = (over = {}) => failedInvoice({ customer: 'cus_stranger', ...over })
+  const paidByStranger = (id, over = {}) => ({
+    id: `evt_${id}`,
+    type: 'invoice.paid',
+    data: { object: { id, customer: 'cus_stranger', amount_paid: 99800, created: 1788173835, status_transitions: { paid_at: 1788173835 }, ...over } },
+  })
+  const { db, queue } = makeFake({ client: CLIENT, payments: [] })
+  await handleEvent(db, stranger({ attempt_count: 2 }))
+  check('a decline from an unlinked customer is parked AS A DECLINE, with the attempts, the retry and the invoice link',
+    [queue.length, queue[0].failed, queue[0].failure_count, queue[0].next_attempt_at, queue[0].hosted_invoice_url],
+    [1, true, 2, '2026-09-01T21:42:58.000Z', 'https://invoice.stripe.com/i/acct_x/live_y'])
+  await handleEvent(db, stranger({ attempt_count: 3, next_payment_attempt: RETRY_AT + 172800 }))
+  check('a repeat decline refreshes the same parked row',
+    [queue.length, queue[0].failure_count, queue[0].next_attempt_at], [1, 3, '2026-09-03T21:42:58.000Z'])
+  await handleEvent(db, paidByStranger('in_mbd'))
+  check('the money arriving turns the parked decline into a parked payment',
+    [queue.length, queue[0].failed, queue[0].failure_count, queue[0].next_attempt_at], [1, false, null, null])
+
+  const second = makeFake({ client: CLIENT, payments: [] })
+  await handleEvent(second.db, paidByStranger('in_s'))
+  await handleEvent(second.db, stranger({ id: 'in_s2' }))
+  check('a decline after the money is already parked adds nothing',
+    [second.queue.length, second.queue[0].failed], [1, false])
+}
+
+{
+  // A decline for an invoice the books already show paid is stale (Stripe
+  // delivers out of order and retries), and must not mark the next month.
+  const { db, rows } = makeFake({
+    client: CLIENT,
+    payments: [
+      { payment_type: 'monthly', amount: 1500, due_date: '2026-09-01', status: 'paid', paid_date: '2026-09-01', stripe_invoice_id: 'in_sept' },
+      { payment_type: 'monthly', amount: 1500, due_date: '2026-10-01', status: 'pending' },
+    ],
+  })
+  const r = await handleEvent(db, failedInvoice({ id: 'in_sept', attempt_count: 4 }))
+  check('a decline for an invoice already paid on the books is ignored, and the next month is left alone',
+    [r.status, rows[1].status, rows[1].failure_count], ['ignored', 'pending', undefined])
+}
+
+{
+  // The money for an invoice clears that invoice's decline from any other open
+  // month still carrying it.
+  const { db, rows } = makeFake({
+    client: CLIENT,
+    payments: [
+      { payment_type: 'monthly', amount: 1500, due_date: '2026-09-01', status: 'overdue', stripe_invoice_id: 'in_sept', last_failed_at: '2026-08-30T19:42:24.000Z', failure_count: 1 },
+      { payment_type: 'monthly', amount: 1500, due_date: '2026-10-01', status: 'overdue', stripe_invoice_id: 'in_sept', last_failed_at: '2026-09-20T19:42:24.000Z', failure_count: 4, next_attempt_at: '2026-09-30T00:00:00.000Z' },
+    ],
+  })
+  await handleEvent(db, {
+    id: 'evt_retry2',
+    type: 'invoice.paid',
+    data: { object: { id: 'in_sept', customer: 'cus_1', amount_paid: 150000, created: 1788173835, status_transitions: { paid_at: 1788173835 } } },
+  })
+  check('the money settles the oldest row carrying the invoice', settled(rows), ['monthly:2026-09-01'])
+  check('and clears the decline from the other month: pending again, failure columns off',
+    [rows[1].status, rows[1].failure_count, rows[1].last_failed_at, rows[1].next_attempt_at, rows[1].stripe_invoice_id],
+    ['pending', 0, null, null, null])
 }
 
 // --- MRR -------------------------------------------------------------------

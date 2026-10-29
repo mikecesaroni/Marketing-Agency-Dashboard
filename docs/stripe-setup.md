@@ -124,3 +124,34 @@ method, so "who actually paid this" (the bookkeeper, a spouse, a second
 business) is answered without opening Stripe. Rows from before 2026-10-23 were
 filled in from the stored Stripe events; a handful imported from a CSV before
 the webhook existed, and the ones marked paid by hand, have none.
+
+## Declined cards
+
+A failure is unresolved when the money has not arrived, and nothing else
+(`src/lib/paymentFailures.js`). A decline marks the client's oldest open month
+overdue with the failure columns filled and the invoice stamped on the row, so
+Stripe's retry lands on that same row and marks it paid: the "Card failing"
+flag and the failed-payments card on the Payments page clear themselves. Most
+declines go through on a retry within two weeks; the card leads with Stripe's
+retry date, and a decline Stripe has given up on is the one that reads as
+urgent.
+
+Three rules keep "when a payment declines but then is successful, it goes away"
+true whichever row the money lands on (2026-10-29):
+
+- **A decline from a customer nobody has linked is parked as a decline**, not
+  as money. The unmatched queue shows "Card declined" with Stripe's retry date;
+  assigning it to a client records the decline on their oldest open month and
+  links the customer, and marks nothing paid. It turns into a parked payment
+  only when the money for that customer and amount arrives. Before this,
+  assigning a parked decline marked a month paid: Classic Home Services'
+  October 2026 invoice was declined before their customer was linked, the
+  decline was assigned as a payment, October read as paid for ten days while
+  Stripe kept retrying, and the later declines landed on November. The October
+  row was put back to overdue with the real failure (six attempts, retrying
+  2026-10-30) and November back to pending.
+- **A decline for an invoice the books already show paid is ignored**, so an
+  out-of-order or stale decline never marks the next month.
+- **The money for an invoice clears that invoice's decline from any other open
+  month** still carrying it (back to pending, failure columns off), and the
+  failed-payments card drops a decline whose invoice is paid on any row.
