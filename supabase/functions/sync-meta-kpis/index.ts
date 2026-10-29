@@ -282,7 +282,7 @@ Deno.serve(async (req) => {
 
   const clientFilter = requestedClientId ? `&id=eq.${encodeURIComponent(requestedClientId)}` : ''
   const clientsRes = await fetch(
-    `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id,meta_ads_active&meta_ad_account_id=not.is.null&archived=eq.false${clientFilter}`,
+    `${supabaseUrl}/rest/v1/clients?select=id,name,meta_ad_account_id,meta_ads_active,meta_ads_off_at&meta_ad_account_id=not.is.null&archived=eq.false${clientFilter}`,
     { headers }
   )
   const clients = await clientsRes.json()
@@ -489,9 +489,26 @@ Deno.serve(async (req) => {
   // A client with recorded spend is demonstrably running ads, so flip the flag
   // rather than making someone tick it by hand. Never flipped back off — a
   // quiet week is not the same as a campaign being switched off.
+  //
+  // Unless somebody switched it off on purpose: clients.meta_ads_off_at is
+  // stamped by a trigger when the switch goes off. Spend from BEFORE that day
+  // is history (MCL moved to Google only, and the $56 their last Meta week
+  // cost kept turning the switch back on twice a day, and the "Meta ads
+  // stopped" alert with it). Only spend on a later day means they are back.
+  const lastSpendDay = new Map<string, string>()
+  for (const r of adRows) {
+    const row = r as { client_id: string; date: string; spend: number }
+    if (!(row.spend > 0)) continue
+    if (!lastSpendDay.has(row.client_id) || row.date > lastSpendDay.get(row.client_id)!) lastSpendDay.set(row.client_id, row.date)
+  }
   const toActivate = clients.filter(
-    (c: { id: string; meta_ads_active: boolean }) =>
-      !c.meta_ads_active && spendingClientIds.has(c.id)
+    (c: { id: string; meta_ads_active: boolean; meta_ads_off_at?: string | null }) => {
+      if (c.meta_ads_active || !spendingClientIds.has(c.id)) return false
+      if (!c.meta_ads_off_at) return true
+      const offDay = String(c.meta_ads_off_at).slice(0, 10)
+      const last = lastSpendDay.get(c.id) || ''
+      return last > offDay
+    }
   )
   for (const client of toActivate) {
     await fetch(`${supabaseUrl}/rest/v1/clients?id=eq.${client.id}`, {
