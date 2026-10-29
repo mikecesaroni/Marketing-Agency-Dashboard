@@ -7,6 +7,12 @@ export const MONTHLY_KEY = 'stripe_monthly_link'
 // The newer, higher-tier plan. A separate Payment Link in Stripe (its own
 // price), so it needs its own slot rather than overloading the first one.
 export const MONTHLY_1500_KEY = 'stripe_monthly_1500_link'
+// The Meta and Google plan. Without a slot there was no $2,500 subscription
+// link to send, and Don Air Co's first month came in through a one-time link
+// that Stripe made no subscription from.
+export const MONTHLY_2500_KEY = 'stripe_monthly_2500_link'
+
+export const EMPTY_LINKS = { setup: '', monthly: '', monthly1500: '', monthly2500: '' }
 
 export async function fetchStripeLinks() {
   const { data } = await supabase.from('app_settings').select('key, value')
@@ -15,15 +21,17 @@ export async function fetchStripeLinks() {
     setup: map[SETUP_KEY] || '',
     monthly: map[MONTHLY_KEY] || '',
     monthly1500: map[MONTHLY_1500_KEY] || '',
+    monthly2500: map[MONTHLY_2500_KEY] || '',
   }
 }
 
-export async function saveStripeLinks({ setup, monthly, monthly1500 }) {
+export async function saveStripeLinks({ setup, monthly, monthly1500, monthly2500 }) {
   const stamp = new Date().toISOString()
   const rows = [
     { key: SETUP_KEY, value: setup || '', updated_at: stamp },
     { key: MONTHLY_KEY, value: monthly || '', updated_at: stamp },
     { key: MONTHLY_1500_KEY, value: monthly1500 || '', updated_at: stamp },
+    { key: MONTHLY_2500_KEY, value: monthly2500 || '', updated_at: stamp },
   ]
   const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
   if (error) throw error
@@ -74,8 +82,11 @@ export async function fetchUnmatched() {
  * because the old id was merely stale rather than missing the relink was
  * skipped and every future invoice would have arrived unmatched again.
  */
-export async function assignUnmatched(row, clientId, { replaceCustomerId = false } = {}) {
-  const type = PAYMENT_TYPES.has(row.payment_type) ? row.payment_type : 'monthly'
+export async function assignUnmatched(row, clientId, { replaceCustomerId = false, bookAs = '' } = {}) {
+  // What the row is booked as: the person's pick first (a one-time payment
+  // can be a month's fee paid through a one-time link, and only a person
+  // knows), else what Stripe's shape says.
+  const type = PAYMENT_TYPES.has(bookAs) ? bookAs : PAYMENT_TYPES.has(row.payment_type) ? row.payment_type : 'monthly'
 
   const { data: due } = await supabase
     .from('payments')

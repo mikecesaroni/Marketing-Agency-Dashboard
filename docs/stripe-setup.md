@@ -125,6 +125,28 @@ business) is answered without opening Stripe. Rows from before 2026-10-23 were
 filled in from the stored Stripe events; a handful imported from a CSV before
 the webhook existed, and the ones marked paid by hand, have none.
 
+## "Setup" or "monthly": Stripe says, the CRM does not guess
+
+A Checkout Session carries its **mode**: `subscription` starts a subscription,
+`payment` is a one-off. A subscription's later charges arrive as invoices. The
+webhook books a subscription or an invoice as `monthly` and a one-off as
+`setup`, because a setup fee is the one one-off the CRM expects. So a month's
+fee paid through a **one-time** payment link arrives as a one-off: Stripe makes
+no subscription from it, nothing is charged next month, and the CRM used to
+show it in the unmatched queue as "setup" (Don Air Co's $2,500 first month,
+2026-10-29: "when it says setup, what does that mean? This is supposed to be
+monthly").
+
+The queue now says how Stripe sent it ("one-time payment", "subscription
+started", "subscription invoice", "card declined"), warns under a one-time
+payment that nothing recurs, and has a **Book as** choice (monthly or setup
+fee) next to the client picker, so a first month paid through a one-time link
+is booked as the month it is. The fix for the recurring part is in Stripe: the
+client has to pay once through a subscription link. There is now a slot for
+the **$2,500 (Meta and Google) subscription link** beside the $998 and $1,500
+ones; create a recurring $2,500/month Payment Link in Stripe and paste it, and
+the client's Payments card offers it to every client on that fee.
+
 ## Declined cards
 
 A failure is unresolved when the money has not arrived, and nothing else

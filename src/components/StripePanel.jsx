@@ -4,6 +4,7 @@ import { copyText } from '../lib/intakeSummary'
 import { money } from '../lib/queries'
 import StripeImportPanel from './StripeImportPanel'
 import {
+  EMPTY_LINKS,
   assignUnmatched,
   clientLink,
   dismissUnmatched,
@@ -11,18 +12,22 @@ import {
   fetchUnmatched,
   saveStripeLinks,
 } from '../lib/stripeLinks'
+import { bookAs as bookAsOf, unmatchedKind, unmatchedNote } from '../lib/unmatchedQueue'
 
 // Stripe setup and the money that could not be matched to anyone. Both live on
 // the Payments page because that is where you go when the books look wrong.
 export default function StripePanel() {
-  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '' })
-  const [draft, setDraft] = useState({ setup: '', monthly: '', monthly1500: '' })
+  const [links, setLinks] = useState(EMPTY_LINKS)
+  const [draft, setDraft] = useState(EMPTY_LINKS)
   const [unmatched, setUnmatched] = useState([])
   const [clients, setClients] = useState([])
   const [open, setOpen] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(null)
+  // What each parked row gets booked as when assigned (setup fee or monthly),
+  // keyed by row id; blank means "as Stripe sent it".
+  const [bookAs, setBookAs] = useState({})
 
   const load = async () => {
     try {
@@ -95,7 +100,7 @@ export default function StripePanel() {
     setBusy(row.id)
     setError('')
     try {
-      await assignUnmatched(row, clientId, { replaceCustomerId: Boolean(replacing) })
+      await assignUnmatched(row, clientId, { replaceCustomerId: Boolean(replacing), bookAs: bookAsOf(row, bookAs[row.id]) })
       await load()
     } catch (err) {
       setError(err.message)
@@ -121,7 +126,7 @@ export default function StripePanel() {
     }
   }
 
-  const configured = links.setup || links.monthly || links.monthly1500
+  const configured = links.setup || links.monthly || links.monthly1500 || links.monthly2500
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl mb-4 overflow-hidden">
@@ -161,6 +166,7 @@ export default function StripePanel() {
               ['Setup fee link', 'setup', 'https://buy.stripe.com/...'],
               ['Monthly subscription link ($998)', 'monthly', 'https://buy.stripe.com/...'],
               ['Monthly subscription link ($1,500)', 'monthly1500', 'https://buy.stripe.com/...'],
+              ['Monthly subscription link ($2,500, Meta and Google)', 'monthly2500', 'https://buy.stripe.com/...'],
             ].map(([label, key, placeholder]) => (
               <div key={key}>
                 <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
@@ -201,11 +207,17 @@ export default function StripePanel() {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-900">
-                        {/* A decline is shown as one. Assigning it records the
-                            decline on the client's schedule, never a payment. */}
+                        {/* How Stripe sent it, in words: a one-time payment, a
+                            subscription, its invoice, or a decline. "Setup" was
+                            the CRM's booking type showing through, and a first
+                            month paid through a one-time link read as a setup
+                            fee. A decline is shown as one: assigning it records
+                            the decline on the client's schedule, never a payment. */}
                         {row.failed && <span className="text-red-700">Card declined · </span>}
                         {money(row.amount)}{' '}
-                        <span className="font-normal text-slate-500">{row.payment_type}</span>
+                        <span className="font-normal text-slate-500" data-unmatched-kind={unmatchedKind(row)}>
+                          {unmatchedKind(row)}
+                        </span>
                       </p>
                       <p className="text-[11px] text-slate-600 truncate">
                         {row.customer_email || row.stripe_customer_id || 'no email on the payment'}
@@ -215,8 +227,22 @@ export default function StripePanel() {
                             ? ` · Stripe retries ${String(row.next_attempt_at).slice(0, 10)}`
                             : ' · Stripe has stopped retrying')}
                       </p>
+                      {unmatchedNote(row) && <p className="text-[11px] text-amber-800">{unmatchedNote(row)}</p>}
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">
+                      {!row.failed && (
+                        <select
+                          value={bookAsOf(row, bookAs[row.id])}
+                          disabled={busy === row.id}
+                          onChange={(e) => setBookAs((m) => ({ ...m, [row.id]: e.target.value }))}
+                          title="What this is booked as on the client's schedule. A one-time payment can be a month's fee paid through a one-time link."
+                          className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white"
+                          data-book-as
+                        >
+                          <option value="monthly">Book as monthly</option>
+                          <option value="setup">Book as setup fee</option>
+                        </select>
+                      )}
                       <select
                         defaultValue=""
                         disabled={busy === row.id}
@@ -264,11 +290,12 @@ export default function StripePanel() {
 const MONTHLY_TIERS = [
   { key: 'monthly', amount: 998, label: '$998/mo link' },
   { key: 'monthly1500', amount: 1500, label: '$1,500/mo link' },
+  { key: 'monthly2500', amount: 2500, label: '$2,500/mo link' },
 ]
 
 // The per-client copy buttons, used on the client's own Payments card.
 export function StripeLinkButtons({ clientId, stripeCustomerId, monthlyFee }) {
-  const [links, setLinks] = useState({ setup: '', monthly: '', monthly1500: '' })
+  const [links, setLinks] = useState(EMPTY_LINKS)
   const [copied, setCopied] = useState('')
 
   useEffect(() => {
