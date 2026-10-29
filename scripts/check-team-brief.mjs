@@ -7,7 +7,7 @@
 // WAITING COSTS MONEY OR A DAY. The morning brief is the whole picture in
 // one short message; the alerts are the changes that cannot wait.
 
-import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds } from '../src/lib/teamBrief.js'
+import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds, taskDoneSlack } from '../src/lib/teamBrief.js'
 import { buildWeeklyStatus, reportWeeks } from '../src/lib/weeklyStatus.js'
 import { addDays } from '../src/lib/dates.js'
 
@@ -174,6 +174,11 @@ const forms = formSubmittedSlack([{ client: { id: 'f1', name: 'Acme & Sons' }, f
 check('forms in: one line each, the client linked, the form named in words', [forms.text, forms.blocks[0].text.text], ['Acme &amp; Sons filled in their onboarding form · Belk sent back their GHL account details', '*Forms in (2)*\n📝 <https://crm.example/client/f1|Acme &amp; Sons> filled in their onboarding form\n📝 <https://crm.example/client/f2|Belk> sent back their GHL account details'])
 check('one form is a singular title', formSubmittedSlack([{ client: { id: 'f1', name: 'Acme' }, form: 'intake' }]).blocks[0].text.text.startsWith('*Form in*\n'), true)
 check('no forms, no message', formSubmittedSlack([]), null)
+
+// --- a task ticked done ---------------------------------------------------------------
+const done = taskDoneSlack({ task: { id: 't1', title: 'Build the <GHL> template' }, client: { id: 'c1', name: 'Acme & Sons' }, list: { name: 'Onboarding' }, by: 'Mike Jones', appUrl: 'https://crm.example' })
+check('task done: who, what, for whom, on which list, linked', [done.text, done.blocks[0].text.text], ['Mike finished: Build the <GHL> template (Acme & Sons · Onboarding)', '✅ *Mike* finished: <https://crm.example/tasks|Build the &lt;GHL&gt; template> · <https://crm.example/client/c1|Acme &amp; Sons> · Onboarding'])
+check('task done: no client, no list, no name still reads', taskDoneSlack({ task: { id: 't2', title: 'Call the printer' } }).text, 'Someone finished: Call the printer')
 check('new client: the top tier carries its setup fee', clientAddedSlack({ id: 'n2', name: 'Top Co', tier: 3, monthly_fee: 3500, setup_fee: 500 }).blocks[0].text.text.includes('Runs Without You Marketing ($3,500/mo, $500 setup)'), true)
 check('new client: no tier picked still posts, with the fee', clientAddedSlack({ id: 'n3', name: 'Odd Co', tier: null, monthly_fee: 1200 }).text, 'New client: Odd Co, $1,200/mo')
 

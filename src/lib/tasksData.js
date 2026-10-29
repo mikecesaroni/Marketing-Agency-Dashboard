@@ -7,6 +7,7 @@
 
 import { supabase } from './supabaseClient'
 import { fetchAllRows } from './pagedQuery'
+import { announceTaskDone } from './teamBriefClient'
 
 export async function fetchBoard() {
   const [tasks, lists, clients, members] = await Promise.all([
@@ -82,6 +83,12 @@ export async function createTask(fields) {
 export async function updateTask(id, patch) {
   const { data, error } = await supabase.from('tasks').update(patch).eq('id', id).select().single()
   if (error) throw error
+  // Ticked done, from wherever (the board, the drawer, a client page): the
+  // channel hears what was done and by whom ("whenever a user completes a
+  // task it sends a message saying what was completed and by who"). Best
+  // effort; the task is done either way. Signed with the "You" name this
+  // page keeps, which is the person at the keyboard even on a shared login.
+  if (patch?.status === 'done') announceTaskDone(id, readMe()).catch(() => {})
   return data
 }
 

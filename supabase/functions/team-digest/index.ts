@@ -38,6 +38,9 @@
 //                      submission. The alerts run also sweeps the last three
 //                      days of submissions, so one the page failed to send
 //                      (or one marked done by hand) still gets its line.
+//   task_done          from the Tasks page the moment a task is ticked done
+//                      (task_id, by): one line, who and what, once per
+//                      completion.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 // model.js is the bundle in this folder (`npm run brief`), served here from
@@ -62,6 +65,7 @@ import {
   fetchWeeklyRows,
   liveClientIds,
   statusFromRows,
+  taskDoneSlack,
   weeklyText,
 } from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@f0572a389868f3a1dc7dc2df0f6b5d0673adfe52/supabase/functions/team-digest/model.js'
 
@@ -87,7 +91,7 @@ function eastern(d = new Date()) {
 const QUIET_FROM = 21
 const QUIET_TO = 7
 
-type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string; channel?: string; token?: string; form?: string }
+type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string; channel?: string; token?: string; form?: string; task_id?: string; by?: string }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return json({}, 200)
@@ -227,6 +231,24 @@ Deno.serve(async (req) => {
       }
       const by = await caller()
       return announce('account', `account:${id}:${channel}:${accountId}`, accountConnectedSlack(client, { channel, account: { id: accountId, name: accountName }, appUrl, by }), { by, channel, account: accountId })
+    }
+
+    if (action === 'task_done') {
+      const id = String(body.task_id || '')
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'task_id is needed.' }, 400)
+      const { data: task } = await supabase.from('tasks').select('id, title, status, client_id, list_id, completed_at, updated_at').eq('id', id).maybeSingle()
+      if (!task) return json({ error: 'No such task.' }, 404)
+      if (task.status !== 'done') return json({ day, skipped: 'not done' })
+      const [{ data: client }, { data: list }] = await Promise.all([
+        task.client_id ? supabase.from('clients').select('id, name').eq('id', task.client_id).maybeSingle() : Promise.resolve({ data: null }),
+        task.list_id ? supabase.from('task_lists').select('name').eq('id', task.list_id).maybeSingle() : Promise.resolve({ data: null }),
+      ])
+      // The "You" name from the Tasks page first (the person at the keyboard,
+      // even on a shared login), else the login's profile name.
+      const by = String(body.by || '').trim() || (await caller())
+      // Once per completion: a task reopened and finished again is news again.
+      const stamp = String(task.completed_at || task.updated_at || day).slice(0, 19)
+      return announce('task', `task:${id}:${stamp}`, taskDoneSlack({ task, client, list, by, appUrl }), { by, task: task.title, client: client?.name || null })
     }
 
     // Forms a client filled in that the channel has not heard about: one

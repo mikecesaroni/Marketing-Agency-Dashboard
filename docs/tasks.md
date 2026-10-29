@@ -81,6 +81,7 @@ you say otherwise. The page always opens on Team.
   they do. Renaming a person renames them on every task at once; removing one
   takes them off the pickers and leaves the tasks they had alone. The roster
   is `team_members`, separate from CRM logins.
+- **Ticking done tells the channel.** The moment a task is ticked done (here, in the drawer, or on a client page) the Slack channel gets one line: "✅ Mike finished: Build the GHL template · Acme · Onboarding", signed with the "You" name below. Once per completion. See `docs/weekly-status.md`.
 - **Your name.** "You:" at the top right, picked from the roster. Kept in this
   browser only (login is off), the same name the Client tiers board uses. It
   drives My day and signs tasks and comments.

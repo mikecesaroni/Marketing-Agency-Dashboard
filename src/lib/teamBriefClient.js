@@ -50,6 +50,13 @@ export const announceAccount = (clientId, channel) => call({ action: 'account_co
  */
 export const announceForm = (token, form) => call({ action: 'form_submitted', token, form })
 
+/**
+ * A task ticked done on the Tasks page (or a client page): tell the channel
+ * what and by whom. `by` is the "You" name the Tasks page keeps; the login's
+ * profile name is the fallback. Once per completion.
+ */
+export const announceTaskDone = (taskId, by) => call({ action: 'task_done', task_id: taskId, by: by || '' })
+
 /** Set, replace or clear the Slack incoming webhook. Admins only; the URL goes to the vault, never to a table the CRM reads. */
 export async function setSlackWebhook(url) {
   const { data, error } = await supabase.rpc('set_slack_webhook', { url: String(url || '').trim() })

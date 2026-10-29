@@ -19,7 +19,7 @@ create table if not exists public.team_digests (
   day date not null,
   -- brief, alerts and the connection test; 'client' is the one post when a
   -- client is added; 'note' is a line posted by hand (a correction).
-  kind text not null check (kind in ('brief', 'alerts', 'test', 'client', 'account', 'form', 'note')),
+  kind text not null check (kind in ('brief', 'alerts', 'test', 'client', 'account', 'form', 'task', 'note')),
   status text not null check (status in ('sent', 'ready', 'failed', 'skipped')),
   reason text,
   slack_status text,

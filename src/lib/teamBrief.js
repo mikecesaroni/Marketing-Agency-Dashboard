@@ -435,6 +435,28 @@ export function accountConnectedSlack(client, { channel = 'meta', account = {}, 
   }
 }
 
+/**
+ * A task ticked done ("whenever a user completes a task in the Tasks page
+ * it sends a message saying what was completed and by who"): who, the task,
+ * the client it was for and the list it was on. One line.
+ *
+ * task: { id, title, client_id, list_id }
+ * client: { id, name } or null; list: { name } or null
+ */
+export function taskDoneSlack({ task = {}, client = null, list = null, by = '', appUrl = '' } = {}) {
+  const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
+  const who = firstName(by) || 'Someone'
+  const title = String(task.title || 'a task').trim()
+  const where = [client ? link(model, `/client/${client.id}`, slackEsc(client.name)) : '', list?.name ? slackEsc(list.name) : ''].filter(Boolean).join(' · ')
+  const plainWhere = [client?.name, list?.name].filter(Boolean).join(' · ')
+  return {
+    text: `${who} finished: ${title}${plainWhere ? ` (${plainWhere})` : ''}`,
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: `✅ *${slackEsc(who)}* finished: ${link(model, '/tasks', slackEsc(title))}${where ? ` · ${where}` : ''}` } },
+    ],
+  }
+}
+
 export const FORM_WORDS = {
   intake: 'filled in their onboarding form',
   ghl: 'sent back their GHL account details',
