@@ -17,7 +17,7 @@ import {
   Th,
   Td,
 } from '../components/ui'
-import { TIER_BY_NUMBER, tierLabel, tierOf } from '../lib/clientTiers'
+import { TIER_BY_NUMBER, tierBadgeLabel, tierOf } from '../lib/clientTiers'
 import { channelOf, channelStatus, missingChannel } from '../lib/channelStatus'
 import { pageTitle, purposeMeta } from '../lib/landingPages'
 
@@ -119,7 +119,7 @@ function TierBadge({ client }) {
   if (!tier) return null
   return (
     <Badge tone="info" className="whitespace-nowrap" title={TIER_BY_NUMBER[tier].name}>
-      {tierLabel(tier)}
+      {tierBadgeLabel(tier)}
     </Badge>
   )
 }

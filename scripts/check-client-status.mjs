@@ -6,7 +6,7 @@
 // overdue), amber means a chase is overdue, blue is our own housekeeping.
 // A client needs a call when anything red or amber is on them.
 
-import { TIERS, tierFromFee, tierLabel, tierOf } from '../src/lib/clientTiers.js'
+import { TIERS, tierBadgeLabel, tierFromFee, tierLabel, tierOf } from '../src/lib/clientTiers.js'
 import { bucketRows, clientFlags, clientStatus, leadTotals, statusOrder } from '../src/lib/clientStatus.js'
 
 let failures = 0
@@ -88,6 +88,7 @@ check('a Google sync error is amber on the Whole Chain and up, and nothing on Ma
 check('KPIs not logged is blue, and only once live', [keysOf(clientFlags({ client: live, result: running, leads: leadTotals(days, TODAY), counts: { kpisThisWeek: 0 }, today: TODAY })), keysOf(clientFlags({ client: { ...live, meta_ads_active: false }, result: { steps: [], ours: [], theirs: [], launched: false }, counts: { kpisThisWeek: 0 }, today: TODAY }))], [['kpis'], []])
 check('no package is blue; a package read from the fee is the package, no flag', [clientFlags({ client: { id: 'x', name: 'N' }, result: { steps: [], ours: [], theirs: [] }, counts: {}, today: TODAY }).map((f) => [f.key, f.label]), clientFlags({ client: { id: 'x', name: 'N', monthly_fee: 2500 }, result: { steps: [], ours: [], theirs: [] }, counts: {}, today: TODAY }).map((f) => f.label)], [[['tier', 'No package set']], []])
 check('the short names say what the package is', [tierLabel(1), tierLabel(2), tierLabel(3)], ['$1,500 plan', 'Meta and Google', '$3,500 plan'])
+check('the Clients list badge adds the price where the name has none', [tierBadgeLabel(1), tierBadgeLabel(2), tierBadgeLabel(3), tierBadgeLabel(0)], ['$1,500 plan', 'Meta and Google $2,500 plan', '$3,500 plan', 'No tier yet'])
 
 const everything = clientFlags({ client: { ...live, monthly_fee: 1500, tier: null }, result: { steps: [], ours: [], theirs: [{ key: 'google-ads-access', title: 'Google Ads access', waitingDays: 20 }], launched: true }, drop: { hasMeta: true, state: 'stale', lastAdAt: '2026-10-01', daysSince: 19 }, leads: leadTotals([{ date: '2026-10-19', leads: 0, spend: 100 }], TODAY), payments: [{ payment_type: 'monthly', status: 'overdue', due_date: '2026-10-01', amount: 1500 }], counts: { kpisThisWeek: 0 }, today: TODAY })
 check('worst first: red, then amber, then blue (a fee that says the package adds no flag)', everything.map((f) => f.severity), ['red', 'red', 'red', 'amber', 'blue'])

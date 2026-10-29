@@ -76,6 +76,17 @@ export function tierLabel(tier) {
   return TIER_BY_NUMBER[tier]?.short || 'No tier yet'
 }
 
+/**
+ * The badge on the Clients list: the short name, with the price added when
+ * the name does not carry it ("Meta and Google $2,500 plan"; "$1,500 plan"
+ * as it is). "Make it say Meta and Google $2,500 plan in the Clients page."
+ */
+export function tierBadgeLabel(tier) {
+  const t = TIER_BY_NUMBER[tier]
+  if (!t) return 'No tier yet'
+  return t.short.includes('$') ? t.short : `${t.short} $${t.price.toLocaleString()} plan`
+}
+
 /** The dollars, for a badge: "$1,500/mo". */
 export function tierPrice(tier) {
   const t = TIER_BY_NUMBER[tier]
