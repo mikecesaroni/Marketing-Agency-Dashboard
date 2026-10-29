@@ -129,7 +129,10 @@ function ClientCard({ row, open, onToggle, onModal, onDone, onUndo, onTier, onAs
   const { client, result, flags, intake } = row
   const next = result.next
   const phone = telHref(intact(intake?.contact_phone))
-  const status = row.red ? ['Call them', 'danger'] : row.amber ? ['Chase', 'warning'] : client.paused_at ? ['Paused', 'dim'] : result.launched ? ['Running', 'success'] : ['Onboarding', 'info']
+  // Amber is a chase when it is the client we are waiting on; anything else
+  // amber (few leads, a sync failing) is ours to look at, not theirs.
+  const amberIsChase = flags.some((f) => f.severity === 'amber') && flags.filter((f) => f.severity === 'amber').every((f) => f.key === 'waiting')
+  const status = row.red ? ['Call them', 'danger'] : row.amber ? [amberIsChase ? 'Chase' : 'Needs a look', 'warning'] : client.paused_at ? ['Paused', 'dim'] : result.launched ? ['Running', 'success'] : ['Onboarding', 'info']
   const stripe = row.red ? 'bg-red-500' : row.amber ? 'bg-amber-400' : result.launched ? 'bg-green-500' : 'bg-slate-300'
   const byKey = new Map(result.steps.map((st) => [st.key, st]))
 

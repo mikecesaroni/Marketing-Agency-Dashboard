@@ -48,6 +48,10 @@ const brief = buildBrief({ statusRows: rows, day: TODAY, appUrl: 'https://crm.ex
 check('archived and internal are left out', brief.counts.clients, 4)
 check('the day in words', brief.label, 'Tuesday, Oct 20')
 check('attention: the ad flags only; a chase is not one', brief.attention.map((a) => [a.client.name, a.severity, a.key]), [['Belk Plumbing', 'red', 'ads-off']])
+check('low leads takes a client out of running clean and into attention, amber', (() => {
+  const b = buildBrief({ statusRows: [mk('l', 'Low Co', { flags: [{ key: 'low-leads', severity: 'amber', label: 'Only 2 leads this week', detail: '$350 spent over 7 days for $175 a lead.', href: '/client/l#ad-performance' }], leads: { leads7: 2, leads14: 5, spend7: 350, spend14: 700 } })], day: TODAY })
+  return [b.green.map((g) => g.client.name), b.attention.map((a) => [a.client.name, a.severity, a.label])]
+})(), [[], [['Low Co', 'amber', 'Only 2 leads this week']]])
 check('running clean counts a client live on Google with Meta off', buildBrief({ statusRows: [mk('m', 'MCL', { client: { id: 'm', name: 'MCL', meta_ads_active: false, paused_at: null, archived: false, is_internal: false }, result: { launched: true, next: null, live: { meta: false, google: true, lsa: false } }, leads: { leads7: 5, leads14: 8, spend7: 300, spend14: 600 } })], day: TODAY }).green.map((g) => g.client.name), ['MCL'])
 check('blue flags are not attention', brief.attention.some((a) => a.key === 'kpis'), false)
 check("every waiting clip, newest first, naming the editor, whether it is in Meta and the editor's note", brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle', 'clip1.mp4, not in Meta yet · “post a day after clip2”'])

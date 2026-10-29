@@ -41,7 +41,8 @@ const money = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`
  * together (Google's conversions count as leads).
  */
 export function leadTotals(rows = [], today) {
-  const out = { leads7: 0, leads14: 0, spend7: 0, spend14: 0, lastLeadDate: '' }
+  const out = { leads7: 0, leads14: 0, spend7: 0, spend14: 0, spendDays7: 0, lastLeadDate: '' }
+  const spentOn = new Set()
   for (const r of rows) {
     const age = daysSince(r.date, today)
     if (age === null || age > 13) continue
@@ -52,11 +53,25 @@ export function leadTotals(rows = [], today) {
     if (age <= 6) {
       out.leads7 += leads
       out.spend7 += spend
+      // Days the ads actually ran this week, so "two leads" on two days of
+      // spend (a client who went live on Thursday) is not read as a bad week.
+      if (spend > 0) spentOn.add(String(r.date).slice(0, 10))
     }
     if (leads > 0 && r.date > out.lastLeadDate) out.lastLeadDate = r.date
   }
+  out.spendDays7 = spentOn.size
   return out
 }
+
+// A week of ads with this many leads or fewer is not delivering. Flagged
+// for the morning (amber, not a call), so the brief's "running clean" is
+// clients who actually got leads: "the clients that are only getting 1 or
+// 2 leads a week in the running clean, we need to flag those as needs
+// attention; that is where we identify delivering value and actual leads
+// weekly". Only after the ads ran most of the week (LOW_LEADS_MIN_DAYS of
+// spend), so a client live since Thursday is not flagged on Friday.
+export const LOW_LEADS_MAX = 2
+export const LOW_LEADS_MIN_DAYS = 5
 
 /**
  * ctx:
@@ -118,6 +133,21 @@ export function clientFlags(ctx) {
         href: `/client/${c.id}#ad-performance`,
       })
     }
+  }
+
+  // A full week of spend for two leads or fewer: not delivering. Not when
+  // the stronger "no leads" flag is already up, and not on a week the ads
+  // only ran a day or two.
+  const noLeadsUp = flags.some((f) => f.key === 'no-leads')
+  if (live && !ctx.alert && !noLeadsUp && leads.spendDays7 >= LOW_LEADS_MIN_DAYS && leads.leads7 <= LOW_LEADS_MAX) {
+    const n = leads.leads7
+    add({
+      key: 'low-leads',
+      severity: 'amber',
+      label: n === 0 ? 'No leads this week' : `Only ${n} lead${n === 1 ? '' : 's'} this week`,
+      detail: `${money(leads.spend7)} spent over ${leads.spendDays7} days${n ? ` for ${money(leads.spend7 / n)} a lead` : ''}. Two or fewer in a week is not delivering: look at the ads, the offer and the form.`,
+      href: `/client/${c.id}#ad-performance`,
+    })
   }
 
   // The video promise: a new ad every ten days (src/lib/videoLaunch.js).

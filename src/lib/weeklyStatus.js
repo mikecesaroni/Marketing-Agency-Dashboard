@@ -124,6 +124,8 @@ export function keyPoints({ row, ads, creative, trend, now, prev }) {
   if (ads.key === 'quiet') out.push(byKey('ads-off')?.label || 'Ads stopped')
   const noLeads = byKey('no-leads')
   if (noLeads) out.push(`${noLeads.label}, ${money(row.leads?.spend14 || 0)} spent in two weeks`)
+  const lowLeads = byKey('low-leads')
+  if (lowLeads && !noLeads) out.push(`${lowLeads.label} on ${money(row.leads?.spend7 || 0)} of spend`)
   if (trend.why && !(noLeads && trend.key === 'down')) out.push(trend.why)
   else if (trend.key === 'flat' && now.leads > 0) out.push(`${now.leads} lead${now.leads === 1 ? '' : 's'} at ${money(now.cpl)} each, about the same as the week before`)
   if (creative.key === 'need') out.push(creative.label.startsWith('No ad') ? 'No ad has gone out yet' : `No new ad in ${row.drop?.daysSince} days`)

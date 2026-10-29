@@ -45,7 +45,10 @@ const isImmediate = (f) => (f.key === 'payment' ? f.label === 'Card failing' : I
  * twelve "waiting on them" lines for clients whose ads were running fine,
  * and nobody reads a list like that twice.
  */
-export const AD_FLAGS = new Set(['account', 'ads-off', 'no-leads', 'video-stale', 'google-sync'])
+// 'low-leads' (two leads or fewer on a full week of spend) is in: a client
+// spending all week for one lead is not "running clean", and the brief is
+// where that gets seen ("that is where we identify delivering value").
+export const AD_FLAGS = new Set(['account', 'ads-off', 'no-leads', 'low-leads', 'video-stale', 'google-sync'])
 /** The ones worth a line when they clear: the ads are back. */
 export const CLEAR_WORTHY = new Set(['account', 'ads-off'])
 

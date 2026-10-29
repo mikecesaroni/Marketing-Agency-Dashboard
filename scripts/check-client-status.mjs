@@ -33,7 +33,7 @@ const days = [
   { date: '2026-10-10', leads: 3, spend: 40 },
   { date: '2026-10-01', leads: 9, spend: 400 },
 ]
-check('seven and fourteen day totals, the last lead date, older days ignored', leadTotals(days, TODAY), { leads7: 2, leads14: 5, spend7: 80, spend14: 120, lastLeadDate: '2026-10-19' })
+check('seven and fourteen day totals, the days with spend, the last lead date, older days ignored', leadTotals(days, TODAY), { leads7: 2, leads14: 5, spend7: 80, spend14: 120, spendDays7: 2, lastLeadDate: '2026-10-19' })
 
 // --- the flags -------------------------------------------------------------------
 const live = { id: 'c1', name: 'Acme', tier: 1, meta_ads_active: true, paused_at: null }
@@ -45,6 +45,20 @@ const noLeads = clientFlags({ client: live, result: running, leads: leadTotals([
 check('spending with no lead for nine days is red', noLeads.map((f) => [f.key, f.severity]), [['no-leads', 'red']])
 check('and says how long and how much', noLeads[0].label === 'No leads for 9 days' && noLeads[0].detail.includes('$600'), true)
 check('no spend at all is not a leads flag (that is the ads-off alert)', keysOf(clientFlags({ client: live, result: running, leads: leadTotals([], TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), [])
+
+// Low leads: a full week of ads for two leads or fewer is amber for the
+// morning ("the clients only getting 1 or 2 leads a week in the running
+// clean, flag those as needs attention").
+const week = (leadsOn = {}) => Array.from({ length: 7 }, (_, i) => ({ date: `2026-10-${String(19 - i).padStart(2, '0')}`, leads: leadsOn[19 - i] || 0, spend: 50 }))
+const low = clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })
+check('two leads on seven days of spend is amber, with the spend and the cost per lead', low.map((f) => [f.key, f.severity, f.label]), [['low-leads', 'amber', 'Only 2 leads this week']])
+// Six days inside the window: the seventh back is eight days old today.
+check('...and the detail says so', low[0].detail.includes('$300 spent over 6 days for $150 a lead'), true)
+check('one lead reads singular', clientFlags({ client: live, result: running, leads: leadTotals(week({ 18: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 1 lead this week')
+check('three leads is clean', keysOf(clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 17: 1, 15: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), [])
+check('two leads on three days of spend (live since Thursday) is not a bad week', keysOf(clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 18: 1 }).slice(0, 3), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), [])
+check('no leads at all is the red flag alone, not both', keysOf(clientFlags({ client: live, result: running, leads: leadTotals(week(), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), ['no-leads'])
+check('a paused client is not flagged for low leads', keysOf(clientFlags({ client: { ...live, paused_at: '2026-10-01T00:00:00Z' }, result: running, leads: leadTotals(week({ 19: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), ['paused'])
 
 const alertFlags = clientFlags({ client: live, result: running, alert: { kind: 'quiet', quietDays: 4, detail: 'Nothing has spent since 2026-10-16.' }, leads: leadTotals(days, TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })
 check('the delivery alert is a red flag, and beats the leads flag', alertFlags.map((f) => [f.key, f.severity, f.label]), [['ads-off', 'red', 'Meta ads stopped: 4 days without spend']])
