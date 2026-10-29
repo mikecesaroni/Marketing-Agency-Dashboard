@@ -71,6 +71,14 @@ function slug(text: string, max = 60): string {
     .slice(0, max)
 }
 
+// Every form the CRM makes is named WC_..., the way its ads are
+// (src/lib/adNaming.js wcName), so ours stand out from the client's own.
+function wcName(name: string): string {
+  const clean = String(name ?? '').trim()
+  if (!clean) return clean
+  return clean.toUpperCase().startsWith('WC_') ? clean : `WC_${clean}`
+}
+
 function buildQuestions(questions: any[]): Record<string, unknown>[] {
   const built: Record<string, unknown>[] = []
   for (const q of questions || []) {
@@ -215,7 +223,9 @@ Deno.serve(async (req) => {
     const site = String(body.follow_up_url || client.website_url || '').trim()
 
     const payload: Record<string, string> = {
-      name: String(body.form_name || `${client.name} — enquiries`),
+      // WC_ on the front, whatever the caller sent: every form the CRM makes
+      // is named like its ads, so ours stand out from the client's own.
+      name: wcName(String(body.form_name || `${client.name} — enquiries`)),
       questions: JSON.stringify(questions),
       privacy_policy: JSON.stringify({ url: privacyUrl, link_text: 'Privacy Policy' }),
       // Meta wants somewhere to send people after they submit. The client's

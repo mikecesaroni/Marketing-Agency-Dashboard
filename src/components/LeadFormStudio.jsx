@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Button from './ui/Button'
 import { copyText } from '../lib/intakeSummary'
+import { wcName } from '../lib/adNaming'
 import { describeForm, formToBuilder, isHigherIntent, metaFormsLibraryUrl, summariseForm } from '../lib/leadFormDetails'
 import {
   FORM_QUESTIONS,
@@ -275,7 +276,12 @@ export default function LeadFormStudio({ client }) {
   const [busy, setBusy] = useState('')
   const [copied, setCopied] = useState('')
 
-  const [formName, setFormName] = useState(`${client.name} — enquiries`)
+  // Every form the CRM makes is named WC_..., like the ads, so ours stand
+  // out from the client's own in Meta ("make so when we make lead instant
+  // form its name is starting with WC_"). The prefix is put on wherever a
+  // name comes from (typed, suggested, copied from an old form) and once
+  // more when the form is created, so it cannot be lost.
+  const [formName, setFormName] = useState(wcName(`${client.name} — enquiries`))
   // Standard fields ticked, by type. Custom questions are their own list
   // because each carries a label the standard ones do not.
   const [picked, setPicked] = useState(['FULL_NAME', 'PHONE', 'EMAIL', 'ZIP'])
@@ -332,7 +338,7 @@ export default function LeadFormStudio({ client }) {
       setPicked(standard.map((q) => q.type))
       setCustoms(typed.map((q) => ({ label: q.label, why: q.why, options: q.options || [] })))
       setWhy(Object.fromEntries(out.questions.map((q) => [q.type === 'CUSTOM' ? q.label : q.type, q.why])))
-      if (out.formName) setFormName(out.formName)
+      if (out.formName) setFormName(wcName(out.formName))
       if (out.thankYou) setThankYou(out.thankYou)
       setNote(
         out.usedChat
@@ -392,7 +398,7 @@ export default function LeadFormStudio({ client }) {
   // the same form again with that one difference", and this saves retyping it.
   const startFrom = (f) => {
     const b = formToBuilder(f)
-    setFormName(b.formName)
+    setFormName(wcName(b.formName))
     setPicked(b.picked)
     setCustoms(b.customs)
     setWhy({})
@@ -411,15 +417,16 @@ export default function LeadFormStudio({ client }) {
         ...picked.map((type) => ({ type })),
         ...customs.map((c) => ({ type: 'CUSTOM', label: c.label, options: c.options || [] })),
       ]
+      const name = wcName(formName.trim())
       const out = await createLeadForm({
         clientId: client.id,
-        formName: formName.trim(),
+        formName: name,
         questions,
         privacyPolicyUrl: privacyUrl.trim() || undefined,
         thankYouMessage: thankYou.trim() || undefined,
         higherIntent,
       })
-      setMade({ id: out.form_id, name: formName.trim() })
+      setMade({ id: out.form_id, name: out.name || name })
       await load()
     } catch (err) {
       setError(err.message)
@@ -575,8 +582,11 @@ export default function LeadFormStudio({ client }) {
         <input
           value={formName}
           onChange={(e) => setFormName(e.target.value)}
-          placeholder="Form name — what you will see in Meta"
+          onBlur={() => setFormName((v) => (v.trim() ? wcName(v.trim()) : v))}
+          placeholder="Form name — what you will see in Meta (WC_ goes on the front)"
+          title="Every form the CRM makes is named WC_… so ours stand out from the client's own in Meta"
           className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
+          data-form-name
         />
         <textarea
           value={thankYou}
