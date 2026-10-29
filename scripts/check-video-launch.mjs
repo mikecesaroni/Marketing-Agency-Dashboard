@@ -124,6 +124,21 @@ check('waiting: a dismissed upload is not new', waitingClips({ files: [{ storage
 check('waiting: a dismissed registered clip is not new', waitingClips({ registered: [{ storage_path: 'y.mp4', file_name: 'y.mp4', meta_video_id: 'v', status: 'ready', thumb_url: 't', created_at: '2026-09-24T09:00:00Z', drop_dismissed_at: '2026-09-24T10:00:00Z' }], now: NOW }).length, 0)
 check('waiting: a legacy video ad newer than the upload hides it', waitingClips({ files: [{ storage_path: 'x.mp4', file_name: 'x.mp4', date_uploaded: '2026-09-10T00:00:00Z' }], ads: [{ created_at: '2026-09-12T00:00:00Z', size_key: null }], now: NOW }).length, 0)
 
+// "Published manually": a clip waved off on the board went out by hand that
+// day, so the client is not behind on the promise (Comfort Experts: two
+// clips put up in Ads Manager and ticked off, then "no new video or ad in
+// 10 days" the same afternoon).
+{
+  const handCo = [{ id: 'H', name: 'Hand Co', meta_ad_account_id: '1' }]
+  const waved = [{ client_id: 'H', storage_path: 'h/one.mp4', file_name: 'one.mp4', date_uploaded: '2026-09-20T09:00:00Z', drop_dismissed_at: '2026-09-24T10:00:00Z' }]
+  const row = videoDrops(handCo, [], [], NOW, waved)[0]
+  check('published by hand counts as the last ad, that day', [row.lastAdAt, row.daysSince, row.state, row.behind, row.lastAdName], ['2026-09-24T10:00:00.000Z', 0, 'done', false, 'one.mp4 (published by hand)'])
+  const notWaved = videoDrops(handCo, [], [], NOW, [{ ...waved[0], drop_dismissed_at: null }])[0]
+  check('...and nothing waved off means no ad yet: a clip waiting, the client still behind', [notWaved.lastAdAt, notWaved.behind, notWaved.state], [null, true, 'ready'])
+  check('...a real published ad newer than the wave-off still wins', videoDrops(handCo, [{ client_id: 'H', created_at: '2026-09-24T11:00:00Z', ad_name: 'Real', size_key: 'synced' }], [], NOW, waved)[0].lastAdName, 'Real')
+  check('...a wave-off from before "start fresh" does not count', videoDrops(handCo, [], [], NOW, waved, '2026-09-24T11:00:00Z')[0].state, 'never')
+}
+
 // Who a clip is signed by: a person's name, never a clip label typed into
 // the prompt by mistake; the one slip the CRM knows reads as Kyle.
 check("signed as: a person's name is kept", personName(' Sam R. '), 'Sam R.')

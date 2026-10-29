@@ -207,12 +207,27 @@ export function videoDrops(clients = [], publishedAds = [], videos = [], now = n
     if (!uploads.has(f.client_id)) uploads.set(f.client_id, [])
     uploads.get(f.client_id).push(f)
   }
+  // A clip waved off as "published manually" is an ad that went out by hand
+  // that day. It counts for "when was the last ad" until the Meta sync sees
+  // the real one, so the day somebody puts two clips up in Ads Manager and
+  // ticks them off here is not the day the channel says "no new video or ad
+  // in 10 days" (Comfort Experts, 2026-10-28). One per clip, by path.
+  const reset = resetAt ? new Date(resetAt).toISOString() : ''
+  const byHand = new Map()
+  for (const f of [...files, ...videos]) {
+    if (!f?.client_id || !f.drop_dismissed_at || !f.storage_path) continue
+    const at = new Date(f.drop_dismissed_at).toISOString()
+    if (reset && at < reset) continue
+    if (!byHand.has(f.client_id)) byHand.set(f.client_id, new Map())
+    const mine = byHand.get(f.client_id)
+    if (!mine.has(f.storage_path)) mine.set(f.storage_path, { client_id: f.client_id, created_at: at, ad_name: `${f.file_name || f.storage_path} (published by hand)`, size_key: 'manual', video_id: null, manual: true })
+  }
 
   return clients
     .filter((c) => c && !c.archived)
     .map((c) => {
       const mine = ads.get(c.id) || []
-      const every = anyAds.get(c.id) || []
+      const every = [...(anyAds.get(c.id) || []), ...(byHand.get(c.id)?.values() || [])]
       const newest = (rows) => rows.reduce((best, r) => (r.created_at > (best || '') ? r.created_at : best), null)
       const lastVideoAt = newest(mine)
       const lastAdAt = newest(every)
