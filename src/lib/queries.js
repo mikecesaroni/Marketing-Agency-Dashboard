@@ -54,7 +54,7 @@ export async function fetchClientsWithKPIs() {
   let clientsQuery = supabase.from('clients').select('*').order('date_added', { ascending: false })
   if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
 
-  const [clientsRes, kpisRes, intakeRes, setupRes, monthlyRes, ghlRes, googleRows] = await Promise.all([
+  const [clientsRes, kpisRes, intakeRes, setupRes, monthlyRes, ghlRes, googleRows, pagesRes] = await Promise.all([
     clientsQuery,
     supabase.from('weekly_kpis').select('*').eq('week_of', thisMonday),
     supabase.from('onboarding_intake').select('client_id, owner_name, industry_trade, service_area'),
@@ -79,12 +79,20 @@ export async function fetchClientsWithKPIs() {
         .gte('date', addDays(today(), -29))
         .order('id')
     ).catch(() => []),
+    // The pages the ads send people to, for the landing page badge. A
+    // missing table reads as none saved.
+    supabase.from('landing_pages').select('client_id, url, label, purpose').order('created_at').then((r) => r.data || []).catch(() => []),
   ])
 
   const googleBy = new Map()
   for (const row of googleRows || []) {
     if (!googleBy.has(row.client_id)) googleBy.set(row.client_id, new Set())
     googleBy.get(row.client_id).add(row.campaign_id)
+  }
+  const pagesBy = new Map()
+  for (const row of pagesRes || []) {
+    if (!pagesBy.has(row.client_id)) pagesBy.set(row.client_id, [])
+    pagesBy.get(row.client_id).push(row)
   }
 
   if (clientsRes.error) throw clientsRes.error
@@ -174,8 +182,9 @@ export async function fetchClientsWithKPIs() {
       // Off, waiting on the client, ours to build, or live. Derived from the
       // plan flag and the setup row rather than stored, so it cannot go stale.
       ghlStage: ghlStage(client, ghlByClient[client.id]),
-      // For the channel badges (src/lib/channelStatus.js).
+      // For the channel badges (src/lib/channelStatus.js) and the landing page badge.
       googleCampaigns: googleBy.get(client.id)?.size || 0,
+      landingPages: pagesBy.get(client.id) || [],
     }
   })
 }

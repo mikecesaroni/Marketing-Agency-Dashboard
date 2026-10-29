@@ -24,7 +24,7 @@ const keysOf = (flags) => flags.map((f) => f.key)
 check('three packages at $1,500, $2,500 and $3,500', TIERS.map((t) => [t.tier, t.price]), [[1, 1500], [2, 2500], [3, 3500]])
 check('the fee says the package, within $100; anything else is unknown', [tierFromFee(1500), tierFromFee(2450), tierFromFee(3500), tierFromFee(998), tierFromFee(0), tierFromFee('x')], [1, 2, 3, 0, 0, 0])
 check('a set tier wins over the fee; a fee alone is a guess; nothing is tier 0', [tierOf({ tier: 1, monthly_fee: 3500 }), tierOf({ monthly_fee: 2500 }), tierOf({ monthly_fee: 998 }), tierOf({})], [{ tier: 1, guessed: false }, { tier: 2, guessed: true }, { tier: 0, guessed: false }, { tier: 0, guessed: false }])
-check('labels', [tierLabel(2), tierLabel(0)], ['Whole Chain', 'No tier yet'])
+check('labels', [tierLabel(2), tierLabel(0)], ['Meta and Google', 'No tier yet'])
 
 // --- leads from the ad days ------------------------------------------------------
 const days = [

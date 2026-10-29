@@ -71,9 +71,9 @@ check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, cli
   const whole = nextSteps(ctx({ tier: 2, meta_ad_account_id: '1', meta_page_id: '2' }, { link: { created_at: '2026-10-11', intake_submitted_at: '2026-10-12', ghl_submitted_at: '2026-10-12' } }))
   check('the strip: the form, each account the package needs, GHL, the ads, and what is live', setupStrip(whole), 'form ✓ · Meta acct ✓ · Google acct ⏳ 9d · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○')
   const wb = buildBrief({ statusRows: [row(whole, { id: 'w', name: 'Whole Co', meta_ads_active: false, date_added: '2026-10-09' }, 2)], day: TODAY, appUrl: 'https://crm.example' })
-  check('the onboarding line: the package and the day, the strip, then the next move', [wb.onboarding[0].tag, wb.onboarding[0].label], ['Whole Chain, day 12', 'form ✓ · Meta acct ✓ · Google acct ⏳ 9d · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○ · next: Onboarding call done'])
-  check('the heading says whose move, the name links, the tag follows it', briefSlack(wb).blocks.find((b) => b.text?.text?.startsWith('*Onboarding')).text.text, '*Onboarding (1): 1 on us*\n⚪ <https://crm.example/client/w|Whole Co> (Whole Chain, day 12): form ✓ · Meta acct ✓ · Google acct ⏳ 9d · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○ · next: Onboarding call done')
-  check('plain text carries the tag too', briefText(wb).includes('⚪ Whole Co (Whole Chain, day 12): form ✓'), true)
+  check('the onboarding line: the package and the day, the strip, then the next move', [wb.onboarding[0].tag, wb.onboarding[0].label], ['Meta and Google, day 12', 'form ✓ · Meta acct ✓ · Google acct ⏳ 9d · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○ · next: Onboarding call done'])
+  check('the heading says whose move, the name links, the tag follows it', briefSlack(wb).blocks.find((b) => b.text?.text?.startsWith('*Onboarding')).text.text, '*Onboarding (1): 1 on us*\n⚪ <https://crm.example/client/w|Whole Co> (Meta and Google, day 12): form ✓ · Meta acct ✓ · Google acct ⏳ 9d · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○ · next: Onboarding call done')
+  check('plain text carries the tag too', briefText(wb).includes('⚪ Whole Co (Meta and Google, day 12): form ✓'), true)
   // Nobody has written to them yet: the form is ours to send, no wait is counted.
   const fresh = nextSteps(ctx({ tier: 2, meta_ad_account_id: '1', meta_page_id: '2', google_ads_customer_id: '1234567890' }))
   check('a client not written to yet: "form not sent", accounts in, nothing waiting', setupStrip(fresh), 'form not sent · Meta acct ✓ · Google acct ✓ · GHL details ⏳ · ads ○ · live: Meta ○, Google ○, LSA ○')
@@ -82,7 +82,7 @@ check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, cli
   check('launched on Meta with Google to come: the strip says so', setupStrip(metaOn), 'form ✓ · Meta acct ✓ · Google acct ⏳ 60d · GHL ✓ · ads ✓ · live: Meta ✓, Google ○, LSA ○')
   check('...and the next move is the channel still to come', setupNext(metaOn).key, 'google-ads-access')
   const mb = buildBrief({ statusRows: [row(metaOn, { id: 'm', name: 'Meta On', meta_ads_active: true, date_added: '2026-08-20' }, 2)], day: TODAY })
-  check('...so a Whole Chain client live on Meta is in onboarding AND running clean', [mb.onboarding.map((o) => [o.tag, o.label]), mb.green.map((g) => g.client.name), briefSections(mb).find((s) => s.key === 'onboarding').title], [[['Whole Chain, day 62', 'form ✓ · Meta acct ✓ · Google acct ⏳ 60d · GHL ✓ · ads ✓ · live: Meta ✓, Google ○, LSA ○ · next: Google Ads access (their move, 60 days)']], ['Meta On'], 'Onboarding (1): 1 on the client'])
+  check('...so a Whole Chain client live on Meta is in onboarding AND running clean', [mb.onboarding.map((o) => [o.tag, o.label]), mb.green.map((g) => g.client.name), briefSections(mb).find((s) => s.key === 'onboarding').title], [[['Meta and Google, day 62', 'form ✓ · Meta acct ✓ · Google acct ⏳ 60d · GHL ✓ · ads ✓ · live: Meta ✓, Google ○, LSA ○ · next: Google Ads access (their move, 60 days)']], ['Meta On'], 'Onboarding (1): 1 on the client'])
   // Maintenance is one channel: on Google, no Meta marks at all.
   const gOnly = nextSteps(ctx({ tier: 1, google_ads_customer_id: '1234567890', lsa_active: true }))
   check('a Maintenance client on Google: no Meta marks, Google and LSA only', setupStrip(gOnly), 'form not sent · Google acct ✓ · GHL details ⏳ · live: Google ○, LSA ✓')
@@ -191,7 +191,7 @@ check('only cleared still posts', alertsSlack({ fresh: [], cleared: open.slice(1
 
 // --- a new client ---------------------------------------------------------------------
 const added = clientAddedSlack({ id: 'n1', name: 'New & Co', tier: 2, monthly_fee: 2500, setup_fee: 0 }, { appUrl: 'https://crm.example/', by: 'ethan@example.com' })
-check('new client: the notification line names the tier and the price', added.text, 'New client: New & Co, Whole Chain tier at $2,500/mo')
+check('new client: the notification line names the tier and the price', added.text, 'New client: New & Co, Meta and Google tier at $2,500/mo')
 check('new client: the post links the client, names the package, the price and who added them, by first name', added.blocks[0].text.text, '🎉 *New client added to the agency*\n<https://crm.example/client/n1|New &amp; Co>: The Whole Chain Marketing ($2,500/mo) · added by Ethan')
 check('first name: from a name, a full name, an email, a dotted email, nothing', ['Ethan', 'Mary Jo Smith', 'ethan@horizonhvacinc.com', 'mary.jo+crm@example.com', '', null].map(firstName), ['Ethan', 'Mary', 'Ethan', 'Mary', '', ''])
 check('new client: a profile name wins over the email it came with', clientAddedSlack({ id: 'n4', name: 'Co', tier: 1 }, { by: 'Josh' }).blocks[0].text.text.endsWith('· added by Josh'), true)

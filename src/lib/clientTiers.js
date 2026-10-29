@@ -24,7 +24,9 @@ export const TIERS = [
     tier: 2,
     key: 'whole-chain',
     name: 'The Whole Chain Marketing',
-    short: 'Whole Chain',
+    // The short name says what the package is on the boards and in the brief
+    // ("instead of saying Whole Chain say Meta and Google").
+    short: 'Meta and Google',
     price: 2500,
     setup: 0,
     line: 'Show up in more places their customers look.',

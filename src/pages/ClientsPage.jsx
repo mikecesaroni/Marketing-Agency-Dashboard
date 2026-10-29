@@ -19,6 +19,7 @@ import {
 } from '../components/ui'
 import { TIER_BY_NUMBER, tierLabel, tierOf } from '../lib/clientTiers'
 import { channelOf, channelStatus, missingChannel } from '../lib/channelStatus'
+import { pageTitle, purposeMeta } from '../lib/landingPages'
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -31,8 +32,7 @@ const FILTERS = [
   { key: 'google-live', label: 'Google live' },
   { key: 'google-not', label: 'Google not yet' },
   { key: 'missing', label: 'Missing a channel' },
-  { key: 'gbp-live', label: 'GBP optimized' },
-  { key: 'gbp-not', label: 'GBP not yet' },
+  { key: 'no-landing', label: 'No landing page' },
   // Two GHL filters rather than the live/not-yet pair the others use. "Not
   // live" is meaningless for an opt-in service -- most clients are not on it at
   // all -- so the useful questions are "who is on the plan" and "whose build is
@@ -66,11 +66,17 @@ function ChannelBadge({ channel }) {
   )
 }
 
-function LiveBadge({ live, label }) {
+/**
+ * Where the ads send people: ● when a landing page is saved for the client
+ * (hover lists them, with what each is for), ○ when none is. Saved under
+ * Content → Landing pages, or on the client page.
+ */
+function LandingBadge({ pages = [] }) {
+  const n = pages.length
+  const title = n ? pages.map((p) => `${pageTitle(p)} (${purposeMeta(p.purpose).label})`).join('\n') : 'No landing page saved yet. Add one under Content → Landing pages.'
   return (
-    <Badge tone={live ? 'success' : 'dim'} className="whitespace-nowrap">
-      {live ? '● ' : '○ '}
-      {label}
+    <Badge tone={n ? 'success' : 'dim'} className="whitespace-nowrap" title={title} data-landing-pages={n}>
+      {n ? `● Landing page${n > 1 ? ` ×${n}` : ''}` : '○ No landing page'}
     </Badge>
   )
 }
@@ -119,29 +125,21 @@ function TierBadge({ client }) {
   )
 }
 
+// The package, the ad channels it owes, and the landing page. GHL and GBP
+// came off this column 2026-10-29 ("get rid of the GHL and GBP in that
+// section, but add in landing page"): GHL lives on the client page and the
+// Ready to build list, GBP on the client page.
 function ChannelBadges({ client }) {
-  const ghl = client.ghlStage
-  const { tier } = tierOf(client)
   return (
     <span className="inline-flex flex-wrap gap-1.5">
       <TierBadge client={client} />
       {channelStatus(client, { googleCampaigns: client.googleCampaigns }).map((ch) => (
         <ChannelBadge key={ch.key} channel={ch} />
       ))}
-      {/* The Business Profile is sold with the Whole Chain; on Maintenance a
-          dim GBP badge would read as work owed. */}
-      {(tier >= 2 || client.gbp_optimized) && <LiveBadge live={client.gbp_optimized} label="GBP" />}
+      <LandingBadge pages={client.landingPages} />
       {client.paused_at && (
         <Badge tone="warning" className="whitespace-nowrap" title="On pause: no ads alerts, no 10+ days flag">
           ⏸ Paused
-        </Badge>
-      )}
-      {/* Only for clients on the plan. Meta and LSA are sold to everyone, so a
-          dim badge there reads as "not yet"; a dim GHL badge on a client who
-          was never buying it would read as work outstanding. */}
-      {ghl && ghl.key !== 'off' && (
-        <Badge tone={ghl.tone} className="whitespace-nowrap">
-          {ghl.key === 'live' ? '● GHL' : ghl.key === 'ready' ? '◐ GHL' : '○ GHL'}
         </Badge>
       )}
     </span>
@@ -196,8 +194,7 @@ export default function ClientsPage() {
         if (statusFilter === 'google-live' && google?.state !== 'live') return false
         if (statusFilter === 'google-not' && !(google && !google.extra && google.state !== 'live')) return false
         if (statusFilter === 'missing' && !missingChannel(c, opts)) return false
-        if (statusFilter === 'gbp-live' && !c.gbp_optimized) return false
-        if (statusFilter === 'gbp-not' && c.gbp_optimized) return false
+        if (statusFilter === 'no-landing' && (c.landingPages || []).length > 0) return false
         if (statusFilter === 'ghl-plan' && !c.ghl_plan) return false
         // Everything on the plan that is not yet live, whether it is blocked on
         // the client or sitting in our queue.
