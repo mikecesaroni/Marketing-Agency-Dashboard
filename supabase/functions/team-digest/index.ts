@@ -67,7 +67,7 @@ import {
   statusFromRows,
   taskDoneSlack,
   weeklyText,
-} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@f0572a389868f3a1dc7dc2df0f6b5d0673adfe52/supabase/functions/team-digest/model.js'
+} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@685da508bc38cc7e05e02c0b69f70333aeb06c25/supabase/functions/team-digest/model.js'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
