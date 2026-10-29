@@ -114,15 +114,9 @@ export function nextSteps(ctx) {
   const creativesDone = (dlDone('meta-statics') && dlDone('meta-video')) || counts.savedAds >= 3
   const publishedDone = counts.publishedAds > 0 || Boolean(c.meta_ads_active) || dlDone('meta-live')
   const liveDone = Boolean(c.meta_ads_active)
-  // Google is the Whole Chain and up. On Maintenance there are no Google
-  // steps whatever stray LSA fields or a Google Ads id say ("1500 is just
-  // Meta"); only a client with no package yet falls back to those clues.
-  const lsaClues = Number(c.lsa_budget_per_day) > 0 || Boolean(c.lsa_active) || filled(intake?.lsa_status) || Number(intake?.lsa_ad_budget_per_day) > 0
-  const lsaApplies = tier >= 2 || (tier === 0 && lsaClues)
   // One Google Ads login covers Search and Local Services, so either one
   // planned means asking for Google Ads access.
   const googleId = String(c.google_ads_customer_id || '').replace(/\D/g, '')
-  const googleApplies = tier >= 2 || (tier === 0 && (lsaApplies || Boolean(googleId)))
   const googleRefused = Boolean(googleId) && isAccessError(c.google_ads_sync_error)
   const googleDone = Boolean(googleId) && !googleRefused
 
@@ -141,7 +135,20 @@ export function nextSteps(ctx) {
   // been through Meta yet keeps them, whatever else is live, because every
   // package includes Meta.
   const leftMeta = !metaLive && publishedDone && (googleLive || lsaLive)
-  const wantsMeta = !leftMeta
+  // MAINTENANCE IS ONE CHANNEL, Meta or Google ("the 1500 plan is only Meta
+  // or Google, only one of those"). Meta unless the client has no Meta ad
+  // account and is on Google already (a Google Ads id, or Local Services
+  // live): then Google is their channel and no Meta step is owed.
+  const googleOnly = tier === 1 && !metaAccount && !metaLive && (Boolean(googleId) || lsaLive)
+  const wantsMeta = !leftMeta && !googleOnly
+  // Google is the Whole Chain and up, or a Maintenance client whose one
+  // channel is Google (from the start, or having left Meta). On Maintenance
+  // with Meta, stray LSA fields or a Google Ads id change nothing; only a
+  // client with no package yet falls back to those clues.
+  const lsaClues = Number(c.lsa_budget_per_day) > 0 || Boolean(c.lsa_active) || filled(intake?.lsa_status) || Number(intake?.lsa_ad_budget_per_day) > 0
+  const onGoogle = googleOnly || leftMeta
+  const lsaApplies = tier >= 2 || ((tier === 0 || onGoogle) && lsaClues)
+  const googleApplies = tier >= 2 || onGoogle || (tier === 0 && (lsaApplies || Boolean(googleId)))
 
   const steps = []
   const add = (s) => steps.push(s)

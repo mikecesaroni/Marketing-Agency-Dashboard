@@ -7,8 +7,9 @@
 // WAITING COSTS MONEY OR A DAY. The morning brief is the whole picture in
 // one short message; the alerts are the changes that cannot wait.
 
-import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds, taskAssignedSlack, taskDoneSlack } from '../src/lib/teamBrief.js'
+import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds, setupNext, setupStrip, taskAssignedSlack, taskDoneSlack } from '../src/lib/teamBrief.js'
 import { buildWeeklyStatus, reportWeeks } from '../src/lib/weeklyStatus.js'
+import { nextSteps } from '../src/lib/nextSteps.js'
 import { addDays } from '../src/lib/dates.js'
 
 let failures = 0
@@ -58,7 +59,41 @@ check("every waiting clip, newest first, naming the editor, whether it is in Met
 check("a clip alert carries the editor's note too", alertKeys(rows).find((k) => k.key === 'd:clip:d/clip1.mp4')?.label, 'New edit dropped in: clip1.mp4, not in Meta yet · “post a day after clip2”')
 check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
 check('onboarding names the next step, whose move, and how long they have had it', brief.onboarding.map((o) => o.label), ['Meta ad account and Page connected (their move, 9 days)'])
-check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, green: 2, greenLeads: 11, onboarding: 1, paused: 0 })
+check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, green: 2, greenLeads: 11, onboarding: 1, onboardingOurs: 0, onboardingTheirs: 1, paused: 0 })
+
+// --- where each onboarding client is: the setup strip --------------------------------
+// ("See where we are at with clients: if their ad accounts are connected,
+// live yet, the form submitted or sent, knowing the tiers.")
+{
+  const ctx = (client, over = {}) => ({ client: { id: 'w', name: 'Whole Co', setup_fee: 0, ...client }, intake: null, link: over.link ?? null, deliverables: over.deliverables || [], payments: [], callSteps: over.callSteps || [], counts: over.counts || {}, overrides: [], today: TODAY })
+  const row = (result, client, tier) => mk(client.id, client.name, { client: { paused_at: null, archived: false, is_internal: false, ...client }, result, tier })
+  // A Whole Chain client eleven days in: form back, Meta in, Google asked for nine days ago.
+  const whole = nextSteps(ctx({ tier: 2, meta_ad_account_id: '1', meta_page_id: '2' }, { link: { created_at: '2026-10-11', intake_submitted_at: '2026-10-12', ghl_submitted_at: '2026-10-12' } }))
+  check('the strip: the form, each account the package needs, GHL, the ads, and what is live', setupStrip(whole), 'form ✓ · Meta acct ✓ · Google acct ⏳ 9d · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○')
+  const wb = buildBrief({ statusRows: [row(whole, { id: 'w', name: 'Whole Co', meta_ads_active: false, date_added: '2026-10-09' }, 2)], day: TODAY, appUrl: 'https://crm.example' })
+  check('the onboarding line: the package and the day, the strip, then the next move', [wb.onboarding[0].tag, wb.onboarding[0].label], ['Whole Chain, day 12', 'form ✓ · Meta acct ✓ · Google acct ⏳ 9d · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○ · next: Onboarding call done'])
+  check('the heading says whose move, the name links, the tag follows it', briefSlack(wb).blocks.find((b) => b.text?.text?.startsWith('*Onboarding')).text.text, '*Onboarding (1): 1 on us*\n⚪ <https://crm.example/client/w|Whole Co> (Whole Chain, day 12): form ✓ · Meta acct ✓ · Google acct ⏳ 9d · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○ · next: Onboarding call done')
+  check('plain text carries the tag too', briefText(wb).includes('⚪ Whole Co (Whole Chain, day 12): form ✓'), true)
+  // Nobody has written to them yet: the form is ours to send, no wait is counted.
+  const fresh = nextSteps(ctx({ tier: 2, meta_ad_account_id: '1', meta_page_id: '2', google_ads_customer_id: '1234567890' }))
+  check('a client not written to yet: "form not sent", accounts in, nothing waiting', setupStrip(fresh), 'form not sent · Meta acct ✓ · Google acct ✓ · GHL details ⏳ · ads ○ · live: Meta ○, Google ○, LSA ○')
+  // Live on Meta, Google still to connect: still on the list, and the next move is the Google chase, not the past customer list.
+  const metaOn = nextSteps(ctx({ tier: 2, meta_ad_account_id: '1', meta_page_id: '2', meta_ads_active: true, ghl_active: true, drive_folder_id: 'f' }, { link: { created_at: '2026-08-21', intake_submitted_at: '2026-08-22', ghl_submitted_at: '2026-08-22' }, callSteps: [{ step_key: 'x' }], counts: { savedAds: 3, publishedAds: 2 } }))
+  check('launched on Meta with Google to come: the strip says so', setupStrip(metaOn), 'form ✓ · Meta acct ✓ · Google acct ⏳ 60d · GHL ✓ · ads ✓ · live: Meta ✓, Google ○, LSA ○')
+  check('...and the next move is the channel still to come', setupNext(metaOn).key, 'google-ads-access')
+  const mb = buildBrief({ statusRows: [row(metaOn, { id: 'm', name: 'Meta On', meta_ads_active: true, date_added: '2026-08-20' }, 2)], day: TODAY })
+  check('...so a Whole Chain client live on Meta is in onboarding AND running clean', [mb.onboarding.map((o) => [o.tag, o.label]), mb.green.map((g) => g.client.name), briefSections(mb).find((s) => s.key === 'onboarding').title], [[['Whole Chain, day 62', 'form ✓ · Meta acct ✓ · Google acct ⏳ 60d · GHL ✓ · ads ✓ · live: Meta ✓, Google ○, LSA ○ · next: Google Ads access (their move, 60 days)']], ['Meta On'], 'Onboarding (1): 1 on the client'])
+  // Maintenance is one channel: on Google, no Meta marks at all.
+  const gOnly = nextSteps(ctx({ tier: 1, google_ads_customer_id: '1234567890', lsa_active: true }))
+  check('a Maintenance client on Google: no Meta marks, Google and LSA only', setupStrip(gOnly), 'form not sent · Google acct ✓ · GHL details ⏳ · live: Google ○, LSA ✓')
+  // Maintenance live on Meta with nothing else owed: off the list.
+  const done = nextSteps(ctx({ tier: 1, meta_ad_account_id: '1', meta_page_id: '2', meta_ads_active: true }))
+  check('a Maintenance client live on Meta is not in onboarding', buildBrief({ statusRows: [row(done, { id: 'd', name: 'Done Co', meta_ads_active: true }, 1)], day: TODAY }).onboarding.length, 0)
+  check('no steps on the row: the old next-step line, no strip', setupStrip({ launched: false, next: { title: 'x' } }), '')
+  // Order: our moves first, then the ones still to launch, then the longest wait.
+  const ob = buildBrief({ statusRows: [row(metaOn, { id: 'm', name: 'Meta On', meta_ads_active: true }, 2), row(whole, { id: 'w', name: 'Whole Co', meta_ads_active: false }, 2), row(gOnly, { id: 'g', name: 'Google Co', meta_ads_active: false }, 1)], day: TODAY })
+  check('our moves first, then still to launch, then the longest wait', ob.onboarding.map((o) => o.client.name), ['Whole Co', 'Google Co', 'Meta On'])
+}
 
 // Paused clients: one line with how long, nothing else about them.
 {
@@ -71,7 +106,7 @@ check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, cli
   check('paused today says so instead of "0 days"', briefSections(buildBrief({ statusRows: [today], day: TODAY })).find((s) => s.key === 'paused').lines[0].text, 'Today Co (paused today)')
 }
 check('the subject', briefSubject(brief), 'Morning brief · Tuesday, Oct 20 · 1 to call, 2 clips to publish, 2 running clean')
-check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week', 'Onboarding (1)'])
+check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week', 'Onboarding (1): 1 on the client'])
 
 // Money is not in the brief at all: a card failing is said once, when it
 // happens (the alerts); an overdue invoice is the Payments page's business.

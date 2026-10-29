@@ -70,6 +70,68 @@ const EMOJI = {
 const pick = (c) => ({ id: c.id, name: c.name })
 const active = (r) => r?.client && !r.client.archived && !r.client.is_internal
 
+// The step each channel goes live on. A client is in setup until every one
+// the package owes is done, launched or not.
+const LIVE_STEPS = [
+  ['go-live', 'Meta'],
+  ['google-publish', 'Google'],
+  ['lsa-live', 'LSA'],
+]
+const LIVE_KEYS = new Set(LIVE_STEPS.map(([k]) => k))
+// The chain each channel runs through, for the next move on a launched client.
+const CHANNEL_KEYS = ['meta-access', 'creatives', 'publish', 'go-live', 'google-ads-access', 'google-publish', 'lsa-live']
+
+/**
+ * Where a client is in onboarding, as one line of marks worked out from the
+ * pipeline steps (nextSteps.js), so the brief says what the Client tiers
+ * board says: the form, each ad account the package needs, GHL, the ads,
+ * and which channels are live. ✓ done, ⏳ waiting on the client (with the
+ * days from a week), ○ not yet. A step the package does not owe is left
+ * out: Maintenance is one channel, the Whole Chain is Meta and Google both,
+ * so a Maintenance client on Google has no Meta marks at all.
+ *
+ * ("See where we are at with clients: if their ad accounts are connected,
+ * live yet, the form submitted or sent, knowing the tiers.")
+ */
+export function setupStrip(result) {
+  const steps = Array.isArray(result?.steps) ? result.steps : []
+  if (!steps.length) return ''
+  const by = new Map(steps.map((s) => [s.key, s]))
+  const wait = (s) => (Number(s?.waitingDays) >= 7 ? ` ${s.waitingDays}d` : '')
+  const mark = (s) => (s.done ? '✓' : s.owner === OWNER_CLIENT && !s.blocked ? `⏳${wait(s)}` : '○')
+  const bits = []
+  const form = by.get('onboarding-form')
+  if (form) bits.push(form.done ? 'form ✓' : form.owner === OWNER_CLIENT ? `form ⏳${wait(form)}` : 'form not sent')
+  const meta = by.get('meta-access')
+  if (meta) bits.push(`Meta acct ${mark(meta)}`)
+  const google = by.get('google-ads-access')
+  if (google) bits.push(`Google acct ${mark(google)}`)
+  const ghlForm = by.get('ghl-form')
+  const ghlBuild = by.get('ghl-build')
+  const ghlLive = by.get('ghl-live')
+  if (ghlForm || ghlBuild || ghlLive) {
+    bits.push(ghlLive?.done ? 'GHL ✓' : ghlBuild?.done ? 'GHL built' : ghlForm && !ghlForm.done ? `GHL details ⏳${wait(ghlForm)}` : 'GHL ○')
+  }
+  const ads = by.get('creatives')
+  if (ads) bits.push(`ads ${ads.done ? '✓' : '○'}`)
+  const live = LIVE_STEPS.filter(([k]) => by.has(k)).map(([k, name]) => `${name} ${by.get(k).done ? '✓' : '○'}`)
+  if (live.length) bits.push(`live: ${live.join(', ')}`)
+  return bits.join(' · ')
+}
+const OWNER_CLIENT = 'client'
+
+/**
+ * The next move on a client's setup. Not launched: the pipeline's own next
+ * (ours first, else the chase). Launched with a channel still to come: the
+ * first open step on that channel's chain, so a Whole Chain client live on
+ * Meta reads "next: Google Ads access", not the past customer list.
+ */
+export function setupNext(result) {
+  if (!result?.launched) return result?.next || null
+  const open = (result.steps || []).filter((s) => !s.done && !s.blocked && CHANNEL_KEYS.includes(s.key))
+  return open.find((s) => s.owner !== OWNER_CLIENT) || open[0] || result.next || null
+}
+
 /**
  * The morning brief.
  *
@@ -110,11 +172,32 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       const before = Math.max(0, (r.leads?.leads14 || 0) - leads7)
       green.push({ client, leads7, before, spend7: r.leads?.spend7 || 0 })
     }
-    if (!r.result?.launched && !r.client.paused_at) {
-      const next = r.result?.next
+    // In setup until every channel the package owes is live: a client not
+    // launched, and a Whole Chain client live on Meta with Google still to
+    // come ("on the 2500 tier they need Google and Meta connected and live").
+    const steps = r.result?.steps || []
+    const channelOpen = steps.some((s) => LIVE_KEYS.has(s.key) && !s.done)
+    if (!r.client.paused_at && (!r.result?.launched || channelOpen)) {
+      const next = setupNext(r.result)
       const days = Number(next?.waitingDays) || 0
       const theirs = next?.owner === 'client'
-      onboarding.push({ client, label: next ? `${next.title}${theirs ? ` (their move${days >= 7 ? `, ${days} days` : ''})` : ''}` : 'nothing open', theirs, days })
+      const move = next ? `${next.title}${theirs ? ` (their move${days >= 7 ? `, ${days} days` : ''})` : ''}` : 'nothing open'
+      const strip = setupStrip(r.result)
+      // The package and the day of onboarding they are on, so "day 40 and
+      // Google still not connected" reads at a glance.
+      const added = r.client.date_added ? String(r.client.date_added).slice(0, 10) : ''
+      const dayN = added ? daysBetween(added, day) + 1 : 0
+      const tierShort = TIER_BY_NUMBER[Number(r.tier)]?.short || 'no package set'
+      onboarding.push({
+        client,
+        tag: `${tierShort}${dayN > 0 ? `, day ${dayN}` : ''}`,
+        label: strip ? `${strip} · next: ${move}` : move,
+        strip,
+        theirs,
+        ours: Boolean(next) && !theirs,
+        days,
+        launched: Boolean(r.result?.launched),
+      })
     }
   }
   const sev = { red: 0, amber: 1 }
@@ -122,6 +205,8 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
   clips.sort((a, b) => (a.at < b.at ? 1 : -1))
   green.sort((a, b) => b.leads7 - a.leads7 || a.client.name.localeCompare(b.client.name))
   paused.sort((a, b) => b.days - a.days || a.client.name.localeCompare(b.client.name))
+  // Our moves first, then the clients still to launch, then the longest wait.
+  onboarding.sort((a, b) => Number(b.ours) - Number(a.ours) || Number(a.launched) - Number(b.launched) || b.days - a.days || a.client.name.localeCompare(b.client.name))
   const red = attention.filter((a) => a.severity === 'red').length
   return {
     day,
@@ -140,6 +225,8 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       green: green.length,
       greenLeads: green.reduce((n, g) => n + g.leads7, 0),
       onboarding: onboarding.length,
+      onboardingOurs: onboarding.filter((o) => o.ours).length,
+      onboardingTheirs: onboarding.filter((o) => o.theirs).length,
       paused: paused.length,
     },
     weekly,
@@ -191,7 +278,9 @@ export function briefSections(model) {
     out.push({ key: 'green', title: `Running clean (${model.green.length}), leads this week`, lines: [{ emoji: EMOJI.green, text: names, href: '/status' }] })
   }
   if (model.onboarding.length) {
-    out.push({ key: 'onboarding', title: `Onboarding (${model.onboarding.length})`, lines: model.onboarding.map((o) => ({ emoji: EMOJI.onboarding, client: o.client, text: o.label, href: `/client/${o.client.id}` })) })
+    const c = model.counts
+    const who = [c.onboardingOurs ? `${c.onboardingOurs} on us` : '', c.onboardingTheirs ? `${c.onboardingTheirs} on the client` : ''].filter(Boolean).join(', ')
+    out.push({ key: 'onboarding', title: `Onboarding (${model.onboarding.length})${who ? `: ${who}` : ''}`, lines: model.onboarding.map((o) => ({ emoji: EMOJI.onboarding, client: o.client, tag: o.tag, text: o.label, href: `/client/${o.client.id}` })) })
   }
   if (model.paused?.length) {
     const names = model.paused.map((p) => `${p.client.name} (${p.days === 0 ? 'paused today' : `since ${shortDay(p.since)}, ${p.days} day${p.days === 1 ? '' : 's'}`})`).join(', ')
@@ -206,7 +295,7 @@ export function briefSections(model) {
 /** Plain text, for the email's text part and the CRM preview. */
 export function briefText(model) {
   const head = [`${model.weekly ? 'MONDAY BRIEF' : 'MORNING BRIEF'} · ${model.label}`, briefSubject(model).split(' · ').slice(2).join(' · ')]
-  const body = briefSections(model).map((s) => [s.title.toUpperCase(), ...s.lines.map((l) => `${l.emoji} ${l.client ? `${l.client.name}: ` : ''}${l.text}`)].join('\n'))
+  const body = briefSections(model).map((s) => [s.title.toUpperCase(), ...s.lines.map((l) => `${l.emoji} ${l.client ? `${l.client.name}${l.tag ? ` (${l.tag})` : ''}: ` : ''}${l.text}`)].join('\n'))
   const weekly = model.weekly ? [weeklyTextShort(model.weekly)] : []
   return [head.join('\n'), ...body, ...weekly, model.appUrl ? `${model.appUrl}/status` : ''].filter(Boolean).join('\n\n')
 }
@@ -253,7 +342,7 @@ function slackSections(title, lines) {
 export function briefSlack(model) {
   const blocks = [{ type: 'header', text: { type: 'plain_text', text: `${model.weekly ? '📊 Monday brief' : '☀️ Morning brief'} · ${model.label}`, emoji: true } }]
   for (const s of briefSections(model)) {
-    const lines = s.lines.map((l) => `${l.emoji} ${l.client ? `${link(model, l.href || `/client/${l.client.id}`, slackEsc(l.client.name))}: ` : ''}${slackEsc(l.text)}`)
+    const lines = s.lines.map((l) => `${l.emoji} ${l.client ? `${link(model, l.href || `/client/${l.client.id}`, slackEsc(l.client.name))}${l.tag ? ` (${slackEsc(l.tag)})` : ''}: ` : ''}${slackEsc(l.text)}`)
     blocks.push(...slackSections(s.title, lines))
   }
   if (model.weekly) {
@@ -284,7 +373,7 @@ export function briefHtml(model, { agencyName = 'The Working Class Marketing' } 
   const section = (s) =>
     `<tr><td style="padding:14px 28px 4px;"><div style="font-size:12px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:.4px;">${esc(s.title)}</div></td></tr>` +
     s.lines
-      .map((l) => `<tr><td style="padding:5px 28px;font-size:14px;line-height:1.45;color:${INK};">${l.emoji} ${l.client ? `${link(model, l.href || `/client/${l.client.id}`, l.client.name, 'html')}: ` : ''}${esc(l.text)}</td></tr>`)
+      .map((l) => `<tr><td style="padding:5px 28px;font-size:14px;line-height:1.45;color:${INK};">${l.emoji} ${l.client ? `${link(model, l.href || `/client/${l.client.id}`, l.client.name, 'html')}${l.tag ? ` <span style="color:${MUTED};">(${esc(l.tag)})</span>` : ''}: ` : ''}${esc(l.text)}</td></tr>`)
       .join('')
   const weekly = model.weekly
     ? `<tr><td style="padding:18px 28px 4px;border-top:1px solid ${LINE};"><div style="font-size:12px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:.4px;">Weekly status · ${esc(model.weekly.label)}</div></td></tr>` +
