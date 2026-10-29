@@ -26,7 +26,7 @@ export function hasInternalColumn() {
 // They live in dates.js (no browser imports, so the pure modules and the
 // Edge Functions can share them) and are re-exported here for the many
 // callers that reach for them through queries.js.
-import { formatDate, getMonday, today, weeksAgoMonday, shortWeekLabel } from './dates'
+import { addDays, formatDate, getMonday, today, weeksAgoMonday, shortWeekLabel } from './dates'
 export { formatDate, getMonday, today, weeksAgoMonday, shortWeekLabel }
 
 export function money(n) {
@@ -54,7 +54,7 @@ export async function fetchClientsWithKPIs() {
   let clientsQuery = supabase.from('clients').select('*').order('date_added', { ascending: false })
   if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
 
-  const [clientsRes, kpisRes, intakeRes, setupRes, monthlyRes, ghlRes] = await Promise.all([
+  const [clientsRes, kpisRes, intakeRes, setupRes, monthlyRes, ghlRes, googleRows] = await Promise.all([
     clientsQuery,
     supabase.from('weekly_kpis').select('*').eq('week_of', thisMonday),
     supabase.from('onboarding_intake').select('client_id, owner_name, industry_trade, service_area'),
@@ -67,7 +67,25 @@ export async function fetchClientsWithKPIs() {
     // whole setup row would pull EINs and phone numbers into a list that only
     // needs to know "is it complete".
     supabase.from('ghl_setup').select(`client_id, ${GHL_REQUIRED_KEYS.join(', ')}`),
+    // Active Google campaigns that showed ads in the last 30 days: what makes
+    // the Google badge read "live". The same count the launch pipeline uses
+    // (pipelineRows.js). A missing table reads as none.
+    fetchAllRows(() =>
+      supabase
+        .from('google_campaign_daily')
+        .select('id, client_id, campaign_id')
+        .eq('campaign_status', 'ENABLED')
+        .gt('impressions', 0)
+        .gte('date', addDays(today(), -29))
+        .order('id')
+    ).catch(() => []),
   ])
+
+  const googleBy = new Map()
+  for (const row of googleRows || []) {
+    if (!googleBy.has(row.client_id)) googleBy.set(row.client_id, new Set())
+    googleBy.get(row.client_id).add(row.campaign_id)
+  }
 
   if (clientsRes.error) throw clientsRes.error
   if (kpisRes.error) throw kpisRes.error
@@ -156,6 +174,8 @@ export async function fetchClientsWithKPIs() {
       // Off, waiting on the client, ours to build, or live. Derived from the
       // plan flag and the setup row rather than stored, so it cannot go stale.
       ghlStage: ghlStage(client, ghlByClient[client.id]),
+      // For the channel badges (src/lib/channelStatus.js).
+      googleCampaigns: googleBy.get(client.id)?.size || 0,
     }
   })
 }

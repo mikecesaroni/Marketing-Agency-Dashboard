@@ -18,13 +18,19 @@ import {
   Td,
 } from '../components/ui'
 import { TIER_BY_NUMBER, tierLabel, tierOf } from '../lib/clientTiers'
+import { channelOf, channelStatus, missingChannel } from '../lib/channelStatus'
 
 const FILTERS = [
   { key: 'all', label: 'All' },
+  // Meta and Google read through the package (src/lib/channelStatus.js):
+  // "not yet" is a channel the package owes that is not live, so a
+  // Maintenance client on Google is never "Meta not yet". Local Services
+  // counts as Google live.
   { key: 'meta-live', label: 'Meta live' },
   { key: 'meta-not', label: 'Meta not yet' },
-  { key: 'lsa-live', label: 'LSA optimized' },
-  { key: 'lsa-not', label: 'LSA not yet' },
+  { key: 'google-live', label: 'Google live' },
+  { key: 'google-not', label: 'Google not yet' },
+  { key: 'missing', label: 'Missing a channel' },
   { key: 'gbp-live', label: 'GBP optimized' },
   { key: 'gbp-not', label: 'GBP not yet' },
   // Two GHL filters rather than the live/not-yet pair the others use. "Not
@@ -36,6 +42,29 @@ const FILTERS = [
   { key: 'paused', label: 'Paused' },
   { key: 'archived', label: 'Archived' },
 ]
+
+// One badge per channel the package owes (and any live channel outside it):
+// ● live, ◐ connected but not live, ○ not connected, ⚠ Google refused us.
+// So a Whole Chain client reads "● Meta live · ○ Google not connected" and
+// a Maintenance client on Google reads "◐ Google connected" with no Meta
+// badge at all ("see if a client is connected to Meta and Google, keeping
+// in mind their tiers").
+const CHANNEL_LOOK = {
+  live: { tone: 'success', mark: '●', word: 'live' },
+  connected: { tone: 'info', mark: '◐', word: 'connected' },
+  refused: { tone: 'danger', mark: '⚠', word: 'access refused' },
+  missing: { tone: 'dim', mark: '○', word: 'not connected' },
+}
+
+function ChannelBadge({ channel }) {
+  const look = CHANNEL_LOOK[channel.state] || CHANNEL_LOOK.missing
+  return (
+    <Badge tone={look.tone} className={`whitespace-nowrap${channel.extra ? ' opacity-80' : ''}`} title={channel.detail} data-channel={channel.key} data-state={channel.state}>
+      {look.mark} {channel.label} {look.word}
+      {channel.extra ? '*' : ''}
+    </Badge>
+  )
+}
 
 function LiveBadge({ live, label }) {
   return (
@@ -92,12 +121,16 @@ function TierBadge({ client }) {
 
 function ChannelBadges({ client }) {
   const ghl = client.ghlStage
+  const { tier } = tierOf(client)
   return (
     <span className="inline-flex flex-wrap gap-1.5">
       <TierBadge client={client} />
-      <LiveBadge live={client.meta_ads_active} label="Meta" />
-      <LiveBadge live={client.lsa_active} label="LSA" />
-      <LiveBadge live={client.gbp_optimized} label="GBP" />
+      {channelStatus(client, { googleCampaigns: client.googleCampaigns }).map((ch) => (
+        <ChannelBadge key={ch.key} channel={ch} />
+      ))}
+      {/* The Business Profile is sold with the Whole Chain; on Maintenance a
+          dim GBP badge would read as work owed. */}
+      {(tier >= 2 || client.gbp_optimized) && <LiveBadge live={client.gbp_optimized} label="GBP" />}
       {client.paused_at && (
         <Badge tone="warning" className="whitespace-nowrap" title="On pause: no ads alerts, no 10+ days flag">
           ⏸ Paused
@@ -154,10 +187,15 @@ export default function ClientsPage() {
       } else {
         if (c.archived) return false
         if (statusFilter === 'paused' && !c.paused_at) return false
-        if (statusFilter === 'meta-live' && !c.meta_ads_active) return false
-        if (statusFilter === 'meta-not' && c.meta_ads_active) return false
-        if (statusFilter === 'lsa-live' && !c.lsa_active) return false
-        if (statusFilter === 'lsa-not' && c.lsa_active) return false
+        // Through the package: "not yet" is an owed channel that is not live.
+        const opts = { googleCampaigns: c.googleCampaigns }
+        const meta = channelOf(c, 'meta', opts)
+        const google = channelOf(c, 'google', opts)
+        if (statusFilter === 'meta-live' && meta?.state !== 'live') return false
+        if (statusFilter === 'meta-not' && !(meta && !meta.extra && meta.state !== 'live')) return false
+        if (statusFilter === 'google-live' && google?.state !== 'live') return false
+        if (statusFilter === 'google-not' && !(google && !google.extra && google.state !== 'live')) return false
+        if (statusFilter === 'missing' && !missingChannel(c, opts)) return false
         if (statusFilter === 'gbp-live' && !c.gbp_optimized) return false
         if (statusFilter === 'gbp-not' && c.gbp_optimized) return false
         if (statusFilter === 'ghl-plan' && !c.ghl_plan) return false

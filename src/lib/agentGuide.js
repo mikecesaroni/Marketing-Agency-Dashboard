@@ -65,12 +65,13 @@ export const ROUTES = [
     nav: 'Clients',
     purpose: 'The roster, and the way in to any single client.',
     contains: [
-      'One row per client: name, business, industry, market, which channels are live, then this week\'s spend, leads and cost per lead, and their setup fee and monthly subscription.',
+      'One row per client: name, business, industry, market, the package and where they stand on each channel it owes, then this week\'s spend, leads and cost per lead, and their setup fee and monthly subscription.',
+      'The channel badges follow the package ("see if a client is connected to Meta and Google, keeping in mind their tiers"): the Whole Chain and Runs Without You owe Meta and Google both, so both badges show; Maintenance is one channel, Meta unless the client has no Meta ad account and is on Google already (then only a Google badge). Each badge is ● live (Meta: the switch; Google: a campaign the sync sees running, or Local Services live), ◐ connected but not live (the ad account is in; hover says if the Facebook Page is still missing), ○ not connected, or ⚠ Google refused us. A channel live outside the package shows too, starred, so a Maintenance client running both is seen. GBP shows on the Whole Chain and up; GHL only for clients on the plan.',
       'A row highlighted amber has KPIs that have not been logged this week.',
     ],
     actions: [
       'Search box, matching business, client, industry or market.',
-      'Filter buttons: All, Meta live, Meta not yet, LSA optimized, LSA not yet, GBP optimized, GBP not yet, and two for GHL.',
+      'Filter buttons: All, Meta live, Meta not yet, Google live, Google not yet, Missing a channel (an owed channel with no account, or Google refused), GBP optimized, GBP not yet, and two for GHL. "Not yet" means the package owes it and it is not live, so a Maintenance client on Google is never "Meta not yet".',
       'A "New Client" button in the page header opens a form in a modal: the business name, the package they signed for (required; it sets their monthly and setup fees) and, optionally, their Meta ad account. The moment the client is created the Slack channel hears "New client added to the agency" with the package, the price and who added them.',
       'Clicking any row opens that client\'s page.',
     ],

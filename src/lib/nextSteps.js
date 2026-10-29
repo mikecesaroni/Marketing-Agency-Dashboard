@@ -147,7 +147,10 @@ export function nextSteps(ctx) {
   // client with no package yet falls back to those clues.
   const lsaClues = Number(c.lsa_budget_per_day) > 0 || Boolean(c.lsa_active) || filled(intake?.lsa_status) || Number(intake?.lsa_ad_budget_per_day) > 0
   const onGoogle = googleOnly || leftMeta
-  const lsaApplies = tier >= 2 || ((tier === 0 || onGoogle) && lsaClues)
+  // Local Services is the Whole Chain's. A Maintenance client on Google is
+  // owed Search; LSA is on their list only once it is actually live (then
+  // it reads done), never as a step to chase.
+  const lsaApplies = tier >= 2 || (tier === 0 && lsaClues) || (onGoogle && lsaLive)
   const googleApplies = tier >= 2 || onGoogle || (tier === 0 && (lsaApplies || Boolean(googleId)))
 
   const steps = []
