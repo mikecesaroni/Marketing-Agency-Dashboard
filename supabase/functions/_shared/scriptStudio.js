@@ -425,7 +425,7 @@ export function parseScript(text) {
  * video scripts it also includes the how to record tips at bottom").
  */
 export const HOW_TO_RECORD = [
-  'Phone upright, propped on something steady at eye level. Not held out at arm’s length.',
+  'Hold the phone yourself, upright and at eye level. It feels personal, like a video message. Or prop it on something steady if you would rather.',
   'Face the light: a window in front of you, or outside in the shade. Never with the sun or a window behind you.',
   'Somewhere quiet. No truck idling, no radio. The phone’s own mic is fine.',
   'Look at the lens, not at yourself on the screen.',
