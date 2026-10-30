@@ -21,6 +21,7 @@ import {
 import { copyText } from '../lib/intakeSummary'
 import { extractTasksFromChat, taskTrigger } from '../lib/clientTasks'
 import { SCRIPT_ANGLES, buildRefillPrompt, isRefillPrompt, outsideScripts, refillLabel, splitScripts, spokenScript, spokenScripts } from '../lib/season'
+import { HOW_TO_RECORD } from '../../supabase/functions/_shared/scriptStudio.js'
 import { today as todayIso } from '../lib/queries'
 import WebsiteMemory from './WebsiteMemory'
 import { lookName } from '../lib/adBatch'
@@ -95,8 +96,10 @@ function RefillAsk({ text }) {
 
 // A reply made of scripts reads as cards, one per script, each with its own
 // copy button, so each goes to the owner or a notes app on its own. Copy
-// hands over only the words to say: the Angle, Length, caption and filming
-// notes stay on the card, for us.
+// hands over the words to say with their labels (Hook, Problem, Proof,
+// Offer, CTA), a blank line between sections so a paste anywhere keeps them
+// apart, and the recording tips at the end; the Angle, Length, caption and
+// filming notes stay on the card, for us.
 function ScriptCards({ scripts }) {
   const [copied, setCopied] = useState(null)
   const copy = async (key, value) => {
@@ -111,7 +114,7 @@ function ScriptCards({ scripts }) {
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{scripts.length} video scripts</p>
         <button
           type="button"
-          onClick={() => copy('all', spokenScripts(scripts))}
+          onClick={() => copy('all', spokenScripts(scripts, { tips: HOW_TO_RECORD }))}
           className="rounded bg-slate-800 px-2 py-1 text-[11px] font-medium text-white hover:bg-slate-900"
         >
           {copied === 'all' ? '✓ Copied' : 'Copy all'}
@@ -127,9 +130,9 @@ function ScriptCards({ scripts }) {
             <div className="flex flex-shrink-0 items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => copy(sc.n, spokenScript(sc.text))}
+                onClick={() => copy(sc.n, spokenScript(sc.text, { labels: true, tips: HOW_TO_RECORD }))}
                 aria-label={`Copy script ${sc.n}`}
-                title="Copies just the words to say"
+                title="Copies this script with its labels and the recording tips"
                 className="rounded px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-slate-300 hover:bg-slate-50"
               >
                 {copied === sc.n ? '✓ Copied' : 'Copy'}

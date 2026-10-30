@@ -91,6 +91,21 @@ Film it: in the truck, window light`
   check('copy is just the spoken lines, no labels, no angle, no notes', spokenScript(full), 'Has your heat run since March?\nThe first cold night is when it fails. Always at 9pm.\nLicensed and insured, 14 years in Burnet.\n$89 heat check this week.\nCall the number on screen.')
   check('a script that lost the layout still drops the notes', spokenScript('SCRIPT 2: Loose\nAngle: whatever\nJust say this.\nFilm it: outside'), 'Just say this.')
   check('copy all puts a one-line title over each', spokenScripts(s).split('\n\n----------\n\n').map((x) => x.split('\n')[0]), ['1. First cold night', '2. Burning smell'])
+
+  // The paste. "I love the format, just fix the spaces, add the hook and CTA
+  // labels, and the how-to-record tips at the end": single line breaks were
+  // being swallowed by the app it was pasted into, so the sections ran
+  // together. Labelled, a blank line between sections, the tips once.
+  check('labelled copy: each line with its label and a blank line after it',
+    spokenScript(full, { labels: true }),
+    'Hook: Has your heat run since March?\n\nProblem: The first cold night is when it fails. Always at 9pm.\n\nProof: Licensed and insured, 14 years in Burnet.\n\nOffer: $89 heat check this week.\n\nCTA: Call the number on screen.')
+  check('the tips go at the end, under their own heading',
+    spokenScript(full, { labels: true, tips: ['Face the light.', 'Look at the lens.'] }).endsWith('CTA: Call the number on screen.\n\n----------\n\nHOW TO RECORD\n• Face the light.\n• Look at the lens.'), true)
+  const all = spokenScripts(s, { tips: ['Face the light.'] })
+  check('copy all: the numbered title, a blank line, then the labelled sections',
+    all.startsWith('1. First cold night\n\nHook: The first cold night is coming.\n\nCTA: Tap Book Now.\n\n----------\n\n2. Burning smell\n\nHook: Smell that when the heat comes on?'), true)
+  check('copy all: the tips once, at the very end', [all.endsWith('\n\n----------\n\nHOW TO RECORD\n• Face the light.'), (all.match(/HOW TO RECORD/g) || []).length], [true, 1])
+  check('a script that lost its layout is still labelled where it can be and plain where it cannot', spokenScript('SCRIPT 2: Loose\nAngle: whatever\nJust say this.\nFilm it: outside', { labels: true }), 'Just say this.')
   check('the prompt forbids licence, registration and insurance numbers', /Never put a licence number, registration number, insurance policy number/.test(buildRefillPrompt({ client: { name: 'X' }, today: '2026-10-12', angle: 'story' })), true)
   const storyPrompt = buildRefillPrompt({ client: { name: 'Belk Heating' }, today: '2026-10-12', angle: 'story' })
   check('the prompt makes the lines first person, the owner talking, and directions say you', storyPrompt.includes('in the first person, the owner talking') && storyPrompt.includes('"Belk Heating has"') && storyPrompt.includes('speaks to the owner as "you" and "your"'), true)

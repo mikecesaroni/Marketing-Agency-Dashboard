@@ -392,14 +392,15 @@ export function outsideScripts(text) {
 // else in a script card (the title, Angle, Length, the caption, where to
 // stand) is for us, not for the person reading it into a phone.
 const SPOKEN = ['HOOK', 'PROBLEM', 'PROOF', 'OFFER', 'CTA']
+const LABEL_WORD = { HOOK: 'Hook', PROBLEM: 'Problem', PROOF: 'Proof', OFFER: 'Offer', CTA: 'CTA' }
 const NOTES = /^(angle|length|on screen text|film it)\b/i
 
 /**
- * Just the words to say, one line each, no labels: what "Copy" hands to an
- * owner. Falls back to the whole script minus the notes when a reply did
- * not keep the layout.
+ * The spoken lines with their labels, in order: [{ label: 'Hook', say }].
+ * Falls back to the whole script minus the notes, unlabelled, when a reply
+ * did not keep the layout.
  */
-export function spokenScript(text) {
+export function spokenLines(text) {
   const lines = String(text || '')
     .split('\n')
     .map((l) => l.trim())
@@ -410,13 +411,35 @@ export function spokenScript(text) {
     const m = line.match(/^([A-Za-z][A-Za-z ]{1,24})(?:\([^)]*\))?\s*:\s*(.*)$/)
     if (!m) continue
     const label = m[1].trim().toUpperCase()
-    if (SPOKEN.includes(label) && m[2].trim()) spoken.push(m[2].trim())
+    if (SPOKEN.includes(label) && m[2].trim()) spoken.push({ label: LABEL_WORD[label], say: m[2].trim() })
   }
-  if (spoken.length) return spoken.join('\n')
-  return lines.filter((l) => !NOTES.test(l)).join('\n')
+  if (spoken.length) return spoken
+  return lines.filter((l) => !NOTES.test(l)).map((say) => ({ label: '', say }))
 }
 
-/** Every script's spoken lines, each under a one-line title, for "Copy all". */
-export function spokenScripts(scripts) {
-  return (scripts || []).map((sc) => `${sc.n}. ${sc.title || `Script ${sc.n}`}\n${spokenScript(sc.text)}`).join('\n\n----------\n\n')
+const tipsBlock = (tips) => (tips.length ? ['', '----------', '', 'HOW TO RECORD', ...tips.map((t) => `• ${t}`)] : [])
+
+/**
+ * The words to say. Plain: one line each, no labels (the teleprompter
+ * reading). With `labels`, each line carries its label and a blank line
+ * follows it ("Hook: ...", "CTA: ..."), so a paste into a notes app, Slack
+ * or a text keeps the sections apart: single line breaks were being
+ * swallowed and the sections ran together ("Third repair this summerIf you
+ * have already paid..."). `tips` go at the end under HOW TO RECORD.
+ */
+export function spokenScript(text, { labels = false, tips = [] } = {}) {
+  const lines = spokenLines(text)
+  const body = labels ? lines.map((l) => (l.label ? `${l.label}: ${l.say}` : l.say)).join('\n\n') : lines.map((l) => l.say).join('\n')
+  return [body, ...tipsBlock(tips)].join('\n')
+}
+
+/**
+ * Every script under a one-line numbered title, labelled, a blank line
+ * between sections and a divider between scripts, the recording tips once
+ * at the end: what "Copy all" hands over ("I love the format, just fix the
+ * spaces, add the hook and CTA labels, and the how-to-record tips at the end").
+ */
+export function spokenScripts(scripts, { tips = [] } = {}) {
+  const body = (scripts || []).map((sc) => `${sc.n}. ${sc.title || `Script ${sc.n}`}\n\n${spokenScript(sc.text, { labels: true })}`).join('\n\n----------\n\n')
+  return [body, ...tipsBlock(tips)].join('\n')
 }
