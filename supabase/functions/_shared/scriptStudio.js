@@ -430,6 +430,7 @@ export const HOW_TO_RECORD = [
   'Face the light: a window in front of you, or outside in the shade. Never with the sun or a window behind you.',
   'Somewhere quiet. No truck idling, no radio. The phone’s own mic is fine.',
   'Look at the lens, not at yourself on the screen.',
+  'Say your name and your company at the start: "I am Donat from Don Air Co." Then straight into the first line.',
   'Hit the first line with energy. The first three seconds decide whether people keep watching.',
   'Count one second before you start and one after you finish, so nothing gets cut off.',
   'Do two or three takes and send them all. Mistakes are fine: pause, say the line again, keep going. We edit.',
