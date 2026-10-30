@@ -426,6 +426,7 @@ export function parseScript(text) {
  */
 export const HOW_TO_RECORD = [
   'Hold the phone yourself, upright and at eye level. It feels personal, like a video message. Or prop it on something steady if you would rather.',
+  'Stand in front of your branded truck, or in front of the system you are working on. It shows who you are and what you do without saying a word.',
   'Face the light: a window in front of you, or outside in the shade. Never with the sun or a window behind you.',
   'Somewhere quiet. No truck idling, no radio. The phone’s own mic is fine.',
   'Look at the lens, not at yourself on the screen.',

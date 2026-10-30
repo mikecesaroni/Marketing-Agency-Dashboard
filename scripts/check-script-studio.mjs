@@ -125,7 +125,8 @@ check('an unknown change with words uses the words', /Rewrite it in Spanish/.tes
 // ---------------------------------------------------------------- the text
 const text = scriptToText(script, { name: 'Prime' })
 check('plain text for copy and share', text.startsWith('FURNACE TUNE-UP BEFORE THE FREEZE\nAbout 30 seconds · Prime') && /1\. Your furnace has not run since March\.\n2\. Eighty-nine dollars/.test(text) && !/Show:/.test(text) && /Caption to post:/.test(text) && !/On screen/.test(text), true)
-check('the copied text ends with how to record, the same seven lines the page shows', text.endsWith(['HOW TO RECORD', ...HOW_TO_RECORD.map((t) => `• ${t}`)].join('\n')) && HOW_TO_RECORD.length === 7, true)
+check('the copied text ends with how to record, the same eight lines the page shows', text.endsWith(['HOW TO RECORD', ...HOW_TO_RECORD.map((t) => `• ${t}`)].join('\n')) && HOW_TO_RECORD.length === 8, true)
+check('the tips say to hold the phone, and to stand by the truck or the system', [HOW_TO_RECORD[0].startsWith('Hold the phone yourself'), HOW_TO_RECORD[1].startsWith('Stand in front of your branded truck')], [true, true])
 check('the tips come after the caption, so the script reads first', text.indexOf('Caption to post:') < text.indexOf('HOW TO RECORD'), true)
 check('the ask as a line', askLabel({ topic: 'season', length: '30', setting: 'truck' }), 'This month’s offer · 30 seconds · in the truck')
 check('the CRM summary', [scriptsSummary([]), scriptsSummary([{ status: 'filmed' }, { status: 'archived' }, { status: 'new' }])], ['No scripts yet. Send them the link and the first three picks are waiting.', '3 scripts · 1 filmed · 1 set aside'])
