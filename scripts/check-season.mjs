@@ -37,7 +37,15 @@ check('late September is fall up north and still summer in Florida',
   const ri = seasonContext({ industry: 'HVAC', market: 'Rhode Island', today: '2026-09-29' })
   check('Rhode Island HVAC in late September', [ri.dateLabel, ri.seasonLabel, /first cold night/.test(ri.focus)], ['Tuesday, September 29, 2026', 'early fall', true])
   const fl = seasonContext({ industry: 'HVAC ', market: 'SWFL', today: '2026-09-29' })
-  check('Florida HVAC in late September talks humidity and hurricanes', [fl.seasonLabel, /hurricane/.test(fl.focus)], ['early summer', true])
+  check('Florida HVAC in late September is late summer, and talks humidity and hurricanes', [fl.seasonLabel, /hurricane/.test(fl.focus)], ['late summer', true])
+  // "The season was wrong: it gave me summer when it is mid fall." A hot
+  // market's year is its own: a five-month summer, a two-month fall.
+  const wpb = seasonContext({ industry: 'HVAC', market: 'West Palm Beach, FL', today: '2026-10-30' })
+  check('West Palm Beach on October 30 is early fall, not summer', [wpb.climate, wpb.season, wpb.seasonLabel], ['hot', 'fall', 'early fall'])
+  check('and the AC is getting a break, with heating a few cold nights', [/AC finally getting a break/.test(wpb.focus), /handful of cold nights/.test(wpb.climateLine)], [true, true])
+  check('a cold market heats October into April', /October into April/.test(seasonContext({ industry: 'HVAC', market: 'Long Island', today: '2026-10-30' }).climateLine), true)
+  check('Texas in late November is late fall; Long Island is late fall too, with the freeze on the list', [seasonContext({ industry: 'HVAC', market: 'Dallas', today: '2026-11-25' }).seasonLabel, seasonContext({ industry: 'HVAC', market: 'Long Island', today: '2026-11-25' }).seasonLabel], ['mid fall', 'late fall'])
+  check('the hot-market winter is December to February', [seasonOf('2026-12-05', 'hot'), seasonOf('2026-03-10', 'hot'), seasonOf('2026-05-02', 'hot')], ['winter', 'spring', 'summer'])
   const pa = seasonContext({ industry: 'HVAC/Plumbing ', market: 'Central PA', today: '2026-09-29' })
   check('HVAC and plumbing gets both halves', /tune-up.*plumbing side.*water heater/.test(pa.focus), true)
 }
@@ -109,6 +117,14 @@ Film it: in the truck, window light`
   check('the prompt forbids licence, registration and insurance numbers', /Never put a licence number, registration number, insurance policy number/.test(buildRefillPrompt({ client: { name: 'X' }, today: '2026-10-12', angle: 'story' })), true)
   const storyPrompt = buildRefillPrompt({ client: { name: 'Belk Heating' }, today: '2026-10-12', angle: 'story' })
   check('the prompt makes the lines first person, the owner talking, and directions say you', storyPrompt.includes('in the first person, the owner talking') && storyPrompt.includes('"Belk Heating has"') && storyPrompt.includes('speaks to the owner as "you" and "your"'), true)
+  // The hook is the most important part of all of this: every script ask
+  // carries the hook playbook, the date and the market's own year, and the
+  // owner's name goes in the second line.
+  const wpbPrompt = buildRefillPrompt({ client: { name: 'Don Air Co' }, intake: { business_name: 'Don Air Co', owner_name: 'Donat', industry_trade: 'HVAC', service_area: 'West Palm Beach, FL' }, today: '2026-10-30', angle: 'season' })
+  check('the prompt says the date, the season for that market and how long heating runs there', [wpbPrompt.includes('Today is Friday, October 30, 2026'), wpbPrompt.includes('that is early fall'), wpbPrompt.includes('handful of cold nights between December and February'), wpbPrompt.includes('never call a late-October script "summer"')], [true, true, true, true])
+  check('the prompt carries the hook playbook', [wpbPrompt.includes('=== THE HOOK: THE FIRST THREE SECONDS ==='), wpbPrompt.includes('LOCAL CALL-OUT'), wpbPrompt.includes('What kills a hook')], [true, true, true])
+  check('the layout has the INTRO line with the owner\'s name, inside the first five seconds', [wpbPrompt.includes('INTRO: the owner\'s name and the company in one breath ("I\'m Donat from Don Air Co")'), wpbPrompt.includes('The owner on camera is Donat.')], [true, true])
+  check('a script with an INTRO line copies it, labelled', spokenScript('SCRIPT 1: T\nHOOK (0-3s): First line.\nINTRO: I am Donat from Don Air Co.\nCTA: Tap Get Quote.', { labels: true }), 'Hook: First line.\n\nIntro: I am Donat from Don Air Co.\n\nCTA: Tap Get Quote.')
 }
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)

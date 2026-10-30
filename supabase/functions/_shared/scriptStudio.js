@@ -239,6 +239,56 @@ export function voiceBlock(voice, transcripts = []) {
 }
 
 /**
+ * THE VIDEO HOOK PLAYBOOK: the first three seconds of an owner-on-camera
+ * video, for every script writer in the CRM (the chat's Refill and angle
+ * buttons, the Script Studio). The hook is the most important part of all of
+ * this ("to grab attention in the first 5 seconds"), so it is written down
+ * once, with where each rule comes from, and fed to the model whole.
+ *
+ * Sources (read 2026-10-30): Meta's own research as relayed by Social Media
+ * Today (47% of a video ad's value lands in the first 3 seconds, 74% by
+ * second 10; brand and message inside the first 5 seconds makes the creative
+ * 1.7x likelier to land in the top fifth for purchase intent); TikTok's
+ * Symphony study via True Future Media (a person on screen in the first 2
+ * seconds lifts hooking power about 1.5x); Saas Hero's 2026 field-service
+ * video guide (speak to camera inside 3 seconds, open on a symptom the
+ * homeowner recognises, name and area on screen inside 5 seconds); Surefire
+ * Local (92% of mobile video is watched muted); CapCut's and Fluxnote's hook
+ * guides (long intros, logo stings, slow greetings and vague setup lines kill
+ * the hook; a surprising question or a bold statement opens); the 2026
+ * practitioner consensus on hook rate (3-second views over impressions:
+ * under 30% and the hook, not the offer, is the problem; the best accounts
+ * run 45 to 55%); and this agency's own account data in playbook.js (fear
+ * and symptom hooks work on video because the clip shows the thing).
+ */
+export const VIDEO_HOOK_PLAYBOOK = `=== THE HOOK: THE FIRST THREE SECONDS ===
+Nearly half of what a video ad earns is decided in its first three seconds, and three quarters by second ten. A face on screen in the first two seconds and the point said out loud by second three is what stops the thumb. The score is hook rate (people who watch three seconds over people who saw it): under 30% means the hook is the problem, not the offer.
+
+The rules:
+1. The first line IS the hook. No greeting, no "hey guys", no company name first, no music before words. The owner is already mid-thought when the clip starts.
+2. The owner's name and the company come in the NEXT breath, inside the first five seconds ("I'm Donat from Don Air Co"), then the problem. Who is talking matters; it just does not go first.
+3. Name the viewer and the moment: their town, the time of year, the thing in their house right now. "Fort Myers, your AC has not had a day off since May" beats "Is your AC struggling?".
+4. One idea per hook. Specific beats clever: a number, a date, a symptom, a dollar figure from real jobs, a street or a neighbourhood.
+5. Face to the lens, standing by the truck or the system, the first word with energy. We burn captions in, so the line has to read as text too: short enough to read in three seconds.
+6. Never manufacture fear or a number. A cost-of-waiting hook needs a real figure from real jobs; "licensed and insured" is as far as credentials go.
+
+The patterns (one per script; a batch of three uses three different patterns, not one pattern three ways):
+- LOCAL CALL-OUT: "Austin homeowners, the first cold front lands Thursday."
+- SYMPTOM: "If the AC runs all day and the house still feels sticky, that is not your thermostat."
+- THE QUESTION THEY ARE ALREADY ASKING: "Fix it a third time, or replace it?"
+- COST OF WAITING (real numbers only): "The $300 repair in June became a $7,800 system in August. Here is how to tell which one you have."
+- THE MISTAKE: "The biggest mistake I see in Naples is running the AC on a clogged filter into November."
+- BOLD OR CONTRARIAN: "Most tune-ups are a waste of money. Here is the one part of one that is not."
+- OWNER, PLAIN: "I am the guy who shows up. Not a call center, not a salesman in a company shirt."
+- DEADLINE: "Three weeks to Thanksgiving. That is the week the furnace quits."
+- PROOF FIRST: "Forty-one five-star reviews in Burnet, and every one of them is a repair we did not oversell."
+- OFFER FIRST (price the small stuff): "$79 gets me to your door, and it comes off the bill if we do the work."
+- STORY: "Last Tuesday a lady in Plano had been told she needed a new system. She needed a $40 capacitor."
+- EDUCATE FIRST: "Three noises a furnace makes before it dies."
+
+What kills a hook: "Hi, I'm ... from ...", "Are you looking for a reliable company?", anything a renter would scroll past, a slow walk-up, the logo, a question with an obvious yes.`
+
+/**
  * The system prompt. `facts` is what the Edge Function gathered (the
  * client row, the intake, the website fact sheet, the ad results as
  * workingLines, hooks already used, transcripts, the voice sheet).
@@ -293,12 +343,15 @@ ${voiceBlock(f.voice, f.transcripts)}
 
 === THE TIME OF YEAR ===
 ${playbook || 'No season notes. Write to what the company sells now.'}
+Write to today's date above, the way the season notes describe it for their market: never call a late-October script "summer", and never sell heating in a hot market as if winter were long there.
+
+${VIDEO_HOOK_PLAYBOOK}
 
 === RULES ===
 - Plain words a neighbour would use. No marketing words: unlock, elevate, solutions, seamless, premier, hassle-free, top-notch.
 - Real facts only: their prices, their towns, their review numbers, their offers, from above. Nothing invented. If a fact is not on file, leave it out rather than guess. No brackets, no placeholders.
 - Never a licence, registration, policy or any other ID number. "Licensed and insured" is as far as it goes, and only if true of them.
-- The first line is the hook: the thing that stops a thumb. Say the point in the first three seconds.
+- The first line is the hook, built on one of the patterns above. The second line is the owner's name and the company in one breath${owner ? ` ("I'm ${owner} from ${name}")` : ''}, so they are inside the first five seconds.
 - One clear call to action at the end, with their real phone number when it is on file, otherwise "the link below".
 - Match the length asked for: about ${WORDS_PER_SECOND} words a second of speaking (15 seconds is about 38 words, 30 is about 75, 60 is about 150). Count the spoken words.
 - Four to eight spoken lines. Each line is one breath: one or two short sentences. The words only: no camera directions, no stage notes.
@@ -430,7 +483,7 @@ export const HOW_TO_RECORD = [
   'Face the light: a window in front of you, or outside in the shade. Never with the sun or a window behind you.',
   'Somewhere quiet. No truck idling, no radio. The phone’s own mic is fine.',
   'Look at the lens, not at yourself on the screen.',
-  'Say your name and your company at the start: "I am Donat from Don Air Co." Then straight into the first line.',
+  'Say your name and your company right after the first line, inside the first five seconds: "I am Donat from Don Air Co." The first line grabs them; your name tells them who is talking.',
   'Hit the first line with energy. The first three seconds decide whether people keep watching.',
   'Count one second before you start and one after you finish, so nothing gets cut off.',
   'Do two or three takes and send them all. Mistakes are fine: pause, say the line again, keep going. We edit.',

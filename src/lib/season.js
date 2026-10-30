@@ -5,6 +5,8 @@
 //
 // Pure on purpose: scripts/check-season.mjs imports it.
 
+import { VIDEO_HOOK_PLAYBOOK } from '../../supabase/functions/_shared/scriptStudio.js'
+
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 /** 'YYYY-MM-DD' or a Date, read as a calendar day (no timezone drift). */
@@ -50,18 +52,46 @@ export function climateOf(market = '') {
   return s.trim() ? 'cold' : 'mixed'
 }
 
-/** Meteorological season, shifted a month later in hot markets where summer lingers. */
-export function seasonOf(day, climate = 'mixed') {
-  const { m } = parts(day)
-  const base = m === 12 || m <= 2 ? 'winter' : m <= 5 ? 'spring' : m <= 8 ? 'summer' : 'fall'
-  if (climate === 'hot' && (m === 9 || m === 10)) return 'summer'
-  return base
+// Each climate's year, by month. A hot market (Florida, Texas, Arizona, the
+// Gulf) has a five-month summer and a two-month fall: late October in West
+// Palm Beach is early fall with the AC still running most days, not summer
+// (a batch written on October 30 opened "Third repair this summer"; "the
+// season was wrong, it gave me summer when it is mid fall"). Cold and mixed
+// markets follow the meteorological seasons.
+const SEASON_MONTHS = {
+  hot: { winter: [12, 1, 2], spring: [3, 4], summer: [5, 6, 7, 8, 9], fall: [10, 11] },
+  mixed: { winter: [12, 1, 2], spring: [3, 4, 5], summer: [6, 7, 8], fall: [9, 10, 11] },
+  cold: { winter: [12, 1, 2], spring: [3, 4, 5], summer: [6, 7, 8], fall: [9, 10, 11] },
 }
 
-/** Early, mid or late in the season, for the prompt's wording. */
-function stageOf(m) {
-  const pos = { 12: 0, 1: 1, 2: 2, 3: 0, 4: 1, 5: 2, 6: 0, 7: 1, 8: 2, 9: 0, 10: 1, 11: 2 }[m]
+// How long heating and cooling actually run in each kind of market: Texas
+// has a few weeks of heating, New York has seven months ("make sure the
+// system knows the location and seasonality for that business").
+const CLIMATE_YEAR = {
+  hot: 'Their market runs hot: the AC runs most days from April into October, the heat lingers into the fall, and the heating season is a handful of cold nights between December and February. Cooling is the business there; heating is a few weeks a year.',
+  mixed: 'Their market has a real summer and a short winter: cooling runs May to September, heating November to March, with a few weeks either side when nothing is on.',
+  cold: 'Their market has a long heating season, October into April, and a short summer: June to August is when the AC matters. The first hard freeze lands in late October or November.',
+}
+
+/** The season for a day in a market: 'winter', 'spring', 'summer' or 'fall'. */
+export function seasonOf(day, climate = 'mixed') {
+  const { m } = parts(day)
+  const table = SEASON_MONTHS[climate] || SEASON_MONTHS.mixed
+  return Object.keys(table).find((s) => table[s].includes(m)) || 'fall'
+}
+
+/** Early, mid or late in the season, by where the month falls in that market's season. */
+function stageOf(m, climate = 'mixed') {
+  const table = SEASON_MONTHS[climate] || SEASON_MONTHS.mixed
+  const months = table[seasonOf(`2000-${String(m).padStart(2, '0')}-15`, climate)] || []
+  const i = Math.max(0, months.indexOf(m))
+  const pos = months.length <= 1 ? 1 : Math.min(2, Math.floor((i * 3) / months.length))
   return ['early', 'mid', 'late'][pos]
+}
+
+/** How heating and cooling run in a market, one sentence for the prompt. */
+export function climateYear(climate = 'mixed') {
+  return CLIMATE_YEAR[climate] || CLIMATE_YEAR.mixed
 }
 
 // What homeowners are thinking about, per trade and season. Short phrases the
@@ -212,7 +242,8 @@ export function seasonContext({ industry, market, today }) {
     trade,
     climate,
     season,
-    seasonLabel: `${stageOf(m)} ${season}`,
+    seasonLabel: `${stageOf(m, climate)} ${season}`,
+    climateLine: climateYear(climate),
     focus: seasonalFocus(trade, season, climate),
     moments: upcomingMoments(today, climate),
   }
@@ -299,11 +330,10 @@ export function buildRefillPrompt({ client, intake, today, count, angle = 'seaso
   const market = i.service_area || client?.market || ''
   const ctx = seasonContext({ industry, market, today })
   const where = market.trim() ? ` in ${market.trim()}` : ''
+  const owner = String(i.owner_name || '').trim()
   const moments = ctx.moments.length
     ? ctx.moments.map((x) => `${x.name} (${x.days <= 0 ? 'this week' : `in ${x.days} day${x.days === 1 ? '' : 's'}`}): ${x.note}`).join('; ')
     : 'nothing big on the calendar'
-  const climateLine =
-    ctx.climate === 'hot' ? ' Their market runs hot, so summer lasts longer there than the calendar says.' : ''
 
   const headline = a.key === 'season' ? `${n} new owner video scripts for ${name}, ${ctx.seasonLabel}.` : `${n} new owner video scripts for ${name}: ${a.label.toLowerCase()}.`
   const angleAsk = a.key === 'season'
@@ -312,27 +342,30 @@ export function buildRefillPrompt({ client, intake, today, count, angle = 'seaso
 
   return `${REFILL_MARKER} ${headline}
 
-Today is ${ctx.dateLabel}. For a ${TRADE_WORDS[ctx.trade]} business${where}, that is ${ctx.seasonLabel}.${climateLine} What homeowners there are thinking about right now: ${ctx.focus}.
+Today is ${ctx.dateLabel}. For a ${TRADE_WORDS[ctx.trade]} business${where}, that is ${ctx.seasonLabel}. ${ctx.climateLine} Write to that date and that market: never call a late-October script "summer", never sell heating in a hot market as if winter were long there, and never sell AC in a cold market in November. What homeowners there are thinking about right now: ${ctx.focus}.
 Coming up: ${moments}.
 
 Use everything you know about them: the intake, their website, their offers, reviews and guarantees, what is running in the ad account and what has won or lost. Use their real offer, real proof and real town names. Do not reuse a hook from an ad already running or from a script you already wrote in this chat. Never put a licence number, registration number, insurance policy number or any other ID number in a script; "licensed and insured" is as far as it goes, and only if that is true of them.
 
 ${angleAsk}
 
-The script goes straight to the owner, who reads it into a phone. So every spoken line (HOOK, PROBLEM, PROOF, OFFER, CTA) is in the first person, the owner talking: "I", "we", "my crew", "our trucks". Never about the owner in the third person ("he", "his", "the owner", "${name} has"). Anything that is a direction rather than a line (Film it, On screen text) speaks to the owner as "you" and "your".
+${VIDEO_HOOK_PLAYBOOK}
+
+The script goes straight to the owner, who reads it into a phone.${owner ? ` The owner on camera is ${owner}.` : ''} So every spoken line (HOOK, INTRO, PROBLEM, PROOF, OFFER, CTA) is in the first person, the owner talking: "I", "we", "my crew", "our trucks". Never about the owner in the third person ("he", "his", "the owner", "${name} has"). Anything that is a direction rather than a line (Film it, On screen text) speaks to the owner as "you" and "your".
 
 Write every script exactly like this, as plain text with no markdown, no asterisks and no brackets:
 
 SCRIPT 1: short title
-Angle: one line on why this one works now
+Angle: one line on why this one works now, and which hook pattern it uses
 Length: about 30 seconds
-HOOK (0-3s): the first line out of the owner's mouth
+HOOK (0-3s): the first line out of the owner's mouth, one of the hook patterns, no greeting and no company name
+INTRO: the owner's name and the company in one breath${owner ? ` ("I'm ${owner} from ${name}")` : ''}, so they land inside the first five seconds
 PROBLEM: one or two lines
 PROOF: one line
 OFFER: one line
 CTA: one line
 On screen text: 3 to 6 words for the caption
-Film it: where to stand and what to show, one line
+Film it: where to stand (by the truck, by the system) and what to show, one line
 
 Put a line of dashes between scripts. Nothing before script 1 and nothing after the last one.`
 }
@@ -391,8 +424,8 @@ export function outsideScripts(text) {
 // The lines the owner actually says, in the order they say them. Everything
 // else in a script card (the title, Angle, Length, the caption, where to
 // stand) is for us, not for the person reading it into a phone.
-const SPOKEN = ['HOOK', 'PROBLEM', 'PROOF', 'OFFER', 'CTA']
-const LABEL_WORD = { HOOK: 'Hook', PROBLEM: 'Problem', PROOF: 'Proof', OFFER: 'Offer', CTA: 'CTA' }
+const SPOKEN = ['HOOK', 'INTRO', 'PROBLEM', 'PROOF', 'OFFER', 'CTA']
+const LABEL_WORD = { HOOK: 'Hook', INTRO: 'Intro', PROBLEM: 'Problem', PROOF: 'Proof', OFFER: 'Offer', CTA: 'CTA' }
 const NOTES = /^(angle|length|on screen text|film it)\b/i
 
 /**
