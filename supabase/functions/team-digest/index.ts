@@ -54,6 +54,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 // put the new commit id here, deploy index.ts.
 import {
   accountConnectedSlack,
+  adsPublishedSlack,
   alertKeys,
   alertsSlack,
   briefHtml,
@@ -292,6 +293,49 @@ Deno.serve(async (req) => {
         fresh.map((n: string) => ({ day, kind: 'task', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: `task:${id}:assigned:${n.toLowerCase()}`, model: { text: message.text, by, to: n, task: task.title } }))
       )
       return json({ day, posted, to: fresh, text: message.text, error: error || undefined })
+    }
+
+    // Ads just published to Meta from the publish page ("did you make so when
+    // we publish videos it sends a CRM update"): one post naming who put what
+    // out for which client. By the Meta ad ids the publish returned, read
+    // back from published_ads so the line carries what was really recorded.
+    // Each ad is announced once (published:<ad id>), so a retry or a second
+    // publish into another ad set only names the new ones.
+    if (action === 'ads_published') {
+      const id = String(body.client_id || '')
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'client_id is needed.' }, 400)
+      const ids = (Array.isArray(body.ad_ids) ? body.ad_ids : []).map((a: unknown) => String(a || '').trim()).filter((a: string) => /^\d{5,30}$/.test(a)).slice(0, 50)
+      if (!ids.length) return json({ error: 'ad_ids is needed.' }, 400)
+      const subjects = ids.map((a: string) => `published:${a}`)
+      const { data: told } = await supabase.from('team_digests').select('subject').eq('kind', 'publish').in('subject', subjects)
+      const seen = new Set((told || []).map((t) => t.subject))
+      const freshIds = ids.filter((_: string, i: number) => !seen.has(subjects[i]))
+      if (!freshIds.length) return json({ day, skipped: 'already announced' })
+      const [{ data: client }, { data: rows }] = await Promise.all([
+        supabase.from('clients').select('id, name').eq('id', id).maybeSingle(),
+        supabase.from('published_ads').select('ad_id, ad_name, video_id, campaign_name, published_by, created_at').eq('client_id', id).in('ad_id', freshIds).order('created_at'),
+      ])
+      if (!client) return json({ error: 'No such client.' }, 404)
+      const ads = (rows || []) as { ad_id: string; ad_name: string | null; video_id: string | null; campaign_name: string | null; published_by: string | null }[]
+      if (!ads.length) return json({ day, skipped: 'no recorded ads for those ids' })
+      const by = String(body.by || '').trim() || String(ads.find((a) => a.published_by)?.published_by || '').trim() || (await caller())
+      const message = adsPublishedSlack({ client, ads, by, appUrl })
+      if (!message) return json({ day, skipped: 'nothing to say' })
+      const url = await slackUrl()
+      let posted = false
+      let error = ''
+      if (url) {
+        try {
+          await postSlack(url, message)
+          posted = true
+        } catch (err) {
+          error = err instanceof Error ? err.message : String(err)
+        }
+      }
+      await supabase.from('team_digests').insert(
+        ads.map((a) => ({ day, kind: 'publish', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: `published:${a.ad_id}`, model: { text: message.text, by, client: client.name, ad: a.ad_name } }))
+      )
+      return json({ day, posted, ads: ads.length, text: message.text, error: error || undefined })
     }
 
     // Forms a client filled in that the channel has not heard about: one

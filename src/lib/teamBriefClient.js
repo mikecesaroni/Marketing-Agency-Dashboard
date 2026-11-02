@@ -64,6 +64,14 @@ export const announceTaskDone = (taskId, by) => call({ action: 'task_done', task
  */
 export const announceTaskAssigned = (taskId, by) => call({ action: 'task_assigned', task_id: taskId, by: by || '' })
 
+/**
+ * Ads just published to Meta from the publish page: tell the channel who
+ * put what out for which client. By the Meta ad ids the publish returned;
+ * the function announces each ad once, so a retry is harmless. Best effort:
+ * the ads exist whether or not the channel hears.
+ */
+export const announceAdsPublished = (clientId, adIds, by) => call({ action: 'ads_published', client_id: clientId, ad_ids: adIds, by: by || '' })
+
 /** Set, replace or clear the Slack incoming webhook. Admins only; the URL goes to the vault, never to a table the CRM reads. */
 export async function setSlackWebhook(url) {
   const { data, error } = await supabase.rpc('set_slack_webhook', { url: String(url || '').trim() })

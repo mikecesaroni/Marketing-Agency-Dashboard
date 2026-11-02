@@ -679,6 +679,36 @@ export function taskAssignedSlack({ task = {}, client = null, list = null, by = 
   }
 }
 
+/**
+ * Ads published to Meta from the CRM ("did you make so when we publish
+ * videos it sends a CRM update"): who, how many and of what kind, for which
+ * client, named, the campaign, and that they land paused. One post per
+ * publish; the function announces each ad once.
+ *
+ * ads: published_ads rows { ad_id, ad_name, video_id, campaign_name }
+ */
+export function adsPublishedSlack({ client = null, ads = [], by = '', appUrl = '' } = {}) {
+  const list = (Array.isArray(ads) ? ads : []).filter(Boolean)
+  if (!list.length) return null
+  const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
+  const who = firstName(by) || 'Someone'
+  const name = String(client?.name || 'a client')
+  const videos = list.filter((a) => a.video_id).length
+  const kind = videos === list.length ? 'video ad' : videos === 0 ? 'image ad' : 'ad'
+  const what = `${list.length} ${kind}${list.length === 1 ? '' : 's'}${kind === 'ad' ? ` (${videos} video, ${list.length - videos} image)` : ''}`
+  const names = list.map((a) => String(a.ad_name || a.ad_id || 'an ad').trim())
+  const campaigns = [...new Set(list.map((a) => String(a.campaign_name || '').trim()).filter(Boolean))]
+  const tail = [campaigns.length ? `campaign ${campaigns.join(', ')}` : '', 'paused until switched on in Ads Manager'].filter(Boolean).join(' · ')
+  const href = `/client/${client?.id || ''}#meta`
+  return {
+    text: `${who} published ${what} to Meta for ${name}: ${names.join(', ')} (${tail})`,
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: `🚀 *${slackEsc(who)}* published *${slackEsc(what)}* to Meta for ${link(model, href, slackEsc(name))}: ${slackEsc(names.join(', '))} · ${slackEsc(tail)}` } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, href, 'Their Meta panel')} · ${link(model, '/content', 'Video board')}` }] },
+    ],
+  }
+}
+
 export const FORM_WORDS = {
   intake: 'filled in their onboarding form',
   ghl: 'sent back their GHL account details',

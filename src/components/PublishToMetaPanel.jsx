@@ -5,6 +5,8 @@ import ZoomImage from './ui/ZoomImage'
 import LocationPicker from './LocationPicker'
 import LeadFormPicker from './LeadFormPicker'
 import { publishedNote, rememberQuietly } from '../lib/memory'
+import { announceAdsPublished } from '../lib/teamBriefClient'
+import { readMe } from '../lib/tasksData'
 import FunnelBuilder from './FunnelBuilder'
 import VideoAdPicker from './VideoAdPicker'
 import { fetchSavedAds } from '../lib/savedAds'
@@ -1401,6 +1403,9 @@ export default function PublishToMetaPanel({
 
       const shared = {
         client_id: client.id,
+        // Who pressed publish: the "You" name the Tasks page keeps, so the
+        // published_ads row and the channel can say so.
+        published_by: readMe() || undefined,
         objective,
         special_ad_categories: specialCategory ? [specialCategory] : [],
         // Both named here rather than left to the function's defaults, so the
@@ -1480,6 +1485,10 @@ export default function PublishToMetaPanel({
           reuseCampaign: true,
         })
       )
+      // Every Meta ad id this publish made, across every ad set.
+      const adIds = (data?.runs ? data.runs.map((r) => r.result).filter(Boolean) : [data]).flatMap(
+        (r) => [].concat(r?.ad_id || [], (r?.results || []).map((x) => x.ad_id).filter(Boolean))
+      )
       // Into memory, so the chat knows what went live and when to judge it.
       rememberQuietly({
         clientId: client.id,
@@ -1493,12 +1502,13 @@ export default function PublishToMetaPanel({
         // whichever one happened to be first.
         evidence: {
           stamps: pickedSets.map((s) => s.stamp),
-          ad_ids: (data?.runs ? data.runs.map((r) => r.result).filter(Boolean) : [data]).flatMap(
-            (r) => [].concat(r?.ad_id || [], (r?.results || []).map((x) => x.ad_id).filter(Boolean))
-          ),
+          ad_ids: adIds,
           adset_ids: data?.runs ? data.runs.map((r) => r.adset_id) : undefined,
         },
       })
+      // The channel hears it went out ("when we publish videos it sends a CRM
+      // update"). Best effort: the ads exist whether or not Slack does.
+      if (adIds.length) announceAdsPublished(client.id, adIds, readMe()).catch(() => {})
     } catch (err) {
       setError(err.message)
       setPartial(err.partial || null)

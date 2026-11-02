@@ -7,7 +7,7 @@
 // WAITING COSTS MONEY OR A DAY. The morning brief is the whole picture in
 // one short message; the alerts are the changes that cannot wait.
 
-import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds, setupLine, setupNext, taskAssignedSlack, taskDoneSlack } from '../src/lib/teamBrief.js'
+import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, adsPublishedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds, setupLine, setupNext, taskAssignedSlack, taskDoneSlack } from '../src/lib/teamBrief.js'
 import { buildWeeklyStatus, reportWeeks } from '../src/lib/weeklyStatus.js'
 import { nextSteps } from '../src/lib/nextSteps.js'
 import { addDays } from '../src/lib/dates.js'
@@ -240,6 +240,14 @@ const given = taskAssignedSlack({ task: { id: 't3', title: 'Chase the <photos>',
 check('task given: who, to whom, what, where and when, linked', [given.text, given.blocks[0].text.text], ['Ethan gave Mike a task: Chase the <photos> (Acme & Sons · Onboarding · due Nov 3)', '📋 *Ethan* gave *Mike* a task: <https://crm.example/tasks|Chase the &lt;photos&gt;> · <https://crm.example/client/c1|Acme &amp; Sons> · Onboarding · due Nov 3'])
 check('task given to two people reads as a pair', taskAssignedSlack({ task: { id: 't4', title: 'Shoot list' }, by: 'Ethan', to: ['Mike', 'Josh'] }).text, 'Ethan gave Mike and Josh a task: Shoot list')
 check('task given, nothing known: still a sentence', taskAssignedSlack({ task: { title: 'Call back' } }).text, 'Someone gave someone a task: Call back')
+// --- ads published to Meta ------------------------------------------------------------
+// ("Did you make so when we publish videos it sends a CRM update?")
+const pub = adsPublishedSlack({ client: { id: 'c1', name: 'Don Air & Co' }, ads: [{ ad_id: '1', ad_name: 'Don Air 11-02 1-1', video_id: 'v1', campaign_name: 'WC_Fall' }, { ad_id: '2', ad_name: 'Don Air 11-02 2-1', video_id: 'v2', campaign_name: 'WC_Fall' }], by: 'Kyle Smith', appUrl: 'https://crm.example' })
+check('ads published: who, how many of what, for whom, named, the campaign, and that they are paused', [pub.text, pub.blocks[0].text.text], ['Kyle published 2 video ads to Meta for Don Air & Co: Don Air 11-02 1-1, Don Air 11-02 2-1 (campaign WC_Fall · paused until switched on in Ads Manager)', '🚀 *Kyle* published *2 video ads* to Meta for <https://crm.example/client/c1#meta|Don Air &amp; Co>: Don Air 11-02 1-1, Don Air 11-02 2-1 · campaign WC_Fall · paused until switched on in Ads Manager'])
+check('one image ad reads singular, no campaign known', adsPublishedSlack({ client: { id: 'c1', name: 'Acme' }, ads: [{ ad_id: '9', ad_name: 'Fall tune-up' }] }).text, 'Someone published 1 image ad to Meta for Acme: Fall tune-up (paused until switched on in Ads Manager)')
+check('a mix says both', adsPublishedSlack({ client: { id: 'c1', name: 'Acme' }, ads: [{ ad_id: '1', ad_name: 'A', video_id: 'v' }, { ad_id: '2', ad_name: 'B' }, { ad_id: '3', ad_name: 'C' }], by: 'Ethan' }).text.startsWith('Ethan published 3 ads (1 video, 2 image) to Meta for Acme: A, B, C'), true)
+check('no ads, no message', adsPublishedSlack({ client: { id: 'c1', name: 'Acme' }, ads: [] }), null)
+
 check('new client: the top tier carries its setup fee', clientAddedSlack({ id: 'n2', name: 'Top Co', tier: 3, monthly_fee: 3500, setup_fee: 500 }).blocks[0].text.text.includes('Runs Without You Marketing ($3,500/mo, $500 setup)'), true)
 check('new client: no tier picked still posts, with the fee', clientAddedSlack({ id: 'n3', name: 'Odd Co', tier: null, monthly_fee: 1200 }).text, 'New client: Odd Co, $1,200/mo')
 
