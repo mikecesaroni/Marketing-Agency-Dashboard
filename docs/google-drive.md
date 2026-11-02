@@ -40,15 +40,11 @@ secret, and the browser only ever talks to the `drive-assets` function.
 
 ## Setup, per client
 
-Usually the client does this themselves. The onboarding page (`/onboarding/:token`,
-the link the **Send to Client** panel produces) has a "Photos for your ads" step
-that shows them the service account address, explains Viewer access in plain
-words, and takes the folder link. When they paste it there the folder is
-connected automatically — nobody here has to copy anything across.
+We make the folder (since 2026-11-02: "I'm doing it myself from now on and
+I'll paste the link in the onboarding message"). The client's form no longer
+asks for one.
 
-Do it by hand only when the client has already shared a folder some other way:
-
-1. In Drive, open the client's folder → **Share**.
+1. In Drive, make the client's folder → **Share**.
 2. Paste the service account email, set it to **Viewer**, and send. Drive may
    warn that this address is not a Google account; that is expected. The Drive
    tab in the Studio displays the address and copies it when clicked, so it does
@@ -56,13 +52,17 @@ Do it by hand only when the client has already shared a folder some other way:
 3. In the same Share window, set **General access** to **Anyone with the
    link** (Viewer). The CRM does not need this, the team does: the editor and
    everyone else open the folder from their own Google accounts, and a
-   Restricted folder locks them out one by one.
+   Restricted folder locks them out one by one. Share it with the client too.
 4. Copy the folder link (`Share → Copy link`).
-5. In the CRM, open the client → Ad Studio → the **Drive** tab on either image
-   picker → paste the link → **Link**.
+5. In the CRM, link it: the client page under Files, the Content board's
+   "Link a folder", or the **Drive** tab on either Ad Studio image picker →
+   paste the link → **Link**. The onboarding message then carries the link
+   ("Photos for your ads. I made one folder in Google Drive..."), so link the
+   folder before copying the message.
 
 The app parses the folder ID out of the link, so any of Drive's URL shapes work.
-Only the ID is stored.
+Only the ID is stored. The moment it is linked the Slack channel hears it
+("📁 Acme · by Ethan · open the folder"; see `docs/weekly-status.md`).
 
 ## What it does and does not do
 

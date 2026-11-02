@@ -7,7 +7,7 @@
 // WAITING COSTS MONEY OR A DAY. The morning brief is the whole picture in
 // one short message; the alerts are the changes that cannot wait.
 
-import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, adsPublishedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds, setupLine, setupNext, taskAssignedSlack, taskDoneSlack } from '../src/lib/teamBrief.js'
+import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, adsPublishedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, driveLinkedSlack, firstName, formSubmittedSlack, liveClientIds, setupLine, setupNext, taskAssignedSlack, taskDoneSlack } from '../src/lib/teamBrief.js'
 import { buildWeeklyStatus, reportWeeks } from '../src/lib/weeklyStatus.js'
 import { nextSteps } from '../src/lib/nextSteps.js'
 import { addDays } from '../src/lib/dates.js'
@@ -228,6 +228,15 @@ check('account connected: a Meta account the CRM has no name for is the id alone
 const forms = formSubmittedSlack([{ client: { id: 'f1', name: 'Acme & Sons' }, form: 'intake', at: '2026-10-28T14:00:00Z' }, { client: { id: 'f2', name: 'Belk' }, form: 'ghl', at: '2026-10-28T15:00:00Z' }], { appUrl: 'https://crm.example/' })
 check('forms in: one line each, the client linked, the form named in words', [forms.text, forms.blocks[0].text.text], ['Acme &amp; Sons filled in their onboarding form · Belk sent back their GHL account details', '*Forms in (2)*\n📝 <https://crm.example/client/f1|Acme &amp; Sons> filled in their onboarding form\n📝 <https://crm.example/client/f2|Belk> sent back their GHL account details'])
 check('one form is a singular title', formSubmittedSlack([{ client: { id: 'f1', name: 'Acme' }, form: 'intake' }]).blocks[0].text.text.startsWith('*Form in*\n'), true)
+
+// --- a Drive folder linked --------------------------------------------------------------
+// ("Send CRM update when Google Drive is linked.")
+const drive = driveLinkedSlack([{ client: { id: 'd1', name: 'Acme & Sons' }, folderId: '1AbC_def-9', by: 'ethan@example.com' }], { appUrl: 'https://crm.example/' })
+check('drive linked from the CRM: the client, who by first name, the folder to open', [drive.text, drive.blocks[0].text.text], ['Drive folder linked for Acme & Sons by Ethan', '*Drive folder linked*\n📁 <https://crm.example/client/d1|Acme &amp; Sons> · by Ethan · <https://drive.google.com/drive/folders/1AbC_def-9|open the folder>'])
+check('nobody known: still a sentence, no "by"', driveLinkedSlack([{ client: { id: 'd3', name: 'Co' }, folderId: 'f' }]).text, 'Drive folder linked for Co')
+check('two at once (the sweep): a counted title, one line each', driveLinkedSlack([{ client: { id: 'd1', name: 'A' }, folderId: '1', by: 'Ken' }, { client: { id: 'd2', name: 'B' }, folderId: '2', by: 'Josh' }]).blocks[0].text.text.split('\n').map((l) => l.slice(0, 15)), ['*Drive folders ', '📁 A · by Ken ·', '📁 B · by Josh '])
+check('the context points at the video board', drive.blocks[1].elements[0].text, '<https://crm.example/content|Video board> · what they add there shows up in the Ad Studio')
+check('no folders, no post', driveLinkedSlack([]), null)
 check('no forms, no message', formSubmittedSlack([]), null)
 
 // --- a task ticked done ---------------------------------------------------------------

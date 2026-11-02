@@ -1,6 +1,6 @@
 // The client onboarding form: one form, in steps, that every new client fills
 // in before the onboarding call. Business, what they sell, why them, leads,
-// photos, and the GoHighLevel account details, all in one sitting.
+// and the GoHighLevel account details, all in one sitting.
 //
 // WHY ONE FORM. It was two (the onboarding questions, then a separate GHL
 // setup form) because GHL was optional. Every client is on GHL now, so the
@@ -100,13 +100,10 @@ export const FORM_STEPS = [
       { key: 'main_goal', table: 'intake', label: 'What does a win look like in 90 days?', type: 'textarea', placeholder: 'e.g. 30 booked jobs a month from ads, two new techs busy', help: 'One sentence is plenty.' },
     ],
   },
-  {
-    key: 'photos',
-    title: 'Photos and videos',
-    blurb: 'Real photos of real jobs beat stock every time. One shared folder and you never email us a picture again.',
-    fields: [],
-    drive: true,
-  },
+  // No photos step any more (2026-11-02: "take that out of the onboarding
+  // form, I'm doing it myself from now on and I'll paste the link in the
+  // onboarding message"). We make the folder, link it on the client page,
+  // and the onboarding message carries the link.
   {
     key: 'account',
     title: 'Your account',

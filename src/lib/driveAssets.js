@@ -1,5 +1,7 @@
 import { supabase } from './supabaseClient'
 import { readFunctionError } from './functionError'
+import { readMe } from './tasksData'
+import { announceDriveLinked } from './teamBriefClient'
 
 // Client side of the Drive integration.
 //
@@ -145,19 +147,27 @@ export async function resolveImageSrc(clientId, path) {
  * drive-video and drive-video-register all read drive_folder_id, so a client
  * with folders but a null primary would break each of them. Keeping the
  * primary populated makes the extras purely additive.
+ *
+ * Linking the primary tells the channel ("send CRM update when Google Drive
+ * is linked"): the row is signed with the "You" name, the trigger in
+ * supabase/drive-linked.sql stamps when, and team-digest posts once per
+ * client and folder. Best effort; the folder is linked either way.
  */
 export async function saveDriveFolder(clientId, input, { additional = false } = {}) {
   const folderId = input.trim() ? parseFolderId(input) : ''
   if (input.trim() && !folderId) {
     throw new Error('That does not look like a Drive folder link or ID.')
   }
+  const me = readMe() || null
+  const tell = () => announceDriveLinked(clientId, me || '').catch(() => {})
 
   if (!additional) {
     const { error } = await supabase
       .from('clients')
-      .update({ drive_folder_id: folderId || null })
+      .update({ drive_folder_id: folderId || null, ...(folderId ? { drive_linked_by: me } : {}) })
       .eq('id', clientId)
     if (error) throw new Error(error.message)
+    if (folderId) tell()
     return folderId
   }
 
@@ -178,10 +188,12 @@ export async function saveDriveFolder(clientId, input, { additional = false } = 
   // With no primary yet, this IS the primary. Otherwise it joins the extras.
   const patch = data.drive_folder_id
     ? { extra_drive_folder_ids: [...(data.extra_drive_folder_ids || []), folderId] }
-    : { drive_folder_id: folderId }
+    : { drive_folder_id: folderId, drive_linked_by: me }
 
   const { error } = await supabase.from('clients').update(patch).eq('id', clientId)
   if (error) throw new Error(error.message)
+  // A second folder beside the first is not "Drive linked" again.
+  if (!data.drive_folder_id) tell()
   return folderId
 }
 

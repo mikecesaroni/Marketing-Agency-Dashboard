@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { announceForm } from '../lib/teamBriefClient'
-import DriveFolderStep from '../components/DriveFolderStep'
 import { Button, Input, Select, Textarea } from '../components/ui'
 import {
   RADIUS_CHIPS,
@@ -19,10 +18,12 @@ import {
 // credential, and it only ever reaches the `onboarding_link_*` functions,
 // which resolve it to exactly one client.
 //
-// One form, seven short steps, and the GoHighLevel account details are the
+// One form, six short steps, and the GoHighLevel account details are the
 // last of them rather than a second form on a second link: every client is
 // on GHL now. Each Continue saves that step, so nothing is lost if they stop.
 // Older links still carry ?form=intake or ?form=ghl and get that half only.
+// The photos folder is not asked for here (2026-11-02): we make it and the
+// onboarding message carries the link.
 
 const AGENCY = 'The Working Class Marketing'
 
@@ -182,10 +183,6 @@ export default function ClientOnboardingPage() {
   const [submittedBefore, setSubmittedBefore] = useState(false)
   const [savedSteps, setSavedSteps] = useState(() => new Set())
   const [missing, setMissing] = useState([])
-  const [driveConnected, setDriveConnected] = useState(false)
-  // The folder we made for them, when there is one: the photos step hands
-  // them the link instead of asking them to make and share a folder.
-  const [driveFolderUrl, setDriveFolderUrl] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -199,8 +196,6 @@ export default function ClientOnboardingPage() {
       }
       setClientName(data.client_name || '')
       setAnswers((prev) => mergeAnswers(prev, data.intake, data.ghl))
-      setDriveConnected(Boolean(data.drive_connected))
-      setDriveFolderUrl(String(data.drive_folder_url || ''))
       setSubmittedBefore(Boolean(data.intake_submitted_at && (only === 'intake' || data.ghl_submitted_at)))
       // A returning visitor who already sent the business half lands on the
       // account step rather than at the top.
@@ -363,17 +358,11 @@ export default function ClientOnboardingPage() {
           <h2 className="mt-0.5 text-xl font-bold text-slate-900 md:text-2xl">{step.title}</h2>
           <p className="mt-1 text-sm text-slate-500">{step.blurb}</p>
 
-          {step.drive ? (
-            <div className="mt-5">
-              <DriveFolderStep token={token} connected={driveConnected} folderUrl={driveFolderUrl} />
-            </div>
-          ) : (
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              {step.fields.map((f) => (
-                <Question key={f.key} field={f} value={answers[f.key]} onChange={change} invalid={missing.includes(f.key)} />
-              ))}
-            </div>
-          )}
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            {step.fields.map((f) => (
+              <Question key={f.key} field={f} value={answers[f.key]} onChange={change} invalid={missing.includes(f.key)} />
+            ))}
+          </div>
 
           {missing.length > 0 && (
             <p className="mt-4 rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-800">

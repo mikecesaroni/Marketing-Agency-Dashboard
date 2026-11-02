@@ -1,6 +1,6 @@
 # The client onboarding form
 
-One link, one form, seven short steps, filled in by the client before the
+One link, one form, six short steps, filled in by the client before the
 onboarding call. `/onboarding/<token>`. The question set lives in
 `src/lib/clientForm.js` and is pinned by `scripts/check-client-form.mjs`.
 
@@ -11,7 +11,6 @@ onboarding call. `/onboarding/<token>`. The question set lives in
 | What you sell | services, the job they want more of, rough prices, jobs to avoid, seasons, ad budget per day | what the ads lead with |
 | Why you | **what makes you better than competitors** (required), ideal customer, offers and guarantees, star rating and count, licences and certifications, competitors | where the ads come from |
 | Your leads | where leads come in, who answers, what to ask a lead, what a 90-day win looks like | so every lead lands and the form asks the right things |
-| Photos and videos | the shared Google Drive folder | real photos for the ads |
 | Your account | legal name, entity type, EIN, address, time zone, phone, email, area code, website, authorised rep, opt-in method, review link, booking link, privacy page, anything else | the GoHighLevel build and A2P text registration |
 
 Every client is on GoHighLevel now, so the account step is part of the one

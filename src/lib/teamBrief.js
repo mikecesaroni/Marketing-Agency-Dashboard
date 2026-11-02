@@ -767,6 +767,37 @@ export function formSubmittedSlack(items = [], { appUrl = '' } = {}) {
   }
 }
 
+/**
+ * The channel hears when a client's Drive folder is linked ("send CRM
+ * update when Google Drive is linked"): which client, who linked it, and
+ * the folder itself to open. One line per folder; several when the sweep
+ * catches up at once.
+ *
+ * items: [{ client: { id, name }, folderId, by }]
+ */
+export function driveLinkedSlack(items = [], { appUrl = '' } = {}) {
+  const list = (Array.isArray(items) ? items : []).filter(Boolean)
+  if (!list.length) return null
+  const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
+  const plain = (it) => {
+    const who = firstName(it.by)
+    return `Drive folder linked for ${String(it.client?.name || 'A client')}${who ? ` by ${who}` : ''}`
+  }
+  const line = (it) => {
+    const name = link(model, `/client/${it.client?.id || ''}`, slackEsc(it.client?.name || 'A client'))
+    const open = it.folderId ? ` · <https://drive.google.com/drive/folders/${encodeURIComponent(String(it.folderId))}|open the folder>` : ''
+    const who = firstName(it.by)
+    return `📁 ${name}${who ? ` · by ${slackEsc(who)}` : ''}${open}`
+  }
+  return {
+    text: list.map(plain).join(' · '),
+    blocks: [
+      ...slackSections(list.length === 1 ? 'Drive folder linked' : `Drive folders linked (${list.length})`, list.map(line)),
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, '/content', 'Video board')} · what they add there shows up in the Ad Studio` }] },
+    ],
+  }
+}
+
 /** The alerts as a Slack message, or null when there is nothing to say. */
 export function alertsSlack({ fresh = [], cleared = [] }, { appUrl = '' } = {}) {
   if (fresh.length === 0 && cleared.length === 0) return null

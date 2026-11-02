@@ -51,6 +51,15 @@ export const announceAccount = (clientId, channel) => call({ action: 'account_co
 export const announceForm = (token, form) => call({ action: 'form_submitted', token, form })
 
 /**
+ * A Drive folder just linked to a client ("send CRM update when Google Drive
+ * is linked"): tell the channel, with the client id and the "You" name.
+ * Once per client and folder; the quarter-hour alert run sweeps the last
+ * three days for any a page failed to send. Best effort: the folder is
+ * linked either way.
+ */
+export const announceDriveLinked = (clientId, by) => call({ action: 'drive_linked', client_id: clientId, by: by || '' })
+
+/**
  * A task ticked done on the Tasks page (or a client page): tell the channel
  * what and by whom. `by` is the "You" name the Tasks page keeps; the login's
  * profile name is the fallback. Once per completion.

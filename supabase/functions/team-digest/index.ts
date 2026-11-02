@@ -50,6 +50,10 @@
 //                      listing them, each task told once per person.
 //   ads_published      from the publish page (client_id, ad_ids, by): one
 //                      post naming who published what; each ad once.
+//   drive_linked       from the CRM (client_id, by) the moment a Drive folder
+//                      is linked: one line per client and folder. The alerts
+//                      run sweeps the last three days too
+//                      (supabase/drive-linked.sql stamps when).
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 // model.js is the bundle in this folder (`npm run brief`), served here from
@@ -73,6 +77,7 @@ import {
   fetchStatusRows,
   formSubmittedSlack,
   fetchWeeklyRows,
+  driveLinkedSlack,
   liveClientIds,
   onboardingTasksSlack,
   statusFromRows,
@@ -448,6 +453,58 @@ Deno.serve(async (req) => {
       return json({ day, ...(await postForms(items)) })
     }
 
+    // Drive folders linked that the channel has not heard about ("send CRM
+    // update when Google Drive is linked"): one subject per client and folder
+    // (drive:<client>:<folder>). `only` narrows it to one client, for the
+    // page's own call; otherwise the last three days, by the stamp the
+    // trigger puts on the row (supabase/drive-linked.sql). The row says who
+    // linked it (the CRM's "You" name) when the page knew.
+    type DriveItem = { subject: string; client: { id: string; name: string }; folderId: string; by: string; at: string }
+    const drivesToPost = async (only?: { clientId: string }): Promise<DriveItem[]> => {
+      const since = new Date(Date.now() - 3 * 86400000).toISOString()
+      let q = supabase.from('clients').select('id, name, archived, drive_folder_id, drive_linked_at, drive_linked_by').not('drive_folder_id', 'is', null).gte('drive_linked_at', since)
+      if (only) q = q.eq('id', only.clientId)
+      const { data: rows } = await q
+      const items: DriveItem[] = (rows || [])
+        .filter((c) => !c.archived && c.drive_folder_id)
+        .map((c) => ({ subject: `drive:${c.id}:${c.drive_folder_id}`, client: { id: c.id, name: c.name }, folderId: String(c.drive_folder_id), by: String(c.drive_linked_by || ''), at: String(c.drive_linked_at || '') }))
+      if (!items.length) return []
+      const { data: done } = await supabase.from('team_digests').select('subject').eq('kind', 'drive').in('subject', items.map((i) => i.subject))
+      const seen = new Set((done || []).map((d) => d.subject))
+      return items.filter((i) => !seen.has(i.subject))
+    }
+    const postDrives = async (items: DriveItem[]) => {
+      if (!items.length) return { posted: false, count: 0 }
+      const message = driveLinkedSlack(items, { appUrl })
+      const url = await slackUrl()
+      let posted = false
+      let error = ''
+      if (message && url) {
+        try {
+          await postSlack(url, message)
+          posted = true
+        } catch (err) {
+          error = err instanceof Error ? err.message : String(err)
+        }
+      }
+      await supabase.from('team_digests').insert(
+        items.map((i) => ({ day, kind: 'drive', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: i.subject, model: { text: message?.text, client: i.client, folder: i.folderId, by: i.by, at: i.at } }))
+      )
+      return { posted, count: items.length, error: error || undefined }
+    }
+
+    if (action === 'drive_linked') {
+      const clientId = String(body.client_id || '')
+      if (!/^[0-9a-f-]{36}$/i.test(clientId)) return json({ error: 'client_id is needed.' }, 400)
+      const items = await drivesToPost({ clientId })
+      if (!items.length) return json({ day, skipped: 'nothing new to say' })
+      // The row may be unsigned (no "You" name set in that browser): the
+      // call's name, else the login, fills it in.
+      const by = String(body.by || '').trim() || (await caller())
+      for (const it of items) if (!it.by) it.by = by
+      return json({ day, ...(await postDrives(items)) })
+    }
+
     const statusRows = statusFromRows(await fetchStatusRows(supabase, { internalColumn: true, day }))
 
     if (action === 'alerts') {
@@ -459,10 +516,13 @@ Deno.serve(async (req) => {
       const diff = diffAlerts(current, open || [], { live: liveClientIds(statusRows) })
       const message = alertsSlack(diff, { appUrl })
       const forms = await formsToPost()
-      if (body.dry_run) return json({ day, dry_run: true, fresh: diff.fresh, cleared: diff.cleared, message, forms })
+      const drives = await drivesToPost()
+      if (body.dry_run) return json({ day, dry_run: true, fresh: diff.fresh, cleared: diff.cleared, message, forms, drives })
       // Forms first: a client who just filled theirs in is the best news of
-      // the quarter hour. Posted on their own, recorded per submission.
+      // the quarter hour. Posted on their own, recorded per submission. Then
+      // any Drive folder linked that the page did not manage to tell us.
       const formResult = await postForms(forms)
+      const driveResult = await postDrives(drives)
 
       const url = await slackUrl()
       let posted = false
@@ -494,7 +554,7 @@ Deno.serve(async (req) => {
           model: { fresh: diff.fresh, cleared: diff.cleared },
         })
       }
-      return json({ day, fresh: diff.fresh.length, cleared: diff.cleared.length, posted, forms: formResult.count, error: error || formResult.error || undefined })
+      return json({ day, fresh: diff.fresh.length, cleared: diff.cleared.length, posted, forms: formResult.count, drives: driveResult.count, error: error || formResult.error || driveResult.error || undefined })
     }
 
     // brief and preview

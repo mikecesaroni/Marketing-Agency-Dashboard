@@ -41,8 +41,11 @@ check('the ghl build fields are required on the form', GHL_REQUIRED_KEYS.filter(
 check('the client page counts the same intake keys', CLIENT_INTAKE_KEYS, INTAKE_FORM_KEYS)
 check('the radius is asked, and required', FORM_FIELDS.find((f) => f.key === 'service_radius_miles')?.required, true)
 check('what makes you better is asked, and required', FORM_FIELDS.find((f) => f.key === 'why_people_choose')?.required, true)
-check('seven steps, account last', FORM_STEPS.map((s) => s.key), ['business', 'area', 'services', 'why', 'leads', 'photos', 'account'])
-check('one photos step, no fields of its own', FORM_STEPS.find((s) => s.drive)?.fields.length, 0)
+check('six steps, account last', FORM_STEPS.map((s) => s.key), ['business', 'area', 'services', 'why', 'leads', 'account'])
+// "Take that out of the onboarding form": we make the Drive folder and the
+// onboarding message carries the link; the form never asks for it.
+check('no photos step', FORM_STEPS.some((s) => s.drive || s.key === 'photos'), false)
+check('every step has fields of its own', FORM_STEPS.every((s) => s.fields.length > 0), true)
 check('dropped: the questions almost nobody answered', ['average_job_value', 'customer_age_min', 'brand_color_primary', 'has_logo', 'leads_needed_per_month', 'lsa_ad_budget_per_day', 'bad_experience_past_marketers', 'offer_headline', 'words_to_avoid', 'response_time_to_lead', 'crm_system', 'service_pricing', 'terms_url', 'dba_name'].filter((k) => FORM_FIELDS.some((f) => f.key === k)), [])
 check('select fields carry options', FORM_FIELDS.filter((f) => f.type === 'select' && !(f.options?.length > 0)).map((f) => f.key), [])
 check('prefill sources exist', FORM_FIELDS.filter((f) => f.prefillFrom && !FORM_FIELDS.some((g) => g.key === f.prefillFrom)).map((f) => f.key), [])
