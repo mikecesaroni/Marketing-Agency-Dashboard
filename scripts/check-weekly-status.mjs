@@ -39,6 +39,10 @@ check('no leads is a zero cost per lead, not a division', weekTotals([{ date: '2
 const w = (leads, spend = 100) => ({ spend, leads, cpl: leads > 0 ? spend / leads : 0 })
 check('nothing spent for two weeks is no trend', trendOf([w(0, 0), w(0, 0), w(0, 0), w(0, 0)]).key, 'none')
 check('spending with no leads two weeks running is down', trendOf([w(3), w(2), w(0), w(0)]), { key: 'down', label: 'Down', why: 'No leads two weeks running' })
+// Active air quality: a Search campaign three days old read "No leads two weeks running".
+check('a first week of ads after none is new, not down', trendOf([w(0, 0), w(0, 0), w(0, 0), w(0, 10)]), { key: 'new', label: 'New', why: 'First week of ads' })
+check('...with leads too: new, not up', trendOf([w(0, 0), w(0, 0), w(0, 0), w(3, 10)]).key, 'new')
+check('no leads this week after a week of ads that got some is not "two weeks running"', trendOf([w(0, 0), w(0, 0), w(2, 50), w(0, 50)]).key, 'down')
 check('leads up a fifth on the week is up', trendOf([w(5), w(5), w(5), w(6)]).key, 'up')
 check('leads up a fifth, and why', trendOf([w(5), w(5), w(5), w(6)]).why, 'Leads up 20% on the week')
 check('leads down a fifth is down', trendOf([w(5), w(5), w(10), w(8)]), { key: 'down', label: 'Down', why: 'Leads down 20% on the week' })
@@ -125,6 +129,15 @@ const text = weeklyText(report, { appUrl: 'https://crm.example' })
 check('the text leads with the window and the totals', text.split('\n')[0], 'WEEKLY STATUS · Oct 15 to 21')
 check('the text groups the clients', ['NEEDS A DECISION (3)', 'NOT RUNNING YET (1)', 'TRENDING UP (1)', 'https://crm.example/weekly'].every((s) => text.includes(s)), true)
 check('agencyTotals on nothing', agencyTotals([]).clients, 0)
+// A client whose ads started this week: "just started", not a decision and not steady.
+{
+  const fresh = buildWeeklyStatus({ statusRows: [mk('fresh', 'Fresh Air'), mk('down', 'Down Drains')], metaRows: [...dayRows('fresh', [[0, 0], [0, 0], [0, 0], [0, 10]]), ...dayRows('down', [[10, 200], [10, 200], [10, 200], [6, 200]])], day: TODAY })
+  const f = fresh.rows.find((r) => r.client.id === 'fresh')
+  check('a first week of spend ranks as just started, after the decisions', [fresh.rows.map((r) => r.client.id), f.rank, f.trend.key, f.ads.key], [['down', 'fresh'], 4, 'new', 'running'])
+  check('...reads as new with the first week as its point', weeklyLine(f), 'Fresh Air: Running · $10, 0 leads · new · New ad 3d ago. First week of ads.')
+  check('...and the text has it under its own heading, not steady', [weeklyText(fresh).includes('JUST STARTED (1)\n• Fresh Air'), weeklyText(fresh).includes('STEADY')], [true, false])
+  check('...and it counts as neither up nor down', [fresh.totals.up, fresh.totals.down], [0, 1])
+}
 
 console.log(failures === 0 ? '\nAll weekly status checks pass' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

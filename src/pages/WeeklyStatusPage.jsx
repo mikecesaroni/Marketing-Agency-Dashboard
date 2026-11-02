@@ -34,6 +34,7 @@ const TREND = {
   up: { glyph: '▲', cls: 'text-emerald-700', label: 'Up' },
   down: { glyph: '▼', cls: 'text-red-700', label: 'Down' },
   flat: { glyph: '→', cls: 'text-slate-500', label: 'Steady' },
+  new: { glyph: '✦', cls: 'text-sky-700', label: 'New' },
   none: { glyph: '·', cls: 'text-slate-400', label: 'No ads' },
 }
 

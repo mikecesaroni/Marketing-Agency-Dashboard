@@ -55,13 +55,16 @@ export function weekTotals(rows = [], monday) {
  * week over week is a trend; three weeks in one direction is a trend however
  * small each step; two weeks of spend with no lead at all is down, whatever
  * the arithmetic says. Anything else is steady. Nothing spent for two weeks
- * is no trend at all.
+ * is no trend at all, and a first week of spend after none is new, not a
+ * trend either way: Active air quality's Search campaign was three days old
+ * when the Monday brief read "No leads two weeks running".
  */
 export function trendOf(weeks = []) {
   const now = weeks[weeks.length - 1] || { spend: 0, leads: 0, cpl: 0 }
   const prev = weeks[weeks.length - 2] || { spend: 0, leads: 0, cpl: 0 }
   if (!(now.spend > 0) && !(prev.spend > 0)) return { key: 'none', label: 'No ads', why: '' }
-  if (now.spend > 0 && now.leads === 0 && prev.leads === 0) return { key: 'down', label: 'Down', why: 'No leads two weeks running' }
+  if (now.spend > 0 && weeks.slice(0, -1).every((w) => !(w?.spend > 0))) return { key: 'new', label: 'New', why: 'First week of ads' }
+  if (now.spend > 0 && prev.spend > 0 && now.leads === 0 && prev.leads === 0) return { key: 'down', label: 'Down', why: 'No leads two weeks running' }
 
   const last3 = weeks.slice(-3).map((w) => w.leads)
   if (last3.length === 3) {
@@ -142,9 +145,9 @@ export function keyPoints({ row, ads, creative, trend, now, prev }) {
   return out.slice(0, 3)
 }
 
-const RANK = { account: 0, quiet: 0, down: 1, need: 2, nospend: 3, onboarding: 5, off: 5, paused: 6, flat: 7, up: 8 }
+const RANK = { account: 0, quiet: 0, down: 1, need: 2, nospend: 3, new: 4, onboarding: 5, off: 5, paused: 6, flat: 7, up: 8 }
 
-/** Worst first: ads off, then a down trend, then a new ad needed, then the rest; bigger spend first inside a rank. */
+/** Worst first: ads off, then a down trend, then a new ad needed, then the clients just started, then the rest; bigger spend first inside a rank. */
 export function weeklyOrder(a, b) {
   return a.rank - b.rank || b.now.spend - a.now.spend || String(a.client.name).localeCompare(String(b.client.name))
 }
@@ -246,7 +249,7 @@ const arrow = (change, lowerIsBetter = false) => {
 export function weeklyLine(r) {
   const nums = r.now.spend > 0 || r.now.leads > 0 ? `${money(r.now.spend)}${arrow(r.change.spend)}, ${r.now.leads} lead${r.now.leads === 1 ? '' : 's'}${arrow(r.change.leads)}${r.now.leads > 0 ? ` at ${money(r.now.cpl)}${arrow(r.change.cpl, true)}` : ''}` : 'no spend'
   const bits = [r.ads.label, nums]
-  if (r.trend.key === 'up' || r.trend.key === 'down') bits.push(r.trend.label.toLowerCase())
+  if (r.trend.key === 'up' || r.trend.key === 'down' || r.trend.key === 'new') bits.push(r.trend.label.toLowerCase())
   if (r.creative.label) bits.push(r.creative.label)
   return `${r.client.name}: ${bits.join(' · ')}. ${r.points.join('. ')}.`
 }
@@ -261,6 +264,7 @@ export function weeklyText(report, { appUrl = '' } = {}) {
   ]
   const groups = [
     ['NEEDS A DECISION', report.rows.filter((r) => r.rank <= 3)],
+    ['JUST STARTED', report.rows.filter((r) => r.rank === 4)],
     ['NOT RUNNING YET', report.rows.filter((r) => r.rank >= 5 && r.rank <= 6)],
     ['STEADY', report.rows.filter((r) => r.rank === 7)],
     ['TRENDING UP', report.rows.filter((r) => r.rank === 8)],

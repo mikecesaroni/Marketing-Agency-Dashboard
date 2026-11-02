@@ -30,7 +30,7 @@ The last 7 days up to and including today against the 7 before ("make this last 
 |---|---|
 | Ads | Running · Ads stopped · Account disabled · No spend last week · Onboarding · Not running · Paused |
 | Spent, Leads, Per lead | the week, with the change on the week before |
-| Trend, 4 weeks | four bars of leads per week and Up, Down or Steady: leads up or down a fifth on the week, three weeks in one direction, or cost per lead moving a fifth; two weeks of spend with no lead is Down; nothing spent for two weeks is no trend |
+| Trend, 4 weeks | four bars of leads per week and Up, Down, Steady or New: leads up or down a fifth on the week, three weeks in one direction, or cost per lead moving a fifth; two weeks of spend with no lead is Down; a first week of spend after none is New, neither up nor down (Active air quality's Search campaign was three days old when the Monday brief read "No leads two weeks running", 2026-11-02), and sits under "Just started" after the decisions; nothing spent for two weeks is no trend |
 | New ad? | New ad needed: N days (ten or more since any ad), No ad yet, N clips waiting to publish (red when also behind), New ad Nd ago |
 | Key points | up to three, in plain words: the ads-off alert, no leads with the money spent, the trend's reason, the stale ad or the waiting clip, a payment, a chase, the next onboarding step. A clean week says "Running clean". |
 

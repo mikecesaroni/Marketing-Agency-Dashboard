@@ -420,6 +420,9 @@ export function weeklyTextShort(report) {
   if (up.length) lines.push('', `TRENDING UP: ${up.map((r) => `${r.client.name} (${r.trend.why.toLowerCase()})`).join(', ')}`)
   const steady = report.rows.filter((r) => r.rank === 7)
   if (steady.length) lines.push(`STEADY: ${steady.map((r) => r.client.name).join(', ')}`)
+  // Ads in their first week: named, not judged.
+  const fresh = report.rows.filter((r) => r.rank === 4)
+  if (fresh.length) lines.push(`JUST STARTED: ${fresh.map((r) => `${r.client.name} (${money(r.now.spend)}, ${r.now.leads} lead${r.now.leads === 1 ? '' : 's'})`).join(', ')}`)
   return lines.join('\n')
 }
 
@@ -461,6 +464,8 @@ export function briefSlack(model) {
     for (const r of decide) lines.push(`• ${link(model, `/client/${r.client.id}`, slackEsc(r.client.name))}: ${slackEsc(weeklyLine(r).replace(`${r.client.name}: `, ''))}`)
     const up = model.weekly.rows.filter((r) => r.rank === 8)
     if (up.length) lines.push(`📈 Trending up: ${up.map((r) => slackEsc(r.client.name)).join(', ')}`)
+    const fresh = model.weekly.rows.filter((r) => r.rank === 4)
+    if (fresh.length) lines.push(`🆕 Just started: ${fresh.map((r) => slackEsc(r.client.name)).join(', ')}`)
     blocks.push(...slackSections(`Weekly status · ${model.weekly.label}`, lines))
     if (model.appUrl) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `Full report: ${link(model, '/weekly', 'Weekly status in the CRM')}` }] })
   }
