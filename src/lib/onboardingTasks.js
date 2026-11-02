@@ -4,28 +4,26 @@
  * "When we onboard new clients we always need a landing page made on GHL
  * with pixel and Google tracking, a GHL account created and the client
  * added as a user, and A2P verification. And when you add a client as a
- * user, message them and let them know how to log in, download the app and
- * turn on notifications, and send them the GHL how-to video. If it's the
+ * user, let them know how to access their account: how to log in, download
+ * the app and turn on notifications, and send them the GHL how-to video
+ * ("instead of welcome message say let them know how to access their
+ * account"). If it's the
  * $1,500 tier we just need the pixel integrated on the landing page; $2,500
  * and above we also need Google Ads tracking on the landing page."
  *
  * Titles read the way the board already does ("Express Home Services GHL
  * Landing Page + Meta & Google Ads Tracking"): the client first, then the
- * job. The package decides the tracking line. Due dates are counted from the
- * day the client is added; the offsets are here, in one place, to change.
+ * job. The package decides the tracking line. No due dates ("no need to add
+ * due dates for those"): they start the day the client is added and Ken
+ * sets a date if he wants one, so nothing goes overdue on its own.
  *
  * Pure, so scripts/check-onboarding-tasks.mjs runs it in Node. The rows are
  * what tasksData.createTask takes; createOnboardingTasks inserts them and
  * tells the channel.
  */
 
-import { addDays } from './dates.js'
-
 export const ONBOARDING_OWNER = 'Ken'
 export const ONBOARDING_TAG = 'onboarding'
-
-/** Days after the client is added that each task is due. */
-export const DUE_IN_DAYS = { landing: 3, account: 2, a2p: 3, welcome: 3 }
 
 /** The package tiers that get Google Ads tracking on the landing page: $2,500 and above. */
 export const GOOGLE_TRACKING_FROM_TIER = 2
@@ -54,9 +52,9 @@ export function onboardingTasks(client, { today, by = '' } = {}) {
     assignees: [ONBOARDING_OWNER],
     tags: [ONBOARDING_TAG],
     start_date: day,
+    due_date: null,
     created_by: clean(by) || null,
   }
-  const due = (key) => (day ? addDays(day, DUE_IN_DAYS[key]) : null)
   const item = (text) => ({ id: `ob-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`, text, done: false })
 
   return [
@@ -68,7 +66,6 @@ export function onboardingTasks(client, { today, by = '' } = {}) {
         ? `Build the landing page on GHL. Connect the Meta pixel and Google Ads conversion tracking. ${tierWords(tier)}.`
         : `Build the landing page on GHL and connect the Meta pixel. ${tierWords(tier)}: no Google Ads tracking.`,
       checklist: google ? [item('Landing page built on GHL'), item('Meta pixel connected'), item('Google Ads tracking connected')] : [item('Landing page built on GHL'), item('Meta pixel connected')],
-      due_date: due('landing'),
     },
     {
       ...base,
@@ -76,7 +73,6 @@ export function onboardingTasks(client, { today, by = '' } = {}) {
       title: `${name} GHL Account + Client Added as User`,
       description: 'Create the GHL sub-account and add the client as a user.',
       checklist: [item('GHL sub-account created'), item('Client added as a user')],
-      due_date: due('account'),
     },
     {
       ...base,
@@ -84,15 +80,13 @@ export function onboardingTasks(client, { today, by = '' } = {}) {
       title: `${name} A2P Verification`,
       description: 'Submit A2P verification for their GHL number so their texts send.',
       checklist: [],
-      due_date: due('a2p'),
     },
     {
       ...base,
-      key: 'welcome',
-      title: `${name} Welcome Message + GHL How-To Video`,
-      description: 'Once they are added as a user, message the client: how to log in, download the app, turn on notifications. Send the GHL how-to video.',
+      key: 'access',
+      title: `${name} Let Them Know How to Access Their Account + GHL How-To Video`,
+      description: 'Once they are added as a user, let the client know how to access their account: how to log in, download the app, turn on notifications. Send the GHL how-to video.',
       checklist: [item('How to log in'), item('Download the app'), item('Turn on notifications'), item('GHL how-to video sent')],
-      due_date: due('welcome'),
     },
   ]
 }

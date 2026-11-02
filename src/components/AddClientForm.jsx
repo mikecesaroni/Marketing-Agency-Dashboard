@@ -12,9 +12,9 @@ import { ONBOARDING_OWNER } from '../lib/onboardingTasks'
  * they are on"), it sets the monthly and setup fees, and the moment the
  * client lands the Slack channel hears "new client added to the agency",
  * with the tier and the dollars. Ken's onboarding tasks (landing page with
- * the tracking the package calls for, GHL account and user, A2P, the
- * welcome message) are made at the same time and the channel hears those
- * too, in one post.
+ * the tracking the package calls for, GHL account and user, A2P, letting
+ * them know how to access their account) are made at the same time and the
+ * channel hears those too, in one post.
  */
 export default function AddClientForm({ onSuccess, onClose }) {
   const [name, setName] = useState('')
@@ -136,7 +136,7 @@ export default function AddClientForm({ onSuccess, onClose }) {
           })}
         </div>
         <p className="text-xs text-slate-500 mt-1">
-          Sets their monthly fee and the steps on their plan. The channel is told the moment they are added, and {ONBOARDING_OWNER}'s onboarding tasks are made for them: landing page with the Meta pixel (Google Ads tracking too from $2,500), GHL account and user, A2P, the welcome message.
+          Sets their monthly fee and the steps on their plan. The channel is told the moment they are added, and {ONBOARDING_OWNER}'s onboarding tasks are made for them: landing page with the Meta pixel (Google Ads tracking too from $2,500), GHL account and user, A2P, letting them know how to access their account.
         </p>
       </div>
 

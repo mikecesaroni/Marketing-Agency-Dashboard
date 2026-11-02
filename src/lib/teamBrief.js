@@ -684,7 +684,8 @@ export function taskAssignedSlack({ task = {}, client = null, list = null, by = 
  * new client, automatically add tasks for Ken... and make sure it messages
  * CRM updates about Ken's new tasks"): one post, not one per task. Who
  * added the client, who the tasks are for, how many, which client, and each
- * task on its own line with its due day.
+ * task on its own line (with a due day only if somebody set one; the tasks
+ * are made without).
  *
  * tasks: rows { id, title, assignees, due_date }
  */

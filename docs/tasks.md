@@ -94,9 +94,9 @@ you say otherwise. The page always opens on Team.
 "When we add a new client to the agency, automatically add tasks for Ken.
 When we onboard new clients we always need a landing page made on GHL with
 pixel and Google tracking, a GHL account created and the client added as a
-user, and A2P verification. When you add a client as a user, message them
-and let them know how to log in, download the app and turn on notifications,
-and send them the GHL how-to video. If it's the $1,500 tier we just need the
+user, and A2P verification. When you add a client as a user, let them know
+how to access their account: how to log in, download the app and turn on
+notifications, and send them the GHL how-to video. If it's the $1,500 tier we just need the
 pixel integrated on the landing page; $2,500 and above we also need Google
 Ads tracking on the landing page."
 
@@ -106,18 +106,18 @@ on the client, tagged `onboarding`, titled the way the board already reads
 
 - `<Client> GHL Landing Page + Meta Pixel` on the $1,500 plan, or
   `<Client> GHL Landing Page + Meta & Google Ads Tracking` from $2,500 up.
-  Due in 3 days.
-- `<Client> GHL Account + Client Added as User`. Due in 2 days.
-- `<Client> A2P Verification`. Due in 3 days.
-- `<Client> Welcome Message + GHL How-To Video`, with a checklist: how to
-  log in, download the app, turn on notifications, GHL how-to video sent.
-  Due in 3 days.
+- `<Client> GHL Account + Client Added as User`.
+- `<Client> A2P Verification`.
+- `<Client> Let Them Know How to Access Their Account + GHL How-To Video`,
+  with a checklist: how to log in, download the app, turn on notifications,
+  GHL how-to video sent. ("Instead of welcome message say let them know how
+  to access their account.")
 
-The due dates count from the day the client is added; the offsets are at
-the top of `src/lib/onboardingTasks.js`, one place to change. The channel
-hears them as one post, not four: "📋 Ethan gave Ken 4 onboarding tasks for
-Paradise Home Services:" then each task on its own line with its due day.
-Each task is marked told the same way a handed-over task is, so re-saving
+No due dates ("no need to add due dates for those"): they start the day the
+client is added, and Ken dates one himself if he wants to, so nothing goes
+overdue on its own. The channel hears them as one post, not four: "📋 Ethan
+gave Ken 4 onboarding tasks for Paradise Home Services:" then each task on
+its own line. Each task is marked told the same way a handed-over task is, so re-saving
 one later says nothing more. A task the client already has by title is not
 made again. The tasks are best effort: a client whose tasks could not be
 made is still added, and the form says so. Pinned by
