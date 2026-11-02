@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { createTask, readMe, updateTask } from '../lib/tasksData'
+import { createOnboardingTasks, createTask, readMe, updateTask } from '../lib/tasksData'
 import { isOverdue, isoDay, knownNames, parseQuickAdd, repeatLabel, sortTasks } from '../lib/tasks'
 import { extractTasksFromChat } from '../lib/clientTasks'
+import { ONBOARDING_OWNER, ONBOARDING_TAG } from '../lib/onboardingTasks'
 import { Button, Card } from './ui'
 import { cached, keys } from '../lib/pageCache'
 
@@ -27,6 +28,7 @@ export default function ClientTasksPanel({ client, onAsk, onChange }) {
   const [showDone, setShowDone] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const [note, setNote] = useState('')
+  const [makingOnboarding, setMakingOnboarding] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -68,6 +70,27 @@ export default function ClientTasksPanel({ client, onAsk, onChange }) {
     [tasks]
   )
   const names = useMemo(() => knownNames(tasks, members), [tasks, members])
+  // Ken's onboarding tasks are made when the client is added; a client
+  // added before that existed, or from a stale tab, has none. One button
+  // makes them, by the package, and tells the channel; any the client
+  // already has by title are not made again.
+  const hasOnboarding = useMemo(() => tasks.some((t) => (t.tags || []).includes(ONBOARDING_TAG)), [tasks])
+
+  const makeOnboarding = async () => {
+    setMakingOnboarding(true)
+    setNote('')
+    setError('')
+    try {
+      const { tasks: made, posted } = await createOnboardingTasks(client, readMe())
+      if (made.length) setTasks((prev) => [...prev, ...made])
+      setNote(made.length ? `Added ${made.length} onboarding task${made.length === 1 ? '' : 's'} for ${ONBOARDING_OWNER}${posted ? '; the channel was told.' : '.'}` : `${client.name} already has ${ONBOARDING_OWNER}'s onboarding tasks.`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setMakingOnboarding(false)
+      setTimeout(() => setNote(''), 6000)
+    }
+  }
 
   const add = async () => {
     const text = line.trim()
@@ -122,7 +145,12 @@ export default function ClientTasksPanel({ client, onAsk, onChange }) {
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">Tasks</h2>
           <p className="text-xs text-slate-500">The same list as the Tasks tab, for {client.name}.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {!loading && !hasOnboarding && !client.archived && (
+            <Button variant="outline" size="sm" onClick={makeOnboarding} disabled={makingOnboarding} title={`The four onboarding tasks ${ONBOARDING_OWNER} gets for every new client, by the package: the GHL landing page with its tracking, the GHL account and user, A2P, and letting them know how to access their account. Posted to the channel.`} data-make-onboarding-tasks>
+              {makingOnboarding ? 'Adding…' : `Add ${ONBOARDING_OWNER}'s onboarding tasks`}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={pullFromChat} disabled={extracting} title="Sweep this client's chat history for to-dos and add them here and to the Tasks tab">
             {extracting ? 'Reading chat…' : 'Pull from chat'}
           </Button>

@@ -24,6 +24,10 @@ export default function AddClientForm({ onSuccess, onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  // Set once the client exists but something after it went wrong (the
+  // channel, Ken's tasks): the form stays open to say so, with a Close
+  // button, instead of closing over a notice nobody could read.
+  const [madeWithNotice, setMadeWithNotice] = useState(false)
 
   // Offered here so a client can be pointed at their ad account during
   // onboarding rather than having to come back for it later.
@@ -69,34 +73,52 @@ export default function AddClientForm({ onSuccess, onClose }) {
 
       if (err) throw err
 
+      const notices = []
       // The channel hears it now. Best effort: the client exists either way,
       // and a channel that is not connected is not a reason to block the form.
       try {
         const out = await announceClient(row.id)
-        if (out?.posted === false && out?.error) setNotice(`Added. Slack did not take the post: ${out.error}`)
+        if (out?.posted === false && out?.error) notices.push(`Slack did not take the post: ${out.error}`)
       } catch (postErr) {
-        setNotice(`Added. The channel was not told: ${postErr.message}`)
+        notices.push(`The channel was not told: ${postErr.message}`)
       }
 
       // Ken's onboarding tasks, by the package ("when we add a new client,
       // automatically add tasks for Ken"). Best effort too: a client without
-      // them is a client whose tasks get made by hand, not a failed add.
+      // them is a client whose tasks get made by hand (the button on their
+      // page under Tasks), not a failed add.
       try {
         await createOnboardingTasks({ id: row.id, name: name.trim(), tier: picked.tier }, readMe())
       } catch (taskErr) {
-        setNotice(`Added. ${ONBOARDING_OWNER}'s onboarding tasks were not made: ${taskErr.message}`)
+        notices.push(`${ONBOARDING_OWNER}'s onboarding tasks were not made (${taskErr.message}). Add them from their page, under Tasks.`)
       }
 
       setName('')
       setTier('')
       setAdAccountId('')
       onSuccess()
+      if (notices.length) {
+        setNotice(`${name.trim()} was added. ${notices.join(' ')}`)
+        setMadeWithNotice(true)
+        return
+      }
       onClose()
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  if (madeWithNotice) {
+    return (
+      <div className="space-y-4" data-added-with-notice>
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">{notice}</div>
+        <button type="button" onClick={onClose} className="w-full bg-slate-200 text-slate-900 py-2.5 rounded-lg font-medium hover:bg-slate-300 transition">
+          Close
+        </button>
+      </div>
+    )
   }
 
   return (

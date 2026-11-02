@@ -120,7 +120,12 @@ gave Ken 4 onboarding tasks for Paradise Home Services:" then each task on
 its own line. Each task is marked told the same way a handed-over task is, so re-saving
 one later says nothing more. A task the client already has by title is not
 made again. The tasks are best effort: a client whose tasks could not be
-made is still added, and the form says so. Pinned by
+made is still added, and the form stays open to say so. A client without
+them (added before this existed, or from a tab still running an older
+build: "when I added a new client just now it did not create tasks for
+Ken") gets an **Add Ken's onboarding tasks** button on their page under
+Tasks, shown until they have any task tagged `onboarding`; it makes the
+same four and posts the same line. Pinned by
 `scripts/check-onboarding-tasks.mjs`.
 
 ## What it is not
