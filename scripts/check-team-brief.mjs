@@ -58,6 +58,8 @@ check('blue flags are not attention', brief.attention.some((a) => a.key === 'kpi
 check("every waiting clip, newest first, naming the editor, whether it is in Meta and the editor's note", brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle', 'clip1.mp4, not in Meta yet · “post a day after clip2”'])
 check("a clip alert carries the editor's note too", alertKeys(rows).find((k) => k.key === 'd:clip:d/clip1.mp4')?.label, 'New edit dropped in: clip1.mp4, not in Meta yet · “post a day after clip2”')
 check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
+// Ads that started this week read as new, not as a zero.
+check('a client whose ads started this week is running clean as "new"', briefSections(buildBrief({ statusRows: [mk('n', 'New Co', { leads: { leads7: 0, leads14: 0, spend7: 10, spend14: 10, spendDays14: 3 } })], day: TODAY })).find((s) => s.key === 'green').lines[0].text, 'New Co 0 (new this week)')
 check('onboarding names what we are waiting on and how long they have had it', brief.onboarding.map((o) => [o.label, o.theirs]), [['Meta ad account and Page connected, 9 days', true]])
 check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, green: 2, greenLeads: 11, onboarding: 1, onboardingOurs: 0, onboardingTheirs: 1, paused: 0 })
 

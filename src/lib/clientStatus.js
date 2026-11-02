@@ -41,8 +41,9 @@ const money = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`
  * together (Google's conversions count as leads).
  */
 export function leadTotals(rows = [], today) {
-  const out = { leads7: 0, leads14: 0, spend7: 0, spend14: 0, spendDays7: 0, lastLeadDate: '' }
+  const out = { leads7: 0, leads14: 0, spend7: 0, spend14: 0, spendDays7: 0, spendDays14: 0, lastLeadDate: '' }
   const spentOn = new Set()
+  const spentOn14 = new Set()
   for (const r of rows) {
     const age = daysSince(r.date, today)
     if (age === null || age > 13) continue
@@ -50,6 +51,9 @@ export function leadTotals(rows = [], today) {
     const spend = Number(r.spend) || 0
     out.leads14 += leads
     out.spend14 += spend
+    // Days the ads actually ran, so "no leads" is said of a client whose ads
+    // have run a week, not of a campaign that started on Friday.
+    if (spend > 0) spentOn14.add(String(r.date).slice(0, 10))
     if (age <= 6) {
       out.leads7 += leads
       out.spend7 += spend
@@ -60,6 +64,7 @@ export function leadTotals(rows = [], today) {
     if (leads > 0 && r.date > out.lastLeadDate) out.lastLeadDate = r.date
   }
   out.spendDays7 = spentOn.size
+  out.spendDays14 = spentOn14.size
   return out
 }
 
@@ -72,6 +77,11 @@ export function leadTotals(rows = [], today) {
 // spend), so a client live since Thursday is not flagged on Friday.
 export const LOW_LEADS_MAX = 2
 export const LOW_LEADS_MIN_DAYS = 5
+// "No leads" is only said after a week of ads. Active air quality's Google
+// Search campaign started on a Friday and the Sunday brief read "No leads in
+// 14 days" ("we haven't even gone live with ads yet; it shouldn't be warning
+// us"): three days and ten dollars of spend is a start, not a problem.
+export const NO_LEADS_MIN_DAYS = 7
 
 /**
  * ctx:
@@ -121,15 +131,16 @@ export function clientFlags(ctx) {
   }
 
   // Spending with nothing to show for it. Seven quiet days on a running
-  // account is a call, not a wait.
-  if (live && !ctx.alert && leads.spend14 > 0) {
+  // account is a call, not a wait. Only once the ads have run a week: a
+  // campaign a few days old has not had its chance yet.
+  if (live && !ctx.alert && leads.spend14 > 0 && leads.spendDays14 >= NO_LEADS_MIN_DAYS) {
     const since = leads.lastLeadDate ? daysSince(leads.lastLeadDate, today) : null
     if (leads.leads14 === 0 || (since !== null && since >= 7)) {
       add({
         key: 'no-leads',
         severity: 'red',
-        label: since === null ? 'No leads in 14 days' : `No leads for ${since} days`,
-        detail: `${money(leads.spend14)} spent in the last two weeks for ${leads.leads14} lead${leads.leads14 === 1 ? '' : 's'}. Look at the ads, the offer and the form before they ask.`,
+        label: since === null ? (leads.spendDays14 >= 14 ? 'No leads in 14 days' : `No leads in ${leads.spendDays14} days of ads`) : `No leads for ${since} days`,
+        detail: `${money(leads.spend14)} spent over ${leads.spendDays14} days for ${leads.leads14} lead${leads.leads14 === 1 ? '' : 's'}. Look at the ads, the offer and the form before they ask.`,
         href: `/client/${c.id}#ad-performance`,
       })
     }

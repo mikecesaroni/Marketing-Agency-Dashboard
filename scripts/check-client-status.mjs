@@ -33,7 +33,7 @@ const days = [
   { date: '2026-10-10', leads: 3, spend: 40 },
   { date: '2026-10-01', leads: 9, spend: 400 },
 ]
-check('seven and fourteen day totals, the days with spend, the last lead date, older days ignored', leadTotals(days, TODAY), { leads7: 2, leads14: 5, spend7: 80, spend14: 120, spendDays7: 2, lastLeadDate: '2026-10-19' })
+check('seven and fourteen day totals, the days with spend, the last lead date, older days ignored', leadTotals(days, TODAY), { leads7: 2, leads14: 5, spend7: 80, spend14: 120, spendDays7: 2, spendDays14: 3, lastLeadDate: '2026-10-19' })
 
 // --- the flags -------------------------------------------------------------------
 const live = { id: 'c1', name: 'Acme', tier: 1, meta_ads_active: true, paused_at: null }
@@ -41,10 +41,18 @@ const running = { steps: [{ key: 'weekly-kpis', done: true }], ours: [], theirs:
 const quiet = () => clientFlags({ client: live, result: running, drop: { hasMeta: true, state: 'done', lastAdAt: '2026-10-15', daysSince: 5 }, leads: leadTotals(days, TODAY), payments: [], counts: { kpisThisWeek: 1 }, today: TODAY })
 check('a running client with leads, a fresh ad and KPIs logged has no flags', quiet(), [])
 
-const noLeads = clientFlags({ client: live, result: running, leads: leadTotals([{ date: '2026-10-19', leads: 0, spend: 300 }, { date: '2026-10-11', leads: 1, spend: 300 }], TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })
+// Nine days of spend since the last lead on the 11th.
+const quietRun = Array.from({ length: 9 }, (_, i) => ({ date: `2026-10-${19 - i}`, leads: i === 8 ? 1 : 0, spend: i === 8 ? 300 : 40 }))
+const noLeads = clientFlags({ client: live, result: running, leads: leadTotals(quietRun, TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })
 check('spending with no lead for nine days is red', noLeads.map((f) => [f.key, f.severity]), [['no-leads', 'red']])
-check('and says how long and how much', noLeads[0].label === 'No leads for 9 days' && noLeads[0].detail.includes('$600'), true)
+check('and says how long and how much', noLeads[0].label === 'No leads for 9 days' && noLeads[0].detail.includes('$620 spent over 9 days'), true)
 check('no spend at all is not a leads flag (that is the ads-off alert)', keysOf(clientFlags({ client: live, result: running, leads: leadTotals([], TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), [])
+// Active air quality: a Google Search campaign three days old, ten dollars
+// in, read "No leads in 14 days" ("we haven't even gone live with ads yet").
+const threeDays = [{ date: '2026-10-20', leads: 0, spend: 3 }, { date: '2026-10-19', leads: 0, spend: 4 }, { date: '2026-10-18', leads: 0, spend: 3 }]
+check('ads three days old with no lead yet are not flagged', keysOf(clientFlags({ client: live, result: running, leads: leadTotals(threeDays, TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), [])
+const sevenDays = Array.from({ length: 7 }, (_, i) => ({ date: `2026-10-${20 - i}`, leads: 0, spend: 3 }))
+check('a week of ads with no lead is, and says how many days of ads', clientFlags({ client: live, result: running, leads: leadTotals(sevenDays, TODAY), counts: { kpisThisWeek: 1 }, today: TODAY }).map((f) => [f.key, f.label]), [['no-leads', 'No leads in 7 days of ads']])
 
 // Low leads: a full week of ads for two leads or fewer is amber for the
 // morning ("the clients only getting 1 or 2 leads a week in the running
@@ -72,7 +80,7 @@ check('no ad yet on a client whose Meta ads are not live is onboarding, not a fl
 // spending with no leads is still a call.
 const googleOnly = { steps: [], ours: [], theirs: [], launched: true, live: { meta: false, google: true, lsa: false }, leftMeta: true }
 check('live on Google only: no Meta video flag, however stale', keysOf(clientFlags({ client: { ...live, meta_ads_active: false }, result: googleOnly, drop: { hasMeta: true, state: 'stale', behind: true, lastAdAt: '2026-09-01', daysSince: 40, waiting: [] }, leads: leadTotals([], TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), [])
-check('live on Google only: spend with no leads is still a flag', keysOf(clientFlags({ client: { ...live, meta_ads_active: false }, result: googleOnly, leads: leadTotals([{ date: TODAY, leads: 0, spend: 300 }], TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), ['no-leads'])
+check('live on Google only: a week of spend with no leads is still a flag', keysOf(clientFlags({ client: { ...live, meta_ads_active: false }, result: googleOnly, leads: leadTotals(Array.from({ length: 7 }, (_, i) => ({ date: `2026-10-${20 - i}`, leads: 0, spend: 40 })), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), ['no-leads'])
 check('a paused client is not stale and not chased for leads', keysOf(clientFlags({ client: { ...live, paused_at: '2026-10-01T00:00:00Z' }, result: running, drop: { hasMeta: true, state: 'paused', lastAdAt: '2026-09-01', daysSince: 49 }, leads: leadTotals([], TODAY), counts: { kpisThisWeek: 0 }, today: TODAY })), ['paused'])
 check('a paused client with a failing card and an open chase is just paused: their invoices fail by design', keysOf(clientFlags({ client: { ...live, paused_at: '2026-09-25T00:00:00Z', monthly_fee: 998, tier: null }, result: { steps: [], ours: [], theirs: [{ key: 'photos', title: 'Photos', waitingDays: 30 }], launched: true }, drop: { hasMeta: true, state: 'paused', lastAdAt: '2026-09-01', daysSince: 49 }, leads: leadTotals([], TODAY), payments: [{ payment_type: 'monthly', status: 'overdue', due_date: '2026-09-30', amount: 998, failure_count: 9 }], counts: { kpisThisWeek: 0 }, today: TODAY })), ['paused'])
 
@@ -90,7 +98,7 @@ check('no package is blue; a package read from the fee is the package, no flag',
 check('the short names say what the package is', [tierLabel(1), tierLabel(2), tierLabel(3)], ['$1,500 plan', 'Meta and Google', '$3,500 plan'])
 check('the Clients list badge adds the price where the name has none', [tierBadgeLabel(1), tierBadgeLabel(2), tierBadgeLabel(3), tierBadgeLabel(0)], ['$1,500 plan', 'Meta and Google $2,500 plan', '$3,500 plan', 'No tier yet'])
 
-const everything = clientFlags({ client: { ...live, monthly_fee: 1500, tier: null }, result: { steps: [], ours: [], theirs: [{ key: 'google-ads-access', title: 'Google Ads access', waitingDays: 20 }], launched: true }, drop: { hasMeta: true, state: 'stale', lastAdAt: '2026-10-01', daysSince: 19 }, leads: leadTotals([{ date: '2026-10-19', leads: 0, spend: 100 }], TODAY), payments: [{ payment_type: 'monthly', status: 'overdue', due_date: '2026-10-01', amount: 1500 }], counts: { kpisThisWeek: 0 }, today: TODAY })
+const everything = clientFlags({ client: { ...live, monthly_fee: 1500, tier: null }, result: { steps: [], ours: [], theirs: [{ key: 'google-ads-access', title: 'Google Ads access', waitingDays: 20 }], launched: true }, drop: { hasMeta: true, state: 'stale', lastAdAt: '2026-10-01', daysSince: 19 }, leads: leadTotals(sevenDays, TODAY), payments: [{ payment_type: 'monthly', status: 'overdue', due_date: '2026-10-01', amount: 1500 }], counts: { kpisThisWeek: 0 }, today: TODAY })
 check('worst first: red, then amber, then blue (a fee that says the package adds no flag)', everything.map((f) => f.severity), ['red', 'red', 'red', 'amber', 'blue'])
 
 // --- the rows and the buckets --------------------------------------------------

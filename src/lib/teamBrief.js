@@ -267,7 +267,10 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
     if (live && !flags.some((f) => AD_FLAGS.has(f.key))) {
       const leads7 = r.leads?.leads7 || 0
       const before = Math.max(0, (r.leads?.leads14 || 0) - leads7)
-      green.push({ client, leads7, before, spend7: r.leads?.spend7 || 0 })
+      // Ads that started this week: "0" would read as a problem, and the
+      // leads flags hold off until a week of spend, so the line says new.
+      const spendDays14 = Number(r.leads?.spendDays14) || 0
+      green.push({ client, leads7, before, spend7: r.leads?.spend7 || 0, isNew: spendDays14 > 0 && spendDays14 < 7 })
     }
     // In setup until every channel the package owes is live: a client not
     // launched, and a Whole Chain client live on Meta with Google still to
@@ -370,7 +373,7 @@ export function briefSections(model) {
     out.push({ key: 'clips', title: `To publish (${model.clips.length})`, lines: model.clips.map((c) => ({ emoji: EMOJI.clip, client: c.client, text: c.label, href: c.href })) })
   }
   if (model.green.length) {
-    const names = model.green.map((g) => `${g.client.name} ${g.leads7}${g.leads7 > g.before ? '↑' : g.leads7 < g.before ? '↓' : ''}`).join(', ')
+    const names = model.green.map((g) => `${g.client.name} ${g.leads7}${g.leads7 > g.before ? '↑' : g.leads7 < g.before ? '↓' : ''}${g.isNew ? ' (new this week)' : ''}`).join(', ')
     out.push({ key: 'green', title: `Running clean (${model.green.length}), leads this week`, lines: [{ emoji: EMOJI.green, text: names, href: '/status' }] })
   }
   // Onboarding is two lists, so "what do we do today" is one glance: our
