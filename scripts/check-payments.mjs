@@ -38,11 +38,15 @@ function check(name, actual, expected) {
 
 // A stand-in for PostgREST that understands only the query shapes this
 // function issues. Enough to prove which schedule row a payment settles.
-function makeFake({ client, payments, parked = [], ignored = [], parkFails = false }) {
+// `raceWith` are rows another delivery of the webhook is writing AT THE SAME
+// TIME: invisible until this one has written its own row, the way the
+// subscription checkout and its first invoice landed two milliseconds apart.
+function makeFake({ client, payments, parked = [], ignored = [], parkFails = false, raceWith = [] }) {
   const rows = payments.map((p, i) => ({ id: `p${i}`, notes: null, ...p }))
   // The unmatched queue, so parking can be asserted on rather than inferred
   // from a log line.
   const queue = parked.map((r, i) => ({ id: `u${i}`, resolved_client_id: null, ...r }))
+  const racing = raceWith.map((r, i) => ({ id: `race${i}`, resolved_client_id: null, ...r }))
   const log = []
   const db = {
     async get(path) {
@@ -54,11 +58,13 @@ function makeFake({ client, payments, parked = [], ignored = [], parkFails = fal
       if (path.startsWith('stripe_unmatched')) {
         const cust = /stripe_customer_id=eq\.([^&]+)/.exec(path)?.[1]
         const amount = /amount=eq\.([^&]+)/.exec(path)?.[1]
+        const type = /payment_type=eq\.([^&]+)/.exec(path)?.[1]
         return queue.filter(
           (r) =>
             r.resolved_client_id === null &&
             (!cust || r.stripe_customer_id === decodeURIComponent(cust)) &&
-            (!amount || Number(r.amount) === Number(amount))
+            (!amount || Number(r.amount) === Number(amount)) &&
+            (!type || r.payment_type === type)
         )
       }
       if (path.startsWith('clients')) {
@@ -88,6 +94,8 @@ function makeFake({ client, payments, parked = [], ignored = [], parkFails = fal
       if (table === 'stripe_unmatched') {
         if (parkFails) return new Response('permission denied', { status: 403 })
         queue.push({ id: `u${queue.length}`, resolved_client_id: null, ...body })
+        // The other delivery's write lands now too.
+        queue.push(...racing.splice(0))
       }
       return new Response('{}')
     },
@@ -97,6 +105,13 @@ function makeFake({ client, payments, parked = [], ignored = [], parkFails = fal
       const row = target.find((r) => r.id === id)
       if (row) Object.assign(row, body)
       log.push({ op: 'patch', path, body })
+      return new Response('{}')
+    },
+    async del(path) {
+      const id = /id=eq\.([^&]+)/.exec(path)?.[1]
+      const at = queue.findIndex((r) => r.id === id)
+      if (at >= 0) queue.splice(at, 1)
+      log.push({ op: 'delete', path })
       return new Response('{}')
     },
   }
@@ -318,6 +333,44 @@ const checkout = (cents, over = {}) => ({
   check('the checkout and its first invoice stay ONE parked row', queue.length, 1)
   check('and the row picks up the invoice id, which is the useful one',
     queue[0].stripe_invoice_id, 'in_first')
+}
+
+{
+  // THE RACE (2026-10-30, Justin Veda's $2,500): the checkout and the first
+  // invoice delivered in parallel, each parked before it could see the other,
+  // and one payment showed as two ("aren't they the same payment but they
+  // show as 2"). After its write each delivery looks again; from either side
+  // the row with the invoice id is the payment and the other goes.
+  const firstInvoice = {
+    id: 'evt_inv',
+    type: 'invoice.paid',
+    data: { object: { id: 'in_first', customer: 'cus_stranger', amount_paid: 250000, created: 1788000000, status_transitions: { paid_at: 1788000000 } } },
+  }
+  const checkoutRow = { stripe_event_id: 'evt_co', stripe_customer_id: 'cus_stranger', amount: 2500, payment_type: 'monthly', stripe_invoice_id: null, failed: false }
+  const invoiceRow = { stripe_event_id: 'evt_inv', stripe_customer_id: 'cus_stranger', amount: 2500, payment_type: 'monthly', stripe_invoice_id: 'in_first', failed: false }
+  const a = makeFake({ client: CLIENT, payments: [], raceWith: [checkoutRow] })
+  await handleEvent(a.db, firstInvoice)
+  check('the invoice arriving alongside the checkout: one row, the invoice', [a.queue.length, a.queue[0]?.stripe_invoice_id], [1, 'in_first'])
+  const b = makeFake({ client: CLIENT, payments: [], raceWith: [invoiceRow] })
+  await handleEvent(b.db, checkout(250000, { mode: 'subscription' }))
+  check('the checkout arriving alongside the invoice: one row, still the invoice', [b.queue.length, b.queue[0]?.stripe_invoice_id, b.queue[0]?.stripe_event_id], [1, 'in_first', 'evt_inv'])
+  // Two invoices for the same amount are two months, never merged.
+  const c = makeFake({ client: CLIENT, payments: [], raceWith: [{ ...invoiceRow, stripe_event_id: 'evt_other', stripe_invoice_id: 'in_other' }] })
+  await handleEvent(c.db, firstInvoice)
+  check('two invoices of the same amount stay two rows', c.queue.length, 2)
+}
+
+{
+  // A $2,500 setup fee through a one-time link and a $2,500 first month on a
+  // subscription are two payments: the kind of money is part of being a twin.
+  const { db, queue } = makeFake({ client: CLIENT, payments: [] })
+  await handleEvent(db, checkout(250000, { mode: 'payment' }))
+  await handleEvent(db, {
+    id: 'evt_inv',
+    type: 'invoice.paid',
+    data: { object: { id: 'in_first', customer: 'cus_stranger', amount_paid: 250000, created: 1788000000, status_transitions: { paid_at: 1788000000 } } },
+  })
+  check('a one-off and a subscription invoice of the same amount are NOT merged', [queue.length, queue.map((r) => r.payment_type)], [2, ['setup', 'monthly']])
 }
 
 {

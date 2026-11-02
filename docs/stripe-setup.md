@@ -118,6 +118,18 @@ missing, it falls back to matching the payer's email against `contact_email` on
 the intake form. If all three miss, the payment is parked in the unmatched list
 rather than dropped.
 
+A subscription's first payment reaches the webhook twice: as the Checkout
+Session ("subscription started") and as its first invoice. They are one
+payment, and the webhook keeps one parked row: the invoice arriving after the
+checkout merges into it, and because Stripe delivers the two together (Justin
+Veda's $2,500 on 2026-10-30 landed two milliseconds apart, each parked before
+it could see the other: "aren't they the same payment but they show as 2"),
+each delivery looks again after its own write and the row without the invoice
+id goes. The Payments page folds any pair that still slipped through into the
+invoice row, and assigning or dismissing it takes both. A twin is the same
+customer, amount, day and kind of money: a $2,500 setup fee through a one-time
+link and a $2,500 first month on a subscription are two payments.
+
 Whichever way a payment lands, the email on the Stripe customer is kept on the
 row (`payments.payer_email`) and shown on the Payments page after the date and
 method, so "who actually paid this" (the bookkeeper, a spouse, a second

@@ -36,6 +36,7 @@ type Db = {
   get: (path: string) => Promise<any>
   post: (table: string, body: unknown, prefer?: string) => Promise<Response>
   patch: (path: string, body: unknown) => Promise<Response>
+  del: (path: string) => Promise<Response>
 }
 
 function json(body: unknown, status = 200) {
@@ -559,12 +560,17 @@ async function parkUnmatched(
   const paidDate = isoDate(event?.data?.object?.created)
   const failed = Boolean(d.failed)
 
-  if (d.customerId) {
-    const open = await db.get(
-      `stripe_unmatched?stripe_customer_id=eq.${encodeURIComponent(d.customerId)}` +
-        `&resolved_client_id=is.null&amount=eq.${d.amount}` +
-        `&select=id,stripe_invoice_id,description,failed`
+  // The same customer, the same amount, the same kind of money. The kind
+  // matters: a $2,500 setup fee paid through a one-time link and a $2,500
+  // first month on a subscription are two payments, not twins.
+  const twinsOf = () =>
+    db.get(
+      `stripe_unmatched?stripe_customer_id=eq.${encodeURIComponent(d.customerId!)}` +
+        `&resolved_client_id=is.null&amount=eq.${d.amount}&payment_type=eq.${d.type}` +
+        `&select=id,stripe_event_id,stripe_invoice_id,description,failed`
     )
+  if (d.customerId) {
+    const open = await twinsOf()
     const twin = (open || []).find((r: any) => r.id)
     if (twin) {
       // A decline arriving after the money for the same amount is already
@@ -607,6 +613,25 @@ async function parkUnmatched(
   if (!res.ok && res.status !== 409) {
     throw new Error(`Could not park the unmatched payment: ${await res.text()}`)
   }
+
+  // THE RACE. Stripe sends a subscription's checkout and its first invoice
+  // together, and delivers them in parallel: on 2026-10-30 both arrived two
+  // milliseconds apart, each looked for a twin before the other had been
+  // written, and one $2,500 payment sat in the queue as two rows
+  // ("subscription started" and "subscription invoice"; "aren't they the
+  // same payment but they show as 2"). So after the write, look again. The
+  // rule is the same as the merge above and deterministic from either side:
+  // the row with the invoice id is the payment, the one without it goes.
+  if (!d.customerId || failed) return
+  const now = (await twinsOf()) || []
+  const mine = now.find((r: any) => r.stripe_event_id === event.id)
+  if (!mine || now.length < 2) return
+  const drop = mine.stripe_invoice_id
+    ? now.filter((r: any) => r.id !== mine.id && !r.stripe_invoice_id && !r.failed)
+    : now.some((r: any) => r.id !== mine.id && r.stripe_invoice_id && !r.failed)
+      ? [mine]
+      : []
+  for (const r of drop) await db.del(`stripe_unmatched?id=eq.${r.id}`)
 }
 
 // Picks up payments that were parked because they arrived before the customer
@@ -659,6 +684,11 @@ export function makeDb(supabaseUrl: string, serviceKey: string): Db {
         method: 'PATCH',
         headers: { ...headers, Prefer: 'return=minimal' },
         body: JSON.stringify(body),
+      }),
+    del: (path) =>
+      fetch(`${supabaseUrl}/rest/v1/${path}`, {
+        method: 'DELETE',
+        headers: { ...headers, Prefer: 'return=minimal' },
       }),
   }
 }

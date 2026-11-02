@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { collapseTwins, unmatchedIds } from './unmatchedQueue.js'
 
 export const SETUP_KEY = 'stripe_setup_link'
 // The original monthly link — the $998/mo plan. Key kept as-is so existing
@@ -68,7 +69,9 @@ export async function fetchUnmatched() {
     .is('resolved_client_id', null)
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data || []
+  // One payment, one row: a subscription's checkout and its first invoice
+  // parked side by side fold into the invoice row (unmatchedQueue.js).
+  return collapseTwins(data || [])
 }
 
 /**
@@ -167,10 +170,11 @@ export async function assignUnmatched(row, clientId, { replaceCustomerId = false
     }
   }
 
+  // The row and any twin folded into it: one payment resolved once.
   const { error } = await supabase
     .from('stripe_unmatched')
     .update({ resolved_client_id: clientId, resolved_at: new Date().toISOString() })
-    .eq('id', row.id)
+    .in('id', unmatchedIds(row))
   if (error) throw error
 
   return { relinked }
@@ -196,6 +200,6 @@ export async function assignUnmatched(row, clientId, { replaceCustomerId = false
  * every payment shows up, and they match it to a client or dismiss it.
  */
 export async function dismissUnmatched(row) {
-  const { error } = await supabase.from('stripe_unmatched').delete().eq('id', row.id)
+  const { error } = await supabase.from('stripe_unmatched').delete().in('id', unmatchedIds(row))
   if (error) throw error
 }
