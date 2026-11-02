@@ -97,7 +97,7 @@ function eastern(d = new Date()) {
 const QUIET_FROM = 21
 const QUIET_TO = 7
 
-type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string; channel?: string; token?: string; form?: string; task_id?: string; by?: string }
+type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string; channel?: string; token?: string; form?: string; task_id?: string; by?: string; ad_ids?: unknown }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return json({}, 200)
