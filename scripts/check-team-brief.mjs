@@ -7,7 +7,7 @@
 // WAITING COSTS MONEY OR A DAY. The morning brief is the whole picture in
 // one short message; the alerts are the changes that cannot wait.
 
-import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds, setupNext, setupStrip, taskAssignedSlack, taskDoneSlack } from '../src/lib/teamBrief.js'
+import { CLEAR_WORTHY, IMMEDIATE, accountConnectedSlack, alertKeys, alertsSlack, briefHtml, briefSections, briefSlack, briefSubject, briefText, buildBrief, clientAddedSlack, diffAlerts, firstName, formSubmittedSlack, liveClientIds, setupLine, setupNext, taskAssignedSlack, taskDoneSlack } from '../src/lib/teamBrief.js'
 import { buildWeeklyStatus, reportWeeks } from '../src/lib/weeklyStatus.js'
 import { nextSteps } from '../src/lib/nextSteps.js'
 import { addDays } from '../src/lib/dates.js'
@@ -58,42 +58,59 @@ check('blue flags are not attention', brief.attention.some((a) => a.key === 'kpi
 check("every waiting clip, newest first, naming the editor, whether it is in Meta and the editor's note", brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle', 'clip1.mp4, not in Meta yet · “post a day after clip2”'])
 check("a clip alert carries the editor's note too", alertKeys(rows).find((k) => k.key === 'd:clip:d/clip1.mp4')?.label, 'New edit dropped in: clip1.mp4, not in Meta yet · “post a day after clip2”')
 check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
-check('onboarding names the next step, whose move, and how long they have had it', brief.onboarding.map((o) => o.label), ['Meta ad account and Page connected (their move, 9 days)'])
+check('onboarding names what we are waiting on and how long they have had it', brief.onboarding.map((o) => [o.label, o.theirs]), [['Meta ad account and Page connected, 9 days', true]])
 check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, green: 2, greenLeads: 11, onboarding: 1, onboardingOurs: 0, onboardingTheirs: 1, paused: 0 })
 
-// --- where each onboarding client is: the setup strip --------------------------------
-// ("See where we are at with clients: if their ad accounts are connected,
-// live yet, the form submitted or sent, knowing the tiers.")
+// --- where each onboarding client is: one plain-words move -----------------------------
+// ("We want to know what we need to do, and if everything is connected then
+// we need to get videos made or publish them.")
 {
   const ctx = (client, over = {}) => ({ client: { id: 'w', name: 'Whole Co', setup_fee: 0, ...client }, intake: null, link: over.link ?? null, deliverables: over.deliverables || [], payments: [], callSteps: over.callSteps || [], counts: over.counts || {}, overrides: [], today: TODAY })
-  const row = (result, client, tier) => mk(client.id, client.name, { client: { paused_at: null, archived: false, is_internal: false, ...client }, result, tier })
+  const row = (result, client, tier, drop) => mk(client.id, client.name, { client: { paused_at: null, archived: false, is_internal: false, ...client }, result, tier, ...(drop ? { drop } : {}) })
+  const noClips = { hasMeta: true, state: 'never', behind: false, daysSince: null, waiting: [], clips: 0, total: 0 }
   // A Whole Chain client eleven days in: form back, Meta in, Google asked for nine days ago.
   const whole = nextSteps(ctx({ tier: 2, meta_ad_account_id: '1', meta_page_id: '2' }, { link: { created_at: '2026-10-11', intake_submitted_at: '2026-10-12', ghl_submitted_at: '2026-10-12' } }))
-  check('the strip: the form, each account the package needs, GHL, the ads, and what is live', setupStrip(whole, {}), 'form ✓ · Meta acct ✓ · Google acct ⏳ 9d · Drive ○ · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○')
+  check('the line: our move in plain words, then only what is still missing, with the days once it is a week', setupLine(whole, {}).text, 'do the onboarding call · still need: Google account (9 days), Drive folder')
+  check('...not connected until the form, the accounts the package needs and the Drive folder are in', [setupLine(whole, {}).connected, setupLine(whole, {}).gaps], [false, ['Google account (9 days)', 'Drive folder']])
   const wb = buildBrief({ statusRows: [row(whole, { id: 'w', name: 'Whole Co', meta_ads_active: false, date_added: '2026-10-09' }, 2)], day: TODAY, appUrl: 'https://crm.example' })
-  check('the onboarding line: the package and the day, the strip, then the next move', [wb.onboarding[0].tag, wb.onboarding[0].label], ['Meta and Google, day 12', 'form ✓ · Meta acct ✓ · Google acct ⏳ 9d · Drive ○ · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○ · next: Onboarding call done'])
-  check('the heading says whose move, the name links, the tag follows it', briefSlack(wb).blocks.find((b) => b.text?.text?.startsWith('*Onboarding')).text.text, '*Onboarding (1): 1 on us*\n⚪ <https://crm.example/client/w|Whole Co> (Meta and Google, day 12): form ✓ · Meta acct ✓ · Google acct ⏳ 9d · Drive ○ · GHL ○ · ads ○ · live: Meta ○, Google ○, LSA ○ · next: Onboarding call done')
-  check('plain text carries the tag too', briefText(wb).includes('⚪ Whole Co (Meta and Google, day 12): form ✓'), true)
-  check('the Drive folder we made for them reads as a tick once linked on the client page', setupStrip(whole, { drive_folder_id: '1abc' }).includes('· Drive ✓ ·'), true)
-  // Nobody has written to them yet: the form is ours to send, no wait is counted.
+  check('the onboarding line: the package and the day, then the move', [wb.onboarding[0].tag, wb.onboarding[0].label], ['Meta and Google, day 12', 'do the onboarding call · still need: Google account (9 days), Drive folder'])
+  check('our moves are their own list; the name links, the tag follows it', briefSlack(wb).blocks.find((b) => b.text?.text?.startsWith('*Onboarding')).text.text, '*Onboarding, our move (1)*\n⚪ <https://crm.example/client/w|Whole Co> (Meta and Google, day 12): do the onboarding call · still need: Google account (9 days), Drive folder')
+  check('plain text carries the tag too', briefText(wb).includes('⚪ Whole Co (Meta and Google, day 12): do the onboarding call'), true)
+  check('the Drive folder we made for them drops off the gaps once linked on the client page', setupLine(whole, { drive_folder_id: '1abc' }).gaps, ['Google account (9 days)'])
+  // Nobody has written to them yet: the form is ours to send, and it is the move, not a gap.
   const fresh = nextSteps(ctx({ tier: 2, meta_ad_account_id: '1', meta_page_id: '2', google_ads_customer_id: '1234567890' }))
-  check('a client not written to yet: "form not sent", accounts in, nothing waiting', setupStrip(fresh), 'form not sent · Meta acct ✓ · Google acct ✓ · GHL details ⏳ · ads ○ · live: Meta ○, Google ○, LSA ○')
-  // Live on Meta, Google still to connect: still on the list, and the next move is the Google chase, not the past customer list.
+  check('a client not written to yet: send the form; the accounts are in, GHL details are the gap', setupLine(fresh).text, 'send the onboarding form · still need: GHL details')
+  // Everything connected: the videos are the tail, and the move says what to do with them.
+  const ready = (over = {}, counts = {}) => nextSteps(ctx({ tier: 2, meta_ad_account_id: '1', meta_page_id: '2', google_ads_customer_id: '1234567890', drive_folder_id: 'f', ...over }, { link: { created_at: '2026-10-11', intake_submitted_at: '2026-10-12', ghl_submitted_at: '2026-10-12' }, callSteps: [{ step_key: 'x' }], counts }))
+  const drive = { drive_folder_id: 'f' }
+  check('connected, no videos: the line says to get them made', setupLine(ready(), drive, noClips).text, 'build the GHL backend · connected · no videos yet: get them made')
+  check('connected, clips dropped in: the line says to publish them', setupLine(ready(), drive, { ...noClips, waiting: [{ path: 'a' }, { path: 'b' }] }).text, 'build the GHL backend · connected · 2 clips waiting to publish')
+  check('connected, videos in but nothing out yet', setupLine(ready(), drive, { ...noClips, clips: 3 }).text, 'build the GHL backend · connected · 3 videos in, none published yet')
+  check('the ads are the move and there are no videos: get them made first', setupLine(ready({ ghl_active: true }), drive, noClips).text, 'get videos made (send the script link), then build the ads · connected')
+  check('the ads are built and clips are waiting: publishing them is the move, ahead of the past customer list', setupLine(ready({ ghl_active: true }, { savedAds: 3 }), drive, { ...noClips, waiting: [{ path: 'a' }] }).text, 'publish the 1 clip waiting · connected')
+  check('...even when we were waiting on the client for something else', (() => {
+    const l = setupLine(ready({ ghl_active: true }, { savedAds: 3 }), { drive_folder_id: '' }, { ...noClips, waiting: [{ path: 'a' }] })
+    return [l.text, l.theirs]
+  })(), ['publish the 1 clip waiting · still need: Drive folder', false])
+  check('before it is connected the videos stay off the line', setupLine(whole, {}, { ...noClips, clips: 3 }).videos, '')
+  // Live on Meta, Google still to connect: still on the list, waiting on them, and the next move is the Google chase, not the past customer list.
   const metaOn = nextSteps(ctx({ tier: 2, meta_ad_account_id: '1', meta_page_id: '2', meta_ads_active: true, ghl_active: true, drive_folder_id: 'f' }, { link: { created_at: '2026-08-21', intake_submitted_at: '2026-08-22', ghl_submitted_at: '2026-08-22' }, callSteps: [{ step_key: 'x' }], counts: { savedAds: 3, publishedAds: 2 } }))
-  check('launched on Meta with Google to come: the strip says so', setupStrip(metaOn, {}), 'form ✓ · Meta acct ✓ · Google acct ⏳ 60d · Drive ○ · GHL ✓ · ads ✓ · live: Meta ✓, Google ○, LSA ○')
+  check('launched on Meta with Google to come: what we wait on, the gap, what is live', setupLine(metaOn, {}).text, 'Google Ads access, 60 days · still need: Drive folder · Meta live')
   check('...and the next move is the channel still to come', setupNext(metaOn).key, 'google-ads-access')
   const mb = buildBrief({ statusRows: [row(metaOn, { id: 'm', name: 'Meta On', meta_ads_active: true, date_added: '2026-08-20' }, 2)], day: TODAY })
-  check('...so a Whole Chain client live on Meta is in onboarding AND running clean', [mb.onboarding.map((o) => [o.tag, o.label]), mb.green.map((g) => g.client.name), briefSections(mb).find((s) => s.key === 'onboarding').title], [[['Meta and Google, day 62', 'form ✓ · Meta acct ✓ · Google acct ⏳ 60d · Drive ○ · GHL ✓ · ads ✓ · live: Meta ✓, Google ○, LSA ○ · next: Google Ads access (their move, 60 days)']], ['Meta On'], 'Onboarding (1): 1 on the client'])
-  // Maintenance is one channel: on Google, no Meta marks at all.
+  check('...so a Whole Chain client live on Meta is in onboarding (waiting on the client) AND running clean', [mb.onboarding.map((o) => [o.tag, o.label]), mb.green.map((g) => g.client.name), briefSections(mb).find((s) => s.key === 'onboarding-theirs').title], [[['Meta and Google, day 62', 'Google Ads access, 60 days · still need: Drive folder · Meta live']], ['Meta On'], 'Onboarding, waiting on the client (1)'])
+  // Maintenance is one channel: on Google, no Meta in the line at all.
   const gOnly = nextSteps(ctx({ tier: 1, google_ads_customer_id: '1234567890', lsa_active: true }))
-  check('a Maintenance client on Google: no Meta marks, Google and LSA only', setupStrip(gOnly), 'form not sent · Google acct ✓ · GHL details ⏳ · live: Google ○, LSA ✓')
+  // Live on Local Services already, so the move is the channel still to come; the unsent form is a gap, not the move.
+  check('a Maintenance client on Google: no Meta, no videos, LSA live, Search to publish', setupLine(gOnly).text, 'build and publish the Google campaign · still need: the form (not sent), GHL details · LSA live')
   // Maintenance live on Meta with nothing else owed: off the list.
   const done = nextSteps(ctx({ tier: 1, meta_ad_account_id: '1', meta_page_id: '2', meta_ads_active: true }))
   check('a Maintenance client live on Meta is not in onboarding', buildBrief({ statusRows: [row(done, { id: 'd', name: 'Done Co', meta_ads_active: true }, 1)], day: TODAY }).onboarding.length, 0)
-  check('no steps on the row: the old next-step line, no strip', setupStrip({ launched: false, next: { title: 'x' } }), '')
-  // Order: our moves first, then the ones still to launch, then the longest wait.
-  const ob = buildBrief({ statusRows: [row(metaOn, { id: 'm', name: 'Meta On', meta_ads_active: true }, 2), row(whole, { id: 'w', name: 'Whole Co', meta_ads_active: false }, 2), row(gOnly, { id: 'g', name: 'Google Co', meta_ads_active: false }, 1)], day: TODAY })
-  check('our moves first, then still to launch, then the longest wait', ob.onboarding.map((o) => o.client.name), ['Whole Co', 'Google Co', 'Meta On'])
+  check('no steps on the row: the next step alone', setupLine({ launched: false, next: { title: 'x', owner: 'us' } }).text, 'x')
+  // Order: our moves first (connected ones at the top), then the ones still to launch, then the longest wait.
+  const ob = buildBrief({ statusRows: [row(metaOn, { id: 'm', name: 'Meta On', meta_ads_active: true }, 2), row(whole, { id: 'w', name: 'Whole Co', meta_ads_active: false }, 2), row(gOnly, { id: 'g', name: 'Google Co', meta_ads_active: false }, 1), row(ready(), { id: 'r', name: 'Ready Co', meta_ads_active: false, drive_folder_id: 'f' }, 2, noClips)], day: TODAY })
+  check('our moves first, connected at the top, then the longest wait', ob.onboarding.map((o) => o.client.name), ['Ready Co', 'Whole Co', 'Google Co', 'Meta On'])
+  check('...and the brief shows them as two lists', briefSections(ob).filter((s) => s.key.startsWith('onboarding')).map((s) => [s.title, s.lines.map((l) => l.emoji)]), [['Onboarding, our move (3)', ['⚪', '⚪', '⚪']], ['Onboarding, waiting on the client (1)', ['⏳']]])
 }
 
 // Paused clients: one line with how long, nothing else about them.
@@ -107,7 +124,7 @@ check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, cli
   check('paused today says so instead of "0 days"', briefSections(buildBrief({ statusRows: [today], day: TODAY })).find((s) => s.key === 'paused').lines[0].text, 'Today Co (paused today)')
 }
 check('the subject', briefSubject(brief), 'Morning brief · Tuesday, Oct 20 · 1 to call, 2 clips to publish, 2 running clean')
-check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week', 'Onboarding (1): 1 on the client'])
+check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week', 'Onboarding, waiting on the client (1)'])
 
 // Money is not in the brief at all: a card failing is said once, when it
 // happens (the alerts); an overdue invoice is the Payments page's business.

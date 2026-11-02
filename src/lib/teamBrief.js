@@ -80,59 +80,153 @@ const LIVE_STEPS = [
 const LIVE_KEYS = new Set(LIVE_STEPS.map(([k]) => k))
 // The chain each channel runs through, for the next move on a launched client.
 const CHANNEL_KEYS = ['meta-access', 'creatives', 'publish', 'go-live', 'google-ads-access', 'google-publish', 'lsa-live']
-
-/**
- * Where a client is in onboarding, as one line of marks worked out from the
- * pipeline steps (nextSteps.js), so the brief says what the Client tiers
- * board says: the form, each ad account the package needs, GHL, the ads,
- * and which channels are live. ✓ done, ⏳ waiting on the client (with the
- * days from a week), ○ not yet. A step the package does not owe is left
- * out: Maintenance is one channel, the Whole Chain is Meta and Google both,
- * so a Maintenance client on Google has no Meta marks at all.
- *
- * ("See where we are at with clients: if their ad accounts are connected,
- * live yet, the form submitted or sent, knowing the tiers.") With the client
- * row, the Google Drive folder we make for their photos is a mark too
- * ("add the Drive linked status in the brief for onboarding clients").
- */
-export function setupStrip(result, client = null) {
-  const steps = Array.isArray(result?.steps) ? result.steps : []
-  if (!steps.length) return ''
-  const by = new Map(steps.map((s) => [s.key, s]))
-  const wait = (s) => (Number(s?.waitingDays) >= 7 ? ` ${s.waitingDays}d` : '')
-  const mark = (s) => (s.done ? '✓' : s.owner === OWNER_CLIENT && !s.blocked ? `⏳${wait(s)}` : '○')
-  const bits = []
-  const form = by.get('onboarding-form')
-  if (form) bits.push(form.done ? 'form ✓' : form.owner === OWNER_CLIENT ? `form ⏳${wait(form)}` : 'form not sent')
-  const meta = by.get('meta-access')
-  if (meta) bits.push(`Meta acct ${mark(meta)}`)
-  const google = by.get('google-ads-access')
-  if (google) bits.push(`Google acct ${mark(google)}`)
-  if (client) bits.push(`Drive ${client.drive_folder_id ? '✓' : '○'}`)
-  const ghlForm = by.get('ghl-form')
-  const ghlBuild = by.get('ghl-build')
-  const ghlLive = by.get('ghl-live')
-  if (ghlForm || ghlBuild || ghlLive) {
-    bits.push(ghlLive?.done ? 'GHL ✓' : ghlBuild?.done ? 'GHL built' : ghlForm && !ghlForm.done ? `GHL details ⏳${wait(ghlForm)}` : 'GHL ○')
-  }
-  const ads = by.get('creatives')
-  if (ads) bits.push(`ads ${ads.done ? '✓' : '○'}`)
-  const live = LIVE_STEPS.filter(([k]) => by.has(k)).map(([k, name]) => `${name} ${by.get(k).done ? '✓' : '○'}`)
-  if (live.length) bits.push(`live: ${live.join(', ')}`)
-  return bits.join(' · ')
-}
 const OWNER_CLIENT = 'client'
+
+// ---------------------------------------------------------------------------
+// onboarding: one plain-words move per client
+//
+// "We want to know what we need to do, and if everything is connected then
+// we need to get videos made or publish them." So the onboarding line is
+// the move, said the way somebody would say it at the desk, then only the
+// gaps (what is still missing, not a strip of ticks), then what is live.
+// The steps are the pipeline's (nextSteps.js), so the line follows the
+// package: Maintenance is one channel, Meta and Google is both.
+// ---------------------------------------------------------------------------
+
+/** What WE do next, by step. */
+const OUR_MOVE = {
+  'onboarding-form': 'send the onboarding form',
+  'onboarding-call': 'do the onboarding call',
+  'ghl-build': 'build the GHL backend',
+  'ghl-live': 'mark GHL live',
+  creatives: 'build the ads',
+  'past-customers': 'load the past customer list',
+  'ai-brain': 'build the second-brain AI',
+  automations: 'build the automations',
+  publish: 'publish to Meta',
+  'go-live': 'switch the Meta ads on and mark live',
+  'google-publish': 'build and publish the Google campaign',
+  'lsa-live': 'get Local Services live',
+  'weekly-kpis': 'log this week’s KPIs',
+}
+/** What we are waiting on THEM for, by step. */
+const THEIR_MOVE = {
+  'setup-fee': 'the setup fee',
+  'onboarding-form': 'the onboarding form',
+  'meta-access': 'Meta ad account and Page access',
+  'google-ads-access': 'Google Ads access',
+  'ghl-form': 'their GHL account details',
+  photos: 'their photos and videos',
+}
+/** The connections a client is still missing, by step, in the order they are asked for. */
+const GAP_STEPS = [
+  ['onboarding-form', 'the form'],
+  ['meta-access', 'Meta account'],
+  ['google-ads-access', 'Google account'],
+  ['ghl-form', 'GHL details'],
+]
+// The accounts that make a client "connected": the form, the ad accounts
+// the package needs, and the Drive folder for their photos. GHL details
+// are a chase too, but not what "connected" means at the desk.
+const CONNECTED_KEYS = new Set(['onboarding-form', 'meta-access', 'google-ads-access'])
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
  * The next move on a client's setup. Not launched: the pipeline's own next
  * (ours first, else the chase). Launched with a channel still to come: the
  * first open step on that channel's chain, so a Whole Chain client live on
- * Meta reads "next: Google Ads access", not the past customer list.
+ * Meta reads "Google Ads access", not the past customer list.
  */
 export function setupNext(result) {
   if (!result?.launched) return result?.next || null
   const open = (result.steps || []).filter((s) => !s.done && !s.blocked && CHANNEL_KEYS.includes(s.key))
   return open.find((s) => s.owner !== OWNER_CLIENT) || open[0] || result.next || null
+}
+
+/**
+ * Where the client's videos are, once Meta is owed and the ad account is
+ * in: the thing to do after everything is connected is to get videos made,
+ * or to publish the ones that are in. From the video board's row
+ * (videoLaunch.js): clips registered in the CRM, clips dropped in and not
+ * published, video ads out. '' when Meta is not in the picture.
+ */
+function videoStage(by, drop) {
+  const goLive = by.get('go-live')
+  const meta = by.get('meta-access')
+  if (!goLive || goLive.done || !meta?.done || !drop) return ''
+  const waiting = drop.waiting?.length || 0
+  if (waiting) return `${plural(waiting, 'clip')} waiting to publish`
+  const clips = Number(drop.clips) || 0
+  if (!clips) return 'no videos yet: get them made'
+  if (!(Number(drop.total) > 0)) return `${plural(clips, 'video')} in, none published yet`
+  return `${plural(drop.total, 'video ad')} out`
+}
+
+/**
+ * The onboarding line for one client, from the pipeline steps, the client
+ * row and the video board's row:
+ *
+ *   move      what to do, in plain words ("build the ads"), or what we are
+ *             waiting on them for ("Google Ads access, 58 days")
+ *   theirs    true when the move is the client's
+ *   days      how long they have had it
+ *   gaps      the connections still missing ("the form (5 days)", "Drive folder")
+ *   connected the form, the accounts the package needs and the Drive folder are all in
+ *   live      "Meta and Google live", or ''
+ *   videos    where the videos are, once connected on Meta, or ''
+ *   text      the line: move · connected / still need: ... · live · videos
+ */
+export function setupLine(result, client = null, drop = null) {
+  const steps = Array.isArray(result?.steps) ? result.steps : []
+  const by = new Map(steps.map((s) => [s.key, s]))
+  const next = setupNext(result)
+  // Finished edits sitting there are the loudest thing on a setup, as on
+  // the video board: when clips are waiting and nothing blocks the publish,
+  // publishing them is the move, whatever else is open.
+  const waitingClips = drop?.waiting?.length || 0
+  const publish = by.get('publish')
+  const publishNow = waitingClips > 0 && publish && !publish.done && !publish.blocked
+  const theirs = !publishNow && next?.owner === OWNER_CLIENT
+  const days = theirs ? Number(next?.waitingDays) || 0 : 0
+  const wait = (s) => (Number(s?.waitingDays) >= 7 ? ` (${s.waitingDays} days)` : '')
+
+  const gaps = []
+  let connected = steps.length > 0
+  for (const [key, name] of GAP_STEPS) {
+    const s = by.get(key)
+    if (!s || s.done) continue
+    if (CONNECTED_KEYS.has(key)) connected = false
+    // The move itself is not repeated as a gap.
+    if (next?.key === key) continue
+    gaps.push(key === 'onboarding-form' && s.owner !== OWNER_CLIENT ? 'the form (not sent)' : `${name}${wait(s)}`)
+  }
+  // A row with no steps (an old row, a test) says nothing about the folder.
+  if (steps.length && client && !client.drive_folder_id) {
+    connected = false
+    gaps.push('Drive folder')
+  }
+
+  const liveNames = LIVE_STEPS.filter(([k]) => by.get(k)?.done).map(([, name]) => name)
+  const live = liveNames.length ? `${liveNames.join(' and ')} live` : ''
+
+  // The videos are the line's tail once everything is connected; before
+  // that the gaps are the news, and the line stays short.
+  const stage = videoStage(by, drop)
+  let videos = connected ? stage : ''
+  let move
+  if (publishNow) {
+    move = `publish the ${plural(waitingClips, 'clip')} waiting`
+    videos = ''
+  } else if (!next) move = 'nothing open'
+  else if (theirs) move = `${THEIR_MOVE[next.key] || next.title}${days >= 7 ? `, ${days} days` : ''}`
+  else if (next.key === 'creatives' && stage.startsWith('no videos')) {
+    move = 'get videos made (send the script link), then build the ads'
+    videos = ''
+  } else move = OUR_MOVE[next.key] || next.title
+
+  const text = [move, connected ? 'connected' : '', gaps.length ? `still need: ${gaps.join(', ')}` : '', live, videos].filter(Boolean).join(' · ')
+  return { move, theirs, days, gaps, connected, live, videos, text }
 }
 
 /**
@@ -181,11 +275,7 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
     const steps = r.result?.steps || []
     const channelOpen = steps.some((s) => LIVE_KEYS.has(s.key) && !s.done)
     if (!r.client.paused_at && (!r.result?.launched || channelOpen)) {
-      const next = setupNext(r.result)
-      const days = Number(next?.waitingDays) || 0
-      const theirs = next?.owner === 'client'
-      const move = next ? `${next.title}${theirs ? ` (their move${days >= 7 ? `, ${days} days` : ''})` : ''}` : 'nothing open'
-      const strip = setupStrip(r.result, r.client)
+      const line = setupLine(r.result, r.client, r.drop)
       // The package and the day of onboarding they are on, so "day 40 and
       // Google still not connected" reads at a glance.
       const added = r.client.date_added ? String(r.client.date_added).slice(0, 10) : ''
@@ -194,11 +284,12 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       onboarding.push({
         client,
         tag: `${tierShort}${dayN > 0 ? `, day ${dayN}` : ''}`,
-        label: strip ? `${strip} · next: ${move}` : move,
-        strip,
-        theirs,
-        ours: Boolean(next) && !theirs,
-        days,
+        label: line.text,
+        move: line.move,
+        theirs: line.theirs,
+        ours: !line.theirs,
+        connected: line.connected,
+        days: line.days,
         launched: Boolean(r.result?.launched),
       })
     }
@@ -208,8 +299,10 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
   clips.sort((a, b) => (a.at < b.at ? 1 : -1))
   green.sort((a, b) => b.leads7 - a.leads7 || a.client.name.localeCompare(b.client.name))
   paused.sort((a, b) => b.days - a.days || a.client.name.localeCompare(b.client.name))
-  // Our moves first, then the clients still to launch, then the longest wait.
-  onboarding.sort((a, b) => Number(b.ours) - Number(a.ours) || Number(a.launched) - Number(b.launched) || b.days - a.days || a.client.name.localeCompare(b.client.name))
+  // Our moves first (the connected ones at the top: they are the ones a
+  // video or a publish gets live), then the clients still to launch, then
+  // the longest wait.
+  onboarding.sort((a, b) => Number(b.ours) - Number(a.ours) || Number(b.connected) - Number(a.connected) || Number(a.launched) - Number(b.launched) || b.days - a.days || a.client.name.localeCompare(b.client.name))
   const red = attention.filter((a) => a.severity === 'red').length
   return {
     day,
@@ -280,10 +373,15 @@ export function briefSections(model) {
     const names = model.green.map((g) => `${g.client.name} ${g.leads7}${g.leads7 > g.before ? '↑' : g.leads7 < g.before ? '↓' : ''}`).join(', ')
     out.push({ key: 'green', title: `Running clean (${model.green.length}), leads this week`, lines: [{ emoji: EMOJI.green, text: names, href: '/status' }] })
   }
-  if (model.onboarding.length) {
-    const c = model.counts
-    const who = [c.onboardingOurs ? `${c.onboardingOurs} on us` : '', c.onboardingTheirs ? `${c.onboardingTheirs} on the client` : ''].filter(Boolean).join(', ')
-    out.push({ key: 'onboarding', title: `Onboarding (${model.onboarding.length})${who ? `: ${who}` : ''}`, lines: model.onboarding.map((o) => ({ emoji: EMOJI.onboarding, client: o.client, tag: o.tag, text: o.label, href: `/client/${o.client.id}` })) })
+  // Onboarding is two lists, so "what do we do today" is one glance: our
+  // moves, then the clients we are waiting on.
+  const ours = model.onboarding.filter((o) => !o.theirs)
+  const theirs = model.onboarding.filter((o) => o.theirs)
+  if (ours.length) {
+    out.push({ key: 'onboarding', title: `Onboarding, our move (${ours.length})`, lines: ours.map((o) => ({ emoji: EMOJI.onboarding, client: o.client, tag: o.tag, text: o.label, href: `/client/${o.client.id}` })) })
+  }
+  if (theirs.length) {
+    out.push({ key: 'onboarding-theirs', title: `Onboarding, waiting on the client (${theirs.length})`, lines: theirs.map((o) => ({ emoji: EMOJI.waiting, client: o.client, tag: o.tag, text: o.label, href: `/client/${o.client.id}` })) })
   }
   if (model.paused?.length) {
     const names = model.paused.map((p) => `${p.client.name} (${p.days === 0 ? 'paused today' : `since ${shortDay(p.since)}, ${p.days} day${p.days === 1 ? '' : 's'}`})`).join(', ')

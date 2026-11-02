@@ -48,7 +48,8 @@ Every ask of a client has a copy button where the step is:
   step of their form hand them that link ("I made one folder in Google Drive.
   Please add in your best job photos/videos..."). The Studio's photo picker
   reads the folder live. The Clients list shows "Drive linked" or "No Drive
-  folder" under Channels, and the brief's onboarding line carries a Drive mark.
+  folder" under Channels, and the brief's onboarding line lists "Drive folder"
+  under "still need" until it is linked.
 
 The agency-wide sweep (who still needs each channel, and the Meta access
 report) is folded under the board for the weekly pass.
