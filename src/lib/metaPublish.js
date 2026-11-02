@@ -370,6 +370,23 @@ export async function searchLocations(query) {
   return data?.locations || []
 }
 
+/**
+ * A pasted list of ZIPs, checked with Meta in one go (the meta-geo function,
+ * search type adgeolocationmeta): the ones Meta knows come back as ZIP
+ * locations the picker can add straight to the ad set, the rest as `missing`.
+ * "What's the easiest way to add all this when a client sends ZIPs."
+ */
+export async function lookupZips(zips) {
+  const { data, error } = await supabase.functions.invoke('meta-geo', { body: { action: 'lookup_zips', zips } })
+  if (error) {
+    const { status, detail } = await readFunctionError(error)
+    if (!status || status === 404) throw new Error('The ZIP lookup is not deployed yet. Deploy meta-geo in Supabase and try again.')
+    throw new Error(detail || 'Could not check the ZIPs with Meta.')
+  }
+  if (data?.error) throw new Error(data.error)
+  return { locations: data?.locations || [], missing: data?.missing || [] }
+}
+
 // Existing campaigns in the client's account, so a second ad can join one
 // rather than starting a fresh campaign per creative.
 export async function listCampaigns(clientId) {

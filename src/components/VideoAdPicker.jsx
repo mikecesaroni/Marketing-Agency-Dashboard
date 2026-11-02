@@ -17,10 +17,13 @@ import {
   deleteVideo,
   fetchClientVideos,
   saveVideoAbout,
+  saveVideoCopy,
   saveVideoMeasure,
+  saveVideoVersions,
   transcribeVideo,
   uploadVideo,
 } from '../lib/adVideoStore'
+import { copyChanged, copyFromRow, copyToSave, versionsFromRow, versionsToSave } from '../lib/videoCopyMemory'
 
 /**
  * Drop a clip, tick it, publish it.
@@ -174,6 +177,49 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     load()
   }, [load])
 
+  // WHAT THE LAST VISIT PAID FOR. The three versions and the copy picked or
+  // typed are kept on the row (supabase/video-copy-memory.sql), so they come
+  // back here instead of being written again ("if I click away and come back
+  // it doesn't have to do all that over again and spend money"). Versions
+  // only where none are held; copy only where the page has no words yet, so
+  // nothing anyone is typing is overwritten.
+  const savedCopy = useRef({})
+  useEffect(() => {
+    for (const v of videos || []) {
+      const path = v.storage_path
+      const kept = versionsFromRow(v)
+      if (kept) setVersions((prev) => (prev[path] ? prev : { ...prev, [path]: kept }))
+      if (v.copy && savedCopy.current[path] === undefined) savedCopy.current[path] = copyToSave(v.copy)
+      const patch = copyFromRow(v, copies[path])
+      if (patch) onCopy(path, patch)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos])
+
+  // THE WORDS, KEPT. Whatever changes a clip's copy record (a version picked,
+  // an angle applied, a field typed) lands on its row a moment later. Ids
+  // stamped on the record are not words and do not count; a clip not yet
+  // sent to Meta has no row to keep them on.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      for (const v of videos || []) {
+        const path = v.storage_path
+        if (v.status === 'new') continue
+        const c = copies[path]
+        if (!c) continue
+        const was = savedCopy.current[path]
+        const next = copyToSave(c)
+        if (was === undefined ? !next : !copyChanged(c, was)) continue
+        savedCopy.current[path] = next
+        saveVideoCopy({ clientId: client.id, storagePath: path, copy: next }).catch(() => {
+          delete savedCopy.current[path]
+        })
+      }
+    }, 800)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copies, videos])
+
   // Only while something is actually transcoding, and it stops on its own.
   // A poll that runs forever on a settled list is a request every six seconds
   // for as long as the tab is open.
@@ -264,6 +310,10 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
         setError(out.note || 'The copy assistant did not return any versions. Try again.')
       }
       setVersions((prev) => ({ ...prev, [path]: out }))
+      // Kept on the row, so the next visit reads them instead of paying again.
+      if (out.variations.length) {
+        saveVideoVersions({ clientId: client.id, storagePath: path, versions: versionsToSave(out) }).catch(() => {})
+      }
       if (auto && out.variations[0] && !copy.primary_text?.trim()) {
         applyVariation(path, video, out.variations[0], 0)
       } else {

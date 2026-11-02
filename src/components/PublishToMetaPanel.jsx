@@ -9,7 +9,7 @@ import { announceAdsPublished } from '../lib/teamBriefClient'
 import { readMe } from '../lib/tasksData'
 import FunnelBuilder from './FunnelBuilder'
 import VideoAdPicker from './VideoAdPicker'
-import { fetchSavedAds } from '../lib/savedAds'
+import { fetchSavedAds, saveSavedAdCopy } from '../lib/savedAds'
 import { guessAdSeason, seasonMeta } from '../lib/adSeason'
 import { metaAdName, wcName } from '../lib/adNaming'
 import { ago } from '../lib/contentHub'
@@ -1265,6 +1265,33 @@ export default function PublishToMetaPanel({
     setPicked((prev) =>
       prev.includes(stamp) ? prev.filter((s) => s !== stamp) : [...prev, stamp]
     )
+
+  // THE WORDS, KEPT. A static's feed copy, written here or typed here, lands
+  // on its saved ad a moment later, so leaving the page and coming back
+  // starts from it instead of writing it again ("if I click away and come
+  // back it doesn't have to do all that over again and spend money"). Only
+  // when the words differ from what the saved ad already carries.
+  const savedStaticCopy = useRef({})
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      for (const s of sets) {
+        const stamp = String(s.stamp)
+        const c = copies[stamp]
+        if (!c) continue
+        const r = s.recipe || {}
+        const words = { primary_text: String(c.primary_text || '').trim(), headline: String(c.headline || '').trim(), description: String(c.description || '').trim() }
+        if (!words.primary_text) continue
+        const key = JSON.stringify(words)
+        const base = savedStaticCopy.current[stamp] ?? JSON.stringify({ primary_text: String(r.primary_text || '').trim(), headline: String(r.headline || r.hook || '').trim(), description: String(r.description || '').trim() })
+        if (key === base) continue
+        savedStaticCopy.current[stamp] = key
+        saveSavedAdCopy(client.id, stamp, words).catch(() => {
+          delete savedStaticCopy.current[stamp]
+        })
+      }
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [copies, sets, client.id])
 
   // Writes the three feed lines for one static and fills whatever is still
   // blank. `again` ignores the once-only guard, for the button in the row.

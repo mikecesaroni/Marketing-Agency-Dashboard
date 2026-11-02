@@ -90,6 +90,25 @@ function recipeColumns(content, backgroundPath, logoPath, safeMode, backgroundPa
   }
 }
 
+/**
+ * Keeps the feed copy written or typed for a static on its saved row, so the
+ * publish page does not write it again next visit ("if I click away and come
+ * back it doesn't have to do all that over again and spend money"). Only the
+ * three feed fields; the painted words are untouched.
+ */
+export async function saveSavedAdCopy(clientId, stamp, copy = {}) {
+  const { error } = await supabase
+    .from('saved_ads')
+    .update({
+      primary_text: String(copy.primary_text || '').trim() || null,
+      headline: String(copy.headline || '').trim() || null,
+      description: String(copy.description || '').trim() || null,
+    })
+    .eq('client_id', clientId)
+    .eq('stamp', String(stamp))
+  if (error) throw error
+}
+
 /** Changes the season label on one saved ad. */
 export async function setSavedAdSeason(clientId, stamp, season) {
   const { error } = await supabase.from('saved_ads').update({ season: season || null }).eq('client_id', clientId).eq('stamp', String(stamp))

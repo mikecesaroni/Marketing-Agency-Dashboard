@@ -188,6 +188,27 @@ export async function dismissClips({ clientId, storagePaths }) {
   if (b.error) throw b.error
 }
 
+/**
+ * Keeps the copy picked or typed for a video on its row, so the next visit
+ * to the publish page starts from it instead of writing it again ("if I
+ * click away and come back it doesn't have to do all that over again and
+ * spend money"). `copy` is copyToSave() output, or null to clear.
+ */
+export async function saveVideoCopy({ clientId, storagePath, copy }) {
+  const { error } = await supabase.from('ad_videos').update({ copy: copy || null }).eq('client_id', clientId).eq('storage_path', storagePath)
+  if (error) throw error
+}
+
+/** Keeps the three versions the copy assistant wrote for a video, with when. */
+export async function saveVideoVersions({ clientId, storagePath, versions }) {
+  const { error } = await supabase
+    .from('ad_videos')
+    .update({ versions: versions || null, versions_at: versions ? new Date().toISOString() : null })
+    .eq('client_id', clientId)
+    .eq('storage_path', storagePath)
+  if (error) throw error
+}
+
 export async function saveVideoAbout({ clientId, storagePath, about }) {
   const { error } = await supabase
     .from('ad_videos')

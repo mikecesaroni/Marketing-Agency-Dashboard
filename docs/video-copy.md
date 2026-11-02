@@ -24,6 +24,23 @@ writes the ad copy from what is said.
 The transcript never replaces the note. The note is what a person says the
 clip is about; the transcript is what is said in it. Both go to the assistant.
 
+## It is kept (2026-11-02)
+
+"If I click publish videos and the AI takes the time to transcribe videos and
+make ad copies, make it so it saves that; if I click away and come back it
+doesn't have to do all that over again and spend money." The transcript was
+always on the row. Now the three versions are too (`ad_videos.versions`, with
+`versions_at`), and so is the copy picked or typed for the clip
+(`ad_videos.copy`: primary text, headline, description, ad name), written a
+moment after it changes (`supabase/video-copy-memory.sql`; the pure part is
+`src/lib/videoCopyMemory.js`, tested by `scripts/check-video-copy-memory.mjs`).
+Coming back to the publish page reads them off the row: the versions are on
+their cards, the words are in the fields, nothing is asked for again. The
+saved copy never lands over words somebody is typing. A static's feed copy,
+written on the page or typed there, is kept the same way on its saved ad
+(`saved_ads.primary_text`, `headline`, `description`). A clip that has not
+been sent to Meta yet has no row and keeps nothing until it has.
+
 ## Switching it on
 
 Transcription needs one secret: `DEEPGRAM_API_KEY`, under Project Settings >
