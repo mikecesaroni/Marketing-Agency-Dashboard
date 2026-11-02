@@ -418,6 +418,10 @@ Deno.serve(async (req) => {
     if (action !== 'brief') return json({ error: `Unknown action "${action}".` }, 400)
 
     if (!body.force) {
+      // 7am Eastern whatever the clocks do: pg_cron runs on UTC, so the job
+      // fires at 11:00 and 12:00 UTC and the brief goes out on whichever of
+      // those is 7am here (the other is before 7am, or already sent).
+      if (hour < QUIET_TO) return json({ day, skipped: 'before 7am Eastern', hour })
       const { data: already } = await supabase.from('team_digests').select('id').eq('day', day).eq('kind', 'brief').eq('status', 'sent').limit(1)
       if (already?.length) return json({ day, skipped: 'already sent today' })
       // Weekends get a brief too (since 2026-10-29); Monday's still carries

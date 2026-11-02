@@ -46,7 +46,7 @@ Actions: `brief` (the morning run; once a day unless `force`), `alerts` (the qua
 
 The log is `team_digests` (every brief, alert post and test, with where it went). The channel's memory is `team_alerts`: one row per client per thing (`<client>:ads-off`, `<client>:clip:<path>`, ...), open until it clears. An alert run posts only keys not open in the table and closes the ones that are gone; the brief marks everything it carried as posted, so the first alert run of the day does not repeat it.
 
-Schedule (pg_cron, `supabase/team-brief.sql`): `team-morning-brief` every day 11:00 UTC (7am Eastern); `team-alerts` every 15 minutes. Both call the function the way the client reports' job does, with the project's anon key.
+Schedule (pg_cron, `supabase/team-brief.sql`): `team-morning-brief` every day at 11:00 and 12:00 UTC, and the function sends on whichever is 7am Eastern (it holds the brief before 7am and sends once a day, so the clocks changing never moves it); `team-alerts` every 15 minutes. Both call the function the way the client reports' job does, with the project's anon key.
 
 ## Slack
 
