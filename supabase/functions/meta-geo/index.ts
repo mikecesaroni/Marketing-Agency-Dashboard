@@ -81,15 +81,22 @@ Deno.serve(async (req) => {
 
   try {
     const found = new Map<string, Row>()
+    // What Meta said when it said no, returned with debug: true so a list
+    // that comes back all-missing can be explained rather than guessed at.
+    const errors: string[] = []
     for (let i = 0; i < zips.length; i += CHUNK) {
       const chunk = zips.slice(i, i + CHUNK)
       const keys = chunk.map((z) => `${country}:${z}`)
       try {
         const res = await graphGet('search', { type: 'adgeolocationmeta', zips: JSON.stringify(keys) }, token)
-        for (const row of Object.values((res?.zips || {}) as Record<string, Row>)) {
+        if (body.debug) errors.push(`raw: ${JSON.stringify(res).slice(0, 800)}`)
+        // The records sit under data.zips (seen 2026-11-02 on v21.0), keyed
+        // by "US:27601"; older docs show them at the top. Read either.
+        for (const row of Object.values((res?.data?.zips || res?.zips || {}) as Record<string, Row>)) {
           if (row?.key) found.set(row.key, row)
         }
-      } catch {
+      } catch (err) {
+        errors.push(`bulk: ${err instanceof Error ? err.message : String(err)}`)
         // One unknown key can fail the whole chunk on some API versions, so
         // fall back to asking for each ZIP on its own, the way the picker's
         // search does. Slower, and only on the chunk that failed.
@@ -98,15 +105,16 @@ Deno.serve(async (req) => {
             const one = await graphGet('search', { type: 'adgeolocation', location_types: JSON.stringify(['zip']), q: z, limit: '5' }, token)
             const hit = ((one?.data || []) as Row[]).find((r) => r.type === 'zip' && String(r.name) === z && String(r.country_code || 'US') === country)
             if (hit?.key) found.set(hit.key, hit)
-          } catch {
-            // Left as missing.
+            else if (errors.length < 20) errors.push(`${z}: ${JSON.stringify((one?.data || []).slice(0, 2))}`)
+          } catch (err) {
+            if (errors.length < 20) errors.push(`${z}: ${err instanceof Error ? err.message : String(err)}`)
           }
         }
       }
     }
     const locations = zips.map((z) => found.get(`${country}:${z}`)).filter(Boolean).map((row) => asLocation(row as Row))
     const missing = zips.filter((z) => !found.has(`${country}:${z}`))
-    return json({ locations, missing })
+    return json({ locations, missing, ...(body.debug ? { errors } : {}) })
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 502)
   }
