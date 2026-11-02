@@ -16,6 +16,7 @@
 // is a blocker on publish.
 
 import { anglesAvailable, nthPerField } from '../src/lib/adCopyOptions.js'
+import { PLAYBOOK } from '../src/lib/playbook.js'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -120,6 +121,14 @@ check('three angles are available', anglesAvailable(REPLY), 3)
 check('no options is no copy', nthPerField([], 0), {})
 check('and no angles', anglesAvailable([]), 0)
 check('null does not throw', [nthPerField(null, 0), anglesAvailable(null)], [{}, 0])
+
+// --- emojis: none by default, a test when asked ------------------------------
+// ("Consider adding emojis to the ad copy generator; research if that would
+// be better." Looked at 2026-11-02: no by default, see docs/emojis-in-ad-copy.md.)
+{
+  const section = PLAYBOOK.slice(PLAYBOOK.indexOf('=== EMOJIS'), PLAYBOOK.indexOf('=== WHAT META REWARDS'))
+  check('the playbook says none by default and names the test rules', [section.includes('Default: none'), section.includes('Meta primary text only'), section.includes('never on a Google ad'), section.includes('cost per lead, not clicks')], [true, true, true, true])
+}
 
 console.log(failures === 0 ? '\nAll ad-copy checks passed' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

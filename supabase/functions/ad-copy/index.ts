@@ -223,6 +223,16 @@ ads with $50 or more behind them, $18,600 of spend, September 2026:
 - Every top-quartile ad carried proof. If proof is empty and you were given a
   rating, a review count or a guarantee, offer it as a proof option.
 
+EMOJIS: none unless the instruction asks for them. The evidence (looked at
+2026-11-02) is vendor tests from 2016 and 2017 on headlines, and controlled
+studies that find emojis lift hedonic buys and do little for utilitarian ones
+like a furnace repair; heavy use reads as spam or AI-written. When the
+instruction does ask, it is a test variant: primaryText only, one emoji at
+most at the start of a line and never two in a row, never in the headline or
+the description or any painted slot, never standing in for a word, and say in
+the note that it should run against the plain version and be judged on cost
+per lead.
+
 Write like the business owner talks. Concrete over clever. No em dashes, no
 square brackets, no placeholders. Never invent a number, a rating, a review
 count, a licence or a guarantee that is not already somewhere in what you were

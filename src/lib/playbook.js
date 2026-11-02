@@ -268,6 +268,25 @@ Set it to what actually happens next or the lead feels tricked at hello.
 - Keep frame edges clear of text so the interface doesn't cover it.
 - Real photos of the team and the work beat stock every time.
 
+=== EMOJIS (looked at 2026-11-02) ===
+Default: none. Our copy reads like the owner talking, and nothing in the
+evidence says an emoji earns a lead for a plumber or an HVAC company:
+- The "241% CTR" and "12 to 20%" numbers are vendor tests from 2016 and 2017,
+  mostly on headlines, and the one with a cost column saw cost per click rise.
+- Controlled studies find emojis lift hedonic buys (food, travel, fashion) and
+  do little for utilitarian ones. A furnace repair is utilitarian.
+- Google Ads forbids them (invalid characters). Meta allows them; its only
+  rule is no emoji that spells or hides a swear word.
+- Heavy emoji use now reads as AI-written or spam, and screen readers speak
+  every one by name, so a stack is a wall of noise.
+- Our own account: 65 saved ads, none with an emoji, and the CRM-published
+  ads ran $16 a lead across 270 leads. There is nothing to fix.
+When asked to TEST them: Meta primary text only, one emoji at most at the
+start of a line and never two in a row, never in the headline, the
+description or any word painted on the image, never standing in for a word,
+never on a Google ad, never in a spoken script line. Run it as its own ad
+against the plain version and judge on cost per lead, not clicks.
+
 === WHAT META REWARDS IN 2026 ===
 - Broad audiences + clean conversion data beat manual interest targeting.
 - Creative DIVERSITY beats creative VOLUME. Angles and formats, not clones.
