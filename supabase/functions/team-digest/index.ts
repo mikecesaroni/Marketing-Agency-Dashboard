@@ -45,6 +45,11 @@
 //   task_assigned      from the Tasks page when a task is made for, or handed
 //                      to, somebody other than the giver (task_id, by): one
 //                      line naming them; each person once per task.
+//   onboarding_tasks   from the add-client form the moment Ken's onboarding
+//                      tasks are made (client_id, task_ids, by): one post
+//                      listing them, each task told once per person.
+//   ads_published      from the publish page (client_id, ad_ids, by): one
+//                      post naming who published what; each ad once.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 // model.js is the bundle in this folder (`npm run brief`), served here from
