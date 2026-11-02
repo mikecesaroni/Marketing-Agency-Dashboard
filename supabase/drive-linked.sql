@@ -20,6 +20,13 @@
 alter table clients add column if not exists drive_linked_at timestamptz;
 alter table clients add column if not exists drive_linked_by text;
 
+-- The log must allow the kind, or the post repeats every sweep (it did,
+-- three times, before this line existed). The current list is in
+-- supabase/team-brief.sql.
+alter table public.team_digests drop constraint if exists team_digests_kind_check;
+alter table public.team_digests add constraint team_digests_kind_check
+  check (kind in ('brief', 'alerts', 'test', 'client', 'account', 'form', 'task', 'note', 'publish', 'drive'));
+
 create or replace function stamp_drive_linked()
 returns trigger
 language plpgsql

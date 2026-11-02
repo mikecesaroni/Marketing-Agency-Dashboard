@@ -18,8 +18,12 @@ create table if not exists public.team_digests (
   id uuid primary key default gen_random_uuid(),
   day date not null,
   -- brief, alerts and the connection test; 'client' is the one post when a
-  -- client is added; 'note' is a line posted by hand (a correction).
-  kind text not null check (kind in ('brief', 'alerts', 'test', 'client', 'account', 'form', 'task', 'note')),
+  -- client is added; 'note' is a line posted by hand (a correction);
+  -- 'publish' ads sent to Meta; 'drive' a Drive folder linked. A kind
+  -- missing from this list is a post the function cannot record, and a
+  -- post it cannot record it makes again on every sweep (2026-11-02: the
+  -- same Drive folder three times). Add the kind here first.
+  kind text not null check (kind in ('brief', 'alerts', 'test', 'client', 'account', 'form', 'task', 'note', 'publish', 'drive')),
   status text not null check (status in ('sent', 'ready', 'failed', 'skipped')),
   reason text,
   slack_status text,
@@ -115,3 +119,7 @@ grant execute on function public.slack_connected() to service_role;
 --   alter table public.team_digests drop constraint team_digests_kind_check;
 --   alter table public.team_digests add constraint team_digests_kind_check
 --     check (kind in ('brief', 'alerts', 'test', 'client', 'note'));
+-- 2026-11-02: 'publish' and 'drive' added the same way (the list above is
+-- the current one). The ads-published post had been failing to record
+-- since it was built, and the Drive post repeated every sweep until the
+-- kind was allowed.

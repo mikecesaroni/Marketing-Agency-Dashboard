@@ -220,8 +220,8 @@ Deno.serve(async (req) => {
           error = err instanceof Error ? err.message : String(err)
         }
       }
-      await record({ day, kind, status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject, model: { text: message.text, ...extra } })
-      return json({ day, posted, text: message.text, error: error || undefined })
+      const { error: recErr } = await record({ day, kind, status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject, model: { text: message.text, ...extra } })
+      return json({ day, posted, text: message.text, error: error || undefined, record_error: recErr?.message })
     }
 
     if (action === 'client_added') {
@@ -300,10 +300,10 @@ Deno.serve(async (req) => {
           error = err instanceof Error ? err.message : String(err)
         }
       }
-      await supabase.from('team_digests').insert(
+      const { error: recErr } = await supabase.from('team_digests').insert(
         fresh.map((n: string) => ({ day, kind: 'task', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: `task:${id}:assigned:${n.toLowerCase()}`, model: { text: message.text, by, to: n, task: task.title } }))
       )
-      return json({ day, posted, to: fresh, text: message.text, error: error || undefined })
+      return json({ day, posted, to: fresh, text: message.text, error: error || undefined, record_error: recErr?.message })
     }
 
     // Ken's onboarding tasks, made the moment a client was added ("when we
@@ -345,10 +345,10 @@ Deno.serve(async (req) => {
           error = err instanceof Error ? err.message : String(err)
         }
       }
-      await supabase.from('team_digests').insert(
+      const { error: recErr } = await supabase.from('team_digests').insert(
         fresh.flatMap(subjectsOf).filter((s) => !seen.has(s)).map((subject) => ({ day, kind: 'task', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject, model: { text: message.text, by, client: client.name, onboarding: true } }))
       )
-      return json({ day, posted, tasks: fresh.map((t) => t.title), text: message.text, error: error || undefined })
+      return json({ day, posted, tasks: fresh.map((t) => t.title), text: message.text, error: error || undefined, record_error: recErr?.message })
     }
 
     // Ads just published to Meta from the publish page ("did you make so when
@@ -388,10 +388,10 @@ Deno.serve(async (req) => {
           error = err instanceof Error ? err.message : String(err)
         }
       }
-      await supabase.from('team_digests').insert(
+      const { error: recErr } = await supabase.from('team_digests').insert(
         ads.map((a) => ({ day, kind: 'publish', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: `published:${a.ad_id}`, model: { text: message.text, by, client: client.name, ad: a.ad_name } }))
       )
-      return json({ day, posted, ads: ads.length, text: message.text, error: error || undefined })
+      return json({ day, posted, ads: ads.length, text: message.text, error: error || undefined, record_error: recErr?.message })
     }
 
     // Forms a client filled in that the channel has not heard about: one
@@ -419,27 +419,35 @@ Deno.serve(async (req) => {
       const seen = new Set((done || []).map((d) => d.subject))
       return items.filter((i) => !seen.has(i.subject))
     }
-    const postForms = async (items: { subject: string; client: { id: string; name: string }; form: string; at: string }[]) => {
-      if (!items.length) return { posted: false, count: 0 }
-      const message = formSubmittedSlack(items, { appUrl })
+    // A swept post is RECORDED BEFORE it is posted. One row per subject, so
+    // each is announced once whatever run carried it; a failed post is
+    // recorded too and not retried, the brief log shows why. And a row that
+    // cannot be written (a kind the table does not allow: on 2026-11-02 the
+    // same Drive folder was posted three times, once per sweep, because
+    // 'drive' was not on the list) means no post at all, not a post every
+    // quarter hour.
+    const recordThenPost = async (kind: string, rows: { subject: string; model: Record<string, unknown> }[], message: { text: string; blocks?: unknown[] } | null) => {
       const url = await slackUrl()
+      const { data: made, error: recErr } = await supabase
+        .from('team_digests')
+        .insert(rows.map((r) => ({ day, kind, status: 'ready', reason: url ? null : 'Slack is not connected', slack_status: url ? 'ready' : 'off', subject: r.subject, model: { text: message?.text, ...r.model } })))
+        .select('id')
+      if (recErr) return { posted: false, count: rows.length, error: `Not recorded, so not posted: ${recErr.message}` }
+      if (!message || !url) return { posted: false, count: rows.length }
       let posted = false
       let error = ''
-      if (message && url) {
-        try {
-          await postSlack(url, message)
-          posted = true
-        } catch (err) {
-          error = err instanceof Error ? err.message : String(err)
-        }
+      try {
+        await postSlack(url, message)
+        posted = true
+      } catch (err) {
+        error = err instanceof Error ? err.message : String(err)
       }
-      // One row per submission, so each is announced once whatever run
-      // carried it; a failed post is recorded too and not retried, the
-      // brief log shows why.
-      await supabase.from('team_digests').insert(
-        items.map((i) => ({ day, kind: 'form', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: i.subject, model: { client: i.client, form: i.form, at: i.at } }))
-      )
-      return { posted, count: items.length, error: error || undefined }
+      await supabase.from('team_digests').update({ status: posted ? 'sent' : 'failed', reason: posted ? null : error, slack_status: posted ? 'sent' : 'failed' }).in('id', (made || []).map((m) => m.id))
+      return { posted, count: rows.length, error: error || undefined }
+    }
+    const postForms = async (items: { subject: string; client: { id: string; name: string }; form: string; at: string }[]) => {
+      if (!items.length) return { posted: false, count: 0 }
+      return recordThenPost('form', items.map((i) => ({ subject: i.subject, model: { client: i.client, form: i.form, at: i.at } })), formSubmittedSlack(items, { appUrl }))
     }
 
     if (action === 'form_submitted') {
@@ -475,22 +483,7 @@ Deno.serve(async (req) => {
     }
     const postDrives = async (items: DriveItem[]) => {
       if (!items.length) return { posted: false, count: 0 }
-      const message = driveLinkedSlack(items, { appUrl })
-      const url = await slackUrl()
-      let posted = false
-      let error = ''
-      if (message && url) {
-        try {
-          await postSlack(url, message)
-          posted = true
-        } catch (err) {
-          error = err instanceof Error ? err.message : String(err)
-        }
-      }
-      await supabase.from('team_digests').insert(
-        items.map((i) => ({ day, kind: 'drive', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: i.subject, model: { text: message?.text, client: i.client, folder: i.folderId, by: i.by, at: i.at } }))
-      )
-      return { posted, count: items.length, error: error || undefined }
+      return recordThenPost('drive', items.map((i) => ({ subject: i.subject, model: { client: i.client, folder: i.folderId, by: i.by, at: i.at } })), driveLinkedSlack(items, { appUrl }))
     }
 
     if (action === 'drive_linked') {
