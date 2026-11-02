@@ -65,6 +65,14 @@ export const announceTaskDone = (taskId, by) => call({ action: 'task_done', task
 export const announceTaskAssigned = (taskId, by) => call({ action: 'task_assigned', task_id: taskId, by: by || '' })
 
 /**
+ * Ken's onboarding tasks, just made for a new client: tell the channel in
+ * one post, not one per task. By the task ids; the function marks each
+ * task told the same way a task handed over is, so a later re-save of the
+ * same task stays silent. Best effort: the tasks exist either way.
+ */
+export const announceOnboardingTasks = (clientId, taskIds, by) => call({ action: 'onboarding_tasks', client_id: clientId, task_ids: taskIds, by: by || '' })
+
+/**
  * Ads just published to Meta from the publish page: tell the channel who
  * put what out for which client. By the Meta ad ids the publish returned;
  * the function announces each ad once, so a retry is harmless. Best effort:

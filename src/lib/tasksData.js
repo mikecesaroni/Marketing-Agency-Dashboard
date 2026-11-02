@@ -7,7 +7,9 @@
 
 import { supabase } from './supabaseClient'
 import { fetchAllRows } from './pagedQuery'
-import { announceTaskAssigned, announceTaskDone } from './teamBriefClient'
+import { announceOnboardingTasks, announceTaskAssigned, announceTaskDone } from './teamBriefClient'
+import { missingOnboardingTasks, onboardingTasks } from './onboardingTasks'
+import { today } from './dates'
 
 const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
 
@@ -84,6 +86,33 @@ export async function createTask(fields) {
   const me = readMe() || fields.created_by || ''
   if ((data?.assignees || []).some((a) => !sameName(a, me))) announceTaskAssigned(data.id, me).catch(() => {})
   return data
+}
+
+/**
+ * Ken's onboarding tasks for a client just added ("when we add a new client
+ * to the agency, automatically add tasks for Ken"): the four from
+ * onboardingTasks.js, by the package, inserted in one call, then one post
+ * to the channel listing them. Any the client already has by title are not
+ * made again, so pressing it twice adds nothing. Returns { tasks, posted }.
+ */
+export async function createOnboardingTasks(client, by) {
+  const me = String(by || readMe() || '').trim()
+  const wanted = onboardingTasks(client, { today: today(), by: me })
+  const { data: have, error: readErr } = await supabase.from('tasks').select('id, title').eq('client_id', client.id)
+  if (readErr) throw readErr
+  const rows = missingOnboardingTasks(wanted, have || []).map(({ key: _key, ...fields }) => fields)
+  if (!rows.length) return { tasks: [], posted: false }
+  const { data, error } = await supabase.from('tasks').insert(rows).select()
+  if (error) throw error
+  const tasks = data || []
+  let posted = false
+  try {
+    const out = await announceOnboardingTasks(client.id, tasks.map((t) => t.id), me)
+    posted = Boolean(out?.posted)
+  } catch {
+    /* the tasks are on the board either way */
+  }
+  return { tasks, posted }
 }
 
 /** Patch one task. Only the keys given are written. */

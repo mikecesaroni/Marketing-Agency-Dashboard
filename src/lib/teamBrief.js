@@ -680,6 +680,37 @@ export function taskAssignedSlack({ task = {}, client = null, list = null, by = 
 }
 
 /**
+ * Ken's onboarding tasks, made the moment a client is added ("when we add a
+ * new client, automatically add tasks for Ken... and make sure it messages
+ * CRM updates about Ken's new tasks"): one post, not one per task. Who
+ * added the client, who the tasks are for, how many, which client, and each
+ * task on its own line with its due day.
+ *
+ * tasks: rows { id, title, assignees, due_date }
+ */
+export function onboardingTasksSlack({ client = null, tasks = [], by = '', appUrl = '' } = {}) {
+  const list = (Array.isArray(tasks) ? tasks : []).filter(Boolean)
+  if (!list.length) return null
+  const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
+  const who = firstName(by) || 'Someone'
+  const people = [...new Set(list.flatMap((t) => (Array.isArray(t.assignees) ? t.assignees : [])).map((n) => firstName(n)).filter(Boolean))]
+  const whom = people.length === 0 ? 'someone' : people.length === 1 ? people[0] : `${people.slice(0, -1).join(', ')} and ${people[people.length - 1]}`
+  const name = String(client?.name || 'a client')
+  const count = `${list.length} onboarding task${list.length === 1 ? '' : 's'}`
+  const dueOf = (t) => (t.due_date ? `due ${shortDay(String(t.due_date).slice(0, 10))}` : '')
+  const plain = list.map((t) => `${String(t.title || 'a task').trim()}${dueOf(t) ? ` (${dueOf(t)})` : ''}`).join(', ')
+  const lines = list.map((t) => `• ${link(model, '/tasks', slackEsc(String(t.title || 'a task').trim()))}${dueOf(t) ? ` · ${dueOf(t)}` : ''}`).join('\n')
+  const href = `/client/${client?.id || ''}`
+  return {
+    text: `${who} gave ${whom} ${count} for ${name}: ${plain}`,
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: `📋 *${slackEsc(who)}* gave *${slackEsc(whom)}* ${count} for ${link(model, href, slackEsc(name))}:\n${lines}` } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, '/tasks', 'Tasks')} · ${link(model, href, 'Their page')}` }] },
+    ],
+  }
+}
+
+/**
  * Ads published to Meta from the CRM ("did you make so when we publish
  * videos it sends a CRM update"): who, how many and of what kind, for which
  * client, named, the campaign, and that they land paused. One post per

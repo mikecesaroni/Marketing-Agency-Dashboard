@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { TIERS, TIER_BY_NUMBER } from '../lib/clientTiers'
 import { announceClient } from '../lib/teamBriefClient'
+import { createOnboardingTasks, readMe } from '../lib/tasksData'
+import { ONBOARDING_OWNER } from '../lib/onboardingTasks'
 
 /**
  * A new client: the name, the package they signed for, and their Meta ad
@@ -9,7 +11,10 @@ import { announceClient } from '../lib/teamBriefClient'
  * guessed later from the fee ("when we add a new client we pick which tier
  * they are on"), it sets the monthly and setup fees, and the moment the
  * client lands the Slack channel hears "new client added to the agency",
- * with the tier and the dollars.
+ * with the tier and the dollars. Ken's onboarding tasks (landing page with
+ * the tracking the package calls for, GHL account and user, A2P, the
+ * welcome message) are made at the same time and the channel hears those
+ * too, in one post.
  */
 export default function AddClientForm({ onSuccess, onClose }) {
   const [name, setName] = useState('')
@@ -73,6 +78,15 @@ export default function AddClientForm({ onSuccess, onClose }) {
         setNotice(`Added. The channel was not told: ${postErr.message}`)
       }
 
+      // Ken's onboarding tasks, by the package ("when we add a new client,
+      // automatically add tasks for Ken"). Best effort too: a client without
+      // them is a client whose tasks get made by hand, not a failed add.
+      try {
+        await createOnboardingTasks({ id: row.id, name: name.trim(), tier: picked.tier }, readMe())
+      } catch (taskErr) {
+        setNotice(`Added. ${ONBOARDING_OWNER}'s onboarding tasks were not made: ${taskErr.message}`)
+      }
+
       setName('')
       setTier('')
       setAdAccountId('')
@@ -122,7 +136,7 @@ export default function AddClientForm({ onSuccess, onClose }) {
           })}
         </div>
         <p className="text-xs text-slate-500 mt-1">
-          Sets their monthly fee and the steps on their plan. The channel is told the moment they are added.
+          Sets their monthly fee and the steps on their plan. The channel is told the moment they are added, and {ONBOARDING_OWNER}'s onboarding tasks are made for them: landing page with the Meta pixel (Google Ads tracking too from $2,500), GHL account and user, A2P, the welcome message.
         </p>
       </div>
 

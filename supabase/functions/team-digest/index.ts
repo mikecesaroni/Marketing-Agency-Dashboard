@@ -69,6 +69,7 @@ import {
   formSubmittedSlack,
   fetchWeeklyRows,
   liveClientIds,
+  onboardingTasksSlack,
   statusFromRows,
   taskAssignedSlack,
   taskDoneSlack,
@@ -97,7 +98,7 @@ function eastern(d = new Date()) {
 const QUIET_FROM = 21
 const QUIET_TO = 7
 
-type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string; channel?: string; token?: string; form?: string; task_id?: string; by?: string; ad_ids?: unknown }
+type Body = { action?: string; force?: boolean; dry_run?: boolean; weekly?: boolean; weeks_back?: number; client_id?: string; channel?: string; token?: string; form?: string; task_id?: string; task_ids?: unknown; by?: string; ad_ids?: unknown }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return json({}, 200)
@@ -293,6 +294,51 @@ Deno.serve(async (req) => {
         fresh.map((n: string) => ({ day, kind: 'task', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject: `task:${id}:assigned:${n.toLowerCase()}`, model: { text: message.text, by, to: n, task: task.title } }))
       )
       return json({ day, posted, to: fresh, text: message.text, error: error || undefined })
+    }
+
+    // Ken's onboarding tasks, made the moment a client was added ("when we
+    // add a new client, automatically add tasks for Ken... make sure it
+    // messages CRM updates about Ken's new tasks"): one post listing them,
+    // not one per task. Each task is marked told per person the same way a
+    // handed-over task is (task:<id>:assigned:<name>), so a later re-save of
+    // the same task through task_assigned stays silent.
+    if (action === 'onboarding_tasks') {
+      const id = String(body.client_id || '')
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'client_id is needed.' }, 400)
+      const ids = (Array.isArray(body.task_ids) ? body.task_ids : []).map((t: unknown) => String(t || '').trim()).filter((t: string) => /^[0-9a-f-]{36}$/i.test(t)).slice(0, 20)
+      if (!ids.length) return json({ error: 'task_ids is needed.' }, 400)
+      const [{ data: client }, { data: rows }] = await Promise.all([
+        supabase.from('clients').select('id, name').eq('id', id).maybeSingle(),
+        supabase.from('tasks').select('id, title, status, assignees, due_date, created_by, created_at').eq('client_id', id).in('id', ids).neq('status', 'done').order('created_at').order('id'),
+      ])
+      if (!client) return json({ error: 'No such client.' }, 404)
+      const tasks = (rows || []) as { id: string; title: string; status: string; assignees: unknown; due_date: string | null; created_by: string | null }[]
+      if (!tasks.length) return json({ day, skipped: 'no open tasks for those ids' })
+      const by = String(body.by || '').trim() || String(tasks[0].created_by || '').trim() || (await caller())
+      const subjectsOf = (t: { id: string; assignees: unknown }) => (Array.isArray(t.assignees) ? t.assignees : []).map((a: unknown) => String(a || '').trim()).filter(Boolean).map((a: string) => `task:${t.id}:assigned:${a.toLowerCase()}`)
+      const all = tasks.flatMap(subjectsOf)
+      if (!all.length) return json({ day, skipped: 'nobody on them' })
+      const { data: told } = await supabase.from('team_digests').select('subject').eq('kind', 'task').in('subject', all)
+      const seen = new Set((told || []).map((t) => t.subject))
+      const fresh = tasks.filter((t) => subjectsOf(t).some((s) => !seen.has(s)))
+      if (!fresh.length) return json({ day, skipped: 'already announced' })
+      const message = onboardingTasksSlack({ client, tasks: fresh, by, appUrl })
+      if (!message) return json({ day, skipped: 'nothing to say' })
+      const url = await slackUrl()
+      let posted = false
+      let error = ''
+      if (url) {
+        try {
+          await postSlack(url, message)
+          posted = true
+        } catch (err) {
+          error = err instanceof Error ? err.message : String(err)
+        }
+      }
+      await supabase.from('team_digests').insert(
+        fresh.flatMap(subjectsOf).filter((s) => !seen.has(s)).map((subject) => ({ day, kind: 'task', status: posted ? 'sent' : url ? 'failed' : 'ready', reason: posted ? null : url ? error : 'Slack is not connected', slack_status: posted ? 'sent' : url ? 'failed' : 'off', subject, model: { text: message.text, by, client: client.name, onboarding: true } }))
+      )
+      return json({ day, posted, tasks: fresh.map((t) => t.title), text: message.text, error: error || undefined })
     }
 
     // Ads just published to Meta from the publish page ("did you make so when
