@@ -340,6 +340,12 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
       const heard = v.transcript || v.transcript_error || transcriptNote[path]
       if (!heard) continue
       if (copies[path]?.primary_text?.trim() || versions[path]) continue
+      // What the last visit kept, read off the row itself. The seed above
+      // lands a render later than the list does, and on a reload this ran
+      // first, saw an empty page, and paid for versions the row already
+      // carried ("when I refresh the publish page it remade all the ad
+      // copies it already made before").
+      if (versionsFromRow(v) || copyFromRow(v, null)) continue
       if (autoWrote.current.has(path)) continue
       autoWrote.current.add(path)
       writeVersions(v, { auto: true })

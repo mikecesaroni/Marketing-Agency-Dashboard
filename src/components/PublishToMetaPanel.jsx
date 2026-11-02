@@ -1328,7 +1328,10 @@ export default function PublishToMetaPanel({
   useEffect(() => {
     if (writingCopy) return
     const stamp = nextToWrite({ picked, copies, done: wroteCopy.current })
-    if (stamp && sets.some((s) => String(s.stamp) === stamp)) writeFeedCopy(stamp)
+    // The saved ad itself is the last word: words it already carries are
+    // never written again, whatever the page's copy record says this render.
+    const s = stamp ? sets.find((x) => String(x.stamp) === stamp) : null
+    if (s && !String(s.recipe?.primary_text || '').trim()) writeFeedCopy(stamp)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picked, copies, sets, writingCopy])
 

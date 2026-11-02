@@ -62,6 +62,10 @@ check('the next static to write for is the first ticked one without primary text
 check('one already written for is skipped', nextToWrite({ picked: ['a', 'b', 'c'], copies, done: new Set(['b']) }), 'c')
 check('nothing left', nextToWrite({ picked: ['a'], copies, done: new Set() }), '')
 check('an unticked static is never written for', nextToWrite({ picked: [], copies, done: new Set() }), '')
+// On a reload the ticks come back before the saved copy is read in. A stamp
+// with no copy record yet is "not loaded", never "has no words".
+check('a ticked static whose copy has not been read in yet is left alone', nextToWrite({ picked: ['z', 'b'], copies, done: new Set() }), 'b')
+check('...and nothing is written while none are loaded', nextToWrite({ picked: ['z'], copies: {}, done: new Set() }), '')
 
 if (failures) {
   console.log(`\n${failures} check(s) failed`)

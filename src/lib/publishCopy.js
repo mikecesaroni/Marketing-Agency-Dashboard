@@ -81,7 +81,13 @@ export function mergeWritten(copy, written) {
 export function nextToWrite({ picked, copies, done }) {
   for (const stamp of picked || []) {
     if (done?.has?.(stamp)) continue
-    if (needsFeedCopy(copies?.[stamp])) return stamp
+    // No copy record at all means the saved ads have not been read into the
+    // page yet, not that the ad has no words. On a reload the ticks come
+    // back before the copy does, and asking then paid for words the saved
+    // ad already carried ("when I refresh the publish page it remade all
+    // the ad copies it already made before").
+    if (copies?.[stamp] === undefined) continue
+    if (needsFeedCopy(copies[stamp])) return stamp
   }
   return ''
 }

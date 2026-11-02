@@ -41,6 +41,14 @@ written on the page or typed there, is kept the same way on its saved ad
 (`saved_ads.primary_text`, `headline`, `description`). A clip that has not
 been sent to Meta yet has no row and keeps nothing until it has.
 
+The first build of this still rewrote on a reload ("when I refresh the
+publish page it remade all the ad copies it already made before"): the ticks
+come back before the saved words are read into the page, and the "write the
+versions, unasked" check ran in that gap, saw an empty page and paid again.
+Both checks now read the row itself (the clip's saved versions and copy, the
+saved ad's primary text) and a tick whose copy record is not loaded yet is
+left alone (`nextToWrite` in `src/lib/publishCopy.js`).
+
 ## Switching it on
 
 Transcription needs one secret: `DEEPGRAM_API_KEY`, under Project Settings >
