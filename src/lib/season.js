@@ -351,7 +351,7 @@ ${angleAsk}
 
 ${VIDEO_HOOK_PLAYBOOK}
 
-The script goes straight to the owner, who reads it into a phone.${owner ? ` The owner on camera is ${owner}.` : ''} So every spoken line (HOOK, INTRO, PROBLEM, PROOF, OFFER, CTA) is in the first person, the owner talking: "I", "we", "my crew", "our trucks". Never about the owner in the third person ("he", "his", "the owner", "${name} has"). Anything that is a direction rather than a line (Film it, On screen text) speaks to the owner as "you" and "your".
+The script goes straight to the owner, who reads it into a phone.${owner ? ` The owner on camera is ${owner}.` : ''} So every spoken line (HOOK, INTRO, PROBLEM, PROOF, OFFER, CTA) is in the first person, the owner talking: "I", "we", "my crew", "our trucks". Never about the owner in the third person ("he", "his", "the owner", "${name} has"). Anything that is a direction rather than a line (Film it) speaks to the owner as "you" and "your". No on-screen text or caption line: the owner just talks, and any words on the video are added in the edit.
 
 Write every script exactly like this, as plain text with no markdown, no asterisks and no brackets:
 
@@ -364,7 +364,6 @@ PROBLEM: one or two lines
 PROOF: one line
 OFFER: one line
 CTA: one line
-On screen text: 3 to 6 words for the caption
 Film it: where to stand (by the truck, by the system) and what to show, one line
 
 Put a line of dashes between scripts. Nothing before script 1 and nothing after the last one.`
@@ -422,8 +421,10 @@ export function outsideScripts(text) {
 }
 
 // The lines the owner actually says, in the order they say them. Everything
-// else in a script card (the title, Angle, Length, the caption, where to
-// stand) is for us, not for the person reading it into a phone.
+// else in a script card (the title, Angle, Length, where to stand) is for
+// us, not for the person reading it into a phone. "On screen text" came off
+// the layout 2026-11-03 ("get rid of this in scripts"); it stays in the
+// notes list so a script written before then still copies clean.
 const SPOKEN = ['HOOK', 'INTRO', 'PROBLEM', 'PROOF', 'OFFER', 'CTA']
 const LABEL_WORD = { HOOK: 'Hook', INTRO: 'Intro', PROBLEM: 'Problem', PROOF: 'Proof', OFFER: 'Offer', CTA: 'CTA' }
 const NOTES = /^(angle|length|on screen text|film it)\b/i

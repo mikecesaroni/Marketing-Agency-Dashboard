@@ -125,6 +125,10 @@ Film it: in the truck, window light`
   check('the prompt carries the hook playbook', [wpbPrompt.includes('=== THE HOOK: THE FIRST THREE SECONDS ==='), wpbPrompt.includes('LOCAL CALL-OUT'), wpbPrompt.includes('What kills a hook')], [true, true, true])
   check('the layout has the INTRO line with the owner\'s name, inside the first five seconds', [wpbPrompt.includes('INTRO: the owner\'s name and the company in one breath ("I\'m Donat from Don Air Co")'), wpbPrompt.includes('The owner on camera is Donat.')], [true, true])
   check('a script with an INTRO line copies it, labelled', spokenScript('SCRIPT 1: T\nHOOK (0-3s): First line.\nINTRO: I am Donat from Don Air Co.\nCTA: Tap Get Quote.', { labels: true }), 'Hook: First line.\n\nIntro: I am Donat from Don Air Co.\n\nCTA: Tap Get Quote.')
+  // "Get rid of this in scripts: On screen text." The layout no longer asks
+  // for a caption line; the owner just talks. An older script that still
+  // carries one (the fixture above) copies clean all the same.
+  check('the layout has no on-screen text line and says why', [/On screen text/.test(wpbPrompt), wpbPrompt.includes('No on-screen text or caption line'), wpbPrompt.includes('CTA: one line\nFilm it:')], [false, true, true])
 }
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)
