@@ -1,6 +1,8 @@
 import { supabase } from './supabaseClient'
 import { fetchAllRows } from './pagedQuery'
 import { GHL_REQUIRED_KEYS, ghlStage } from './ghlSetupFields'
+import { INTAKE_KEYS, intakeFilled } from './nextSteps'
+import { formStatus } from './formStatus'
 
 // Re-exported so the many callers that reach for these through queries.js keep
 // working; they live in billing.js because they are pure and need testing.
@@ -54,10 +56,13 @@ export async function fetchClientsWithKPIs() {
   let clientsQuery = supabase.from('clients').select('*').order('date_added', { ascending: false })
   if (await hasInternalColumn()) clientsQuery = clientsQuery.eq('is_internal', false)
 
-  const [clientsRes, kpisRes, intakeRes, setupRes, monthlyRes, ghlRes, googleRows, pagesRes] = await Promise.all([
+  const [clientsRes, kpisRes, intakeRes, setupRes, monthlyRes, ghlRes, googleRows, pagesRes, linkRows] = await Promise.all([
     clientsQuery,
     supabase.from('weekly_kpis').select('*').eq('week_of', thisMonday),
-    supabase.from('onboarding_intake').select('client_id, owner_name, industry_trade, service_area'),
+    // The answers the form badge counts (INTAKE_KEYS) ride along with the
+    // three the list shows, so "filled in on the call" reads the same here
+    // as on the launch pipeline.
+    supabase.from('onboarding_intake').select(['client_id', 'owner_name', 'industry_trade', 'service_area', ...INTAKE_KEYS].filter((k, i, all) => all.indexOf(k) === i).join(', ')),
     supabase
       .from('payments')
       .select('client_id, amount, status, due_date')
@@ -82,7 +87,14 @@ export async function fetchClientsWithKPIs() {
     // The pages the ads send people to, for the landing page badge. A
     // missing table reads as none saved.
     supabase.from('landing_pages').select('client_id, url, label, purpose').order('created_at').then((r) => r.data || []).catch(() => []),
+    // The onboarding link: when it was made (the form was sent) and when the
+    // form came back, for the form badge. Newest link per client wins.
+    supabase.from('onboarding_links').select('client_id, created_at, intake_submitted_at').eq('revoked', false).order('created_at', { ascending: false }).then((r) => r.data || []).catch(() => []),
   ])
+
+  const linkBy = new Map()
+  for (const row of linkRows || []) if (!linkBy.has(row.client_id)) linkBy.set(row.client_id, row)
+  const day = today()
 
   const googleBy = new Map()
   for (const row of googleRows || []) {
@@ -185,6 +197,8 @@ export async function fetchClientsWithKPIs() {
       // For the channel badges (src/lib/channelStatus.js) and the landing page badge.
       googleCampaigns: googleBy.get(client.id)?.size || 0,
       landingPages: pagesBy.get(client.id) || [],
+      // The onboarding form: in, sent, or not sent yet (src/lib/formStatus.js).
+      form: formStatus({ submittedAt: linkBy.get(client.id)?.intake_submitted_at || '', sentAt: linkBy.get(client.id)?.created_at || '', filled: intakeFilled(intake), today: day }),
     }
   })
 }

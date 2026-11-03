@@ -28,7 +28,7 @@ export const PHASES = ['Sign up', 'Access', 'Build', 'Launch', 'Run']
 // row has no submitted stamp (a form filled on the call, not through the link).
 const INTAKE_FILLED_MIN = 8
 
-const INTAKE_KEYS = [
+export const INTAKE_KEYS = [
   'business_name',
   'contact_phone',
   'service_area',
@@ -50,6 +50,15 @@ function filled(v) {
 function answered(intake) {
   if (!intake) return 0
   return INTAKE_KEYS.filter((k) => filled(intake[k])).length
+}
+
+/**
+ * Whether an intake row counts as the form filled in without a submitted
+ * stamp (typed in on the call): enough of the answers that matter. The
+ * Clients list's form badge reads the same rule (src/lib/formStatus.js).
+ */
+export function intakeFilled(intake) {
+  return answered(intake) >= INTAKE_FILLED_MIN
 }
 
 function daysBetween(a, b) {
@@ -102,7 +111,7 @@ export function nextSteps(ctx) {
   const setupPaid = setupRows.some((p) => p.status === 'paid')
   const setupApplies = setupRows.length > 0 || Number(c.setup_fee) > 0
 
-  const formDone = Boolean(link?.intake_submitted_at) || answered(intake) >= INTAKE_FILLED_MIN
+  const formDone = Boolean(link?.intake_submitted_at) || intakeFilled(intake)
   const callDone = (ctx.callSteps || []).length > 0 || filled(intake?.call_notes)
   const metaAccount = Boolean(c.meta_ad_account_id)
   const metaPage = Boolean(c.meta_page_id)

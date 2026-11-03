@@ -19,6 +19,7 @@ import {
 } from '../components/ui'
 import { TIER_BY_NUMBER, tierBadgeLabel, tierOf } from '../lib/clientTiers'
 import { channelOf, channelStatus, missingChannel } from '../lib/channelStatus'
+import { FORM_TONE, formStatus } from '../lib/formStatus'
 import { pageTitle, purposeMeta } from '../lib/landingPages'
 
 const FILTERS = [
@@ -32,6 +33,8 @@ const FILTERS = [
   { key: 'google-live', label: 'Google live' },
   { key: 'google-not', label: 'Google not yet' },
   { key: 'missing', label: 'Missing a channel' },
+  // The onboarding form: sent and not back, or never sent.
+  { key: 'form-not', label: 'Form not in' },
   { key: 'no-landing', label: 'No landing page' },
   { key: 'no-drive', label: 'No Drive folder' },
   // Two GHL filters rather than the live/not-yet pair the others use. "Not
@@ -82,6 +85,22 @@ function LandingBadge({ pages = [] }) {
   )
 }
 
+/**
+ * The onboarding form ("under Channels, also add whether they have
+ * submitted the onboarding form yet or not"): ● in (submitted through the
+ * link, or filled in on the call), ◐ sent and not back, with how long ago,
+ * ○ not sent yet. The same rule as the launch pipeline's form step.
+ */
+function FormBadge({ form }) {
+  const f = form || formStatus()
+  return (
+    <Badge tone={FORM_TONE[f.state] || 'dim'} className="whitespace-nowrap" title={f.detail} data-form={f.state}>
+      {f.label}
+      {f.state === 'sent' && f.days !== null ? ` ${f.days}d` : ''}
+    </Badge>
+  )
+}
+
 const SETUP_FEE_STYLES = {
   paid: { label: '✓ Paid', tone: 'success' },
   partial: { label: 'Part paid', tone: 'info' },
@@ -125,14 +144,16 @@ function TierBadge({ client }) {
   )
 }
 
-// The package, the ad channels it owes, and the landing page. GHL and GBP
-// came off this column 2026-10-29 ("get rid of the GHL and GBP in that
-// section, but add in landing page"): GHL lives on the client page and the
-// Ready to build list, GBP on the client page.
+// The package, the onboarding form, the ad channels it owes, the landing
+// page and the Drive folder: the order things happen in. GHL and GBP came
+// off this column 2026-10-29 ("get rid of the GHL and GBP in that section,
+// but add in landing page"): GHL lives on the client page and the Ready to
+// build list, GBP on the client page. The form badge was added 2026-11-03.
 function ChannelBadges({ client }) {
   return (
     <span className="inline-flex flex-wrap gap-1.5">
       <TierBadge client={client} />
+      <FormBadge form={client.form} />
       {channelStatus(client, { googleCampaigns: client.googleCampaigns }).map((ch) => (
         <ChannelBadge key={ch.key} channel={ch} />
       ))}
@@ -205,6 +226,7 @@ export default function ClientsPage() {
         if (statusFilter === 'google-live' && google?.state !== 'live') return false
         if (statusFilter === 'google-not' && !(google && !google.extra && google.state !== 'live')) return false
         if (statusFilter === 'missing' && !missingChannel(c, opts)) return false
+        if (statusFilter === 'form-not' && c.form?.state === 'in') return false
         if (statusFilter === 'no-landing' && (c.landingPages || []).length > 0) return false
         if (statusFilter === 'no-drive' && c.drive_folder_id) return false
         if (statusFilter === 'ghl-plan' && !c.ghl_plan) return false
