@@ -16,6 +16,7 @@ import { fetchAllRows } from './pagedQuery.js'
 import { GHL_REQUIRED_KEYS, missingRequired } from './ghlSetupFields.js'
 import { addDays, formatDate, getMonday, today } from './dates.js'
 import { nextSteps } from './nextSteps.js'
+import { legacySet, withoutLegacy } from './ourAds.js'
 
 /**
  * The raw rows. `internalColumn` false skips the is_internal filter for a
@@ -28,7 +29,7 @@ export async function fetchPipelineRows(supabase, { internalColumn = true, day =
   let clientsQuery = supabase.from('clients').select('*').eq('archived', false).order('name')
   if (internalColumn) clientsQuery = clientsQuery.eq('is_internal', false)
 
-  const [clientsRes, intakeRes, linksRes, ghlRes, deliverables, payRes, callsRes, filesRes, savedRes, pubRes, kpiRes, reportRes, overridesRes, googleRows] =
+  const [clientsRes, intakeRes, linksRes, ghlRes, deliverables, payRes, callsRes, filesRes, savedRes, pubRes, kpiRes, reportRes, overridesRes, googleRows, legacy] =
     await Promise.all([
       clientsQuery,
       supabase.from('onboarding_intake').select('*'),
@@ -64,6 +65,10 @@ export async function fetchPipelineRows(supabase, { internalColumn = true, day =
           .gte('date', addDays(day, -29))
           .order('id')
       ).catch(() => []),
+      // The client's own campaigns, spending before we connected the account
+      // (src/lib/ourAds.js): not "Google live". A project without the view
+      // reads as none.
+      supabase.from('legacy_ad_campaigns').select('client_id, channel, campaign_id').then((r) => r.data || []).catch(() => []),
     ])
 
   if (clientsRes.error) throw clientsRes.error
@@ -84,6 +89,7 @@ export async function fetchPipelineRows(supabase, { internalColumn = true, day =
     reports: reportRes.data || [],
     overrides: overridesRes.data || [],
     googleRows: googleRows || [],
+    legacy: legacy || [],
   }
 }
 
@@ -113,7 +119,9 @@ export function pipelineFromRows(raw) {
   const reportBy = by((raw.reports || []).filter((r) => r.status === 'sent'))
   const overBy = by(raw.overrides)
   const googleBy = new Map()
-  for (const r of raw.googleRows || []) {
+  // Our campaigns only: one the client was already running before the
+  // account was connected does not make them live on Google.
+  for (const r of withoutLegacy(raw.googleRows, legacySet(raw.legacy), 'google')) {
     if (!googleBy.has(r.client_id)) googleBy.set(r.client_id, new Set())
     googleBy.get(r.client_id).add(r.campaign_id)
   }

@@ -12,24 +12,29 @@ import { fetchPipelineRows, pipelineFromRows } from './pipelineRows.js'
 import { DROPS_RESET_KEY, syncedAdRows, videoDrops } from './videoLaunch.js'
 import { adDeliveryAlerts } from './adHealth.js'
 import { clientStatus, leadTotals } from './clientStatus.js'
+import { legacySet, withoutLegacy } from './ourAds.js'
 
 /** The raw rows: the pipeline's, the delivery view, two weeks of ad days, the video board's inputs, the payments. */
 export async function fetchStatusRows(supabase, { internalColumn = true, day = today() } = {}) {
-  const [pipeline, deliveryRes, metaRows, googleRows, published, videos, files, reset, newest, payments] = await Promise.all([
+  const [pipeline, deliveryRes, metaRows, googleRows, published, videos, files, reset, newest, payments, legacy] = await Promise.all([
     fetchPipelineRows(supabase, { internalColumn, day }),
     supabase.from('client_ad_delivery').select('client_id, last_spend_date, spend_7d, spend_30d'),
-    fetchAllRows(() => supabase.from('ad_daily').select('id, client_id, date, leads, spend').gte('date', addDays(day, -13)).order('id')).catch(() => []),
-    fetchAllRows(() => supabase.from('google_campaign_daily').select('id, client_id, date, conversions, cost').gte('date', addDays(day, -13)).order('id')).catch(() => []),
+    fetchAllRows(() => supabase.from('ad_daily').select('id, client_id, campaign_id, date, leads, spend').gte('date', addDays(day, -13)).order('id')).catch(() => []),
+    fetchAllRows(() => supabase.from('google_campaign_daily').select('id, client_id, campaign_id, date, conversions, cost').gte('date', addDays(day, -13)).order('id')).catch(() => []),
     fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name').order('created_at').order('id')).catch(() => []),
     supabase.from('ad_videos').select('client_id,created_at,status,meta_video_id,thumb_url,storage_path,file_name,drop_dismissed_at').then((r) => r.data || []),
     supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by,drop_note,drop_dismissed_at').ilike('file_type', 'video/%').then((r) => r.data || []),
     supabase.from('app_settings').select('value').eq('key', DROPS_RESET_KEY).maybeSingle().then((r) => r.data?.value || ''),
     supabase.from('client_newest_ad').select('client_id,ad_id,ad_name,first_seen,is_video').then((r) => r.data || []),
     supabase.from('payments').select('client_id, payment_type, status, due_date, amount, failure_count').then((r) => r.data || []),
+    // The client's own campaigns, spending before we connected the account
+    // (src/lib/ourAds.js). A project without the view reads as none.
+    supabase.from('legacy_ad_campaigns').select('client_id, channel, campaign_id').then((r) => r.data || []).catch(() => []),
   ])
   return {
     day,
     pipeline,
+    legacy,
     // A project without the view applied should not take the board down; the
     // account status alone still catches a disabled account.
     delivery: deliveryRes.error ? {} : Object.fromEntries((deliveryRes.data || []).map((r) => [r.client_id, r])),
@@ -57,8 +62,11 @@ export function statusFromRows(raw, { now = new Date() } = {}) {
     if (!adDays.has(id)) adDays.set(id, [])
     adDays.get(id).push(row)
   }
-  for (const r of raw.metaRows || []) push(r.client_id, { date: r.date, leads: r.leads, spend: r.spend })
-  for (const r of raw.googleRows || []) push(r.client_id, { date: r.date, leads: r.conversions, spend: r.cost })
+  // Our ads only: a campaign the client was already running before the
+  // account was connected is theirs, and says nothing about ours.
+  const legacy = legacySet(raw.legacy)
+  for (const r of withoutLegacy(raw.metaRows, legacy, 'meta')) push(r.client_id, { date: r.date, leads: r.leads, spend: r.spend })
+  for (const r of withoutLegacy(raw.googleRows, legacy, 'google')) push(r.client_id, { date: r.date, leads: r.conversions, spend: r.cost })
   const payBy = new Map()
   for (const p of raw.payments || []) {
     if (!payBy.has(p.client_id)) payBy.set(p.client_id, [])
