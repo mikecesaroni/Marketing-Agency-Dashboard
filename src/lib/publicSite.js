@@ -55,3 +55,43 @@ export function publicLink(path) {
 export function onPublicSite() {
   return isPublicOnlySite({ hostname: typeof window !== 'undefined' ? window.location.hostname : '', env: runtimeEnv() })
 }
+
+// ---------------------------------------------------------------------------
+// The third wall, for the day the client-facing site is not switched on and
+// a client's link carries the CRM's own address: a tab that has opened a
+// client page is a client's tab. From then on, every CRM address in that
+// tab (the root, /clients, /login itself) is "Nothing here", not a sign-in
+// form ("make sure there's no way they can get inside our main CRM from
+// these links, or even get prompted to log in"). A signed-in teammate is
+// never affected: the session wins. A teammate who is NOT signed in and
+// opened a client link in a tab signs in from a fresh tab.
+//
+// Per tab (sessionStorage), so a client who closes the tab and later types
+// the CRM's address by hand meets the login page like any stranger, which
+// says nothing about what the link was for.
+// ---------------------------------------------------------------------------
+
+export const CLIENT_VISITOR_KEY = 'crm.client-visitor'
+
+/** Mark this tab as a client's. `storage` is sessionStorage or a stand-in. */
+export function markClientVisitor(storage) {
+  try {
+    storage?.setItem(CLIENT_VISITOR_KEY, '1')
+  } catch {
+    /* private window, storage off: the other two walls still stand */
+  }
+}
+
+/** Has this tab opened a client page? */
+export function isClientVisitor(storage) {
+  try {
+    return storage?.getItem(CLIENT_VISITOR_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+const sessionStore = () => (typeof window !== 'undefined' ? window.sessionStorage : null)
+
+export const rememberClientVisitor = () => markClientVisitor(sessionStore())
+export const cameFromClientLink = () => isClientVisitor(sessionStore())

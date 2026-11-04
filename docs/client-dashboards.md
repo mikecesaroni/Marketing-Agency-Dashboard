@@ -71,11 +71,27 @@ address. Two walls, both in the code and ready to switch on:
 Until the client-facing site exists, client links use the CRM's address.
 The CRM itself asks for a sign-in (`LOGIN_REQUIRED` in `src/lib/access.js`,
 with `supabase/logins-on.sql` as its database half; see `docs/logins.md`),
-so a client who edits their link into the CRM meets the login page and
-nothing else; the client pages themselves never ask for one. `scripts/check-public-site.mjs`
-checks the walls: the public pages import no CRM shell and link to no CRM
-page, the router has the client-facing mode, every client link goes
-through the public base, and search engines are told to stay out.
+and the client pages themselves never ask for one.
+
+3. **A client's tab never sees the sign-in form** (since 2026-11-04: "make
+   sure there's no way they can get inside our main CRM from these links,
+   or even get prompted to log in"). The moment a client page opens, that
+   browser tab is marked a client's (`sessionStorage`, so per tab). From
+   then on every CRM address typed into it, the root, `/clients`, `/login`
+   itself, shows "Nothing here" instead of the login page, so a client who
+   edits their link learns nothing about what else exists. A signed-in
+   teammate is never affected: the session wins. A teammate who is not
+   signed in and opened a client link in a tab signs in from a fresh tab.
+   A client who closes the tab and later types the CRM's address by hand
+   meets the login page like any stranger, which says nothing about the
+   link. `src/lib/publicSite.js` (`markClientVisitor`, `isClientVisitor`),
+   `src/components/RequireAuth.jsx`, the `/login` route in `src/App.jsx`.
+
+`scripts/check-public-site.mjs` checks the walls: the public pages import
+no CRM shell and link to no CRM page, the router has the client-facing
+mode, the auth gate and the login address are dead ends in a client's tab,
+every client link goes through the public base, and search engines are
+told to stay out.
 
 ## On a phone
 

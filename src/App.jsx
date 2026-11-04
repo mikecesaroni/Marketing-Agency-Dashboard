@@ -12,7 +12,7 @@ import AdApprovalPage from './pages/AdApprovalPage'
 import LoginPage from './pages/LoginPage'
 import NothingHerePage from './pages/NothingHerePage'
 import RequireAuth from './components/RequireAuth'
-import { isPublicPath, onPublicSite } from './lib/publicSite'
+import { cameFromClientLink, isPublicPath, onPublicSite, rememberClientVisitor } from './lib/publicSite'
 import { applyHomeScreen, homeScreenLabel } from './lib/homeScreen'
 
 // The CRM's pages load on demand, each as its own file, so none of the
@@ -45,14 +45,18 @@ const TeamPage = lazy(() => import('./pages/TeamPage'))
 const HelpChat = lazy(() => import('./components/HelpChat'))
 
 /**
- * On a client's page, "Add to Home Screen" saves that page, not the CRM:
- * the CRM manifest (whose start page is the login) comes off while a token
- * page is open and the icon is named for the page (src/lib/homeScreen.js).
+ * A client's page, two things the moment it opens:
+ *  - "Add to Home Screen" saves that page, not the CRM: the CRM manifest
+ *    (whose start page is the login) comes off while a token page is open
+ *    and the icon is named for the page (src/lib/homeScreen.js);
+ *  - this tab is marked a client's, so every CRM address typed into it from
+ *    now on is "Nothing here", never a sign-in form (src/lib/publicSite.js).
  */
 function PublicHomeScreen({ pathname }) {
   useEffect(() => {
     const label = homeScreenLabel(pathname)
     if (!label) return undefined
+    rememberClientVisitor()
     return applyHomeScreen(document, label)
   }, [pathname])
   return null
@@ -123,7 +127,8 @@ export default function App() {
       {/* Public, the same token again: every video ad that went live on the
           client's account, to watch and download, through client_videos_load. */}
       <Route path="/videos/:token" element={<ClientVideosPage />} />
-      <Route path="/login" element={<LoginPage />} />
+      {/* A tab that opened a client link never sees the sign-in form. */}
+      <Route path="/login" element={cameFromClientLink() ? <NothingHerePage /> : <LoginPage />} />
       {/* Everything else needs a login. RequireAuth also turns a VA away from
           the admin-only paths (see src/lib/access.js), so /payments and /team
           need no guard of their own. */}

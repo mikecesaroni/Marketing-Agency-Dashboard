@@ -13,13 +13,21 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { LOGIN_REQUIRED, canOpen, canOpenWithoutLogin } from '../lib/access'
+import { cameFromClientLink } from '../lib/publicSite'
+import NothingHerePage from '../pages/NothingHerePage'
 
 export default function RequireAuth({ children }) {
   const { loading, session, profile, profileError, role, signOut } = useAuth()
   const location = useLocation()
 
+  // A tab that opened a client link is a client's: with no sign-in of its
+  // own, every CRM address is a dead end, and never the login form
+  // (src/lib/publicSite.js). A signed-in teammate goes through below.
+  const clientTab = cameFromClientLink()
+
   // Login switched off: straight through, minus the Team page.
   if (!LOGIN_REQUIRED) {
+    if (clientTab) return <NothingHerePage />
     if (!canOpenWithoutLogin(location.pathname)) return <Navigate to="/" replace />
     return children ?? <Outlet />
   }
@@ -33,6 +41,7 @@ export default function RequireAuth({ children }) {
   }
 
   if (!session) {
+    if (clientTab) return <NothingHerePage />
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
   }
 

@@ -1,7 +1,7 @@
 // Self-check for the wall between client links and the CRM.
 // Run: node scripts/check-public-site.mjs
 import { readFileSync } from 'node:fs'
-import { PUBLIC_PREFIXES, isPublicOnlySite, isPublicPath, publicBase } from '../src/lib/publicSite.js'
+import { CLIENT_VISITOR_KEY, PUBLIC_PREFIXES, isClientVisitor, isPublicOnlySite, isPublicPath, markClientVisitor, publicBase } from '../src/lib/publicSite.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -55,6 +55,28 @@ for (const [file, needle] of [
 ]) {
   check(`${file.split('/').pop()} makes client links through the public base`, read(file).includes(needle) && !read(file).includes('window.location.origin'), true)
 }
+
+// ------------------------------------------- the third wall: a client's tab
+// ("make sure there's no way they can get inside our main CRM from these
+// links, or even get prompted to log in")
+const store = (() => {
+  const m = new Map()
+  return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) }
+})()
+check('a fresh tab is nobody in particular', isClientVisitor(store), false)
+markClientVisitor(store)
+check('a tab that opened a client page is a client\'s from then on', [isClientVisitor(store), store.getItem(CLIENT_VISITOR_KEY)], [true, '1'])
+check('storage that throws is survived, and reads as not a client', (() => {
+  const broken = { getItem: () => { throw new Error('off') }, setItem: () => { throw new Error('off') } }
+  markClientVisitor(broken)
+  return isClientVisitor(broken)
+})(), false)
+check('no storage at all is survived', isClientVisitor(null), false)
+const guard = read('src/components/RequireAuth.jsx')
+check('the auth gate shows a client\'s tab the dead end, never the login form', guard.includes('cameFromClientLink()') && guard.includes('<NothingHerePage />') && guard.indexOf('if (clientTab) return <NothingHerePage />') < guard.indexOf('<Navigate to="/login"'), true)
+check('...with login switched off too', (guard.match(/if \(clientTab\) return <NothingHerePage \/>/g) || []).length, 2)
+check('the login address itself is a dead end in a client\'s tab', app.includes('cameFromClientLink() ? <NothingHerePage /> : <LoginPage />'), true)
+check('every client page marks the tab on open', app.includes('rememberClientVisitor()') && app.includes('<PublicHomeScreen pathname={pathname} />'), true)
 
 // Nobody indexes a CRM.
 check('index.html tells search engines to stay out', read('index.html').includes('name="robots" content="noindex'), true)
