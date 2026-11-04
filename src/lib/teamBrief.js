@@ -70,14 +70,19 @@ const EMOJI = {
 const pick = (c) => ({ id: c.id, name: c.name })
 const active = (r) => r?.client && !r.client.archived && !r.client.is_internal
 
-// The step each channel goes live on. A client is in setup until every one
-// the package owes is done, launched or not.
+// The step each channel goes live on, for the "Meta and Google live" tail.
 const LIVE_STEPS = [
   ['go-live', 'Meta'],
   ['google-publish', 'Google'],
   ['lsa-live', 'LSA'],
 ]
-const LIVE_KEYS = new Set(LIVE_STEPS.map(([k]) => k))
+// A client is in setup until the AD channels the package owes are live,
+// launched or not: Meta, and Google on the Whole Chain and up. Local
+// Services is not a gate ("Dynamic Flow is already onboarded" when the
+// line still read "get Local Services live" on day 60): it stays a step on
+// the Client tiers board, and the move on a launched client, but a client
+// live on Meta and Google is onboarded.
+const GATE_KEYS = new Set(['go-live', 'google-publish'])
 // The chain each channel runs through, for the next move on a launched client.
 const CHANNEL_KEYS = ['meta-access', 'creatives', 'publish', 'go-live', 'google-ads-access', 'google-publish', 'lsa-live']
 const OWNER_CLIENT = 'client'
@@ -272,11 +277,12 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       const spendDays14 = Number(r.leads?.spendDays14) || 0
       green.push({ client, leads7, before, spend7: r.leads?.spend7 || 0, isNew: spendDays14 > 0 && spendDays14 < 7 })
     }
-    // In setup until every channel the package owes is live: a client not
+    // In setup until the ad channels the package owes are live: a client not
     // launched, and a Whole Chain client live on Meta with Google still to
     // come ("on the 2500 tier they need Google and Meta connected and live").
+    // Local Services open does not hold a client here.
     const steps = r.result?.steps || []
-    const channelOpen = steps.some((s) => LIVE_KEYS.has(s.key) && !s.done)
+    const channelOpen = steps.some((s) => GATE_KEYS.has(s.key) && !s.done)
     if (!r.client.paused_at && (!r.result?.launched || channelOpen)) {
       const line = setupLine(r.result, r.client, r.drop)
       // The package and the day of onboarding they are on, so "day 40 and

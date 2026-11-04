@@ -54,6 +54,19 @@ check('low leads takes a client out of running clean and into attention, amber',
   return [b.green.map((g) => g.client.name), b.attention.map((a) => [a.client.name, a.severity, a.label])]
 })(), [[], [['Low Co', 'amber', 'Only 2 leads this week']]])
 check('running clean counts a client live on Google with Meta off', buildBrief({ statusRows: [mk('m', 'MCL', { client: { id: 'm', name: 'MCL', meta_ads_active: false, paused_at: null, archived: false, is_internal: false }, result: { launched: true, next: null, live: { meta: false, google: true, lsa: false } }, leads: { leads7: 5, leads14: 8, spend7: 300, spend14: 600 } })], day: TODAY }).green.map((g) => g.client.name), ['MCL'])
+// Local Services is not an onboarding gate ("Dynamic Flow is already
+// onboarded", while the line read "get Local Services live" on day 60): a
+// client live on Meta and Google is out of setup, LSA open or not. Google
+// still open on the Whole Chain keeps them in.
+const stepsLive = (lsaDone, googleDone = true) => [
+  { key: 'go-live', title: 'Meta ads live', owner: 'us', done: true },
+  { key: 'google-publish', title: 'Google campaign published', owner: 'us', done: googleDone },
+  { key: 'lsa-live', title: 'Local Services Ads live', owner: 'us', done: lsaDone },
+]
+const dyn = (lsaDone, googleDone) => mk('dy', 'Dynamic Flow', { tier: 3, client: { id: 'dy', name: 'Dynamic Flow', meta_ads_active: true, date_added: '2026-08-22', drive_folder_id: 'f', paused_at: null, archived: false, is_internal: false }, result: { launched: true, next: lsaDone && googleDone ? null : { key: googleDone ? 'lsa-live' : 'google-publish', title: 'x', owner: 'us' }, steps: stepsLive(lsaDone, googleDone), live: { meta: true, google: googleDone, lsa: lsaDone } }, leads: { leads7: 5, leads14: 9, spend7: 300, spend14: 600 } })
+check('Meta and Google live with Local Services still open: onboarded, not on the setup list', buildBrief({ statusRows: [dyn(false, true)], day: TODAY }).onboarding.map((o) => o.client.name), [])
+check('...and running clean as before', buildBrief({ statusRows: [dyn(false, true)], day: TODAY }).green.map((g) => g.client.name), ['Dynamic Flow'])
+check('Google still to publish on the Whole Chain and up keeps them in setup', buildBrief({ statusRows: [dyn(false, false)], day: TODAY }).onboarding.map((o) => [o.client.name, o.move]), [['Dynamic Flow', 'build and publish the Google campaign']])
 check('blue flags are not attention', brief.attention.some((a) => a.key === 'kpis'), false)
 check("every waiting clip, newest first, naming the editor, whether it is in Meta and the editor's note", brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle', 'clip1.mp4, not in Meta yet · “post a day after clip2”'])
 check("a clip alert carries the editor's note too", alertKeys(rows).find((k) => k.key === 'd:clip:d/clip1.mp4')?.label, 'New edit dropped in: clip1.mp4, not in Meta yet · “post a day after clip2”')
