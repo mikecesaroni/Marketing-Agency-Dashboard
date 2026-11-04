@@ -226,7 +226,7 @@ function ClientCard({ row, open, onToggle, onModal, onDone, onUndo, onTier, onAs
                 <Link to={`/client/${client.id}`} className="hover:underline">Client page</Link>
                 <Link to={`/client/${client.id}#files`} className="hover:underline">Files</Link>
                 <Link to={`/client/${client.id}#ad-performance`} className="hover:underline">Ads</Link>
-                <Link to={`/client/${client.id}?open=studio`} className="hover:underline">Ad Studio</Link>
+                <Link to={`/client/${client.id}?open=studio`} className="hover:underline">Make Static Ads</Link>
                 <Link to="/content" className="hover:underline">Video board</Link>
               </div>
             </div>

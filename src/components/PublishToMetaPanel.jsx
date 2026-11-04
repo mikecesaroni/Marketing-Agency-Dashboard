@@ -1858,7 +1858,7 @@ export default function PublishToMetaPanel({
           <span className="text-[11px] text-slate-500">
             {creativeKind === 'video'
               ? 'Drop the week\'s clips. Each one goes to Meta straight away, gets transcribed, and gets three versions of its copy written. Tick a clip, pick a version, done.'
-              : 'Saved from the Ad Studio. Tick one and its words from the Studio are already filled in.'}
+              : 'Saved from Make Static Ads. Tick one and its words are already filled in.'}
           </span>
         </div>
 
@@ -1884,8 +1884,8 @@ export default function PublishToMetaPanel({
             <div className="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
               <p className="text-sm font-medium text-slate-700">No saved statics for {client.name} yet</p>
               <p className="mt-1 text-xs text-slate-500">
-                Content, then Ad Studio, then this client makes three from their brief. Or design one on
-                the Studio&rsquo;s Design tab and save it.
+                Content, then Make Static Ads, then this client makes three from their brief. Or design one on
+                its Design tab and save it.
               </p>
             </div>
           )}

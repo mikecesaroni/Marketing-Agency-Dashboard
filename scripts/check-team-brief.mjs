@@ -248,7 +248,7 @@ const drive = driveLinkedSlack([{ client: { id: 'd1', name: 'Acme & Sons' }, fol
 check('drive linked from the CRM: the client, who by first name, the folder to open', [drive.text, drive.blocks[0].text.text], ['Drive folder linked for Acme & Sons by Ethan', '*Drive folder linked*\n📁 <https://crm.example/client/d1|Acme &amp; Sons> · by Ethan · <https://drive.google.com/drive/folders/1AbC_def-9|open the folder>'])
 check('nobody known: still a sentence, no "by"', driveLinkedSlack([{ client: { id: 'd3', name: 'Co' }, folderId: 'f' }]).text, 'Drive folder linked for Co')
 check('two at once (the sweep): a counted title, one line each', driveLinkedSlack([{ client: { id: 'd1', name: 'A' }, folderId: '1', by: 'Ken' }, { client: { id: 'd2', name: 'B' }, folderId: '2', by: 'Josh' }]).blocks[0].text.text.split('\n').map((l) => l.slice(0, 15)), ['*Drive folders ', '📁 A · by Ken ·', '📁 B · by Josh '])
-check('the context points at the video board', drive.blocks[1].elements[0].text, '<https://crm.example/content|Video board> · what they add there shows up in the Ad Studio')
+check('the context points at the video board', drive.blocks[1].elements[0].text, '<https://crm.example/content|Video board> · what they add there shows up in Make Static Ads')
 check('no folders, no post', driveLinkedSlack([]), null)
 check('no forms, no message', formSubmittedSlack([]), null)
 

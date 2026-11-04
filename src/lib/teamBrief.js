@@ -799,7 +799,7 @@ export function driveLinkedSlack(items = [], { appUrl = '' } = {}) {
     text: list.map(plain).join(' · '),
     blocks: [
       ...slackSections(list.length === 1 ? 'Drive folder linked' : `Drive folders linked (${list.length})`, list.map(line)),
-      { type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, '/content', 'Video board')} · what they add there shows up in the Ad Studio` }] },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `${link(model, '/content', 'Video board')} · what they add there shows up in Make Static Ads` }] },
     ],
   }
 }

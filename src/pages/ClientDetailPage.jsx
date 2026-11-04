@@ -341,7 +341,7 @@ export default function ClientDetailPage() {
     tools: [
       {
         name: 'client_open_studio',
-        description: "Open this client's Ad Studio on the Design tab, empty.",
+        description: "Open Make Static Ads for this client on the Design tab, empty.",
         input_schema: { type: 'object', properties: {} },
         run: () => {
           openStudio('design')
@@ -350,7 +350,7 @@ export default function ClientDetailPage() {
       },
       {
         name: 'client_make_ads',
-        description: "Open this client's Ad Studio already writing N ads from their brief (\"Make 3 ads\").",
+        description: "Open Make Static Ads for this client already writing N ads from their brief (\"Make 3 ads\").",
         input_schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 6 } } },
         run: ({ count }) => {
           openStudio('design', '', Math.max(1, Math.min(6, Number(count) || 3)))
@@ -458,7 +458,7 @@ export default function ClientDetailPage() {
         onClick={() => openStudio('design')}
         className="w-full md:w-auto"
       >
-        Ad Studio
+        Make Static Ads
       </Button>
       <Button
         variant="dark"

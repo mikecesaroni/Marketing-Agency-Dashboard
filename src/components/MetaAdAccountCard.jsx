@@ -351,7 +351,7 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
               <div>
                 <p className="text-sm font-medium text-slate-700">Needed to publish ads</p>
                 <p className="text-xs text-slate-500">
-                  Only used by the Ad Studio&rsquo;s Publish button. Syncing works without them.
+                  Only used by the Make Static Ads Publish button. Syncing works without them.
                 </p>
               </div>
               <button
@@ -534,7 +534,7 @@ export default function MetaAdAccountCard({ client, weeklyKPIs = [], onUpdate })
               </span>
             ) : (
               <span className="text-amber-700">
-                No Page ID, so the Ad Studio cannot publish to this account yet.
+                No Page ID, so Make Static Ads cannot publish to this account yet.
               </span>
             )}
           </p>

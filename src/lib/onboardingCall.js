@@ -221,7 +221,7 @@ export const CALL_SECTIONS = [
       {
         key: 'photos',
         title: 'Photos folder linked and being filled',
-        how: 'Job-site photos, trucks, the owner and team, shot in daylight. Everything the Ad Studio builds comes from this folder, so an empty folder means stock-looking ads. Check the folder is set to "Anyone with the link" (Viewer) as well as shared with the CRM address, or the editor cannot open it.',
+        how: 'Job-site photos, trucks, the owner and team, shot in daylight. Everything Make Static Ads builds comes from this folder, so an empty folder means stock-looking ads. Check the folder is set to "Anyone with the link" (Viewer) as well as shared with the CRM address, or the editor cannot open it.',
         auto: (ctx) => Boolean(ctx.client?.drive_folder_id),
       },
       {

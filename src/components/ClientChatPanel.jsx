@@ -70,7 +70,7 @@ function CreativeSetCard({ set, index, onUse }) {
               onClick={() => onUse(mapped)}
               className="flex-shrink-0 px-2 py-1 rounded bg-orange-600 text-white text-[11px] font-medium hover:bg-orange-700 transition"
             >
-              Open in Ad Studio
+              Open in Make Static Ads
             </button>
           )
         )}

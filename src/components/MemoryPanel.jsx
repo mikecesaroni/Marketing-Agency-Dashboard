@@ -72,7 +72,7 @@ export default function MemoryPanel({ client }) {
     <Card padding="none" className="mt-6 p-4 md:mt-8 md:p-6">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-bold text-slate-900 md:text-xl">Memory</h2>
-        <p className="text-xs text-slate-500">Read by the chat and the Ad Studio on every call. Pauses, wins and publishes write themselves; add anything else.</p>
+        <p className="text-xs text-slate-500">Read by the chat and Make Static Ads on every call. Pauses, wins and publishes write themselves; add anything else.</p>
       </div>
 
       {error && <p className="mb-2 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</p>}

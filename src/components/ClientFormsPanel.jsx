@@ -133,7 +133,7 @@ export default function ClientFormsPanel({ client, intake, onDataChanged }) {
         blurb={
           link?.intake_submitted_at
             ? `${answered} of ${intakeTotal} questions answered.`
-            : 'About their business, their offer and their customers. Feeds the brief and the Ad Studio.'
+            : 'About their business, their offer and their customers. Feeds the brief and Make Static Ads.'
         }
         status={intakeStatus}
         onOpen={() => setOpen('intake')}

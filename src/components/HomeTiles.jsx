@@ -23,7 +23,7 @@ import { IconLaunch } from './ui'
 // the grid reads as places rather than a list of links.
 const TILES = {
   '/clients': { blurb: 'Every client, where they stand, and their page.', tone: 'from-blue-600 to-sky-400' },
-  '/content': { blurb: 'Ad Studio, Google Drive folders, and the weekly video board.', tone: 'from-orange-500 to-amber-400' },
+  '/content': { blurb: 'Make Static Ads, Google Drive folders, and the weekly video board.', tone: 'from-orange-500 to-amber-400' },
   '/status': { blurb: 'Every client by package: what is done, what is owed, who needs a call.', tone: 'from-violet-600 to-fuchsia-400' },
   '/weekly': { blurb: 'Last week for every client: ads, leads, trend, who needs a new ad. The team brief and Slack.', tone: 'from-amber-600 to-orange-400' },
   '/tasks': { blurb: 'The team’s tasks, by person and by client.', tone: 'from-slate-800 to-slate-600' },

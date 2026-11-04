@@ -57,7 +57,7 @@ export default function LaunchReadyAlerts({ ready = [], blocked = [] }) {
       </div>
 
       <p className="mt-3 text-xs text-slate-600">
-        Open the client, build in the Ad Studio and publish from the Publish tab. Ads publish paused; you switch them on in Ads Manager.
+        Open the client, build in Make Static Ads and publish from the Publish tab. Ads publish paused; you switch them on in Ads Manager.
       </p>
     </Card>
   )

@@ -59,7 +59,7 @@ export function globalHelpTools({ navigate }) {
     },
     {
       name: 'make_ads',
-      description: "Open a client's Ad Studio already writing N ads from their brief (the Content tab's \"Make 3 ads\"). The ads take about half a minute; call page_state afterwards to see them, then studio_save_batch to save them all.",
+      description: "Open a client's Make Static Ads already writing N ads from their brief (the Content tab's \"Make 3 ads\"). The ads take about half a minute; call page_state afterwards to see them, then studio_save_batch to save them all.",
       input_schema: {
         type: 'object',
         properties: { client: { type: 'string' }, count: { type: 'integer', minimum: 1, maximum: 6, description: 'Default 3' } },
@@ -74,7 +74,7 @@ export function globalHelpTools({ navigate }) {
     },
     {
       name: 'open_studio',
-      description: "Open a client's Ad Studio empty, to design one ad by hand or to reach their Saved ads tab.",
+      description: "Open a client's Make Static Ads empty, to design one ad by hand or to reach their Saved ads tab.",
       input_schema: { type: 'object', properties: { client: { type: 'string' } }, required: ['client'] },
       run: async ({ client }) => {
         const f = await findClient(client)

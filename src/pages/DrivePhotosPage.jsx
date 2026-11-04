@@ -133,7 +133,7 @@ export default function DrivePhotosPage() {
         {client && folders.length === 0 && (
           <Card>
             <p className="text-sm text-slate-700">No Drive folder is linked for {client.name} yet.</p>
-            <p className="mt-1 text-xs text-slate-500">Link one from the Google Drive door on the Content tab, or from the client&apos;s Ad Studio.</p>
+            <p className="mt-1 text-xs text-slate-500">Link one from the Google Drive door on the Content tab, or from the client&apos;s Make Static Ads.</p>
           </Card>
         )}
 

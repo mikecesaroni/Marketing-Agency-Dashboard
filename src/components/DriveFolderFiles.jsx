@@ -49,7 +49,7 @@ export default function DriveFolderFiles({ clientId, driveFolderId }) {
         <h3 className="font-bold text-slate-900 text-sm">Google Drive</h3>
         <p className="text-xs text-slate-500 mt-1">
           No folder linked. The client can connect one from their onboarding link, or you can
-          paste it in the Ad Studio under either image picker&apos;s Drive tab.
+          paste it in Make Static Ads under either image picker&apos;s Drive tab.
         </p>
       </div>
     )
@@ -84,7 +84,7 @@ export default function DriveFolderFiles({ clientId, driveFolderId }) {
 
       <p className="text-xs text-slate-500 mb-3">
         Live from the client&apos;s folder — not stored here. Anything they add shows up on
-        refresh, and it is all usable in the Ad Studio.
+        refresh, and it is all usable in Make Static Ads.
       </p>
 
       {error && <p className="text-xs text-red-600 mb-2">{error}</p>}

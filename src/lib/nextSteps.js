@@ -314,7 +314,7 @@ export function nextSteps(ctx) {
     applies: wantsMeta,
     done: creativesDone,
     blockedBy: !metaDone ? 'meta-access' : !photosDone ? 'photos' : null,
-    action: { kind: 'studio', label: 'Open the Ad Studio' },
+    action: { kind: 'studio', label: 'Open Make Static Ads' },
     detail: creativesDone
       ? `${counts.savedAds} saved ad set${counts.savedAds === 1 ? '' : 's'}.`
       : counts.savedAds > 0

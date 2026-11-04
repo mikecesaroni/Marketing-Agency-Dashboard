@@ -15,7 +15,7 @@ import { DROPS_RESET_KEY, dropStats, syncedAdRows, videoDrops } from '../lib/vid
 /**
  * Content: the creative side of the CRM behind three doors.
  *
- *   Ad Studio     design static ads for a client
+ *   Make Static Ads  design static ads for a client (the Ad Studio, renamed 2026-11-04)
  *   Google Drive  every client's folders: open in Drive, browse, download,
  *                 link a folder that is missing
  *   Publish       take saved ads and videos live on Meta
@@ -30,7 +30,7 @@ import { DROPS_RESET_KEY, dropStats, syncedAdRows, videoDrops } from '../lib/vid
 const DOORS = [
   {
     key: 'studio',
-    title: 'Ad Studio',
+    title: 'Make Static Ads',
     blurb: 'Pick a client and get 3 ads written and laid out from their brief, photos and logo. Edit, then save all three.',
     cta: 'Make 3 ads: pick the client',
     tone: 'from-orange-500 to-amber-400',
@@ -363,7 +363,7 @@ function PagesCard({ row, onChange }) {
 const SECTION_META = {
   studio: {
     title: 'Make 3 ads',
-    hint: 'Pick a client. The Studio opens on their page and writes 3 ads from their brief, each in a different look, with their photo and logo. Edit any of them, then save all three. Or open the Studio empty to design by hand.',
+    hint: 'Pick a client. Make Static Ads opens on their page and writes 3 ads from their brief, each in a different look, with their photo and logo. Edit any of them, then save all three. Or open it empty to design by hand.',
   },
   drive: {
     title: 'Google Drive',

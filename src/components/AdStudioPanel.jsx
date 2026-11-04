@@ -407,7 +407,7 @@ function StudioFrame({ client, tab, setTab, onClose, onBack, backLabel = 'Back',
             ✦
           </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-300">Ad Studio</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-300">Make Static Ads</p>
             <h2 className="truncate text-base font-bold leading-tight">{client.name}</h2>
           </div>
         </div>
@@ -430,7 +430,7 @@ function StudioFrame({ client, tab, setTab, onClose, onBack, backLabel = 'Back',
         <button
           type="button"
           onClick={onClose}
-          title="Close the Studio"
+          title="Close Make Static Ads"
           className="relative ml-auto grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg text-2xl leading-none text-white/70 transition hover:bg-white/10 hover:text-white"
         >
           ×
@@ -1660,7 +1660,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // WHAT THE HELP CHAT CAN DO IN THE STUDIO: read the ad, change the words,
   // switch the look, pick a photo, save, and drive a "Make N ads" batch.
   useHelpActions('studio', {
-    label: `Ad Studio for ${client.name}`,
+    label: `Make Static Ads for ${client.name}`,
     state: () => ({
       client: client.name,
       tab,
@@ -1800,7 +1800,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       },
       {
         name: 'studio_tab',
-        description: `Open a tab of the Studio: ${TABS.map((t) => `${t[0]} (${t[1]})`).join(', ')}.`,
+        description: `Open a tab of Make Static Ads: ${TABS.map((t) => `${t[0]} (${t[1]})`).join(', ')}.`,
         input_schema: { type: 'object', properties: { tab: { type: 'string', enum: TABS.map((t) => t[0]) } }, required: ['tab'] },
         run: ({ tab: t }) => {
           if (!TABS.some((x) => x[0] === t)) return { error: `No tab called ${t}.` }
