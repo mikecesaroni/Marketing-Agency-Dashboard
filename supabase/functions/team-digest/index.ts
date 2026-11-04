@@ -84,7 +84,7 @@ import {
   taskAssignedSlack,
   taskDoneSlack,
   weeklyText,
-} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@8bd7d7146f8e977e41789623caf156cec8275a08/supabase/functions/team-digest/model.js'
+} from 'https://cdn.jsdelivr.net/gh/mikecesaroni/Marketing-Agency-Dashboard@e1e297230a4c05b3d752371d7b05a7a0bd29e892/supabase/functions/team-digest/model.js'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
