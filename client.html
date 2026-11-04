@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- The shell a client's link is served from (netlify.toml routes the six
+         client paths here): the same app as index.html with NO web app
+         manifest. A home screen icon opens a manifest's start page, and the
+         CRM's is the login, so a client who saved their dashboard to their
+         phone got the sign-in form. With no manifest, iPhone and Android save
+         the page's own address. Nothing here points at the CRM or its guide. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Working Class</title>
+    <meta name="robots" content="noindex, nofollow" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&family=Anton&family=Pacifico&display=swap"
+      rel="stylesheet"
+    />
+
+    <meta name="theme-color" content="#070b14" />
+
+    <!-- Full screen when opened from the home screen; the page's script
+         names the icon for the page (src/lib/homeScreen.js). -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Client Portal" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <noscript>
+      <p style="font: 16px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 34rem">
+        This page needs JavaScript to run. Open the link in Safari or Chrome.
+      </p>
+    </noscript>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

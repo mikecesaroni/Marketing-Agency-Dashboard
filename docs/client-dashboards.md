@@ -124,13 +124,18 @@ I wanna save it to my phone"). No client has a password; the icon was
 pointing at the wrong door. The site declares a web app manifest for the
 CRM (`public/manifest.webmanifest`) whose start page is `/`, and a home
 screen icon opens the manifest's start page, not the page it was saved
-from. Now, while a client page is open, the manifest is taken off the
-document and the iOS title is set to the page's name ("KPI Dashboard",
-"Weekly Report", "Video Scripts"...), so "Add to Home Screen" saves the
-page's own address on iPhone and Android alike, and still opens full
-screen on iPhone (`src/lib/homeScreen.js`, `scripts/check-home-screen.mjs`).
-The CRM's manifest comes back on any CRM page. A client who saved the
-icon before this deleted it and added it again from their link.
+from. Now a client page is served from its own shell, `client.html`,
+which has no manifest at all: `netlify.toml` routes the six client paths
+to it at the edge, before any script runs, so no phone ever sees the
+CRM's manifest on a client page (the first fix took the manifest off with
+script after the page loaded; a phone that had already read it still
+opened the login: "I just tried again and it's the same issue"). The
+page's script also names the icon for the page ("KPI Dashboard", "Weekly
+Report", "Video Scripts"...) and takes the manifest off should the shell
+ever carry one (`src/lib/homeScreen.js`, `scripts/check-home-screen.mjs`).
+So "Add to Home Screen" saves the page's own address on iPhone and
+Android alike, and still opens full screen on iPhone. A client who saved
+the icon before this deletes it and adds it again from their link.
 
 ## What a message app shows for the link
 

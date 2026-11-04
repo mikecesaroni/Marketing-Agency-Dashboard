@@ -78,6 +78,22 @@ check('...with login switched off too', (guard.match(/if \(clientTab\) return <N
 check('the login address itself is a dead end in a client\'s tab', app.includes('cameFromClientLink() ? <NothingHerePage /> : <LoginPage />'), true)
 check('every client page marks the tab on open', app.includes('rememberClientVisitor()') && app.includes('<PublicHomeScreen pathname={pathname} />'), true)
 
+// ------------------------------------------ the client shell, client.html
+// ("as soon as I added it as a bookmark it wants me to log in"): a home
+// screen icon opens the manifest's start page, so a client page is served
+// from a shell with no manifest at all, at the edge, before any script.
+const clientHtml = read('client.html')
+check('client.html has no web app manifest and no help link into the CRM guide', [/rel="manifest"/.test(clientHtml), /rel="help"/.test(clientHtml), /llms\.txt/.test(clientHtml)], [false, false, false])
+check('client.html still opens full screen on an iPhone, named for the client side', clientHtml.includes('apple-mobile-web-app-capable') && /apple-mobile-web-app-title" content="Client Portal"/.test(clientHtml), true)
+check('client.html boots the same app', clientHtml.includes('src="/src/main.jsx"') && clientHtml.includes('name="robots" content="noindex'), true)
+const toml = read('netlify.toml')
+const catchAll = toml.indexOf('from = "/*"')
+check('every client path is served from client.html at the edge, before the catch-all', PUBLIC_PREFIXES.every((p) => {
+  const at = toml.indexOf(`from = "${p}*"`)
+  return at > -1 && at < catchAll && toml.slice(at, at + 80).includes('to = "/client.html"')
+}), true)
+check('the build makes both shells', /client:\s*resolve\(import\.meta\.dirname, 'client\.html'\)/.test(read('vite.config.js')), true)
+
 // Nobody indexes a CRM.
 check('index.html tells search engines to stay out', read('index.html').includes('name="robots" content="noindex'), true)
 check('robots.txt disallows everything', /Disallow:\s*\/\s*$/m.test(read('public/robots.txt')), true)

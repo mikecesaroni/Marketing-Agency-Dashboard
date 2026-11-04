@@ -55,6 +55,42 @@
 #   to = "/nothing-here.html"
 #   status = 404
 
+# THE CLIENT PAGES GET THEIR OWN SHELL. client.html is the same app without
+# the CRM's web app manifest: a home screen icon opens a manifest's start
+# page, and the CRM's is the login, so a client who saved their dashboard to
+# their phone got the sign-in form ("as soon as I added it as a bookmark it
+# wants me to log in"). Served at the edge, before any script runs, so no
+# phone ever sees the manifest on a client page. Before the catch-all.
+[[redirects]]
+  from = "/dashboard/*"
+  to = "/client.html"
+  status = 200
+
+[[redirects]]
+  from = "/report/*"
+  to = "/client.html"
+  status = 200
+
+[[redirects]]
+  from = "/approve/*"
+  to = "/client.html"
+  status = 200
+
+[[redirects]]
+  from = "/onboarding/*"
+  to = "/client.html"
+  status = 200
+
+[[redirects]]
+  from = "/scripts/*"
+  to = "/client.html"
+  status = 200
+
+[[redirects]]
+  from = "/videos/*"
+  to = "/client.html"
+  status = 200
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
