@@ -2,7 +2,7 @@
 // market, and pulling scripts back out of a reply.
 // Run: node scripts/check-season.mjs
 
-import { SCRIPT_ANGLES, scriptAngle, outsideScripts, buildRefillPrompt, climateOf, isRefillPrompt, refillLabel, seasonContext, seasonOf, splitScripts, spokenScript, spokenScripts, tradeOf, upcomingMoments } from '../src/lib/season.js'
+import { SCRIPT_ANGLES, scriptAngle, outsideScripts, buildRefillPrompt, climateOf, isRefillPrompt, refillLabel, seasonContext, seasonOf, splitScripts, spokenScript, spokenScripts, tradeOf, upcomingMoments, withoutDroppedLines } from '../src/lib/season.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -128,7 +128,13 @@ Film it: in the truck, window light`
   // "Get rid of this in scripts: On screen text." The layout no longer asks
   // for a caption line; the owner just talks. An older script that still
   // carries one (the fixture above) copies clean all the same.
-  check('the layout has no on-screen text line and says why', [/On screen text/.test(wpbPrompt), wpbPrompt.includes('No on-screen text or caption line'), wpbPrompt.includes('CTA: one line\nFilm it:')], [false, true, true])
+  check('the layout has no on-screen text line and says why', [/On screen text/.test(wpbPrompt), wpbPrompt.includes('No on-screen text or caption line, even if scripts earlier in this chat had one'), wpbPrompt.includes('CTA: one line\nFilm it:')], [false, true, true])
+  // A reply that brought the line back anyway (copied from older scripts in
+  // the chat) loses it before the card is drawn.
+  const drywall = 'SCRIPT 1: Drywall\nHOOK (0-3s): This was behind the drywall.\nCTA: Call us.\nOn screen text: This Was Behind The Drywall\nFilm it: by the open wall'
+  check('an on-screen text line in a reply is dropped from the card', splitScripts(drywall)[0].text, 'SCRIPT 1: Drywall\nHOOK (0-3s): This was behind the drywall.\nCTA: Call us.\nFilm it: by the open wall')
+  check('...however it is dressed', splitScripts('SCRIPT 1: T\nHOOK: Hi.\n**On-screen text:** Big words\nFilm it: x')[0].text.includes('Big words'), false)
+  check('a single script shown as plain text loses it too', withoutDroppedLines(drywall), 'SCRIPT 1: Drywall\nHOOK (0-3s): This was behind the drywall.\nCTA: Call us.\nFilm it: by the open wall')
 }
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)

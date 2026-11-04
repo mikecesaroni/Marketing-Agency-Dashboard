@@ -20,7 +20,7 @@ import {
 } from '../lib/chatImages'
 import { copyText } from '../lib/intakeSummary'
 import { extractTasksFromChat, taskTrigger } from '../lib/clientTasks'
-import { SCRIPT_ANGLES, buildRefillPrompt, isRefillPrompt, outsideScripts, refillLabel, splitScripts, spokenScript, spokenScripts } from '../lib/season'
+import { SCRIPT_ANGLES, buildRefillPrompt, isRefillPrompt, outsideScripts, refillLabel, splitScripts, spokenScript, spokenScripts, withoutDroppedLines } from '../lib/season'
 import { HOW_TO_RECORD } from '../../supabase/functions/_shared/scriptStudio.js'
 import { today as todayIso } from '../lib/queries'
 import WebsiteMemory from './WebsiteMemory'
@@ -202,7 +202,9 @@ function Bubble({ role, text, images, onUseSet }) {
             <ScriptCards scripts={scripts} />
           </>
         ) : (
-          text
+          // A single script shows as plain text; the line the layout no
+          // longer has is dropped there too.
+          mine ? text : withoutDroppedLines(text)
         )}
         {sets && sets.length > 0 && (
           <div className="mt-2 pt-2 border-t border-slate-300 space-y-1.5">

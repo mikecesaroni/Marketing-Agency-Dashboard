@@ -351,7 +351,7 @@ ${angleAsk}
 
 ${VIDEO_HOOK_PLAYBOOK}
 
-The script goes straight to the owner, who reads it into a phone.${owner ? ` The owner on camera is ${owner}.` : ''} So every spoken line (HOOK, INTRO, PROBLEM, PROOF, OFFER, CTA) is in the first person, the owner talking: "I", "we", "my crew", "our trucks". Never about the owner in the third person ("he", "his", "the owner", "${name} has"). Anything that is a direction rather than a line (Film it) speaks to the owner as "you" and "your". No on-screen text or caption line: the owner just talks, and any words on the video are added in the edit.
+The script goes straight to the owner, who reads it into a phone.${owner ? ` The owner on camera is ${owner}.` : ''} So every spoken line (HOOK, INTRO, PROBLEM, PROOF, OFFER, CTA) is in the first person, the owner talking: "I", "we", "my crew", "our trucks". Never about the owner in the third person ("he", "his", "the owner", "${name} has"). Anything that is a direction rather than a line (Film it) speaks to the owner as "you" and "your". No on-screen text or caption line, even if scripts earlier in this chat had one: the owner just talks, and any words on the video are added in the edit. The layout below is the whole layout; add nothing to it.
 
 Write every script exactly like this, as plain text with no markdown, no asterisks and no brackets:
 
@@ -379,8 +379,22 @@ export function refillLabel(text) {
   return String(text || '').split('\n')[0].replace(REFILL_MARKER, '').trim()
 }
 
+// A line the layout no longer has. The writer sometimes copies it from the
+// scripts earlier in the same chat ("this came up in a script still: On
+// screen text: This Was Behind The Drywall"), so it is dropped on the way
+// in, and the card never shows it.
+const DROPPED_LINE = /^\s*\**\s*on[- ]screen text\s*\**\s*:/i
+
+/** A reply with the dropped lines taken out, for showing one as plain text. */
+export function withoutDroppedLines(text) {
+  return String(text || '')
+    .split('\n')
+    .filter((l) => !DROPPED_LINE.test(l))
+    .join('\n')
+}
+
 function parseScripts(text) {
-  const lines = String(text || '').split('\n')
+  const lines = String(text || '').split('\n').filter((l) => !DROPPED_LINE.test(l))
   const blocks = []
   const extra = []
   let cur = null
