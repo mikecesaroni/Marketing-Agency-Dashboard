@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 // The pages a client opens load with the first file: a phone on a slow
 // connection gets the dashboard or a script in one trip, with no second
@@ -13,6 +13,7 @@ import LoginPage from './pages/LoginPage'
 import NothingHerePage from './pages/NothingHerePage'
 import RequireAuth from './components/RequireAuth'
 import { isPublicPath, onPublicSite } from './lib/publicSite'
+import { applyHomeScreen, homeScreenLabel } from './lib/homeScreen'
 
 // The CRM's pages load on demand, each as its own file, so none of the
 // agency's screens ride along to a client's phone. A page a CRM user has
@@ -43,6 +44,20 @@ const AgentGuidePage = lazy(() => import('./pages/AgentGuidePage'))
 const TeamPage = lazy(() => import('./pages/TeamPage'))
 const HelpChat = lazy(() => import('./components/HelpChat'))
 
+/**
+ * On a client's page, "Add to Home Screen" saves that page, not the CRM:
+ * the CRM manifest (whose start page is the login) comes off while a token
+ * page is open and the icon is named for the page (src/lib/homeScreen.js).
+ */
+function PublicHomeScreen({ pathname }) {
+  useEffect(() => {
+    const label = homeScreenLabel(pathname)
+    if (!label) return undefined
+    return applyHomeScreen(document, label)
+  }, [pathname])
+  return null
+}
+
 /** What shows for the moment a CRM page's file is on its way. */
 function PageLoading() {
   return (
@@ -60,6 +75,8 @@ export default function App() {
   // CRM to find by editing the address. See src/lib/publicSite.js.
   if (onPublicSite()) {
     return (
+      <>
+      <PublicHomeScreen pathname={pathname} />
       <Routes>
         <Route path="/onboarding/:token" element={<ClientOnboardingPage />} />
         <Route path="/approve/:token" element={<AdApprovalPage />} />
@@ -69,6 +86,7 @@ export default function App() {
         <Route path="/videos/:token" element={<ClientVideosPage />} />
         <Route path="*" element={<NothingHerePage />} />
       </Routes>
+      </>
     )
   }
 
@@ -78,6 +96,7 @@ export default function App() {
 
   return (
     <>
+    <PublicHomeScreen pathname={pathname} />
     {/* The help chat sits outside the routes so a conversation survives the
         page changes it causes itself. It hides on the public token pages. */}
     {agencyPage && (

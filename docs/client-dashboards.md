@@ -100,6 +100,22 @@ file has gone (`vite:preloadError` in `src/main.jsx`). Before the split
 the one file was about 1.9 MB; the client pages now fetch about 0.7 MB
 before compression.
 
+## Saving it to the home screen (2026-11-04)
+
+A client who saved their dashboard to their phone got the CRM login
+("are you able to send the password? it only shows up on a web link but
+I wanna save it to my phone"). No client has a password; the icon was
+pointing at the wrong door. The site declares a web app manifest for the
+CRM (`public/manifest.webmanifest`) whose start page is `/`, and a home
+screen icon opens the manifest's start page, not the page it was saved
+from. Now, while a client page is open, the manifest is taken off the
+document and the iOS title is set to the page's name ("KPI Dashboard",
+"Weekly Report", "Video Scripts"...), so "Add to Home Screen" saves the
+page's own address on iPhone and Android alike, and still opens full
+screen on iPhone (`src/lib/homeScreen.js`, `scripts/check-home-screen.mjs`).
+The CRM's manifest comes back on any CRM page. A client who saved the
+icon before this deleted it and added it again from their link.
+
 ## What a message app shows for the link
 
 A dashboard link pasted into iMessage, WhatsApp, Slack or an email
