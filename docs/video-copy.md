@@ -49,6 +49,37 @@ Both checks now read the row itself (the clip's saved versions and copy, the
 saved ad's primary text) and a tick whose copy record is not loaded yet is
 left alone (`nextToWrite` in `src/lib/publishCopy.js`).
 
+## The copy says what the clip says (2026-11-05)
+
+"Make sure the ad copy matches what is actually said in the transcript."
+Until now the transcript was background: the writer was told to use its
+phrases and facts, and where it disagreed with the offer on file, the offer
+on file won. For a video ad that is backwards: the viewer reads the copy
+beside the clip and hears the owner at the same time, and copy that names
+a different deal loses them. Now (`ad-copy` v19):
+
+- The offer in the copy is the offer the owner states in the clip, in the
+  owner's numbers and words. A clip that states no offer gets copy led by
+  the owner's main point, never a deal the viewer will not hear.
+- Every claim, number, timeframe, guarantee and town is one the owner says,
+  or a business fact the clip does not contradict (a rating the owner never
+  mentions can still stand as proof).
+- Where the transcript and the offer on file differ, the transcript wins
+  for that ad and the note says they differ, so a person can check which is
+  current.
+- A word the machine misheard (a mangled town, a number that makes no
+  sense) is corrected from the business facts, not invented.
+- Each version carries the short exact phrase from the transcript it is
+  built on, shown under its card as "In the clip: ...", so the match is
+  there to see. It is kept with the versions on the row.
+
+The three angles are the same, read off the clip: the offer the owner
+states, trust as the owner says it, the problem the owner describes. The
+"Quick draft" and "Another angle" buttons share the rules, so a single
+field written from a transcript follows them too. A clip with no
+transcript (music only, or Deepgram not set up) is written from the note
+and the facts as before.
+
 ## Switching it on
 
 Transcription needs one secret: `DEEPGRAM_API_KEY`, under Project Settings >

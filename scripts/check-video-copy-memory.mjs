@@ -25,9 +25,10 @@ const row = { copy: { primary_text: 'Saved line', headline: 'Saved head', descri
 check('the saved copy comes back as a patch, blanks left out', copyFromRow(row, null), { primary_text: 'Saved line', headline: 'Saved head', ad_name: 'WC_x' })
 check('...but never over words already on the page', copyFromRow(row, { primary_text: 'Typing now' }), null)
 check('...and a row with none gives nothing', [copyFromRow({}, null), copyFromRow({ copy: { primary_text: '' } }, null)], [null, null])
-check('the versions come back in the shape the cards read', versionsFromRow(row), { note: 'three angles', variations: [{ angle: 'The offer', primaryText: 'A', headline: 'B', description: 'C' }, { angle: 'Trust', primaryText: 'D', headline: 'E', description: 'F' }] })
+check('the versions come back in the shape the cards read', versionsFromRow(row), { note: 'three angles', variations: [{ angle: 'The offer', primaryText: 'A', headline: 'B', description: 'C', fromClip: '' }, { angle: 'Trust', primaryText: 'D', headline: 'E', description: 'F', fromClip: '' }] })
+check('the line from the clip a version echoes rides along', versionsFromRow({ versions: { note: '', variations: [{ angle: 'The offer', primaryText: 'A', headline: 'B', description: 'C', fromClip: '$89 heat check this week' }] } }).variations[0].fromClip, '$89 heat check this week')
 check('no versions, or an empty list, is null', [versionsFromRow({}), versionsFromRow({ versions: { variations: [] } }), versionsFromRow({ versions: 'junk' })], [null, null, null])
-check('what is saved of the versions is the note and the three, nothing else', versionsToSave({ note: 'n', variations: [{ angle: 'a', primaryText: 'p', headline: 'h', description: 'd', extra: 1 }], raw: {} }), { note: 'n', variations: [{ angle: 'a', primaryText: 'p', headline: 'h', description: 'd' }] })
+check('what is saved of the versions is the note and the three, nothing else', versionsToSave({ note: 'n', variations: [{ angle: 'a', primaryText: 'p', headline: 'h', description: 'd', extra: 1 }], raw: {} }), { note: 'n', variations: [{ angle: 'a', primaryText: 'p', headline: 'h', description: 'd', fromClip: '' }] })
 
 if (failures) {
   console.log(`\n${failures} check(s) failed`)

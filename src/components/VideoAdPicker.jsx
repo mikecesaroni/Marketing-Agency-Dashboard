@@ -908,6 +908,13 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                                 <p className="whitespace-pre-wrap text-slate-800">{opt.primaryText}</p>
                                 <p className="mt-1.5 font-semibold text-slate-900">{opt.headline}</p>
                                 <p className="text-slate-600">{opt.description}</p>
+                                {/* The line from the transcript this version echoes, so the
+                                    match between the copy and the clip is there to see. */}
+                                {opt.fromClip && (
+                                  <p className="mt-1.5 border-t border-slate-100 pt-1.5 text-[10px] italic text-slate-500" title="What the owner says in the clip that this version is built on" data-from-clip>
+                                    In the clip: “{opt.fromClip}”
+                                  </p>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => pickVersion(v.storage_path, i)}

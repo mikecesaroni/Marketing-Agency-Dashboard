@@ -22,6 +22,10 @@
 //     written as sets, from the clip's transcript (transcribe-video) and the
 //     note typed on it. A person picks one. `transcript` is now read in every
 //     mode when present.
+// v19: the copy MATCHES the transcript ("make sure the ad copy matches what
+//     is actually said"): the offer and every claim are the owner's own, the
+//     transcript wins over the offer on file (the note says when they
+//     differ), and each version carries fromClip, the line it echoes.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
 import { z } from 'npm:zod'
@@ -86,6 +90,11 @@ const Variation = z.object({
   primaryText: z.string(),
   headline: z.string(),
   description: z.string(),
+  // The short exact phrase from the transcript this version is built on,
+  // shown under the card so the match between copy and clip is visible
+  // ("make sure the ad copy matches what is actually said"). '' without a
+  // transcript.
+  fromClip: z.string(),
 })
 const Variations = z.object({
   note: z.string(),
@@ -135,14 +144,18 @@ what the clip shows, and usually a transcript of what is said in it.
 Return exactly THREE complete versions, each with its own primaryText, headline
 and description written together so they read as one ad. Each version takes a
 different angle, and the angle is named in two or three words:
-  1. the offer, led by the number or the deal the clip states
-  2. trust, led by the owner, the years, the guarantee or the reviews
-  3. the problem the clip shows, and what happens if it is left
-If the facts cannot honestly support one of those angles, take the strongest
-honest alternative and say so in the note. The versions must differ in their
-first line, not only in wording further down: the first line is all that shows
-before "see more". A person picks one and can edit it, so write finished copy,
-not options.`
+  1. the offer, led by the number or the deal the owner states in the clip
+     (or, when the clip states none, the main point the owner makes)
+  2. trust, led by the owner, the years, the guarantee or the reviews, as
+     the owner says them
+  3. the problem the owner describes in the clip, and what happens if it is
+     left
+Every version says what the clip says: same offer, same numbers, same
+claims. If the clip cannot honestly support one of those angles, take the
+strongest honest alternative that the clip does support and say so in the
+note. The versions must differ in their first line, not only in wording
+further down: the first line is all that shows before "see more". A person
+picks one and can edit it, so write finished copy, not options.`
 
 const RULES = `There is NO BUTTON painted on the image. Meta renders the real call-to-action
 button directly under the creative and it is chosen separately, so never write
@@ -194,11 +207,28 @@ worked out and it is usually off by one. The same goes for turning a count into
 a rate, a price into a discount, or a timeframe into a date.
 
 WHEN YOU ARE GIVEN A TRANSCRIPT, it is what a viewer hears: the machine's
-text of the audio, with the odd wrong word. It is the best evidence of what
-the clip is about, of the offer it states and of how this owner talks, so use
-its phrases and its facts. Do not quote it back wholesale or describe the
-footage, and where it disagrees with the offer you were given, keep the offer
-you were given and say so in the note.
+text of the audio, with the odd wrong word. THE COPY MUST MATCH IT. The
+viewer reads the copy beside the clip and hears the owner at the same time,
+and copy that promises something the owner never says, or names a different
+deal, is the fastest way to lose them. So:
+- The offer in the copy is the offer the owner states in the clip, in the
+  owner's own numbers and words. If the clip states no offer, the copy leads
+  with the main point the owner makes instead, and never adds a deal from the
+  business facts that the viewer will not hear.
+- Every claim, number, timeframe, guarantee and town in the copy is one the
+  owner says in the clip, or a business fact that the clip does not
+  contradict (a rating or a review count the owner does not mention may
+  still stand as proof).
+- Where the transcript disagrees with the offer you were given, the
+  transcript wins for this ad, and the note says the two differ so a person
+  can check which is current.
+- Borrow the owner's own phrasing where it is good; it is how they talk.
+- A wrong word the machine heard (a mangled town name, a number that makes
+  no sense) is corrected from the business facts, not invented.
+Do not quote the transcript back wholesale or describe the footage. For each
+version, give the short exact phrase from the transcript it is built on (the
+line the copy echoes) as fromClip, so the person can see the match; leave it
+empty only when there is no transcript.
 
 WHEN THE AD IS A VIDEO, you are told so explicitly. Then there is no image and
 no artboard: the painted slots do not exist, and the only three that do are

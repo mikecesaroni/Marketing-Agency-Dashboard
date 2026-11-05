@@ -15,6 +15,7 @@
 // option has to return that option rather than nothing — a blank primary text
 // is a blocker on publish.
 
+import { readFileSync } from 'node:fs'
 import { anglesAvailable, nthPerField } from '../src/lib/adCopyOptions.js'
 import { PLAYBOOK } from '../src/lib/playbook.js'
 
@@ -128,6 +129,23 @@ check('null does not throw', [nthPerField(null, 0), anglesAvailable(null)], [{},
 {
   const section = PLAYBOOK.slice(PLAYBOOK.indexOf('=== EMOJIS'), PLAYBOOK.indexOf('=== WHAT META REWARDS'))
   check('the playbook says none by default and names the test rules', [section.includes('Default: none'), section.includes('Meta primary text only'), section.includes('never on a Google ad'), section.includes('cost per lead, not clicks')], [true, true, true, true])
+}
+
+// The copy says what the clip says ("make sure the ad copy matches what is
+// actually said from the transcript"): the rule is in the function's own
+// words, the transcript wins over the offer on file, and each version names
+// the line it is built on.
+{
+  const fn = readFileSync(new URL('../supabase/functions/ad-copy/index.ts', import.meta.url), 'utf8')
+  const rules = fn.slice(fn.indexOf('WHEN YOU ARE GIVEN A TRANSCRIPT'), fn.indexOf('WHEN THE AD IS A VIDEO'))
+  check('the transcript rule says the copy must match it', rules.includes('THE COPY MUST MATCH IT'), true)
+  check('the offer in the copy is the one the owner states, never an unheard deal from the facts', rules.includes('The offer in the copy is the offer the owner states in the clip') && rules.includes('never adds a deal from the\n  business facts that the viewer will not hear'), true)
+  check('the transcript wins over the offer on file, and the note says they differ', rules.includes('the\n  transcript wins for this ad, and the note says the two differ'), true)
+  check('a misheard word is corrected from the facts, not invented', rules.includes('corrected from the business facts, not invented'), true)
+  check('each version names the line from the clip it echoes', rules.includes('as fromClip') && /fromClip: z\.string\(\)/.test(fn), true)
+  const intro = fn.slice(fn.indexOf('const VARIATIONS_INTRO'), fn.indexOf('const RULES'))
+  check('the three angles are read off the clip and say what it says', intro.includes('the owner states in the clip') && intro.includes('Every version says what the clip says: same offer, same numbers, same\nclaims.'), true)
+  check('the old rule (keep the offer you were given) is gone', fn.includes('keep the offer\nyou were given and say so in the note'), false)
 }
 
 console.log(failures === 0 ? '\nAll ad-copy checks passed' : `\n${failures} FAILED`)

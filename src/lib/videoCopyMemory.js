@@ -59,6 +59,9 @@ export function versionsFromRow(row = {}) {
       primaryText: String(x?.primaryText || ''),
       headline: String(x?.headline || ''),
       description: String(x?.description || ''),
+      // The line from the transcript the version echoes (ad-copy v19), so
+      // the match between copy and clip stays visible on a later visit.
+      fromClip: String(x?.fromClip || ''),
     })),
   }
 }
