@@ -128,6 +128,22 @@ Tasks, shown until they have any task tagged `onboarding`; it makes the
 same four and posts the same line. Pinned by
 `scripts/check-onboarding-tasks.mjs`.
 
+## Ethan's task when the form comes in (2026-11-05)
+
+"When a client fills in the onboarding form, auto add a task for Ethan to
+send the client video scripts." The moment a client's onboarding form is
+submitted (the link's `intake_submitted_at` is set for the first time), the
+database makes `<Client> Send Video Scripts` for Ethan, on the client,
+tagged `onboarding`, with the next move in its description: send them the
+video scripts link from their page. A trigger (`supabase/scripts-task.sql`),
+so it happens whether the form came through the link, was marked in by
+hand, or the browser closed a moment too soon; a client submitting again
+does not get a second task, and a client who already has one by that title
+does not either. The channel's "Form in" line says so: "📝 Acme filled in
+their onboarding form · task for Ethan: send the video scripts". The title's
+wording is mirrored in `src/lib/onboardingTasks.js` and
+`scripts/check-onboarding-tasks.mjs` checks the two agree.
+
 ## What it is not
 
 - Not the per-client onboarding checklist on the client page. That is

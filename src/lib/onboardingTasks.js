@@ -99,6 +99,17 @@ function tierWords(tier) {
 }
 
 /**
+ * The task the database makes for Ethan the moment a client's onboarding
+ * form comes in (supabase/scripts-task.sql: a trigger on the form's
+ * submitted stamp): "<Client> Send Video Scripts". The wording lives in
+ * both places on purpose; scripts/check-onboarding-tasks.mjs checks they
+ * agree. The Slack "Form in" line reads it to say the task was made.
+ */
+export const SCRIPTS_TASK_OWNER = 'Ethan'
+export const SCRIPTS_TASK_SUFFIX = 'Send Video Scripts'
+export const scriptsTaskTitle = (clientName) => `${clean(clientName)} ${SCRIPTS_TASK_SUFFIX}`
+
+/**
  * The wanted tasks a client does not have yet, by title, so making them
  * twice (a second add, a button pressed again) adds nothing. `existing` is
  * the client's tasks as rows { title, client_id }.

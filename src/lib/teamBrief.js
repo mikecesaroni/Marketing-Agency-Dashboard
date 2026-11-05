@@ -757,13 +757,17 @@ export const FORM_WORDS = {
  * sends message when client fills out onboarding form"): one line per
  * submission, the client linked to their page where the answers are.
  *
- * items: [{ client: { id, name }, form: 'intake' | 'ghl', at }]
+ * items: [{ client: { id, name }, form: 'intake' | 'ghl', at, task? }]
+ *   task: the task the form made ("Ethan: send the video scripts"), when
+ *         the database made one (supabase/scripts-task.sql), so the line
+ *         says who has the next move.
  */
 export function formSubmittedSlack(items = [], { appUrl = '' } = {}) {
   if (!items.length) return null
   const model = { appUrl: String(appUrl || '').replace(/\/$/, '') }
-  const line = (it) => `${slackEsc(it.client?.name || 'A client')} ${FORM_WORDS[it.form] || 'filled in a form'}`
-  const lines = items.map((it) => `📝 ${link(model, `/client/${it.client?.id || ''}`, slackEsc(it.client?.name || 'A client'))} ${FORM_WORDS[it.form] || 'filled in a form'}`)
+  const tail = (it) => (it.task ? ` · task for ${it.task}` : '')
+  const line = (it) => `${slackEsc(it.client?.name || 'A client')} ${FORM_WORDS[it.form] || 'filled in a form'}${tail(it)}`
+  const lines = items.map((it) => `📝 ${link(model, `/client/${it.client?.id || ''}`, slackEsc(it.client?.name || 'A client'))} ${FORM_WORDS[it.form] || 'filled in a form'}${it.task ? ` · task for ${slackEsc(it.task)}` : ''}`)
   return {
     text: items.map(line).join(' · '),
     blocks: [

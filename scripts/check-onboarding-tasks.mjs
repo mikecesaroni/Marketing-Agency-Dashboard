@@ -3,8 +3,9 @@
 // rule.
 // Run: node scripts/check-onboarding-tasks.mjs
 
-import { ONBOARDING_OWNER, ONBOARDING_TAG, landingPageTitle, missingOnboardingTasks, onboardingTasks } from '../src/lib/onboardingTasks.js'
-import { onboardingTasksSlack } from '../src/lib/teamBrief.js'
+import { readFileSync } from 'node:fs'
+import { ONBOARDING_OWNER, ONBOARDING_TAG, SCRIPTS_TASK_OWNER, SCRIPTS_TASK_SUFFIX, landingPageTitle, missingOnboardingTasks, onboardingTasks, scriptsTaskTitle } from '../src/lib/onboardingTasks.js'
+import { formSubmittedSlack, onboardingTasksSlack } from '../src/lib/teamBrief.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -57,6 +58,19 @@ check('the context links the board and their page', post.blocks[1].elements[0].t
 check('one task reads singular, nobody known still a sentence', onboardingTasksSlack({ client: { id: 'c1', name: 'Acme' }, tasks: [{ id: 't1', title: 'Acme A2P Verification', assignees: ['Ken'] }] }).text, 'Someone gave Ken 1 onboarding task for Acme: Acme A2P Verification')
 check('two people across the tasks read as a pair', onboardingTasksSlack({ client: { name: 'Acme' }, tasks: [{ title: 'A', assignees: ['Ken'] }, { title: 'B', assignees: ['Josh'] }], by: 'Ethan' }).text.startsWith('Ethan gave Ken and Josh 2 onboarding tasks for Acme'), true)
 check('no tasks, no post', onboardingTasksSlack({ client: { name: 'Acme' }, tasks: [] }), null)
+
+// --- the form's own task: Ethan sends the video scripts ---------------------------
+// ("When a client fills in the onboarding form it auto adds a task for
+// Ethan to send the client video scripts.") Made by the database the moment
+// the form's submitted stamp is set; the wording here and in the SQL agree.
+check('the scripts task reads like the others: the client first, then the job', scriptsTaskTitle(' Acme Heating '), 'Acme Heating Send Video Scripts')
+check('it is for Ethan', SCRIPTS_TASK_OWNER, 'Ethan')
+const sql = readFileSync(new URL('../supabase/scripts-task.sql', import.meta.url), 'utf8')
+check('the trigger makes the same title, for the same person, tagged onboarding', [sql.includes(`|| ' ${SCRIPTS_TASK_SUFFIX}'`), sql.includes(`array['${SCRIPTS_TASK_OWNER}']`), sql.includes("array['onboarding']")], [true, true, true])
+check('the trigger fires once, on the first submitted stamp, and never twice for a client', [sql.includes('old.intake_submitted_at is not null then'), sql.includes('lower(t.title) = lower(v_title)'), sql.includes('after update of intake_submitted_at on public.onboarding_links')], [true, true, true])
+const formLine = formSubmittedSlack([{ client: { id: 'f1', name: 'Acme & Sons' }, form: 'intake', at: '2026-11-05T14:00:00Z', task: 'Ethan: send the video scripts' }], { appUrl: 'https://crm.example' })
+check('the Form in line says the task was made and for whom', [formLine.text, formLine.blocks[0].text.text], ['Acme &amp; Sons filled in their onboarding form · task for Ethan: send the video scripts', '*Form in*\n📝 <https://crm.example/client/f1|Acme &amp; Sons> filled in their onboarding form · task for Ethan: send the video scripts'])
+check('a GHL form, or a form with no task, reads as before', formSubmittedSlack([{ client: { id: 'f2', name: 'Belk' }, form: 'ghl' }]).text, 'Belk sent back their GHL account details')
 
 if (failures) {
   console.log(`\n${failures} check(s) failed`)

@@ -402,7 +402,7 @@ Deno.serve(async (req) => {
       let q = supabase.from('onboarding_links').select('id, client_id, intake_submitted_at, ghl_submitted_at, clients(id, name, archived)')
       q = only ? q.eq('id', only.linkId) : q.or(`intake_submitted_at.gte.${since},ghl_submitted_at.gte.${since}`)
       const { data: links } = await q
-      const items: { subject: string; client: { id: string; name: string }; form: string; at: string }[] = []
+      const items: { subject: string; client: { id: string; name: string }; form: string; at: string; task?: string }[] = []
       for (const l of links || []) {
         const c = (l as any).clients
         if (!c || c.archived) continue
@@ -417,7 +417,17 @@ Deno.serve(async (req) => {
       if (!items.length) return []
       const { data: done } = await supabase.from('team_digests').select('subject').eq('kind', 'form').in('subject', items.map((i) => i.subject))
       const seen = new Set((done || []).map((d) => d.subject))
-      return items.filter((i) => !seen.has(i.subject))
+      const fresh = items.filter((i) => !seen.has(i.subject))
+      // The form's own task ("<Client> Send Video Scripts", made for Ethan by
+      // the trigger in supabase/scripts-task.sql the moment the form came
+      // in): the line says so, so the channel knows who has the next move.
+      const intakeIds = [...new Set(fresh.filter((i) => i.form === 'intake').map((i) => i.client.id))]
+      if (intakeIds.length) {
+        const { data: made } = await supabase.from('tasks').select('client_id, assignees').in('client_id', intakeIds).ilike('title', '% Send Video Scripts').neq('status', 'done')
+        const by = new Map((made || []).map((t) => [t.client_id, Array.isArray(t.assignees) && t.assignees.length ? String(t.assignees[0]) : 'Ethan']))
+        for (const it of fresh) if (it.form === 'intake' && by.has(it.client.id)) it.task = `${by.get(it.client.id)}: send the video scripts`
+      }
+      return fresh
     }
     // A swept post is RECORDED BEFORE it is posted. One row per subject, so
     // each is announced once whatever run carried it; a failed post is
@@ -445,9 +455,9 @@ Deno.serve(async (req) => {
       await supabase.from('team_digests').update({ status: posted ? 'sent' : 'failed', reason: posted ? null : error, slack_status: posted ? 'sent' : 'failed' }).in('id', (made || []).map((m) => m.id))
       return { posted, count: rows.length, error: error || undefined }
     }
-    const postForms = async (items: { subject: string; client: { id: string; name: string }; form: string; at: string }[]) => {
+    const postForms = async (items: { subject: string; client: { id: string; name: string }; form: string; at: string; task?: string }[]) => {
       if (!items.length) return { posted: false, count: 0 }
-      return recordThenPost('form', items.map((i) => ({ subject: i.subject, model: { client: i.client, form: i.form, at: i.at } })), formSubmittedSlack(items, { appUrl }))
+      return recordThenPost('form', items.map((i) => ({ subject: i.subject, model: { client: i.client, form: i.form, at: i.at, task: i.task || null } })), formSubmittedSlack(items, { appUrl }))
     }
 
     if (action === 'form_submitted') {
