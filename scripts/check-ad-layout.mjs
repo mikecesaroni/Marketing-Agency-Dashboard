@@ -7,7 +7,7 @@
 // photo over the offer block on Stories. Everything resolves through
 // photoRect, so the 216px preview and the 1080px export agree.
 
-import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_KEYS, TEXT_LAYOUTS, TWO_PHOTO_LAYOUTS, accentWord, beforeRects, containRect, coverRect, dragFocus, dragPhoto, photoRect, plateRects, splitRects } from '../src/lib/adLayout.js'
+import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_KEYS, TEXT_LAYOUTS, TWO_PHOTO_LAYOUTS, accentWord, beforeRects, containRect, coverRect, dragFocus, dragPhoto, photoRect, plateRects, splitRects, washRects } from '../src/lib/adLayout.js'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -18,10 +18,21 @@ function check(name, actual, expected) {
 }
 
 check('cover is first and therefore the default', LAYOUTS[0].key, 'cover')
-check('the five photo looks, classic first (the card and the AI concept are retired from the row)', PHOTO_LOOKS.map((l) => l.key), ['cover', 'stack', 'plate', 'split', 'before'])
+check('the six photo looks, classic first (the card and the AI concept are retired from the row)', PHOTO_LOOKS.map((l) => l.key), ['cover', 'stack', 'plate', 'wash', 'split', 'before'])
 check('the templates follow the photo looks in the full list', LAYOUTS.map((l) => l.key), [...PHOTO_LOOKS.map((l) => l.key), ...TEMPLATE_KEYS])
-check('every look but the AI concept paints the words, the retired card included so old saved ads still edit, the templates too', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'before', 'card', ...TEMPLATE_KEYS])
-check('dragging moves the focal point on the photo looks and the photo templates', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'split', 'before', 'photo_sale', 'before_sale', 'reveal'])
+check('every look but the AI concept paints the words, the retired card included so old saved ads still edit, the templates too', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'wash', 'split', 'before', 'card', ...TEMPLATE_KEYS])
+check('dragging moves the focal point on the photo looks and the photo templates', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'wash', 'split', 'before', 'photo_sale', 'before_sale', 'reveal'])
+
+// The brand wash: the photo whole, the wash under a seam that curves down
+// into the frame, lowest in the middle, with the same room for the words on
+// every frame.
+const wq = washRects(1080, 1080)
+check('square: the photo is the whole frame', wq.photo, { x: 0, y: 0, w: 1080, h: 1080 })
+check('square: the seam is lowest in the middle, 80 higher at the edges', [wq.seam.y, wq.seam.edgeY, wq.seam.bulge], [540, 460, 80])
+check('square: the wash starts where the seam meets the edges and runs to the bottom', [wq.wash.y, wq.wash.y + wq.wash.h], [460, 1080])
+const wt = washRects(1080, 1920, { safeTop: 269, safeBottom: 672 })
+check('story: the wash keeps the same share of the usable room above the Reels band', [wt.seam.y, wt.seam.y > 269, wt.seam.y < 1920 - 672], [758, true, true])
+check('a bigger share drops the seam', washRects(1080, 1080, { share: 0.6 }).seam.y < wq.seam.y, true)
 check('the before look and the two before templates take the After picker', TWO_PHOTO_LAYOUTS, ['before', 'before_sale', 'reveal'])
 
 // The headline stack's giant word.

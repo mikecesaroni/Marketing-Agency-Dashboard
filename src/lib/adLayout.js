@@ -12,6 +12,7 @@ export const PHOTO_LOOKS = [
   { key: 'cover', label: 'Classic', hint: 'photo fills the frame, headline up top, offer block down the bottom', group: 'photo' },
   { key: 'stack', label: 'Headline stack', hint: 'one giant accent word over the photo, with a white offer card', group: 'photo' },
   { key: 'plate', label: 'Bottom plate', hint: 'photo on top, the words on a brand-colour plate below', group: 'photo' },
+  { key: 'wash', label: 'Brand wash', hint: 'the photo whole, its lower part under a wash of the brand colour behind a curved seam in the accent, the logo in a white pill on the seam, the offer huge in the accent with a white outline', group: 'photo' },
   { key: 'split', label: 'Split panel', hint: 'brand-colour panel with the words beside the photo', group: 'photo' },
   { key: 'before', label: 'Before and after', hint: 'two photos side by side (one above the other on the Story), Before and After labelled, the words on a plate below', group: 'photo' },
 ]
@@ -23,9 +24,9 @@ export const PHOTO_LOOKS = [
 export const LAYOUTS = [...PHOTO_LOOKS, ...TEMPLATE_LAYOUTS.map((t) => ({ ...t, group: 'template' }))]
 export { TEMPLATE_LAYOUTS, TEMPLATE_KEYS }
 // Looks that paint the words themselves (an AI concept carries its own).
-export const TEXT_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'before', 'card', ...TEMPLATE_KEYS]
+export const TEXT_LAYOUTS = ['cover', 'stack', 'plate', 'wash', 'split', 'before', 'card', ...TEMPLATE_KEYS]
 // Looks where dragging the artboard moves the photo's focal point.
-export const FOCUS_LAYOUTS = ['cover', 'stack', 'plate', 'split', 'before', ...PHOTO_TEMPLATES]
+export const FOCUS_LAYOUTS = ['cover', 'stack', 'plate', 'wash', 'split', 'before', ...PHOTO_TEMPLATES]
 // Looks that take a second photo: the "After photo" picker appears and the
 // first picker reads "Before photo".
 export const TWO_PHOTO_LAYOUTS = ['before', ...TWO_PHOTO_TEMPLATES]
@@ -165,6 +166,31 @@ export function plateRects(w, h, { safeTop = 0, safeBottom = 0, share = 0.46, ov
   return {
     photo: { x: 0, y: 0, w, h: plateTop + overlap },
     plate: { x: 0, y: plateTop, w, h: plateH },
+  }
+}
+
+/**
+ * The brand wash look: the photo fills the frame; its lower part sits under
+ * a wash of the brand colour, behind a seam that curves down into the frame
+ * (the bottom of a circle, not a straight cut), so the picture up top reads
+ * whole and the words below read on a colour. Modelled on the Belknap
+ * Heating and Cooling ad (2026-11-05): the technician at the condenser up
+ * top, navy over the rest, "5% OFF" in red with a white outline.
+ *
+ * The seam's lowest point is `seam.y`, in the middle; at the edges it is
+ * `bulge` higher. The wash takes a fixed share of the usable room (between
+ * the safe margins) measured from that lowest point, so the words always
+ * have the same room on every frame. The logo's pill is centred on `seam.y`;
+ * the words start under it (the renderer knows the pill's size).
+ */
+export function washRects(w, h, { safeTop = 0, safeBottom = 0, share = 0.5, bulge = 80 } = {}) {
+  const usable = h - safeTop - safeBottom
+  const washH = Math.round(usable * share) + safeBottom
+  const seamY = h - washH
+  return {
+    photo: { x: 0, y: 0, w, h },
+    seam: { y: seamY, edgeY: seamY - bulge, bulge },
+    wash: { x: 0, y: seamY - bulge, w, h: h - (seamY - bulge) },
   }
 }
 

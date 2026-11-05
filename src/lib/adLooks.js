@@ -6,6 +6,9 @@
 //          it, and a white offer card: the "FREE second opinion" shape that
 //          home-services ads keep landing on
 //   plate  the photo on top, the words on a brand-colour plate below
+//   wash   the photo whole, its lower part under a wash of the brand colour
+//          behind a curved seam in the accent, the logo in a white pill on
+//          the seam, the offer huge in the accent with a white outline
 //   split  a brand-colour panel beside (or above) the photo
 //   ai     a finished AI concept, fitted whole with a blurred surround, no
 //          words painted
@@ -18,7 +21,7 @@
 import { readableTextOn } from './logoColours'
 import { logoFor } from './logoCutout'
 import { PAD, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
-import { DEFAULT_BG, accentWord, containRect, coverRect, beforeRects, plateRects, splitRects } from './adLayout'
+import { DEFAULT_BG, accentWord, containRect, coverRect, beforeRects, plateRects, splitRects, washRects } from './adLayout'
 
 export const SLATE = '#0F172A'
 const r = (n) => Math.round(n)
@@ -464,6 +467,197 @@ function drawPlateBody(ctx, m, content, assets, plate) {
 }
 
 // ---------------------------------------------------------------------------
+// brand wash
+// ---------------------------------------------------------------------------
+
+/** A hex colour with an alpha, for the wash; anything else falls back to slate. */
+function withAlpha(hex, alpha) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim())
+  if (!m) return `rgba(15,23,42,${alpha})`
+  const n = parseInt(m[1], 16)
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
+}
+
+/**
+ * The photo whole, its lower part under a wash of the brand colour behind a
+ * seam that curves down into the frame, the logo in a white pill on the
+ * seam, and the words centred on the wash: the offer huge in the accent
+ * with a white outline and a hard shadow, the rest in white. Modelled on
+ * the Belknap Heating and Cooling ad (2026-11-05): the technician at the
+ * condenser up top, navy over the rest, "5% OFF" in red. Any photo from the
+ * client's Drive folder drops in; dragging the artboard moves what the top
+ * keeps.
+ *
+ * The wash is the plate colour (the brand's second colour), the seam and the
+ * big word the accent. A one-colour brand (accent and wash the same) gets
+ * the big word in white with a dark outline instead, so it never vanishes
+ * into the wash.
+ */
+function renderWash(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, contentBottom, maxWidth, safeTop, safeBottom } = m
+  const { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, focus } = content
+  const { background, logo } = assets || {}
+  const washColor = badgeColor || DEFAULT_BG
+  const ink = readableTextOn(washColor)
+  const light = ink === '#FFFFFF'
+  const soft = light ? 'rgba(255,255,255,0.9)' : 'rgba(15,23,42,0.74)'
+  const sameColour = String(accent || '').toUpperCase() === String(washColor).toUpperCase()
+  const bigFill = sameColour ? '#FFFFFF' : accent
+  const bigStroke = sameColour ? 'rgba(2,6,23,0.85)' : '#FFFFFF'
+
+  const { photo, seam, wash } = washRects(w, h, { safeTop, safeBottom })
+
+  // The photo, whole, with a little lift at the top for the badge.
+  ctx.fillStyle = SLATE
+  ctx.fillRect(0, 0, w, h)
+  if (background) drawCoverIn(ctx, background, photo, focus)
+  else {
+    ctx.fillStyle = '#1E293B'
+    ctx.fillRect(0, 0, w, h)
+  }
+  scrim(ctx, 0, 0, w, r(seam.edgeY * 0.35), [
+    [0, 'rgba(2,6,23,0.42)'],
+    [1, 'rgba(2,6,23,0)'],
+  ])
+
+  // The seam: the bottom of a circle, lowest in the middle. Everything under
+  // it is the wash: the brand colour over the photo, darker towards the
+  // bottom so the small words read whatever the picture is.
+  const curve = () => {
+    ctx.beginPath()
+    ctx.moveTo(0, seam.edgeY)
+    ctx.quadraticCurveTo(w / 2, seam.y + seam.bulge, w, seam.edgeY)
+  }
+  ctx.save()
+  curve()
+  ctx.lineTo(w, h)
+  ctx.lineTo(0, h)
+  ctx.closePath()
+  ctx.clip()
+  ctx.fillStyle = withAlpha(washColor, 0.86)
+  ctx.fillRect(wash.x, wash.y, wash.w, wash.h)
+  scrim(ctx, wash.x, wash.y, wash.w, wash.h, [
+    [0, 'rgba(2,6,23,0)'],
+    [1, light ? 'rgba(2,6,23,0.38)' : 'rgba(255,255,255,0.22)'],
+  ])
+  ctx.restore()
+  ctx.save()
+  curve()
+  ctx.lineWidth = 14
+  ctx.strokeStyle = accent
+  ctx.shadowColor = 'rgba(2,6,23,0.4)'
+  ctx.shadowBlur = 18
+  ctx.shadowOffsetY = 4
+  ctx.stroke()
+  ctx.restore()
+
+  drawBadge(ctx, badge, padX, contentTop, maxWidth, badgeColor === washColor ? accent : badgeColor)
+
+  // The logo in a white pill, centred on the seam's lowest point: the one
+  // place on this look where the logo keeps its box, because the box IS the
+  // look (the white badge over the seam in the reference ad). The original
+  // mark, not the knocked-out one: it was drawn to sit on white.
+  let wordsTop = seam.y + seam.bulge + 44
+  if (logo) {
+    const scale = Math.min(Math.min(420, maxWidth * 0.6) / logo.width, 104 / logo.height)
+    const lw = logo.width * scale
+    const lh = logo.height * scale
+    const padW = 26
+    const padH = 16
+    const pw = lw + padW * 2
+    const ph = lh + padH * 2
+    const px = r(w / 2 - pw / 2)
+    const py = r(seam.y - ph / 2)
+    ctx.save()
+    ctx.shadowColor = 'rgba(2,6,23,0.4)'
+    ctx.shadowBlur = 28
+    ctx.shadowOffsetY = 8
+    ctx.fillStyle = '#FFFFFF'
+    roundRect(ctx, px, py, pw, ph, 22)
+    ctx.fill()
+    ctx.restore()
+    ctx.drawImage(logo, px + padW, py + padH, lw, lh)
+    wordsTop = py + ph + 40
+  }
+
+  // The words, centred on the wash. The offer amount is the huge word (5%
+  // OFF, $89, FREE); with no amount the headline takes its place. Then the
+  // offer detail, the headline, the subhead; the proof on the last line.
+  const amount = offerAmount?.trim() || ''
+  const big = amount ? amount.toUpperCase() : typographic(hook || '')
+  const restHook = amount ? typographic(hook || '') : ''
+  const bottom = contentBottom
+  const proofFit = proof?.trim() ? fitText(ctx, typographic(proof), maxWidth, 2, 22, 17, '600', 0, { lineRatio: 1.3 }) : null
+  const proofH = proofFit ? proofFit.lines.length * proofFit.px * 1.3 + 22 : 0
+  let room = bottom - proofH - wordsTop
+  // Each block takes a share of what is left, the big word first, so the
+  // subhead is never the one squeezed to nothing.
+  const bigFit = big ? fitText(ctx, big, maxWidth, amount ? 2 : 3, amount ? 170 : 120, amount ? 72 : 48, '900', -3, { maxHeight: Math.max(80, room * (amount ? 0.38 : 0.5)), lineRatio: 1.0 }) : null
+  const bigH = bigFit ? bigFit.lines.length * bigFit.px * 1.0 + 18 : 0
+  room -= bigH
+  const detailFit = offerDetail?.trim() ? fitText(ctx, typographic(offerDetail), maxWidth, 2, 36, 24, '800', 0, { maxHeight: Math.max(40, room * 0.36), lineRatio: 1.2 }) : null
+  const detailH = detailFit ? detailFit.lines.length * detailFit.px * 1.2 + 16 : 0
+  room -= detailH
+  const hookFit = restHook ? fitText(ctx, restHook, maxWidth, 2, 42, 26, '700', -0.5, { maxHeight: Math.max(30, room * 0.5), lineRatio: 1.14 }) : null
+  const hookH = hookFit ? hookFit.lines.length * hookFit.px * 1.14 + 14 : 0
+  room -= hookH
+  const deck = subhead?.trim() ? fitText(ctx, typographic(subhead), maxWidth, 3, 30, 22, '500', 0, { maxHeight: Math.max(28, room), lineRatio: 1.3 }) : null
+
+  let y = wordsTop
+  const cx = w / 2
+  if (bigFit) {
+    setFont(ctx, '900', bigFit.px, -3)
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    ctx.lineJoin = 'round'
+    let by = y + bigFit.px * 0.84
+    for (const line of bigFit.lines) {
+      // The outline first, carrying a hard shadow, so the whole shape casts
+      // it; then the colour on top with no shadow.
+      ctx.save()
+      ctx.lineWidth = Math.max(6, bigFit.px * 0.08)
+      ctx.strokeStyle = bigStroke
+      ctx.shadowColor = 'rgba(2,6,23,0.45)'
+      ctx.shadowBlur = 0
+      ctx.shadowOffsetX = 5
+      ctx.shadowOffsetY = 7
+      ctx.strokeText(line, cx, by)
+      ctx.restore()
+      ctx.fillStyle = bigFill
+      ctx.fillText(line, cx, by)
+      by += bigFit.px * 1.0
+    }
+    y += bigH
+  }
+  if (detailFit) {
+    setFont(ctx, '800', detailFit.px, 0)
+    ctx.fillStyle = ink
+    drawLines(ctx, detailFit.lines, cx, y + detailFit.px * 0.86, detailFit.px, 1.2, 'center')
+    y += detailH
+  }
+  if (hookFit) {
+    setFont(ctx, '700', hookFit.px, -0.5)
+    ctx.fillStyle = ink
+    drawLines(ctx, hookFit.lines, cx, y + hookFit.px * 0.86, hookFit.px, 1.14, 'center')
+    y += hookH
+  }
+  if (deck) {
+    setFont(ctx, '500', deck.px, 0)
+    ctx.fillStyle = soft
+    drawLines(ctx, deck.lines, cx, y + deck.px * 0.9, deck.px, 1.3, 'center')
+    y += deck.lines.length * deck.px * 1.3
+  }
+  if (proofFit) {
+    setFont(ctx, '600', proofFit.px, 0)
+    ctx.fillStyle = soft
+    drawLines(ctx, proofFit.lines, cx, bottom - (proofFit.lines.length - 1) * proofFit.px * 1.3 - proofFit.px * 0.25, proofFit.px, 1.3, 'center')
+  }
+  ctx.textAlign = 'left'
+  return { band: { top: wordsTop, bottom: contentBottom } }
+}
+
+// ---------------------------------------------------------------------------
 // before and after
 // ---------------------------------------------------------------------------
 
@@ -678,7 +872,7 @@ function renderAiConcept(ctx, size, content, assets) {
   return { band: { top: fit.y, bottom: fit.y + fit.h } }
 }
 
-export const LOOKS = { stack: renderStack, plate: renderPlate, split: renderSplit,
+export const LOOKS = { stack: renderStack, plate: renderPlate, wash: renderWash, split: renderSplit,
   before: renderBefore, ai: renderAiConcept }
 
 /** True when adCanvas should hand this layout to a look in this file. */

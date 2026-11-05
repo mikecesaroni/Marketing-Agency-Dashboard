@@ -39,7 +39,7 @@ export const TEMPLATE_LAYOUTS = [
 export const TEMPLATE_KEYS = TEMPLATE_LAYOUTS.map((t) => t.key)
 
 /** The photo looks (adLooks.js) a chat may name for an ad, beside the templates. */
-export const PHOTO_LOOK_KEYS = ['cover', 'stack', 'plate', 'split', 'before']
+export const PHOTO_LOOK_KEYS = ['cover', 'stack', 'plate', 'wash', 'split', 'before']
 
 /** True for a key the Studio can paint: a template or a photo look. */
 export function isLookKey(key) {

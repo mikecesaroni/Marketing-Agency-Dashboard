@@ -379,9 +379,12 @@ not get is a slot that renders empty. Notes on the ones that catch people out:
 === AD STUDIO TEMPLATES (pick one per static ad) ===
 Each ad is painted on one of these. Pick by the ad's words first, then by the
 season playbook's "best templates", and never the same one for two ads in one
-reply. The photo looks (cover, stack, plate, split, before) are for an ad built
-on the client's photo: stack for the owner's face with the stars, before for
-a real before-and-after pair. The templates:
+reply. The photo looks (cover, stack, plate, wash, split, before) are for an ad
+built on the client's photo: stack for the owner's face with the stars, wash
+for one loud offer (5% OFF, $89, FREE) on a real job photo (the photo up top,
+the lower part under a wash of the brand colour, the offer huge in the accent
+with a white outline, the logo in a white pill on the seam), before for a
+real before-and-after pair. The templates:
 ${templateMenu()}
 
 === WHAT I NEED FROM YOU ===

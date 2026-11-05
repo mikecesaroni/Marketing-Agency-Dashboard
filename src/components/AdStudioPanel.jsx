@@ -2298,6 +2298,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
               {LAYOUTS.find((l) => l.key === layout)?.hint}. Drag the photo on any artboard to choose what the
               crop keeps; the other two sizes follow the same spot.
               {layout === 'stack' && ' Wrap a word in asterisks (*Free* second opinion) to choose the giant word; otherwise a short first word is used.'}
+              {layout === 'wash' && ' The offer amount is the huge word (5% OFF, $89, FREE); with no amount the headline takes its place. The wash is the plate colour, the big word and the seam the accent.'}
             </p>
           </>
         )}
@@ -2490,7 +2491,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         </div>
         {/* The plate, split and AI looks already put the words on a panel, so
             the switch would be a lie there; it says so instead of doing nothing. */}
-        {['plate', 'split', 'ai'].includes(layout) || isTemplate(layout) ? (
+        {['plate', 'wash', 'split', 'ai'].includes(layout) || isTemplate(layout) ? (
           <span className="text-xs text-slate-400" data-hook-plate title="On this look the words already sit on a solid panel">
             Panel: built into this look
           </span>

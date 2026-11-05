@@ -19,10 +19,10 @@ import { pickTemplate } from './seasonPlaybook.js'
 // year on the season's template, proof on the owner's photo with the stars;
 // then another round of the same three ideas in other clothes. A batch reads
 // as a campaign rather than one template three times.
-export const BATCH_LOOKS = ['sun_deal', 'season_sale', 'stack', 'photo_sale', 'price_grid', 'plate']
+export const BATCH_LOOKS = ['sun_deal', 'season_sale', 'stack', 'wash', 'price_grid', 'plate']
 export const BATCH_SIZE = 3
 
-const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', split: 'Split panel', before: 'Before and after', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept',
+const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', wash: 'Brand wash', split: 'Split panel', before: 'Before and after', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept',
   ...Object.fromEntries(TEMPLATE_LAYOUTS.map((t) => [t.key, t.label])) }
 
 export function lookName(key) {
@@ -55,7 +55,7 @@ export function chooseLooks(sets, { phase, hasPhoto = false, pick = pickTemplate
     // The chat's own pick wins when it is a real key, fits the photos there
     // are, and nothing in the batch has it yet; the scorer is the safety net.
     const wanted = String(s.suggestedLayout || '').trim()
-    const fits = wanted && isLookKey(wanted) && !used.includes(wanted) && !TWO_PHOTO_TEMPLATES.includes(wanted) && !(['before'].includes(wanted)) && (hasPhoto || !(PHOTO_TEMPLATES.includes(wanted) || ['cover', 'stack', 'plate', 'split'].includes(wanted)))
+    const fits = wanted && isLookKey(wanted) && !used.includes(wanted) && !TWO_PHOTO_TEMPLATES.includes(wanted) && !(['before'].includes(wanted)) && (hasPhoto || !(PHOTO_TEMPLATES.includes(wanted) || ['cover', 'stack', 'plate', 'wash', 'split'].includes(wanted)))
     if (fits) layout = wanted
     else if (proof && hasPhoto && !used.includes('stack')) layout = 'stack'
     else layout = pick({ phase, content: s, hasPhoto, hasAfter: false, exclude: used }).key
