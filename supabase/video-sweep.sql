@@ -1,0 +1,42 @@
+-- Clips dropped into the CRM go to Meta on their own (2026-11-05).
+--
+-- "Make clips dropped in the CRM by the editor auto send to Meta so they are
+-- ready when we click publish, or if someone wants to do it manually."
+--
+-- The video-sweep function (supabase/functions/video-sweep/index.ts) sends
+-- every CRM upload with no registration in the client's current ad account
+-- to Meta, and asks Meta about every clip still transcoding until it is
+-- ready. Nothing new in the schema: it reads client_files and clients and
+-- writes ad_videos, the rows the publish page already polls. All it needs
+-- is a schedule.
+--
+-- Every two minutes, round the clock. A run with nothing to do is two
+-- reads; Meta is only called when a clip is waiting on it. The function is
+-- deployed with verify_jwt = true and the gateway accepts the project's anon
+-- key; a sweep does nothing a stranger could profit from.
+--
+-- Applied live on 2026-11-05 from the existing team-alerts job's command,
+-- so the key never had to be typed (see the second statement). To apply by
+-- hand, fill in the placeholders in the first.
+
+-- select cron.unschedule('video-sweep')
+--   where exists (select 1 from cron.job where jobname = 'video-sweep');
+-- select cron.schedule(
+--   'video-sweep',
+--   '*/2 * * * *',
+--   $$
+--   select net.http_post(
+--     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/video-sweep',
+--     headers := '{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>","apikey":"<ANON_KEY>"}'::jsonb,
+--     body    := '{"action":"sweep"}'::jsonb,
+--     timeout_milliseconds := 60000
+--   );
+--   $$
+-- );
+
+-- The same schedule, copied off a job that already carries the key:
+-- select cron.schedule(
+--   'video-sweep',
+--   '*/2 * * * *',
+--   replace(replace(command, '/team-digest', '/video-sweep'), '{"action":"alerts"}', '{"action":"sweep"}')
+-- ) from cron.job where jobname = 'team-alerts';

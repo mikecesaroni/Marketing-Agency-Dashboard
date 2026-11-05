@@ -6,6 +6,8 @@
 
 import {
   clipChecks,
+  clipMetaState,
+  clipMetaWords,
   clipVerdict,
   describeLaunch,
   dropState,
@@ -113,6 +115,12 @@ const wait = waitingClips({ registered: REGISTERED.filter((r) => r.client_id ===
 check('waiting: a published clip is not waiting', wait.some((w) => w.path === 'A/v/done.mp4'), false)
 check('waiting: a clip older than the last legacy video ad is not waiting', wait.some((w) => w.path === 'A/v/before.mp4'), false)
 check('waiting: a registered, unpublished, fresh upload is', wait.map((w) => [w.path, w.ready]), [['A/v/drive.mp4', false]])
+check('waiting: the clip says where it is with Meta', wait.map((w) => w.meta), ['processing'])
+check('waiting: an upload with no row is not in Meta yet', waitingClips({ files: [{ storage_path: 'n.mp4', file_name: 'n.mp4', date_uploaded: '2026-09-24T09:00:00Z' }], now: NOW }).map((w) => [w.ready, w.meta]), [[false, 'none']])
+check('waiting: a ready row with a cover frame is ready', waitingClips({ registered: [{ storage_path: 'r.mp4', file_name: 'r.mp4', meta_video_id: 'v', status: 'ready', thumb_url: 't', created_at: '2026-09-24T09:00:00Z' }], files: [{ storage_path: 'r.mp4', file_name: 'r.mp4', date_uploaded: '2026-09-24T09:00:00Z' }], now: NOW }).map((w) => [w.ready, w.meta]), [[true, 'ready']])
+// The state, from the ad_videos row the sweep writes.
+check('meta state: ready needs the cover frame, error is error, anything else is still processing, no row is none', [clipMetaState({ status: 'ready', thumb_url: 't' }), clipMetaState({ status: 'ready', thumb_url: '' }), clipMetaState({ status: 'error' }), clipMetaState({ status: 'processing' }), clipMetaState(null)], ['ready', 'processing', 'error', 'processing', 'none'])
+check('meta words: the board, Slack and the brief say the same thing', [clipMetaWords('ready'), clipMetaWords('processing'), clipMetaWords('error'), clipMetaWords('none'), clipMetaWords('none', false), clipMetaWords('ready', false)], ['in Meta, ready to publish', 'Meta is still processing it', 'Meta could not process it', 'not in Meta yet', 'no Meta account to send it to', 'in Meta, ready to publish'])
 check('waiting: a clip that only lives in the client\'s Drive is not a drop', wait.some((w) => w.path === 'drive:abc123'), false)
 const waitB = waitingClips({ files: FILES.filter((f) => f.client_id === 'B'), ads: ADS.filter((a) => a.client_id === 'B'), now: NOW })
 check('waiting: an unregistered upload counts, with who dropped it', waitB.map((w) => [w.name, w.by]), [['new.mp4', 'Sam']])

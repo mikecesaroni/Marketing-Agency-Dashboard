@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ago } from '../lib/contentHub'
-import { DROP_STATES, dropStats, personName } from '../lib/videoLaunch'
+import { DROP_STATES, clipMetaWords, dropStats, personName } from '../lib/videoLaunch'
 import { isVideoFile, validateVideo } from '../lib/adVideos'
 import { dismissClips, downloadUrl, setDropNote, uploadVideo } from '../lib/adVideoStore'
 import { registerAdVideo } from '../lib/metaPublish'
@@ -43,6 +43,30 @@ function StatePill({ state }) {
   return (
     <span className={`inline-flex whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ${TONES[s.tone]}`}>
       {s.label}
+    </span>
+  )
+}
+
+// Where the clip is with Meta, beside its download link. It gets there on
+// its own (the video-sweep function sends every drop and marks it ready, every
+// two minutes), so "still processing" is a minute or two, not a to-do.
+const META_TONES = {
+  ready: 'text-green-700',
+  processing: 'text-slate-500',
+  error: 'text-red-700',
+  none: 'text-slate-500',
+}
+
+function MetaMark({ clip }) {
+  const meta = clip.meta || (clip.ready ? 'ready' : 'none')
+  const words = clipMetaWords(meta, true)
+  return (
+    <span
+      className={`whitespace-nowrap ${META_TONES[meta] || META_TONES.none}`}
+      title={meta === 'ready' ? 'In the client’s Meta ad account: publish it here, or build the ad by hand in Ads Manager from the Media Library' : words}
+      data-clip-meta={meta}
+    >
+      {meta === 'ready' ? '✓ in Meta' : meta === 'processing' ? 'Meta is processing it…' : meta === 'error' ? 'Meta could not process it' : 'sending to Meta…'}
     </span>
   )
 }
@@ -100,16 +124,18 @@ function Row({ row, onDismiss, onNote }) {
                 needs it outside the CRM (a client's own posting, a second
                 cut, an archive). One link per new clip. */}
             {row.waiting.map((w) => (
-              <a
-                key={w.path}
-                href={downloadUrl(w.path, w.name)}
-                download={w.name}
-                title={`Download ${w.name}`}
-                className="rounded-md border border-violet-200 bg-white px-2 py-0.5 font-medium text-violet-800 hover:bg-violet-100"
-                data-download-clip={w.path}
-              >
-                ⬇ {row.waiting.length > 1 ? w.name : 'Download'}
-              </a>
+              <span key={w.path} className="inline-flex items-center gap-1.5">
+                <a
+                  href={downloadUrl(w.path, w.name)}
+                  download={w.name}
+                  title={`Download ${w.name}`}
+                  className="rounded-md border border-violet-200 bg-white px-2 py-0.5 font-medium text-violet-800 hover:bg-violet-100"
+                  data-download-clip={w.path}
+                >
+                  ⬇ {row.waiting.length > 1 ? w.name : 'Download'}
+                </a>
+                <MetaMark clip={w} />
+              </span>
             ))}
             {onNote && (
               <button
@@ -263,7 +289,7 @@ function DropIn({ clients, onDropped }) {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-900">Drop a finished clip</p>
           <p className="text-[11px] text-slate-500">
-            For editors: pick the client, drop the .mp4 or .mov. It goes to Meta and shows up below as ready to publish.{' '}
+            For editors: pick the client, drop the .mp4 or .mov. It goes to the client’s Meta ad account on its own and shows up below as ready to publish, here or by hand in Ads Manager.{' '}
             <span data-drop-as>
               {!me ? (
                 'It will ask your name once.'
@@ -333,6 +359,7 @@ function DropIn({ clients, onDropped }) {
           <span>
             ✓ {done.clips.length === 1 ? done.clips[0].file_name : `${done.clips.length} clips`} dropped in for {done.client.name}
             {personName(me) ? ` by ${me}` : ''}.{done.note ? ` Note: “${done.note}”.` : ''}
+            {done.client.meta_ad_account_id ? ' On the way to their Meta ad account; ready in a minute or two.' : ''}
           </span>
           {done.clips.map((c) => (
             <a key={c.storage_path} href={downloadUrl(c.storage_path, c.file_name)} download={c.file_name} className="text-violet-800 underline hover:text-violet-950" title={`Download ${c.file_name}`}>

@@ -162,7 +162,8 @@ export function waitingClips({ registered = [], files = [], ads = [], now = new 
     if (r.drop_dismissed_at || f.drop_dismissed_at) continue
     const at = f?.date_uploaded || r.created_at
     if (!fresh(at)) continue
-    out.push({ path: r.storage_path, name: r.file_name || f?.file_name || r.storage_path, at, by: personName(f?.uploaded_by), note: dropNote(f?.drop_note), ready: r.status === 'ready' && Boolean(r.thumb_url) })
+    const meta = clipMetaState(r)
+    out.push({ path: r.storage_path, name: r.file_name || f?.file_name || r.storage_path, at, by: personName(f?.uploaded_by), note: dropNote(f?.drop_note), ready: meta === 'ready', meta })
   }
   for (const f of files) {
     if (!f?.storage_path || seen.has(f.storage_path)) continue
@@ -170,9 +171,41 @@ export function waitingClips({ registered = [], files = [], ads = [], now = new 
     seen.add(f.storage_path)
     if (f.drop_dismissed_at) continue
     if (!fresh(f.date_uploaded)) continue
-    out.push({ path: f.storage_path, name: f.file_name || f.storage_path, at: f.date_uploaded, by: personName(f.uploaded_by), note: dropNote(f.drop_note), ready: false })
+    out.push({ path: f.storage_path, name: f.file_name || f.storage_path, at: f.date_uploaded, by: personName(f.uploaded_by), note: dropNote(f.drop_note), ready: false, meta: 'none' })
   }
   return out.sort((a, b) => (a.at < b.at ? 1 : -1))
+}
+
+/**
+ * Where a dropped clip is with Meta, from its ad_videos row:
+ *
+ *   ready       transcoded, with a cover frame: an ad can be built from it
+ *   processing  Meta has it and is still working on it
+ *   error       Meta refused it or could not process it
+ *   none        no row: never sent (no ad account yet, or the send failed)
+ *
+ * The video-sweep function (supabase/functions/video-sweep/index.ts) moves a
+ * clip from none to processing to ready on its own, every two minutes, so
+ * none and processing are short states unless something is wrong.
+ */
+export function clipMetaState(row) {
+  if (!row) return 'none'
+  if (row.status === 'ready' && row.thumb_url) return 'ready'
+  if (row.status === 'error') return 'error'
+  return 'processing'
+}
+
+/**
+ * The words for that state, for the board, Slack and the brief. `hasMeta`
+ * false means the clip has nowhere to go yet, which is the one thing worth
+ * saying over "not in Meta yet".
+ */
+export function clipMetaWords(meta, hasMeta = true) {
+  if (meta === 'ready') return 'in Meta, ready to publish'
+  if (!hasMeta) return 'no Meta account to send it to'
+  if (meta === 'error') return 'Meta could not process it'
+  if (meta === 'processing') return 'Meta is still processing it'
+  return 'not in Meta yet'
 }
 
 /**

@@ -37,6 +37,7 @@ versions) and `docs/content.md` (the Content tab).
 | Moment                         | What happens without a click                                   |
 |--------------------------------|----------------------------------------------------------------|
 | clip dropped (board or publish)| uploaded, registered with Meta, transcode started, board row turns purple |
+| every two minutes              | any drop not yet in the client's ad account is sent; any clip Meta is still transcoding is checked and marked ready (`video-sweep`) |
 | "click to publish"             | Publish opens with the clip ticked, ids and name filled in      |
 | clip previewed                 | length and shape measured and saved for the clip checks         |
 | clip ticked                    | transcribed (Deepgram, once, cached on the row)                 |
@@ -45,6 +46,47 @@ versions) and `docs/content.md` (the Content tab).
 | clip ticked with no name typed | named `WC_Client · day · file`                                  |
 | publish succeeds               | destination remembered per client for "same place as last time" |
 | publish succeeds               | `published_ads.video_id` recorded so the weekly board can count |
+
+## Dropped clips reach Meta on their own (2026-11-05)
+
+"Make clips dropped in the CRM by the editor auto send to Meta so they are
+ready when we click publish, or if someone wants to do it manually."
+
+The drop zone sends a clip to Meta from the editor's browser the moment it
+lands, and that was all: a send that did not happen (the tab closed, the
+call failed, no ad account that day) was never retried, and nothing asked
+Meta whether it had finished, so a row stayed "processing" until somebody
+opened the publish page and its picker polled. The board and Slack read
+"not in Meta yet" for clips Meta was already transcoding.
+
+Now the `video-sweep` function (`supabase/functions/video-sweep/index.ts`,
+scheduled every two minutes by `supabase/video-sweep.sql`) does both:
+
+- **Send.** Every CRM upload from the last 30 days with no registration in
+  the client's current ad account is handed to Meta by URL, the same
+  `/advideos` call the publish page makes. A drop for a client with no ad
+  account yet goes the moment the account is connected. A send Meta refused
+  is recorded on the row ("Meta would not take it: ...") and tried again six
+  hours later; "Send to Meta" on the publish page retries it at once.
+- **Poll.** Every clip still processing (or ready with no cover frame) is
+  asked about, and the row gets Meta's answer: ready and the preferred
+  thumbnail, or the error. The picker reads the same row.
+
+Not sent: videos that only sit in the client's Drive folder (raw footage
+lives there; a Drive clip goes to Meta when picked on the publish page), and
+drops waved off as "published manually" (the account has the file already,
+by hand).
+
+Once a clip is in the account it is in Ads Manager's Media Library under
+"<Client> — <file name>", so an ad can be built from it by hand there as well
+as here. The board shows where each new clip is beside its download link
+("✓ in Meta", "Meta is processing it…", "sending to Meta…", "Meta could not
+process it"), and the Slack alert and the morning brief say the same
+("Paradise Clips 5-1.mp4 from Kyle · in Meta, ready to publish"). The alert
+gives a clip ten minutes to get there before posting, so the one line it
+gets says where it is, not where it was. Pinned by
+`scripts/check-video-sweep.mjs`, `scripts/check-video-launch.mjs` and
+`scripts/check-team-brief.mjs`.
 
 ## Clip checks
 

@@ -27,7 +27,28 @@
 import { TIER_BY_NUMBER } from './clientTiers.js'
 import { daysBetween, longDay, shortDay } from './dates.js'
 import { dashedId } from './googleAdsId.js'
+import { clipMetaWords } from './videoLaunch.js'
 import { money, weeklyLine } from './weeklyStatus.js'
+
+/**
+ * A dropped clip's line: the file, who dropped it, where it is with Meta,
+ * the editor's note. "in Meta, ready to publish" is where the sweep
+ * (supabase/functions/video-sweep/index.ts) brings every clip on its own; a
+ * row from before the state existed carries only `ready`.
+ */
+function clipLabel(w, hasMeta = true) {
+  const meta = w.meta || (w.ready ? 'ready' : 'none')
+  return `${w.name}${w.by ? ` from ${w.by}` : ''} · ${clipMetaWords(meta, hasMeta)}${w.note ? ` · “${w.note}”` : ''}`
+}
+
+/**
+ * How long a dropped clip is given to reach Meta before the channel hears
+ * of it. The sweep sends it and marks it ready inside this, so the one
+ * line posted (an alert is never repeated) can say "ready to publish"
+ * rather than "not in Meta yet" for ever. A clip Meta refused, or one with
+ * no account to go to, posts at once.
+ */
+export const CLIP_HOLD_MS = 10 * 60000
 
 /**
  * The flags that get their own post the moment they appear. Clips are keyed
@@ -265,7 +286,7 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       }
     }
     for (const w of r.drop?.waiting || []) {
-      clips.push({ client, key: 'clip', label: `${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}${w.note ? ` · “${w.note}”` : ''}`, href: '/content', at: w.at })
+      clips.push({ client, key: 'clip', label: clipLabel(w, r.drop?.hasMeta !== false), href: '/content', at: w.at })
     }
     // Live on any channel: Meta, Google Search or Local Services.
     const live = Boolean(r.result?.launched ?? r.client.meta_ads_active) && !r.client.paused_at
@@ -520,7 +541,7 @@ ${weekly}
  * thing. The immediate flags by their key; each waiting clip by its path, so
  * a second drop is a second post and a published one goes quiet.
  */
-export function alertKeys(statusRows = []) {
+export function alertKeys(statusRows = [], { now = new Date() } = {}) {
   const out = []
   for (const r of statusRows.filter(active)) {
     const client = pick(r.client)
@@ -528,10 +549,15 @@ export function alertKeys(statusRows = []) {
       if (!isImmediate(f)) continue
       out.push({ key: `${client.id}:${f.key}`, client, kind: f.key, label: f.label, detail: f.key === 'account' ? f.detail || '' : '', href: f.href || `/client/${client.id}` })
     }
+    const hasMeta = r.drop?.hasMeta !== false
     for (const w of r.drop?.waiting || []) {
+      // Not yet in Meta and dropped minutes ago: the sweep is on it. Wait,
+      // so the line says where the clip is rather than where it was.
+      const meta = w.meta || (w.ready ? 'ready' : 'none')
+      if (hasMeta && meta !== 'ready' && meta !== 'error' && now - new Date(w.at) < CLIP_HOLD_MS) continue
       // The editor's note rides along: it is the one thing the publisher
       // needs that the file name cannot say ("post these a day apart").
-      out.push({ key: `${client.id}:clip:${w.path}`, client, kind: 'clip', label: `New edit dropped in: ${w.name}${w.by ? ` from ${w.by}` : ''}${w.ready ? '' : ', not in Meta yet'}${w.note ? ` · “${w.note}”` : ''}`, detail: '', href: '/content' })
+      out.push({ key: `${client.id}:clip:${w.path}`, client, kind: 'clip', label: `New edit dropped in: ${clipLabel(w, hasMeta)}`, detail: '', href: '/content' })
     }
   }
   return out

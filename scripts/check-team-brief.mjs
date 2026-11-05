@@ -68,8 +68,8 @@ check('Meta and Google live with Local Services still open: onboarded, not on th
 check('...and running clean as before', buildBrief({ statusRows: [dyn(false, true)], day: TODAY }).green.map((g) => g.client.name), ['Dynamic Flow'])
 check('Google still to publish on the Whole Chain and up keeps them in setup', buildBrief({ statusRows: [dyn(false, false)], day: TODAY }).onboarding.map((o) => [o.client.name, o.move]), [['Dynamic Flow', 'build and publish the Google campaign']])
 check('blue flags are not attention', brief.attention.some((a) => a.key === 'kpis'), false)
-check("every waiting clip, newest first, naming the editor, whether it is in Meta and the editor's note", brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle', 'clip1.mp4, not in Meta yet · “post a day after clip2”'])
-check("a clip alert carries the editor's note too", alertKeys(rows).find((k) => k.key === 'd:clip:d/clip1.mp4')?.label, 'New edit dropped in: clip1.mp4, not in Meta yet · “post a day after clip2”')
+check("every waiting clip, newest first, naming the editor, where it is with Meta and the editor's note", brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle · in Meta, ready to publish', 'clip1.mp4 · not in Meta yet · “post a day after clip2”'])
+check("a clip alert carries the editor's note too", alertKeys(rows).find((k) => k.key === 'd:clip:d/clip1.mp4')?.label, 'New edit dropped in: clip1.mp4 · not in Meta yet · “post a day after clip2”')
 check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
 // Ads that started this week read as new, not as a zero.
 check('a client whose ads started this week is running clean as "new"', briefSections(buildBrief({ statusRows: [mk('n', 'New Co', { leads: { leads7: 0, leads14: 0, spend7: 10, spend14: 10, spendDays14: 3 } })], day: TODAY })).find((s) => s.key === 'green').lines[0].text, 'New Co 0 (new this week)')
@@ -196,7 +196,20 @@ check('html on Monday too', briefHtml(monday).includes('Weekly status · Oct 14 
 const noisy = [...rows, mk('g', 'Gaps LLC', { flags: [{ key: 'no-leads', severity: 'red', label: 'No leads for 9 days' }, { key: 'payment', severity: 'red', label: 'Card failing' }, { key: 'video-stale', severity: 'red', label: 'No new video or ad in 12 days' }], needsContact: true })]
 const keys = alertKeys(noisy)
 check('alert keys: ads off, a card failing and ten days stale by key, each clip by its path; no leads, chases and blue flags wait for the morning', keys.map((k) => k.key), ['b:ads-off', 'd:clip:d/clip2.mp4', 'd:clip:d/clip1.mp4', 'g:payment', 'g:video-stale'])
-check('a clip alert says who dropped it and whether it is in Meta', keys.find((k) => k.key === 'd:clip:d/clip2.mp4'), { key: 'd:clip:d/clip2.mp4', client: { id: 'd', name: 'Drain Kings' }, kind: 'clip', label: 'New edit dropped in: clip2.mp4 from Kyle', detail: '', href: '/content' })
+check('a clip alert says who dropped it and where it is with Meta', keys.find((k) => k.key === 'd:clip:d/clip2.mp4'), { key: 'd:clip:d/clip2.mp4', client: { id: 'd', name: 'Drain Kings' }, kind: 'clip', label: 'New edit dropped in: clip2.mp4 from Kyle · in Meta, ready to publish', detail: '', href: '/content' })
+
+// A clip is given ten minutes to reach Meta (the sweep sends it and marks it
+// ready inside that), so the one line it gets says where it is.
+const justNow = new Date('2026-10-20T12:00:00Z')
+const dropAt = (minutesAgo, over = {}) => mk('d', 'Drain Kings', { drop: { hasMeta: true, state: 'ready', waiting: [{ path: 'd/new.mp4', name: 'new.mp4', at: new Date(justNow - minutesAgo * 60000).toISOString(), by: 'Kyle', ready: false, meta: 'processing', ...over }] } })
+const clipKeys = (row, now = justNow) => alertKeys([row], { now }).map((k) => k.label)
+check('three minutes in and still processing: the channel waits', clipKeys(dropAt(3)), [])
+check('three minutes in and not sent yet: it waits for the sweep too', clipKeys(dropAt(3, { meta: 'none' })), [])
+check('eleven minutes in and still processing: posted, saying so', clipKeys(dropAt(11)), ['New edit dropped in: new.mp4 from Kyle · Meta is still processing it'])
+check('ready at one minute: posted at once', clipKeys(dropAt(1, { ready: true, meta: 'ready' })), ['New edit dropped in: new.mp4 from Kyle · in Meta, ready to publish'])
+check('refused by Meta: posted at once, so somebody looks', clipKeys(dropAt(1, { meta: 'error' })), ['New edit dropped in: new.mp4 from Kyle · Meta could not process it'])
+check('no ad account to send it to: posted at once, saying that', alertKeys([mk('d', 'Drain Kings', { drop: { hasMeta: false, state: 'never', waiting: [{ path: 'd/new.mp4', name: 'new.mp4', at: justNow.toISOString(), by: 'Kyle', ready: false, meta: 'none' }] } })], { now: justNow }).map((k) => k.label), ['New edit dropped in: new.mp4 from Kyle · no Meta account to send it to'])
+check('a row from before the state existed reads off ready alone', clipKeys(dropAt(30, { meta: undefined })), ['New edit dropped in: new.mp4 from Kyle · not in Meta yet'])
 check('only the account flag keeps its detail (the balance owed is the instruction)', [keys.find((k) => k.kind === 'ads-off').detail, alertKeys([mk('h', 'H', { flags: [{ key: 'account', severity: 'red', label: 'Ad account disabled', detail: '$3.04 outstanding on the account.' }] })])[0].detail], ['', '$3.04 outstanding on the account.'])
 const open = [
   { key: 'b:ads-off', kind: 'ads-off', label: 'Meta ads stopped: 1 day without spend', client_id: 'b', client_name: 'Belk Plumbing' },
@@ -217,8 +230,8 @@ const quiet = diffAlerts(alertKeys(pausedAcme), open, { live: liveClientIds(paus
 check('a paused client\'s open alerts close without "ads delivering again"', [quiet.gone.map((g) => g.key), quiet.cleared.map((c) => c.key)], [['a:ads-off', 'a:video-stale', 'd:clip:d/old.mp4'], []])
 check('...while a live client\'s ads coming back is still said', diffAlerts(keys, open, { live: liveClientIds(noisy) }).cleared.map((c) => c.key), ['a:ads-off'])
 const post = alertsSlack(diff, { appUrl: 'https://crm.example' })
-check('the alerts post: new then cleared, each client a link, one line each', [post.blocks.length, post.blocks[0].text.text, post.blocks[1].text.text], [2, '*New (3)*\n🎬 <https://crm.example/content|Drain Kings>: New edit dropped in: clip2.mp4 from Kyle\n💳 <https://crm.example/client/g|Gaps LLC>: Card failing\n📹 <https://crm.example/client/g|Gaps LLC>: No new video or ad in 12 days', '*Cleared*\n✅ <https://crm.example/client/a|Acme Heating>: ads delivering again (was "Meta ads stopped: 4 days without spend")'])
-check('the notification line names the first few', post.text, 'Drain Kings: New edit dropped in: clip2.mp4 from Kyle · Gaps LLC: Card failing · Gaps LLC: No new video or ad in 12 days')
+check('the alerts post: new then cleared, each client a link, one line each', [post.blocks.length, post.blocks[0].text.text, post.blocks[1].text.text], [2, '*New (3)*\n🎬 <https://crm.example/content|Drain Kings>: New edit dropped in: clip2.mp4 from Kyle · in Meta, ready to publish\n💳 <https://crm.example/client/g|Gaps LLC>: Card failing\n📹 <https://crm.example/client/g|Gaps LLC>: No new video or ad in 12 days', '*Cleared*\n✅ <https://crm.example/client/a|Acme Heating>: ads delivering again (was "Meta ads stopped: 4 days without spend")'])
+check('the notification line names the first few', post.text, 'Drain Kings: New edit dropped in: clip2.mp4 from Kyle · in Meta, ready to publish · Gaps LLC: Card failing · Gaps LLC: No new video or ad in 12 days')
 check('nothing new, nothing cleared: nothing posted', alertsSlack({ fresh: [], cleared: [] }), null)
 check('only cleared still posts', alertsSlack({ fresh: [], cleared: open.slice(1, 2) }).text, 'Acme Heating: ads delivering again')
 
