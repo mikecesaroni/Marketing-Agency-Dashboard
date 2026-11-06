@@ -135,6 +135,25 @@ export function adsFor(ads, days, limit = 10) {
  * average cost per lead for the range. Every verdict carries a label and a
  * sentence, never a colour on its own.
  */
+/**
+ * A landing page address the way a person reads it on a card: no scheme,
+ * no www, no tracking query, no trailing slash. "belknapheating.com/fall"
+ * for https://www.belknapheating.com/fall/?utm_source=fb. Anything that is
+ * not a web address comes back empty.
+ */
+export function landingLabel(url) {
+  const s = String(url || '').trim()
+  if (!/^https?:\/\//i.test(s)) return ''
+  try {
+    const u = new URL(s)
+    const host = u.hostname.replace(/^www\./i, '')
+    const path = u.pathname.replace(/\/+$/, '')
+    return `${host}${path}`.slice(0, 80)
+  } catch {
+    return ''
+  }
+}
+
 export function adVerdict(ad, avgCpl) {
   const cpl = num(avgCpl)
   // Within a fifth of the average counts as working: cost per lead moves

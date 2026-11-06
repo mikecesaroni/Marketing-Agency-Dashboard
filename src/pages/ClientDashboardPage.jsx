@@ -6,7 +6,7 @@ import PortalSidebar from '../components/PortalSidebar'
 import { ChannelDot, DTd, DTh, DTr, Delta, Eyebrow, MixBar, Panel, Pill, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
 import { cn } from '../components/ui/cn'
 import { CHANNELS, channelMix, compactMoney, rangeLabel } from '../lib/channels'
-import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailySeries, guideFor, latestReport, lsaFor, money, pctChange, perDay, previewFrame, returnStory, sumDays, windowFor } from '../lib/clientDashboard'
+import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailySeries, guideFor, landingLabel, latestReport, lsaFor, money, pctChange, perDay, previewFrame, returnStory, sumDays, windowFor } from '../lib/clientDashboard'
 import { portalPath } from '../lib/clientPortal'
 import { downloadName, mergeClientVideos } from '../lib/clientVideos'
 import { downloadUrl, loadClientVideos } from '../lib/clientVideoStore'
@@ -194,6 +194,20 @@ function AdCard({ ad, creative, ready, verdict, onOpen, link }) {
             </span>
           )}
         </p>
+        {/* Where the ad sends people: the landing page, as a link, when it
+            is a landing page ad; an instant-form ad says the form opens
+            inside Facebook instead. Read off the creative at the moment
+            the page opens, like the picture. */}
+        {creative?.landing && landingLabel(creative.landing) && (
+          <a href={creative.landing} target="_blank" rel="noreferrer" title={creative.landing} className="mt-1 block truncate text-[11px] text-sky-300 hover:underline" data-ad-landing={creative.landing}>
+            Goes to {landingLabel(creative.landing)} ↗
+          </a>
+        )}
+        {creative?.form && (
+          <p className="mt-1 text-[11px] text-slate-500" data-ad-form>
+            Form opens inside Facebook, no landing page
+          </p>
+        )}
         <div className="mt-3 grid grid-cols-4 gap-1">
           <MiniStat label="Leads" value={fmtLeads(ad.leads)} />
           <MiniStat label="Spend" value={money(ad.spend)} />
@@ -747,7 +761,14 @@ export default function ClientDashboardPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={() => setLightbox(null)} role="dialog" aria-modal="true" aria-label={lightbox.ad.name} data-lightbox>
           <div className="max-h-full w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-200">
-              <span className="min-w-0 break-words font-semibold">{lightbox.ad.name}</span>
+              <span className="min-w-0 break-words font-semibold">
+                {lightbox.ad.name}
+                {lightbox.creative?.landing && landingLabel(lightbox.creative.landing) && (
+                  <a href={lightbox.creative.landing} target="_blank" rel="noreferrer" className="ml-2 font-normal text-sky-300 hover:underline" data-lightbox-landing>
+                    Goes to {landingLabel(lightbox.creative.landing)} ↗
+                  </a>
+                )}
+              </span>
               <div className="flex flex-shrink-0 items-center gap-2">
                 <VideoLink link={videoLink(videos.get(String(lightbox.ad.key)), lightbox.creative)} />
                 <button type="button" onClick={() => setLightbox(null)} className="min-h-[44px] rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">

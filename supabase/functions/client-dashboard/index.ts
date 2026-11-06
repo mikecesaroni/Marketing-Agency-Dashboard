@@ -17,7 +17,13 @@
 //
 // Body:  { token }
 // Reply: { creatives: [{ ad_id, kind: 'image' | 'video' | 'unknown',
-//                        image, thumb, video, video_id }], problems: [] }
+//                        image, thumb, video, video_id,
+//                        landing, form }], problems: [] }
+//         `landing` is the page the ad sends people to (a link ad's link,
+//         the button's link on a video ad, the website_url of a dynamic
+//         creative), so the dashboard can show which landing page an ad
+//         is using; null for an instant-form ad, which says so with
+//         `form: true` (the form opens inside Facebook, there is no page).
 //
 // Body:  { token, action: 'preview', ad_id }
 // Reply: { ad_id, iframe }   Meta's own rendered preview of one ad (an
@@ -45,6 +51,10 @@ type Creative = {
   thumb: string | null
   video: string | null
   video_id: string | null
+  // The landing page the ad sends people to, when it is a link ad; an
+  // instant-form ad has none and says so.
+  landing: string | null
+  form: boolean
   // Internal: the ad image's hash when Meta gave no URL, resolved below.
   image_hash?: string | null
 }
@@ -111,10 +121,43 @@ function isoDaysAgo(n: number) {
 // asked for too and looked up on the account afterwards. The thumbnail is
 // asked for at 1080px: Meta renders one for every creative, video posters
 // included, so there is always a picture to show.
+//
+// Where the ad SENDS people is asked for too ("add in the landing page the
+// ads are using in the KPI dash"): a link ad's link, the button on a video
+// ad (its call_to_action carries the link, or the instant form's id), and
+// a dynamic creative's link_urls and call_to_actions. The structs are asked
+// for whole rather than by subfield.
 const CREATIVE_FIELDS =
   'id,creative.thumbnail_width(1080).thumbnail_height(1080){id,thumbnail_url,image_url,image_hash,video_id,' +
-  'object_story_spec{video_data{video_id,image_url,image_hash},link_data{picture,image_hash}},' +
-  'asset_feed_spec{videos{video_id,thumbnail_url},images{url,hash}}}'
+  'object_story_spec{video_data{video_id,image_url,image_hash,call_to_action},link_data{picture,image_hash,link,call_to_action}},' +
+  'asset_feed_spec{videos{video_id,thumbnail_url},images{url,hash},link_urls,call_to_actions}}'
+
+// A web address people can be sent to; Meta also writes form ids and
+// Facebook-internal links into these slots, which are not a landing page.
+function webUrl(v: unknown): string | null {
+  const s = String(v || '').trim()
+  if (!/^https?:\/\/[^\s]+$/i.test(s)) return null
+  if (/^https?:\/\/(www\.|m\.|l\.)?(facebook|fb|instagram|messenger)\.(com|me)\b/i.test(s)) return null
+  return s
+}
+
+/** The page a creative sends people to, and whether the button opens an instant form instead. */
+function destination(c: any): { landing: string | null; form: boolean } {
+  const linkData = c?.object_story_spec?.link_data
+  const videoData = c?.object_story_spec?.video_data
+  const feed = c?.asset_feed_spec
+  const ctas = [linkData?.call_to_action, videoData?.call_to_action, ...(Array.isArray(feed?.call_to_actions) ? feed.call_to_actions : [])]
+  const form = ctas.some((cta) => cta?.value?.lead_gen_form_id)
+  if (form) return { landing: null, form: true }
+  const landing =
+    webUrl(linkData?.link) ||
+    webUrl(linkData?.call_to_action?.value?.link) ||
+    webUrl(videoData?.call_to_action?.value?.link) ||
+    webUrl((Array.isArray(feed?.link_urls) ? feed.link_urls : []).map((l: any) => l?.website_url).find(Boolean)) ||
+    webUrl(ctas.map((cta) => cta?.value?.link).find(Boolean)) ||
+    null
+  return { landing, form: false }
+}
 
 function fromAd(id: string, ad: any): Creative | null {
   const c = ad?.creative
@@ -142,6 +185,7 @@ function fromAd(id: string, ad: any): Creative | null {
     thumb: c.thumbnail_url || null,
     video: null,
     video_id: videoId ? String(videoId) : null,
+    ...destination(c),
     image_hash: !videoId && !c.image_url && hash ? String(hash) : null,
   }
 }

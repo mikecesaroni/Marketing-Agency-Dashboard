@@ -26,7 +26,17 @@ owner needs, with no login and no agency chrome.
   (`docs/client-videos.md`). Pictures and videos come
   from Meta at the moment the page opens, through the `client-dashboard`
   function, and are never stored, because Meta's links expire. Google
-  Search ads are words, so they show no picture.
+  Search ads are words, so they show no picture. Since 2026-11-06 ("add in
+  the landing page the ads are using in the KPI dash if the ads are landing
+  page ads") a landing page ad's card and its full-size view carry "Goes to
+  belknapheating.com/fall-tune-up ↗", the page the ad sends people to, as
+  a link in a new tab: read off the creative with the picture (a link ad's
+  link, the button on a video ad, a dynamic creative's link_urls), shown as
+  host and path with no tracking query (`landingLabel` in
+  `src/lib/clientDashboard.js`). An instant-form ad has no page and says
+  "Form opens inside Facebook, no landing page"; a Google Search ad says
+  nothing. Facebook-internal links (a Message button) are not a landing
+  page and are left out.
 - **The number that matters most**: dollars back per dollar spent, from
   the weeks the client answered the weekly report, with a table of those
   weeks. Before any answer: the argument for return over cost per lead,

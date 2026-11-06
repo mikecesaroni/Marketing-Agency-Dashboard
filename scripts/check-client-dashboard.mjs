@@ -13,6 +13,7 @@ import {
   dailySeries,
   dashboardLink,
   guideFor,
+  landingLabel,
   latestReport,
   lsaFor,
   mondayOf,
@@ -34,6 +35,20 @@ const check = (name, got, want) => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`)
   if (!ok) console.log(`        want ${JSON.stringify(want)}\n        got  ${JSON.stringify(got)}`)
 }
+
+// ------------------------------------------------ the landing page on a card
+// "Add in the landing page the ads are using in the KPI dash if the ads are
+// landing page ads." The function reads where each creative sends people;
+// the card shows it as a link, the way a person reads an address.
+check('a landing page reads as host and path, no scheme, www, query or trailing slash', landingLabel('https://www.belknapheating.com/fall-tune-up/?utm_source=fb&utm_medium=paid'), 'belknapheating.com/fall-tune-up')
+check('a bare site is just the host', landingLabel('http://belknapheating.com'), 'belknapheating.com')
+check('a form id, a blank, a non-address: nothing to show', [landingLabel('1234567890'), landingLabel(''), landingLabel('mailto:x@y.z'), landingLabel(null)], ['', '', '', ''])
+check('a long address is cut to fit a card', landingLabel(`https://example.com/${'a'.repeat(200)}`).length, 80)
+const dashFn = readFileSync(new URL('../supabase/functions/client-dashboard/index.ts', import.meta.url), 'utf8')
+check('the function asks Meta where each creative sends people: the link, the button, the dynamic link_urls', [dashFn.includes('link_data{picture,image_hash,link,call_to_action}'), dashFn.includes('video_data{video_id,image_url,image_hash,call_to_action}'), dashFn.includes('link_urls,call_to_actions')], [true, true, true])
+check('an instant form is a form, not a landing page; Facebook-internal links are not one either', [dashFn.includes('lead_gen_form_id'), dashFn.includes("return { landing: null, form: true }"), /facebook\|fb\|instagram\|messenger/.test(dashFn)], [true, true, true])
+const dashPage = readFileSync(new URL('../src/pages/ClientDashboardPage.jsx', import.meta.url), 'utf8')
+check('the card links the landing page in a new tab and says when the form is inside Facebook instead', [dashPage.includes('data-ad-landing={creative.landing}'), dashPage.includes('Goes to {landingLabel(creative.landing)}'), dashPage.includes('Form opens inside Facebook, no landing page'), dashPage.includes('data-lightbox-landing')], [true, true, true, true])
 
 // --------------------------------------------------------------- the ranges
 check('three ranges', RANGES.map((r) => r.value), [7, 30, 90])
