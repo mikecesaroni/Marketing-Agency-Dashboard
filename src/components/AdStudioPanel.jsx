@@ -22,11 +22,12 @@ import { aiArtForAd, aiArtUrl, listAiArt } from '../lib/aiArt'
 import { templateArtBitmaps } from '../lib/templateArt'
 import { listUnitPhotos, loadUnitPhotoBitmaps } from '../lib/unitPhotos'
 import TemplateGallery from './TemplateGallery'
+import LookPicker from './LookPicker'
 import SeasonPlaybook from './SeasonPlaybook'
 import { bestTemplates, phaseOf, pickTemplate } from '../lib/seasonPlaybook'
 import { findBeforeAfterPairs } from '../lib/beforeAfterStore'
 import { auditLine } from '../lib/adAudit'
-import { CUTOUTS, TEMPLATE_LAYOUTS, THEME_LAYOUTS, isTemplate, kickerFor, themeFor } from '../lib/adTemplateMeta'
+import { CUTOUTS, TEMPLATE_LAYOUTS, THEME_LAYOUTS, isLookKey, isTemplate, kickerFor, themeFor } from '../lib/adTemplateMeta'
 import { stockPath } from '../lib/stockLibrary'
 import { prepareLogo } from '../lib/logoCutout'
 import { resolveImageSrc } from '../lib/driveAssets'
@@ -34,7 +35,7 @@ import { heicToJpegBlob, isHeic, jpegName, jpegPath, toUploadable } from '../lib
 import { forgetBatchDraft, loadBatchDraft, makeAdBatch, saveBatchDraft } from '../lib/adBatchStore'
 import { looseMatch } from '../lib/helpActions'
 import { useHelpActions } from '../lib/useHelpActions'
-import { BATCH_SIZE, batchReady, lookName, setTitle, snapshotSet } from '../lib/adBatch'
+import { BATCH_SIZE, batchReady, lookName, planLabel, setTitle, snapshotSet, templatesFor } from '../lib/adBatch'
 import { adFileName, saveBlob, zipAdSizes, zipFileName } from '../lib/adZip'
 import {
   DEFAULT_ACCENT,
@@ -631,13 +632,22 @@ function proofFromIntake(intake) {
   return count ? `\u2605 ${rating} on Google \u00b7 ${count} reviews` : `\u2605 ${rating} on Google`
 }
 
-export default function AdStudioPanel({ client, intake, seed, initialTab, initialVideo, onClose, onBack, backLabel, make = 0, ads = [] }) {
+export default function AdStudioPanel({ client, intake, seed, initialTab, initialVideo, onClose, onBack, backLabel, make = 0, makeTemplates = [], ads = [] }) {
   const [files, setFiles] = useState([])
-  // "Make 3 ads" from the Content tab: the chat writes three creative sets,
-  // the Studio shows them one at a time with a strip to switch, and one click
-  // saves all three. `sets` carry every edit made on them; `active` is the one
+  // "Make ads" from the Content tab: the chat writes the creative sets, the
+  // Studio shows them one at a time with a strip to switch, and one click
+  // saves them all. `sets` carry every edit made on them; `active` is the one
   // on the artboards; the active set is what the Design tab is seeded with.
+  // `makeTemplates` is the plan from the template picker: the look of each
+  // ad, in order (the same key N times is N ads on it); empty, the chat picks.
   const [batch, setBatch] = useState(() => (make ? { status: 'working', sets: [], active: 0, error: '' } : null))
+  // How many the batch being written is for, for the strip's line.
+  const [wanted, setWanted] = useState(() => (makeTemplates.length ? Math.min(6, makeTemplates.length) : make || BATCH_SIZE))
+  // The Studio's own "Write ads" bar (shown while no batch is up): the
+  // templates ticked and how many, the picker folded until asked for.
+  const [makeOpen, setMakeOpen] = useState(false)
+  const [makePicked, setMakePicked] = useState([])
+  const [makeCount, setMakeCount] = useState(BATCH_SIZE)
   // What is on the artboards and where it came from: a saved ad or a chat
   // set (`seed`, from the page), or one of the batch's sets. Whichever was
   // applied last wins, so a batch kept from last time never paints over an
@@ -921,7 +931,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   useEffect(() => {
     if (!make) return
     let cancelled = false
-    makeAdBatch({ client, intake, ads, count: make })
+    makeAdBatch({ client, intake, ads, count: make, templates: makeTemplates })
       .then((sets) => {
         if (cancelled) return
         batchLanded.current = true
@@ -1003,10 +1013,16 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     setSaved('')
     setError('')
   }
-  // Try again after a failure, or ask for a batch from the help chat.
-  const startBatch = (count = make || BATCH_SIZE, { template = '', about = '' } = {}) => {
+  // Try again after a failure, the "Write ads" bar, or an ask from the help
+  // chat. `templates` is the look of each ad in order, from the picker.
+  const lastAsk = useRef({ count: make || BATCH_SIZE, template: '', about: '', templates: makeTemplates })
+  const startBatch = (count = lastAsk.current.count, { template = '', about = '', templates = lastAsk.current.templates } = {}) => {
+    const plan = (Array.isArray(templates) ? templates : []).filter(isLookKey).slice(0, 6)
+    lastAsk.current = { count, template, about, templates: plan }
+    setWanted(plan.length || count)
+    setMakeOpen(false)
     setBatch({ status: 'working', sets: [], active: 0, error: '' })
-    makeAdBatch({ client, intake, ads, count, template, about })
+    makeAdBatch({ client, intake, ads, count, template, about, templates: plan })
       .then((sets) => {
         batchLanded.current = true
         setBatch({ status: 'done', sets, active: 0, error: '', madeAt: new Date().toISOString() })
@@ -1819,12 +1835,15 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       },
       {
         name: 'studio_make_ads',
-        description: `Write N ads for this client from their brief and the season playbook, each on the template its words call for, as a batch to review and save together ("Make 3 ads"). Optional: "about" (what the ads should be about, in a sentence: "the $89 furnace tune-up", "a before and after of the Smith job") and "template" (one key: ${LAYOUTS.filter((l) => l.group === 'template').map((l) => l.key).join(', ')}) to write every ad to that template's shape.`,
-        input_schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 6 }, about: { type: 'string' }, template: { type: 'string' } } },
-        run: ({ count, about, template }) => {
+        description: `Write N ads for this client from their brief and the season playbook, each on the template its words call for, as a batch to review and save together ("Make ads"). Optional: "about" (what the ads should be about, in a sentence: "the $89 furnace tune-up", "a before and after of the Smith job"); "template" (one key) to write every ad to that template's shape; or "templates", the look key for each ad in order (the same key N times is N ads on it, three different keys are one each; at most six). Template keys: ${LAYOUTS.filter((l) => l.group === 'template').map((l) => l.key).join(', ')}. Photo looks: ${PHOTO_LOOKS.map((l) => l.key).join(', ')}.`,
+        input_schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 6 }, about: { type: 'string' }, template: { type: 'string' }, templates: { type: 'array', items: { type: 'string' } } } },
+        run: ({ count, about, template, templates }) => {
           const key = String(template || '').trim()
           if (key && !isTemplate(key)) return { error: `No template called ${key}.` }
-          startBatch(Math.max(1, Math.min(6, Number(count) || BATCH_SIZE)), { template: key, about: String(about || '') })
+          const plan = (Array.isArray(templates) ? templates : []).map((t) => String(t || '').trim())
+          const bad = plan.find((t) => !isLookKey(t))
+          if (bad) return { error: `No look called ${bad}.` }
+          startBatch(plan.length || Math.max(1, Math.min(6, Number(count) || BATCH_SIZE)), { template: key, about: String(about || ''), templates: plan })
           return { ok: true, note: 'Writing now; about half a minute. Call page_state to see the result, then studio_save_batch.' }
         },
       },
@@ -1956,11 +1975,48 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
 
       {applied?.from === 'seed' && <SeedBanner seed={applied.set} />}
 
+      {/* WRITE ADS from inside the Studio: the same batch the Content tab's
+          door makes, with the template picker folded under one line. "Pick a
+          template and have the Studio make N ads on it, or tick three and
+          get three." Gone while a batch is up. */}
+      {!batch && (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/70 p-3" data-make-ads>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-orange-900">✨ Write ads from the brief</span>
+            <span className="text-xs text-orange-800">
+              {makePicked.length ? 'Each ad written to the template you ticked.' : 'The Studio picks the templates, or tick the ones you want: one and how many, or a few for one each.'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMakeOpen((v) => !v)}
+              className="rounded-lg border border-orange-300 bg-white px-2.5 py-1 text-xs font-medium text-orange-900 hover:bg-orange-100"
+              data-choose-templates
+            >
+              {makeOpen ? 'Hide the templates' : makePicked.length ? 'Change the templates' : 'Choose templates'}
+            </button>
+            <button
+              type="button"
+              onClick={() => startBatch(templatesFor(makePicked, makeCount).length || makeCount, { templates: templatesFor(makePicked, makeCount) })}
+              className="ml-auto rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+              data-make-ads-go
+              title="About half a minute: the brief, the offer, the reviews, the season playbook and the photos, then the words for each ad"
+            >
+              ✨ {planLabel(makePicked, makeCount)}
+            </button>
+          </div>
+          {makeOpen && (
+            <div className="mt-3">
+              <LookPicker content={paintContent} assets={assets} safeMode={safeMode} picked={makePicked} onPicked={setMakePicked} count={makeCount} onCount={setMakeCount} />
+            </div>
+          )}
+        </div>
+      )}
+
       {batch && (
         <BatchStrip
           batch={batch}
           client={client}
-          count={make || BATCH_SIZE}
+          count={wanted}
           saving={saving}
           onShow={showSet}
           onSave={saveBatch}

@@ -41,6 +41,20 @@ export const TEMPLATE_KEYS = TEMPLATE_LAYOUTS.map((t) => t.key)
 /** The photo looks (adLooks.js) a chat may name for an ad, beside the templates. */
 export const PHOTO_LOOK_KEYS = ['cover', 'stack', 'plate', 'wash', 'split', 'before']
 
+/**
+ * The photo looks the way TEMPLATE_SHAPES describes the templates: a name,
+ * what the look is, when it wins and what it needs in words, so a batch
+ * can be asked for ads on one of them too (adLooks.js paints them).
+ */
+export const PHOTO_LOOK_SHAPES = {
+  cover: { label: 'Classic', hint: 'the photo fills the frame, the headline up top, the offer block down the bottom', wins: 'any photo; the safe default', needs: 'a headline of five to eight words, the offer and its detail, a subhead, the proof' },
+  stack: { label: 'Headline stack', hint: 'one giant accent word over the photo, the rest of the headline under it, a white offer card', wins: "the owner's face or a strong photo with a one-word shout: FREE, $89, SAVE", needs: 'a headline whose first word is the shout (FREE, $89, SAVE, NEW), the offer and its detail, a one-line subhead' },
+  plate: { label: 'Bottom plate', hint: 'the photo on top, the words on a brand-colour plate below', wins: 'a photo that does not want words over it', needs: 'a headline of six to ten words, the offer and its detail, a subhead, the proof' },
+  wash: { label: 'Brand wash', hint: 'the photo whole, its lower part under a wash of the brand colour behind a curved seam, the logo in a white pill on the seam, the offer huge with a white outline', wins: 'one loud offer (5% OFF, $89, FREE) on a real job photo', needs: 'a short offer amount as the big word (5% OFF, $89, FREE), who or what it is for as the offer detail, a headline of four to eight words, a one-line subhead' },
+  split: { label: 'Split panel', hint: 'a brand-colour panel with the words beside the photo (above it on the Story)', wins: 'a busy photo, or a long headline that needs room', needs: 'a headline, the offer amount big, its detail, a subhead' },
+  before: { label: 'Before and after', hint: 'two photos, Before and After labelled, the words on a plate below', wins: 'a real before-and-after pair of the same job', needs: 'a transformation headline, the offer; the two photos come from the finder or the pickers' },
+}
+
 /** True for a key the Studio can paint: a template or a photo look. */
 export function isLookKey(key) {
   const k = String(key || '').trim()

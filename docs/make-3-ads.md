@@ -15,6 +15,52 @@ Written 2026-10-14. The Ad Studio door on the Content tab used to open an empty 
 
 Review the three before saving. The chat is good at the words but it does not see the photo; a headline that fights the picture wants a different look or a different photo, and both are one click.
 
+## Pick the templates (2026-11-06)
+
+"When we click on Make Static Ads, can we also pick a template and have the
+Studio make N ads using that template, or click 3 templates and get 3 ads.
+Super intuitive."
+
+Above the client cards on the Content tab's Make Static Ads door, one line
+says what clicking a client will make: "Make 3 ads for the client you
+click", the Studio picking the templates as before. **Choose templates**
+opens the picker: every photo look and template painted small with sample
+words (the client's own words and photo are not known yet; inside the
+Studio the tiles paint with the ad on the form). Tick tiles:
+
+- **One template** and a number, 1 to 6: that many ads on it, each on its
+  own hook and angle ("Make 4 ads on Price grid").
+- **A few templates**: one ad on each, in the order ticked (the tiles are
+  numbered); the number becomes "how many on each", so three templates at
+  2 each is six ads. Six is the most one ask writes, so with four ticked
+  the numbers past 1 are greyed out.
+- **Nothing ticked**: the Studio picks, 3 ads unless the number says
+  otherwise.
+
+The line and every card read the plan ("Make 3 ads: Price grid, Coupon,
+Brand wash →"), the link carries it (`?open=studio&make=N&templates=a,b,c`),
+and the client page opens with the Studio writing exactly those. The chat is
+told the look of each ad in order and writes each ad's words to that look's
+shape (`lookShape` / `templateAsk` in `src/lib/adBatch.js` describe the
+photo looks the way `TEMPLATE_SHAPES` describes the templates); with one
+template repeated it is asked for N different hooks on it, so they read as N
+ads and not one ad N times. The looks come back as asked (`layout` is set
+from the plan, never from the chat's pick), and the photo picks, the
+sticker, the tiles, the kicker and the unit work as before.
+
+The same picker sits inside the Studio: while no batch is up, a line above
+the artboards, "✨ Write ads from the brief", carries "Choose templates" and
+the button ("✨ Make 3 ads", "✨ Make 4 ads on Price grid"). There the tiles
+paint with the words, the colours, the logo and the photo on the form. The
+help chat's `make_ads`, `client_make_ads` and `studio_make_ads` take a
+`templates` list (the look key for each ad, in order) for "make me four
+coupon ads for Belk".
+
+`templatesFor(picked, count)` and `planLabel(picked, count)` in
+`src/lib/adBatch.js` are the rules (pinned by `scripts/check-ad-batch.mjs`,
+with the prompt's per-ad plan); `src/components/LookPicker.jsx` is the
+picker.
+
 ## Where the code is
 
 - `src/lib/adBatch.js`: the pure half (the prompt, the looks per set, which photo to start from, the chip titles, the round trip of edits), tested by `scripts/check-ad-batch.mjs`.

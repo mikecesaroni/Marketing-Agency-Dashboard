@@ -3,7 +3,7 @@
 // upload, and edits survive a switch between sets.
 // Run: node scripts/check-ad-batch.mjs
 
-import { BATCH_LOOKS, BATCH_PHOTO_MAX, SET_FIELDS, assignLooks, assignPhotos, batchReady, cutoutFor, lookName, makeAdsPrompt, photoPool, pickBackground, setTitle, snapshotSet, templateAsk, tilesFrom } from '../src/lib/adBatch.js'
+import { BATCH_LOOKS, BATCH_MAX, BATCH_PHOTO_MAX, SET_FIELDS, assignLooks, assignPhotos, batchReady, cutoutFor, lookName, lookShape, makeAdsPrompt, photoPool, pickBackground, planLabel, setTitle, snapshotSet, templateAsk, templatesFor, tilesFrom } from '../src/lib/adBatch.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -28,6 +28,24 @@ check('an unknown template falls back to the menu', /"template" key/.test(makeAd
 check('a subject goes in the first line', /about this: the \$89 furnace tune-up\./.test(makeAdsPrompt({ count: 1, about: 'the $89 furnace tune-up' })), true)
 check('the template ask says what the template needs', /comma-separated list/.test(templateAsk('plan_card')) && templateAsk('zzz') === '', true)
 check('a missing name still reads', /for this client to run now/.test(makeAdsPrompt({})), true)
+
+// The template picker: "pick a template and have the Studio make N ads on
+// it, or tick three templates and get three ads".
+check('nothing ticked: the chat picks', templatesFor([], 3), [])
+check('one ticked and a count: that many on it', templatesFor(['price_grid'], 4), ['price_grid', 'price_grid', 'price_grid', 'price_grid'])
+check('three ticked: one each, in the order ticked', templatesFor(['price_grid', 'coupon', 'wash'], 1), ['price_grid', 'coupon', 'wash'])
+check('three ticked, two each: six, grouped by template', templatesFor(['price_grid', 'coupon', 'wash'], 2), ['price_grid', 'price_grid', 'coupon', 'coupon', 'wash', 'wash'])
+check('four ticked, two each: six is the most, so one each', templatesFor(['price_grid', 'coupon', 'wash', 'sun_deal'], 2).length, 4)
+check('a key that is not a look is dropped; a repeat is one tick', templatesFor(['nope', 'coupon', 'coupon'], 1), ['coupon'])
+check('the count is clamped to six', templatesFor(['coupon'], 40).length, BATCH_MAX)
+check('the plan in words', [planLabel([], 3), planLabel([], 1), planLabel(['price_grid'], 4), planLabel(['price_grid', 'coupon', 'wash'], 1), planLabel(['price_grid', 'coupon', 'wash'], 2)], ['Make 3 ads', 'Make an ad', 'Make 4 ads on Price grid', 'Make 3 ads: Price grid, Coupon, Brand wash', 'Make 6 ads: 2 each on Price grid, Coupon, Brand wash'])
+const planned = makeAdsPrompt({ clientName: 'Prime', today: new Date('2026-10-14'), templates: ['price_grid', 'coupon', 'wash'] })
+check('a plan decides the count and the look of each ad, in order', [/Write 3 static ads for Prime/.test(planned), /Ad 1: Price grid \(/.test(planned), /Ad 2: Coupon \(/.test(planned), /Ad 3: Brand wash \(/.test(planned), /JSON block of exactly 3/.test(planned)], [true, true, true, true, true])
+check('a plan does not ask the chat to pick a template', /"template" key/.test(planned), false)
+const same = makeAdsPrompt({ clientName: 'Prime', count: 2, templates: ['price_grid', 'price_grid', 'price_grid', 'price_grid'] })
+check('the same template four times: four ads on it, each its own hook', [/Write 4 static ads/.test(same), /"Price grid" template/.test(same), /All 4 ads go on it, each on its own hook/.test(same)], [true, true, true])
+check('a photo look can be asked for too', /"Brand wash" look/.test(templateAsk('wash')) && /5% OFF/.test(templateAsk('wash')), true)
+check('a look shape: a template, a photo look, nothing', [lookShape('coupon')?.label, lookShape('coupon')?.photo, lookShape('stack')?.label, lookShape('stack')?.photo, lookShape('zzz')], ['Coupon', false, 'Headline stack', true, null])
 
 // The looks.
 check('a poster for the offer, the season template for the time of year, the owner photo for proof, then another round (the offer on the brand wash)', BATCH_LOOKS, ['sun_deal', 'season_sale', 'stack', 'wash', 'price_grid', 'plate'])

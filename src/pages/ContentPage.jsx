@@ -3,7 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout'
 import DriveFolderFiles from '../components/DriveFolderFiles'
 import VideoDropBoard from '../components/VideoDropBoard'
+import LookPicker from '../components/LookPicker'
 import { Card, Input } from '../components/ui'
+import { planLabel, templatesFor } from '../lib/adBatch'
 import { supabase } from '../lib/supabaseClient'
 import { fetchAllRows } from '../lib/pagedQuery'
 import { removeDriveFolder, saveDriveFolder } from '../lib/driveAssets'
@@ -31,8 +33,8 @@ const DOORS = [
   {
     key: 'studio',
     title: 'Make Static Ads',
-    blurb: 'Pick a client and get 3 ads written and laid out from their brief, photos and logo. Edit, then save all three.',
-    cta: 'Make 3 ads: pick the client',
+    blurb: 'Pick a client and get ads written and laid out from their brief, photos and logo: 3 the Studio chooses, or any number on the templates you tick. Edit, then save them all.',
+    cta: 'Make ads: pick the client',
     tone: 'from-orange-500 to-amber-400',
     ring: 'group-hover:ring-orange-300',
     icon: (
@@ -362,8 +364,8 @@ function PagesCard({ row, onChange }) {
 
 const SECTION_META = {
   studio: {
-    title: 'Make 3 ads',
-    hint: 'Pick a client. Make Static Ads opens on their page and writes 3 ads from their brief, each in a different look, with their photo and logo. Edit any of them, then save all three. Or open it empty to design by hand.',
+    title: 'Make ads',
+    hint: 'Pick a client. Make Static Ads opens on their page and writes the ads from their brief, with their photo and logo: 3 in the looks the Studio chooses, or tick templates below first (one and how many, or a few for one each). Edit any of them, then save them all. Or open it empty to design by hand.',
   },
   drive: {
     title: 'Google Drive',
@@ -382,6 +384,14 @@ const SECTION_META = {
 export default function ContentPage() {
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') || ''
+  // The template plan for "Make ads": which looks are ticked (in order) and
+  // how many; carried to the client page in the link (?templates=a,b&make=N).
+  const [picked, setPicked] = useState([])
+  const [count, setCount] = useState(3)
+  const [choosing, setChoosing] = useState(false)
+  const plan = templatesFor(picked, count)
+  const makeN = plan.length || count
+  const makeHref = (id) => `/client/${id}?open=studio&make=${makeN}${plan.length ? `&templates=${plan.join(',')}` : ''}`
   const [data, setData] = useState(null)
   const [drops, setDrops] = useState(null)
   // The raw client rows, for the drop zone: it needs the Meta account id,
@@ -500,6 +510,40 @@ export default function ContentPage() {
             <p className="text-xs font-medium text-slate-700">Publish: pick the client</p>
           )}
 
+          {/* THE PLAN. What clicking a client below makes: 3 ads in the looks
+              the Studio chooses, or the templates ticked here. The picker is
+              folded until asked for, so the door stays one click. */}
+          {tab === 'studio' && (
+            <div className="rounded-2xl border border-orange-200 bg-orange-50/60 p-3" data-make-plan>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-semibold text-orange-900" data-make-plan-label>
+                  {planLabel(picked, count)} for the client you click.
+                </span>
+                <span className="text-xs text-orange-800">
+                  {plan.length ? 'Each ad written to its template.' : 'The Studio picks the templates from the words and the season.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setChoosing((v) => !v)}
+                  className="rounded-lg border border-orange-300 bg-white px-2.5 py-1 text-xs font-medium text-orange-900 hover:bg-orange-100"
+                  data-choose-templates
+                >
+                  {choosing ? 'Hide the templates' : picked.length ? 'Change the templates' : 'Choose templates'}
+                </button>
+                {picked.length > 0 && (
+                  <button type="button" onClick={() => setPicked([])} className="text-xs text-slate-500 underline hover:text-slate-800">
+                    Let the Studio pick
+                  </button>
+                )}
+              </div>
+              {choosing && (
+                <div className="mt-3">
+                  <LookPicker picked={picked} onPicked={setPicked} count={count} onCount={setCount} />
+                </div>
+              )}
+            </div>
+          )}
+
           {data === null ? (
             <p className="text-sm text-slate-500">Loading…</p>
           ) : rows.length === 0 ? (
@@ -527,8 +571,8 @@ export default function ContentPage() {
                 <ClientCard
                   key={r.id}
                   row={r}
-                  href={tab === 'studio' ? `/client/${r.id}?open=studio&make=3` : `/publish/${r.id}`}
-                  primary={tab === 'studio' ? 'Make 3 ads →' : 'Publish videos and statics →'}
+                  href={tab === 'studio' ? makeHref(r.id) : `/publish/${r.id}`}
+                  primary={tab === 'studio' ? `${planLabel(picked, count)} →` : 'Publish videos and statics →'}
                   secondary={
                     tab === 'studio'
                       ? { href: `/client/${r.id}?open=studio`, label: 'Open empty' }

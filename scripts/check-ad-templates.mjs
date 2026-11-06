@@ -6,7 +6,7 @@
 // that every template is a layout the Studio, the help chat and the
 // saved-ad recipe all know.
 
-import { CUTOUTS, PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS, TEMPLATE_SHAPES, THEME_KEYS, TWO_PHOTO_TEMPLATES, isLookKey, isTemplate, kickerFor, offersFor, offersToStore, seasonKicker, templateMenu, themeFor } from '../src/lib/adTemplateMeta.js'
+import { CUTOUTS, PHOTO_LOOK_KEYS, PHOTO_LOOK_SHAPES, PHOTO_TEMPLATES, TEMPLATE_KEYS, TEMPLATE_LAYOUTS, TEMPLATE_SHAPES, THEME_KEYS, TWO_PHOTO_TEMPLATES, isLookKey, isTemplate, kickerFor, offersFor, offersToStore, seasonKicker, templateMenu, themeFor } from '../src/lib/adTemplateMeta.js'
 import { FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEXT_LAYOUTS } from '../src/lib/adLayout.js'
 import { lookName } from '../src/lib/adBatch.js'
 import { readFileSync } from 'node:fs'
@@ -64,6 +64,7 @@ check('stored trimmed', offersToStore([{ amount: ' $89 ', detail: ' Tune-up ' }]
 // The shapes the chat writes to.
 check('every template says when it wins and what it needs', TEMPLATE_KEYS.every((k) => TEMPLATE_SHAPES[k]?.wins && TEMPLATE_SHAPES[k]?.needs), true)
 check('the menu lists every template once', TEMPLATE_KEYS.every((k) => templateMenu().split('\n').filter((l) => l.startsWith(`- ${k} (`)).length === 1), true)
+check('every photo look has a shape (a name, what it is, when it wins, what it needs), and nothing else does', [Object.keys(PHOTO_LOOK_SHAPES), Object.values(PHOTO_LOOK_SHAPES).every((s) => s.label && s.hint && s.wins && s.needs)], [PHOTO_LOOK_KEYS, true])
 check('a look key is a template or a photo look', [isLookKey('plan_card'), isLookKey('stack'), isLookKey(' coupon '), isLookKey('card'), isLookKey(''), isLookKey(null)], [true, true, true, false, false, false])
 
 // The equipment.

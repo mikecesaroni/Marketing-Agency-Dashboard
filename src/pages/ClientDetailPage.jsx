@@ -109,6 +109,8 @@ export default function ClientDetailPage() {
   // Copy handed from the chat to the Ad Studio. Null means "start from intake".
   const [studioSeed, setStudioSeed] = useState(null)
   const [studioMake, setStudioMake] = useState(0)
+  // The look for each ad of a "Make ads" batch, when the picker chose them.
+  const [studioTemplates, setStudioTemplates] = useState([])
   // Whether the Ad Studio was reached from the chat. Only then is there a
   // conversation to go back TO, so only then is a back button honest.
   const [studioFromChat, setStudioFromChat] = useState(false)
@@ -158,7 +160,12 @@ export default function ClientDetailPage() {
     if (loading || !client) return
     const want = new URLSearchParams(pageLocation.search).get('open')
     if (!want) return
-    if (want === 'studio') openStudio('design', '', Number(new URLSearchParams(pageLocation.search).get('make')) || 0)
+    if (want === 'studio') {
+      // `templates` is the plan from the Content tab's picker: the look of
+      // each ad, in order (the same key N times is N ads on it).
+      const sp = new URLSearchParams(pageLocation.search)
+      openStudio('design', '', Number(sp.get('make')) || 0, String(sp.get('templates') || '').split(',').map((s) => s.trim()).filter(Boolean))
+    }
     else if (want === 'publish') openStudio('publish', new URLSearchParams(pageLocation.search).get('video') || '')
     else if (want === 'kpis') setShowKPIsModal(true)
     else if (want === 'chat') {
@@ -287,6 +294,7 @@ export default function ClientDetailPage() {
   const handleUseCreativeSet = (mapped) => {
     setStudioTab('design')
     setStudioMake(0)
+    setStudioTemplates([])
     setStudioSeed(mapped)
     setStudioKey((k) => k + 1)
     setStudioFromChat(true)
@@ -319,10 +327,11 @@ export default function ClientDetailPage() {
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   // `make` is the "Make 3 ads" door on the Content tab: the Studio opens
   // already asking the chat for that many ads.
-  const openStudio = (tab, video = '', make = 0) => {
+  const openStudio = (tab, video = '', make = 0, templates = []) => {
     setStudioTab(tab)
     setStudioVideo(video)
     setStudioMake(make)
+    setStudioTemplates(templates)
     setStudioSeed(null)
     setStudioKey((k) => k + 1)
     setStudioFromChat(false)
@@ -350,10 +359,11 @@ export default function ClientDetailPage() {
       },
       {
         name: 'client_make_ads',
-        description: "Open Make Static Ads for this client already writing N ads from their brief (\"Make 3 ads\").",
-        input_schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 6 } } },
-        run: ({ count }) => {
-          openStudio('design', '', Math.max(1, Math.min(6, Number(count) || 3)))
+        description: "Open Make Static Ads for this client already writing N ads from their brief (\"Make ads\"). Optional \"templates\": the look key for each ad in order (price_grid, coupon, sun_deal, wash, stack...); the same key N times makes N ads on it; at most six.",
+        input_schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 6 }, templates: { type: 'array', items: { type: 'string' } } } },
+        run: ({ count, templates }) => {
+          const plan = (Array.isArray(templates) ? templates : []).map((t) => String(t || '').trim()).filter(Boolean).slice(0, 6)
+          openStudio('design', '', plan.length || Math.max(1, Math.min(6, Number(count) || 3)), plan)
           return { ok: true, note: 'Writing them now; about half a minute. Call page_state to see them.' }
         },
       },
@@ -757,6 +767,7 @@ export default function ClientDetailPage() {
             intake={intake}
             seed={studioSeed}
             make={studioMake}
+            makeTemplates={studioTemplates}
             ads={briefAds}
             initialTab={studioTab}
             initialVideo={studioVideo}

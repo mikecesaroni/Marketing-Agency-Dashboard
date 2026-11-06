@@ -11,7 +11,7 @@
  * Network (the chat call, the files) lives in adBatchStore.js.
  */
 
-import { PHOTO_TEMPLATES, TEMPLATE_LAYOUTS, TEMPLATE_SHAPES, TWO_PHOTO_TEMPLATES, isLookKey, templateMenu } from './adTemplateMeta.js'
+import { PHOTO_LOOK_SHAPES, PHOTO_TEMPLATES, TEMPLATE_LAYOUTS, TEMPLATE_SHAPES, TWO_PHOTO_TEMPLATES, isLookKey, templateMenu } from './adTemplateMeta.js'
 import { pickTemplate } from './seasonPlaybook.js'
 
 // The looks a batch cycles through, in order, matched to the angles the
@@ -21,6 +21,51 @@ import { pickTemplate } from './seasonPlaybook.js'
 // as a campaign rather than one template three times.
 export const BATCH_LOOKS = ['sun_deal', 'season_sale', 'stack', 'wash', 'price_grid', 'plate']
 export const BATCH_SIZE = 3
+// The most one ask writes: past this the chat's answer gets long and thin.
+export const BATCH_MAX = 6
+
+/** A look's name, what it is and what it needs in words: a template or a photo look; null for anything else. */
+export function lookShape(key) {
+  const k = String(key || '').trim()
+  const t = TEMPLATE_LAYOUTS.find((x) => x.key === k)
+  if (t) return { key: k, label: t.label, hint: t.hint, needs: (TEMPLATE_SHAPES[k] || {}).needs || 'the usual slots', photo: false }
+  const p = PHOTO_LOOK_SHAPES[k]
+  if (p) return { key: k, label: p.label, hint: p.hint, needs: p.needs, photo: true }
+  return null
+}
+
+/**
+ * The look for each ad of a batch from the template picker ("pick a
+ * template and have the Studio make N ads on it, or tick three templates
+ * and get three ads"). One ticked and a count makes that many on it;
+ * several ticked make `count` on each, the ads grouped by template, and
+ * never more than six in all, so with four ticked it is one each. Nothing
+ * ticked is an empty list: the chat picks, as before.
+ */
+export function templatesFor(picked = [], count = 1) {
+  const keys = [...new Set((picked || []).map((k) => String(k || '').trim()).filter(isLookKey))].slice(0, BATCH_MAX)
+  if (!keys.length) return []
+  const asked = Math.max(1, Math.min(BATCH_MAX, Number(count) || 1))
+  const each = keys.length === 1 ? asked : Math.max(1, Math.min(asked, Math.floor(BATCH_MAX / keys.length)))
+  return keys.flatMap((k) => Array(each).fill(k))
+}
+
+/**
+ * What the button and the card say for a pick: "Make 3 ads" (the chat
+ * picks), "Make 4 ads on Price grid", "Make 3 ads: Price grid, Coupon,
+ * Brand wash", "Make 6 ads: 2 each on Price grid, Coupon, Brand wash".
+ */
+export function planLabel(picked = [], count = BATCH_SIZE) {
+  const plan = templatesFor(picked, count)
+  const n = plan.length || Math.max(1, Math.min(BATCH_MAX, Number(count) || BATCH_SIZE))
+  const ads = n === 1 ? 'an ad' : `${n} ads`
+  if (!plan.length) return `Make ${ads}`
+  const keys = [...new Set(plan)]
+  const names = keys.map(lookName).join(', ')
+  if (keys.length === 1) return `Make ${ads} on ${names}`
+  const each = plan.length / keys.length
+  return each > 1 ? `Make ${ads}: ${each} each on ${names}` : `Make ${ads}: ${names}`
+}
 
 const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', wash: 'Brand wash', split: 'Split panel', before: 'Before and after', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept',
   ...Object.fromEntries(TEMPLATE_LAYOUTS.map((t) => [t.key, t.label])) }
@@ -64,12 +109,11 @@ export function chooseLooks(sets, { phase, hasPhoto = false, pick = pickTemplate
   })
 }
 
-/** What a template needs in words, for an ask that names one. */
+/** What a template (or a photo look) needs in words, for an ask that names one. */
 export function templateAsk(key) {
-  const t = TEMPLATE_LAYOUTS.find((x) => x.key === key)
-  if (!t) return ''
-  const s = TEMPLATE_SHAPES[key] || {}
-  return `Every ad is for the "${t.label}" template (${t.hint}). Write the words to its shape: it needs ${s.needs || 'the usual slots'}.`
+  const s = lookShape(key)
+  if (!s) return ''
+  return `Every ad is for the "${s.label}" ${s.photo ? 'look' : 'template'} (${s.hint}). Write the words to its shape: it needs ${s.needs}.`
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -79,17 +123,27 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
  * already uses) carries the formats and the JSON schema; this only says how
  * many, which angles, and that the JSON is the part that matters.
  */
-export function makeAdsPrompt({ count = BATCH_SIZE, clientName, today = new Date(), photos = [], playbook = '', template = '', about = '' } = {}) {
-  const n = Math.max(1, Math.min(6, Number(count) || BATCH_SIZE))
+export function makeAdsPrompt({ count = BATCH_SIZE, clientName, today = new Date(), photos = [], playbook = '', template = '', about = '', templates = [] } = {}) {
+  // A plan from the picker decides the look of every ad, and how many.
+  const plan = (Array.isArray(templates) ? templates : []).map((k) => String(k || '').trim()).filter(isLookKey).slice(0, BATCH_MAX)
+  const n = plan.length || Math.max(1, Math.min(BATCH_MAX, Number(count) || BATCH_SIZE))
   const month = MONTHS[today.getMonth()]
   const angles = n >= 3 ? 'the current offer, the time of year, and proof or trust' : n === 2 ? 'the current offer and the time of year' : 'the strongest angle for right now'
   const subject = String(about || '').trim()
+  const distinct = [...new Set(plan)]
+  const looksAsk = plan.length
+    ? distinct.length === 1
+      ? `${templateAsk(distinct[0])}${n > 1 ? ` All ${n} ads go on it, each on its own hook and angle, so they read as ${n} different ads and not one ad ${n} times.` : ''}`
+      : `THE LOOK FOR EACH AD is decided. Write each ad's words to its shape, in this order:\n${plan.map((k, i) => { const s = lookShape(k); return `- Ad ${i + 1}: ${s.label} (${s.hint}). Needs ${s.needs}.` }).join('\n')}`
+    : template && templateAsk(template)
+      ? templateAsk(template)
+      : `TEMPLATES: for every ad add a "template" key with the one template from this list that says it best (by the ad's words first, then the playbook; never the same one twice in a batch) and a "template_reason" line, and write the ad's words to that template's shape:\n${templateMenu()}`
   const parts = [
     subject
       ? `Write ${n} static ad${n === 1 ? '' : 's'} for ${clientName || 'this client'} to run now, in ${month}, about this: ${subject}.${n > 1 ? ' Each a different hook.' : ''}`
       : `Write ${n} static ad${n === 1 ? '' : 's'} for ${clientName || 'this client'} to run now, in ${month}: ${angles}, ${n === 1 ? 'one ad' : 'one ad each, each a different hook'}.`,
     ...(playbook ? [`SEASON PLAYBOOK, write to it: ${playbook}`] : []),
-    ...(template && templateAsk(template) ? [templateAsk(template)] : [`TEMPLATES: for every ad add a "template" key with the one template from this list that says it best (by the ad's words first, then the playbook; never the same one twice in a batch) and a "template_reason" line, and write the ad's words to that template's shape:\n${templateMenu()}`]),
+    looksAsk,
     'For every ad fill every slot of FORMAT 2 with real words: location badge, headline on image (five to eight words, the shout first: FREE, $89, SAVE), offer badge with the price first, subhead, proof strip, background note. Also the primary text, headline and description Meta shows beside the image. Leave offer_colour and badge_colour empty: the Studio takes the colours from the logo.',
     'Two more keys on every set, for the poster templates: "sticker", two or three words for a starburst or a seal (EASY FINANCING, SAME DAY, 0% FOR 18 MONTHS; "" when nothing fits), and "offers", a list of up to two {"amount","detail"} price tiles when the brief carries more than one price (the main offer first; [] otherwise). Real prices from the brief only; never invent one.',
   ]

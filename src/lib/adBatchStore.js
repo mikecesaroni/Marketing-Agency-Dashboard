@@ -46,7 +46,11 @@ export async function smallImage(src, max = 800) {
  * `layout` and `backgroundPath` set. Throws with a plain reason when the chat
  * is not deployed, the key is missing, or no JSON came back.
  */
-export async function makeAdBatch({ client, intake, ads = [], count = 3, template = '', about = '' }) {
+export async function makeAdBatch({ client, intake, ads = [], count = 3, template = '', about = '', templates = [] }) {
+  // A plan from the template picker: the look of every ad, in order, and
+  // how many (templatesFor in adBatch.js). Empty means the chat picks.
+  const plan = (Array.isArray(templates) ? templates : []).filter(isLookKey).slice(0, 6)
+  const wanted = plan.length || count
   const [learnings, pages, files, drive] = await Promise.all([
     fetchLearnings(client.id).catch(() => []),
     fetchLandingPages(client.id).catch(() => []),
@@ -86,7 +90,7 @@ export async function makeAdBatch({ client, intake, ads = [], count = 3, templat
   const data = await sendChatMessage({
     clientId: client.id,
     system,
-    message: makeAdsPrompt({ count, clientName: client.name, photos: shown, playbook, template, about }),
+    message: makeAdsPrompt({ count: wanted, clientName: client.name, photos: shown, playbook, template, about, templates: plan }),
     images,
     transient: true,
   })
@@ -100,13 +104,13 @@ export async function makeAdBatch({ client, intake, ads = [], count = 3, templat
   // kicker, the painted background and the unit in the corner from the
   // playbook (all editable on the form).
   const forced = isLookKey(template) ? template : ''
-  const sets = raw.slice(0, count).map((r) => {
+  const sets = raw.slice(0, wanted).map((r, i) => {
     const mapped = creativeSetToStudio(r)
     return {
       ...mapped,
       // The chat's pick is a suggestion chooseLooks() weighs; an ask that
-      // named a template is the look, full stop.
-      layout: forced,
+      // named a template, or a plan from the picker, is the look, full stop.
+      layout: plan[i] || forced,
       suggestedLayout: mapped.layout || '',
       accent: '',
       badgeColor: '',
@@ -117,7 +121,7 @@ export async function makeAdBatch({ client, intake, ads = [], count = 3, templat
       theme: phase.theme || '',
     }
   })
-  const picks = raw.slice(0, count).map((r) => Number(r.photo) || 0)
+  const picks = raw.slice(0, wanted).map((r) => Number(r.photo) || 0)
   return assignPhotos(chooseLooks(sets, { phase, hasPhoto: pool.length > 0 }), { pool, shown, picks })
 }
 

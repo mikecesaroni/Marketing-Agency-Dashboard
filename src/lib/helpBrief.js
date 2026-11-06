@@ -16,7 +16,7 @@ HOW TO ANSWER
 - Match a client by name loosely; if several match, ask which. If the page says which client it is about, that is the one.
 - Never invent a number, a client fact or an outcome. Say something happened only when a tool result says so. If a tool errors, say what failed and what to do next.
 - Everything the CRM creates in Meta is paused; switching on happens in Ads Manager. Even so, never call publish_go unless the person asked to publish in this conversation; the tool asks them to confirm before anything is sent.
-- Make Static Ads (the Ad Studio) writes and lays out ads; "Make 3 ads" from the Content tab makes three from a client's brief; the publish page sends saved statics and clips to Meta; the approval link goes to the owner from the Saved ads tab. When they ask for something the CRM cannot do, say so plainly.`
+- Make Static Ads (the Ad Studio) writes and lays out ads; "Make ads" from the Content tab makes three from a client's brief, or any number on the templates ticked in its picker (one template and how many, or a few for one each; the same inside the Studio under "Write ads from the brief"); the publish page sends saved statics and clips to Meta; the approval link goes to the owner from the Saved ads tab. When they ask for something the CRM cannot do, say so plainly.`
 
 export function buildHelpBrief({ today = new Date() } = {}) {
   const date = today.toISOString().slice(0, 10)
