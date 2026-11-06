@@ -7,7 +7,7 @@
 // photo over the offer block on Stories. Everything resolves through
 // photoRect, so the 216px preview and the 1080px export agree.
 
-import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_KEYS, TEXT_LAYOUTS, TWO_PHOTO_LAYOUTS, accentWord, beforeRects, containRect, coverRect, dragFocus, dragPhoto, photoRect, plateRects, splitRects, washRects } from '../src/lib/adLayout.js'
+import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_KEYS, TEXT_LAYOUTS, TWO_PHOTO_LAYOUTS, accentWord, beforeRects, containRect, contrastBetween, coverRect, dragFocus, dragPhoto, luminance, photoRect, plateRects, splitRects, washColours, washRects } from '../src/lib/adLayout.js'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -33,6 +33,19 @@ check('square: the wash starts where the seam meets the edges and runs to the bo
 const wt = washRects(1080, 1920, { safeTop: 269, safeBottom: 672 })
 check('story: the wash keeps the same share of the usable room above the Reels band', [wt.seam.y, wt.seam.y > 269, wt.seam.y < 1920 - 672], [758, true, true])
 check('a bigger share drops the seam', washRects(1080, 1080, { share: 0.6 }).seam.y < wq.seam.y, true)
+
+// The colours: the wash is the darker of the two whichever picker it sat
+// in, the pop the other; the pop only has to be plainly different (it is
+// outlined in white), and when it is not, the look goes white.
+check('luminance: black, white, navy, red', [luminance('#000000'), luminance('#FFFFFF'), luminance('#1F3B8B') < 0.1, luminance('#CC2E2E') > luminance('#1F3B8B')], [0, 1, true, true])
+check('contrast: white on black is 21, a colour on itself is 1', [contrastBetween('#FFFFFF', '#000000'), contrastBetween('#1F3B8B', '#1F3B8B')], [21, 1])
+check('the sampler\'s order (navy offer, red badge) still washes navy and pops red', washColours('#1F3B8B', '#CC2E2E'), { wash: '#1F3B8B', pop: '#CC2E2E', popReads: true })
+check('the other way round comes out the same', washColours('#CC2E2E', '#1F3B8B'), { wash: '#1F3B8B', pop: '#CC2E2E', popReads: true })
+check('one colour twice: the pop would vanish, so the look goes white', washColours('#1E3A8A', '#1E3A8A').popReads, false)
+check('two darks of one hue: white too', washColours('#0F1F4D', '#1E3A8A').popReads, false)
+check('two darks of different hues read off the hue (the white outline carries the big word)', washColours('#0B3D2E', '#1E3A8A'), { wash: '#0B3D2E', pop: '#1E3A8A', popReads: true })
+check('a different hue at the same depth reads off the hue', washColours('#B91C1C', '#15803D').popReads, true)
+check('a missing colour falls back to slate as the wash', washColours('#C81E1E', '').wash, '#0F172A')
 check('the before look and the two before templates take the After picker', TWO_PHOTO_LAYOUTS, ['before', 'before_sale', 'reveal'])
 
 // The headline stack's giant word.

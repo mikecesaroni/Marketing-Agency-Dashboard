@@ -194,6 +194,78 @@ export function washRects(w, h, { safeTop = 0, safeBottom = 0, share = 0.5, bulg
   }
 }
 
+/** A hex colour as [r, g, b]; slate for anything that is not one. */
+function rgbOf(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim())
+  const n = m ? parseInt(m[1], 16) : 0x0f172a
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+/** WCAG relative luminance, 0 (black) to 1 (white). */
+export function luminance(hex) {
+  const lin = (c) => {
+    const v = c / 255
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  }
+  const [r, g, b] = rgbOf(hex)
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+/** The contrast ratio between two colours, 1 to 21. */
+export function contrastBetween(a, b) {
+  const la = luminance(a)
+  const lb = luminance(b)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+/** Hue (degrees) and saturation (0 to 1) of a hex colour. */
+function hueSat(hex) {
+  const [r, g, b] = rgbOf(hex).map((c) => c / 255)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  if (max === min) return { h: 0, s: 0 }
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60
+  else if (max === g) h = ((b - r) / d + 2) * 60
+  else h = ((r - g) / d + 4) * 60
+  return { h, s }
+}
+
+/**
+ * The two brand colours sorted into the wash and the pop for the brand
+ * wash look, by what they are rather than by which picker they sat in:
+ * the wash is whichever of the two is darker (the one white words read
+ * on), the pop is the other. The logo sampler (src/lib/logoColours.js)
+ * calls the logo's most common colour the offer colour, and on a navy
+ * wordmark with a red stroke that would wash the frame red and write 5%
+ * OFF in navy; the reference ad is the other way round.
+ *
+ * `popReads` says whether the pop will show on the wash: the big word is
+ * outlined in white, so it only has to be a plainly different colour (a
+ * little lighter, or a different hue), not readable on its own. The same
+ * colour twice, or two darks of one hue, fails, and the look paints the
+ * big word white with a dark outline instead.
+ */
+export function washColours(accent, badgeColor) {
+  const a = accent || DEFAULT_BG
+  const b = badgeColor || DEFAULT_BG
+  const washIsB = luminance(b) <= luminance(a)
+  const wash = washIsB ? b : a
+  const pop = washIsB ? a : b
+  const hp = hueSat(pop)
+  const hw = hueSat(wash)
+  const gap = Math.abs(hp.h - hw.h) % 360
+  const hueApart = (gap > 180 ? 360 - gap : gap) > 60 && hp.s > 0.25 && hw.s > 0.25
+  // 1.8: red on navy (1.9) passes on depth alone; navy on a darker navy
+  // (1.5) does not, and has no hue to pass on, so the big word goes white
+  // instead of hollow.
+  const popReads = contrastBetween(pop, wash) >= 1.8 || hueApart
+  return { wash, pop, popReads }
+}
+
 /**
  * The split look: a colour panel and the photo side by side on the wide
  * frames, stacked on the tall one. The panel always holds the words.

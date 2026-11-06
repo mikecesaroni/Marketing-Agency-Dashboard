@@ -2298,7 +2298,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
               {LAYOUTS.find((l) => l.key === layout)?.hint}. Drag the photo on any artboard to choose what the
               crop keeps; the other two sizes follow the same spot.
               {layout === 'stack' && ' Wrap a word in asterisks (*Free* second opinion) to choose the giant word; otherwise a short first word is used.'}
-              {layout === 'wash' && ' The offer amount is the huge word (5% OFF, $89, FREE); with no amount the headline takes its place. The wash is the plate colour, the big word and the seam the accent.'}
+              {layout === 'wash' && ' The offer amount is the huge word (5% OFF, $89, FREE); with no amount the headline takes its place. The wash is the darker of the two colours, the big word and the seam the other; a big word that would not read on the wash goes white with a dark outline.'}
             </p>
           </>
         )}

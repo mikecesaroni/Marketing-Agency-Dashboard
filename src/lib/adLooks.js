@@ -21,7 +21,7 @@
 import { readableTextOn } from './logoColours'
 import { logoFor } from './logoCutout'
 import { PAD, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
-import { DEFAULT_BG, accentWord, containRect, coverRect, beforeRects, plateRects, splitRects, washRects } from './adLayout'
+import { DEFAULT_BG, accentWord, containRect, coverRect, beforeRects, plateRects, splitRects, washColours, washRects } from './adLayout'
 
 export const SLATE = '#0F172A'
 const r = (n) => Math.round(n)
@@ -488,23 +488,23 @@ function withAlpha(hex, alpha) {
  * client's Drive folder drops in; dragging the artboard moves what the top
  * keeps.
  *
- * The wash is the plate colour (the brand's second colour), the seam and the
- * big word the accent. A one-colour brand (accent and wash the same) gets
- * the big word in white with a dark outline instead, so it never vanishes
- * into the wash.
+ * The wash is the darker of the brand's two colours, the seam and the big
+ * word the other (washColours). A one-colour brand, or two darks, gets the
+ * big word in white with a dark outline instead, so it never vanishes into
+ * the wash.
  */
 function renderWash(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
   const { w, h, padX, contentTop, contentBottom, maxWidth, safeTop, safeBottom } = m
   const { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, focus } = content
   const { background, logo } = assets || {}
-  const washColor = badgeColor || DEFAULT_BG
+  const { wash: washColor, pop, popReads } = washColours(accent, badgeColor)
   const ink = readableTextOn(washColor)
   const light = ink === '#FFFFFF'
   const soft = light ? 'rgba(255,255,255,0.9)' : 'rgba(15,23,42,0.74)'
-  const sameColour = String(accent || '').toUpperCase() === String(washColor).toUpperCase()
-  const bigFill = sameColour ? '#FFFFFF' : accent
-  const bigStroke = sameColour ? 'rgba(2,6,23,0.85)' : '#FFFFFF'
+  const bigFill = popReads ? pop : '#FFFFFF'
+  const bigStroke = popReads ? '#FFFFFF' : 'rgba(2,6,23,0.85)'
+  const seamColor = popReads ? pop : '#FFFFFF'
 
   const { photo, seam, wash } = washRects(w, h, { safeTop, safeBottom })
 
@@ -545,14 +545,14 @@ function renderWash(ctx, size, content, assets, opts) {
   ctx.save()
   curve()
   ctx.lineWidth = 14
-  ctx.strokeStyle = accent
+  ctx.strokeStyle = seamColor
   ctx.shadowColor = 'rgba(2,6,23,0.4)'
   ctx.shadowBlur = 18
   ctx.shadowOffsetY = 4
   ctx.stroke()
   ctx.restore()
 
-  drawBadge(ctx, badge, padX, contentTop, maxWidth, badgeColor === washColor ? accent : badgeColor)
+  drawBadge(ctx, badge, padX, contentTop, maxWidth, popReads ? pop : washColor)
 
   // The logo in a white pill, centred on the seam's lowest point: the one
   // place on this look where the logo keeps its box, because the box IS the
