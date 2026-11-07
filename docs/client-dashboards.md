@@ -56,6 +56,33 @@ fixed text: short sentences, everyday words, no hype, no em dashes.
 - The bottom of every weekly report email, and the top of the report's web
   copy.
 
+## The address on the links (2026-11-07)
+
+"Can we change the URL of this CRM when we send out links." Yes, from the
+Reports page: under **Client dashboards**, the line **Links go out on**
+shows the address every client link starts with (this site's own until one
+is saved) and **Use our own domain** takes a domain (clients.yourdomain.com,
+however it is typed: https:// is added, the host lowercased, nothing after
+it kept) and saves it to `app_settings.public_app_url`. From then on every
+link the CRM makes for a client, the dashboard, the weekly report, an ad
+approval, the onboarding form, the video scripts and the videos tab, and the
+links in the weekly report emails (the `weekly-report` function reads the
+same row, then its `APP_URL` secret, then the site) carry that address.
+Links already sent keep working on the old one. Clearing the box puts the
+links back on the site's own address.
+
+The one thing the box cannot do is make the domain answer: it has to be
+added to the site in Netlify (Domain management) with its DNS pointed where
+Netlify says. Once the padlock shows, the CRM loads on the new address too
+(it is the same site), and the link address can be saved. To make the new
+domain serve only the client pages, put its host into the edge rules in
+`netlify.toml` and `VITE_PUBLIC_HOST` (the wall below).
+
+`cleanPublicUrl`, `publicBase` and the cache behind `publicLink` are in
+`src/lib/publicSite.js` (pinned by `scripts/check-public-site.mjs`); the
+reads and writes in `src/lib/publicSiteStore.js`; the CRM reads the setting
+once when it opens (`src/App.jsx`).
+
 ## Keeping clients out of the CRM
 
 The dashboard page itself has no way in: no agency nav, no link to any

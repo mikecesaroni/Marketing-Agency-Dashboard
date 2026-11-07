@@ -1,7 +1,7 @@
 // Self-check for the wall between client links and the CRM.
 // Run: node scripts/check-public-site.mjs
 import { readFileSync } from 'node:fs'
-import { CLIENT_VISITOR_KEY, PUBLIC_PREFIXES, isClientVisitor, isPublicOnlySite, isPublicPath, markClientVisitor, publicBase } from '../src/lib/publicSite.js'
+import { CLIENT_VISITOR_KEY, PUBLIC_APP_URL_KEY, PUBLIC_PREFIXES, cleanPublicUrl, getPublicAppUrl, isClientVisitor, isPublicOnlySite, isPublicPath, markClientVisitor, publicBase, publicLink, setPublicAppUrl } from '../src/lib/publicSite.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -22,6 +22,17 @@ check('the CRM host is not client-facing', isPublicOnlySite({ hostname: 'crm.exa
 check('nothing set means the CRM', isPublicOnlySite({ hostname: 'x.netlify.app', env: {} }), false)
 check('links use the client-facing address when set', publicBase({ VITE_PUBLIC_APP_URL: 'https://clients.example.com/' }, 'https://crm.example.com'), 'https://clients.example.com')
 check('and the current origin when not', publicBase({}, 'https://crm.example.com'), 'https://crm.example.com')
+
+// The address saved in the CRM ("can we change the URL of this CRM when we
+// send out links") wins over the build and the site.
+check('the setting lives under one key', PUBLIC_APP_URL_KEY, 'public_app_url')
+check('an address as typed becomes a base: https added, the host lowercased, no path, no slash', [cleanPublicUrl('clients.Example.com/'), cleanPublicUrl('https://Clients.Example.com/dashboard/x'), cleanPublicUrl('http://localhost:5173/'), cleanPublicUrl('  ')], ['https://clients.example.com', 'https://clients.example.com', 'http://localhost:5173', ''])
+check('not a web address: nothing, so a slip cannot send every link somewhere odd', [cleanPublicUrl('mailto:x@y.z'), cleanPublicUrl('just words'), cleanPublicUrl('ftp://x.com')], ['', '', ''])
+check('the saved address beats the build and the site', publicBase({ VITE_PUBLIC_APP_URL: 'https://build.example.com' }, 'https://crm.example.com', 'clients.example.com'), 'https://clients.example.com')
+check('a saved address that is not one falls through to the build', publicBase({ VITE_PUBLIC_APP_URL: 'https://build.example.com' }, 'https://crm.example.com', 'nope'), 'https://build.example.com')
+check('publicLink reads the saved address from the cache', [setPublicAppUrl('reports.example.com'), getPublicAppUrl(), publicLink('/dashboard/t1'), setPublicAppUrl(''), publicLink('/dashboard/t1')], ['https://reports.example.com', 'https://reports.example.com', 'https://reports.example.com/dashboard/t1', '', '/dashboard/t1'])
+check('the weekly report email reads the same setting for its links', [read('supabase/functions/weekly-report/index.ts').includes("app_settings?key=eq.public_app_url"), read('supabase/functions/weekly-report/index.ts').includes('let appUrl')], [true, true])
+check('the Reports page has the box, and the CRM reads the setting when it opens', [read('src/components/ClientDashboardsPanel.jsx').includes('data-link-address'), read('src/App.jsx').includes('loadPublicAppUrl()')], [true, true])
 
 // ------------------------------------------------- the pages themselves
 // A client page must not import the CRM shell or link into the CRM.

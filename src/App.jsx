@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react'
+import { loadPublicAppUrl } from './lib/publicSiteStore'
 import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 // The pages a client opens load with the first file: a phone on a slow
 // connection gets the dashboard or a script in one trip, with no second
@@ -73,6 +74,18 @@ function PageLoading() {
 
 export default function App() {
   const { pathname } = useLocation()
+
+  // The address client links go out on (app_settings.public_app_url), read
+  // once so every Copy link, every onboarding message and every approval
+  // link built in this tab carries it. Best effort: without it the links
+  // carry the CRM's own address, as before. Not on a client's page: that
+  // page builds no links and may not be able to read settings.
+  useEffect(() => {
+    if (onPublicSite() || isPublicPath(pathname)) return
+    loadPublicAppUrl().catch(() => {})
+    // Once per tab: the setting changes from the Reports page, which updates the cache itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // The client-facing site (VITE_PUBLIC_ONLY, or a host named in
   // VITE_PUBLIC_HOST) serves the token pages and nothing else: there is no

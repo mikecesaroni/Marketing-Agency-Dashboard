@@ -88,7 +88,11 @@ Deno.serve(async (req) => {
   const from = Deno.env.get('REPORT_FROM')
   const canEmail = Boolean(apiKey && from)
   const agencyName = Deno.env.get('REPORT_AGENCY_NAME') || 'The Working Class Marketing'
-  const appUrl = (Deno.env.get('APP_URL') || 'https://marketing-agency-dashboard.netlify.app').replace(/\/$/, '')
+  // Where the links in the email point: the address saved in the CRM
+  // (app_settings.public_app_url, the Reports page's "Links go out on"),
+  // else the APP_URL secret, else the site itself. Read below, once the
+  // database helper exists.
+  let appUrl = (Deno.env.get('APP_URL') || 'https://marketing-agency-dashboard.netlify.app').replace(/\/$/, '')
   const dryRun = Boolean(body.dry_run)
   const preview = body.action === 'preview'
 
@@ -101,6 +105,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const savedUrl = String(((await get(`app_settings?key=eq.public_app_url&select=value`)) || [])[0]?.value || '').trim()
+    if (/^https?:\/\/[^\s/]+$/i.test(savedUrl)) appUrl = savedUrl.replace(/\/$/, '')
+
     const onlyId = preview ? String(body.client_id || '') : String(body.only_client_id || '')
     const clientFilter = onlyId ? `&id=eq.${encodeURIComponent(onlyId)}` : ''
     const rowFilter = onlyId ? `&client_id=eq.${encodeURIComponent(onlyId)}` : ''

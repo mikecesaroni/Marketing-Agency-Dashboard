@@ -1,7 +1,107 @@
 import { useEffect, useState } from 'react'
 import { ChannelDot, DarkButton, Panel, Pill, SectionTitle } from './reports/kit'
 import { dashboardLink, newToken } from '../lib/clientDashboard'
+import { cleanPublicUrl, getPublicAppUrl } from '../lib/publicSite'
+import { loadPublicAppUrl, savePublicAppUrl } from '../lib/publicSiteStore'
 import { supabase } from '../lib/supabaseClient'
+
+/**
+ * The address every client link goes out on ("can we change the URL of
+ * this CRM when we send out links"). Saved in app_settings; the dashboard,
+ * report, approval, onboarding, scripts and videos links the CRM makes, and
+ * the weekly report emails, carry it from then on. The domain itself has
+ * to be added to the site in Netlify first; that is the one step this box
+ * cannot do.
+ */
+function LinkAddressRow({ onChange }) {
+  const [saved, setSaved] = useState(getPublicAppUrl())
+  const [draft, setDraft] = useState(getPublicAppUrl())
+  const [editing, setEditing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
+
+  useEffect(() => {
+    loadPublicAppUrl()
+      .then((v) => {
+        setSaved(v)
+        setDraft(v)
+      })
+      .catch(() => {})
+  }, [])
+
+  const here = typeof window !== 'undefined' ? window.location.origin : ''
+  const save = async () => {
+    setBusy(true)
+    setNote('')
+    try {
+      const v = await savePublicAppUrl(draft)
+      setSaved(v)
+      setDraft(v)
+      setEditing(false)
+      setNote(v ? `Saved. Every link copied from now on starts with ${v}.` : 'Cleared. Links use this site’s own address again.')
+      onChange?.(v)
+    } catch (err) {
+      setNote(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const preview = cleanPublicUrl(draft)
+
+  return (
+    <Panel className="mb-3 p-4" data-link-address>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+        <span className="text-slate-400">Links go out on</span>
+        {editing ? (
+          <>
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !busy && save()}
+              placeholder="clients.yourdomain.com"
+              aria-label="The address client links go out on"
+              className="w-72 max-w-full rounded-lg border border-white/15 bg-white/[0.04] px-2.5 py-1.5 font-mono text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-400/60"
+              data-link-address-input
+            />
+            <DarkButton onClick={save} disabled={busy}>
+              {busy ? 'Saving…' : 'Save'}
+            </DarkButton>
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(saved)
+                setEditing(false)
+                setNote('')
+              }}
+              className="text-xs text-slate-400 hover:text-white"
+            >
+              Cancel
+            </button>
+            {draft.trim() && !preview && <span className="text-xs text-amber-300">Not a web address yet.</span>}
+          </>
+        ) : (
+          <>
+            <span className="font-mono text-xs text-white" data-link-address-value>
+              {saved || here}
+            </span>
+            {!saved && <span className="text-xs text-slate-500">(this site’s own address)</span>}
+            <DarkButton onClick={() => setEditing(true)}>{saved ? 'Change' : 'Use our own domain'}</DarkButton>
+          </>
+        )}
+      </div>
+      {note && <p className="mt-2 text-xs text-emerald-300" data-link-address-note>{note}</p>}
+      <details className="mt-2 text-xs text-slate-500">
+        <summary className="cursor-pointer hover:text-slate-300">How to put the links on our own domain</summary>
+        <ol className="mt-2 list-decimal space-y-1 pl-5">
+          <li>In Netlify, open this site, Domain management, add the domain (clients.yourdomain.com or the like) and point its DNS where Netlify says. Wait for the padlock.</li>
+          <li>Open the domain in a browser: the CRM should load there too (it is the same site).</li>
+          <li>Put the domain here and Save. Every link copied from then on, every onboarding message and every weekly report email uses it. Links already sent keep working on the old address.</li>
+        </ol>
+        <p className="mt-2">To make the new domain serve only the client pages (no CRM there at all), say so and the domain goes into the site’s edge rules as well.</p>
+      </details>
+    </Panel>
+  )
+}
 
 /**
  * One card per client with their private dashboard link. Lives on the
@@ -13,6 +113,8 @@ export default function ClientDashboardsPanel() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState('')
   const [confirmId, setConfirmId] = useState('')
+  // Bumped when the link address changes, so the cards re-read their links.
+  const [, setLinkBase] = useState('')
 
   useEffect(() => {
     supabase
@@ -54,6 +156,7 @@ export default function ClientDashboardsPanel() {
   return (
     <section data-client-dashboards>
       <SectionTitle title="Client dashboards" sub="One private link per client: every number, what it means, and why return beats cost per lead. Send it once; it stays live." />
+      <LinkAddressRow onChange={setLinkBase} />
       {error && <p className="mb-3 text-sm text-rose-300">{error}</p>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {clients.map((c) => {

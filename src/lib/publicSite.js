@@ -9,9 +9,13 @@
 //    VITE_PUBLIC_HOST, serves ONLY the public pages; every other address is
 //    a dead end. Netlify can enforce the same thing at the edge (see
 //    netlify.toml).
-// 2. Links the CRM makes for clients use VITE_PUBLIC_APP_URL when it is
-//    set, so a client never sees the CRM's own address. The weekly-report
-//    function does the same with its APP_URL secret.
+// 2. Links the CRM makes for clients use the address saved in the CRM
+//    (app_settings.public_app_url, set on the Reports page under Client
+//    dashboards: "can we change the URL of this CRM when we send out
+//    links", 2026-11-07), else VITE_PUBLIC_APP_URL from the build, else
+//    the address the CRM is open on. So a client never sees the CRM's own
+//    address once a domain is saved. The weekly-report function reads the
+//    same setting for the links in its emails (then its APP_URL secret).
 //
 // Plain JavaScript with no imports, so scripts/check-public-site.mjs can
 // load it in Node.
@@ -37,18 +41,57 @@ export function isPublicOnlySite({ hostname, env } = {}) {
   return hosts(e.VITE_PUBLIC_HOST).includes(String(hostname || '').toLowerCase())
 }
 
-/** Where client links point: the client-facing site when there is one. */
-export function publicBase(env, origin) {
+/** The app_settings key holding the address client links go out on. */
+export const PUBLIC_APP_URL_KEY = 'public_app_url'
+
+/**
+ * An address as typed ("clients.example.com/", "https://Clients.Example.com")
+ * made into a base for links: https:// added when no scheme was given, the
+ * host lowercased, no path, no trailing slash. Empty for anything that is
+ * not a web address, so a slip cannot send every link somewhere odd.
+ */
+export function cleanPublicUrl(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  // Any scheme but http(s) is not a web address (mailto:, ftp:); a bare
+  // host gets https.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw) && !/^https?:\/\//i.test(raw)) return ''
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+  try {
+    const u = new URL(withScheme)
+    if (!/^https?:$/.test(u.protocol) || u.username || u.password) return ''
+    if (!u.hostname.includes('.') && u.hostname !== 'localhost') return ''
+    return `${u.protocol}//${u.hostname.toLowerCase()}${u.port ? `:${u.port}` : ''}`
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Where client links point: the address saved in the CRM when there is
+ * one, else the client-facing site from the build, else the address the
+ * CRM is open on.
+ */
+export function publicBase(env, origin, saved = '') {
   const e = env || {}
-  return String(e.VITE_PUBLIC_APP_URL || origin || '').replace(/\/+$/, '')
+  return (cleanPublicUrl(saved) || String(e.VITE_PUBLIC_APP_URL || origin || '')).replace(/\/+$/, '')
 }
 
 const runtimeEnv = () => (typeof import.meta !== 'undefined' && import.meta.env) || {}
 const runtimeOrigin = () => (typeof window !== 'undefined' ? window.location.origin : '')
 
+// The saved address, read once when the CRM opens (src/lib/publicSiteStore.js)
+// and kept here so every link builder stays a plain function.
+let savedPublicUrl = ''
+export function setPublicAppUrl(value) {
+  savedPublicUrl = cleanPublicUrl(value)
+  return savedPublicUrl
+}
+export const getPublicAppUrl = () => savedPublicUrl
+
 /** A full link for a client, from a public path such as /dashboard/<token>. */
 export function publicLink(path) {
-  return `${publicBase(runtimeEnv(), runtimeOrigin())}${path}`
+  return `${publicBase(runtimeEnv(), runtimeOrigin(), savedPublicUrl)}${path}`
 }
 
 /** Is this page running on the client-facing site? */

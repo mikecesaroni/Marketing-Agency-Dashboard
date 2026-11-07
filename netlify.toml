@@ -21,10 +21,13 @@
 #
 # To switch on: add the client domain to this site in Netlify (Domain
 # management), put its host in the rules below in place of
-# clients.example.com, set VITE_PUBLIC_HOST and VITE_PUBLIC_APP_URL in the
-# site's environment to the same host, set the weekly-report function's
-# APP_URL secret to https://<that host>, and redeploy. Domain-level rules
-# must sit above the catch-all below; first match wins.
+# clients.example.com, set VITE_PUBLIC_HOST in the site's environment to
+# the same host, and redeploy. Domain-level rules must sit above the
+# catch-all below; first match wins. The address the links go out on is
+# saved in the CRM itself (Reports, Client dashboards, "Links go out on":
+# app_settings.public_app_url, read by the app and by the weekly-report
+# function), so no VITE_PUBLIC_APP_URL or APP_URL secret is needed for
+# that; both still work as fallbacks.
 #
 # [[redirects]]
 #   from = "https://clients.example.com/dashboard/*"
