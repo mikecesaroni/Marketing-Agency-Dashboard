@@ -5,6 +5,9 @@ import UnmappedAccountsPanel from '../components/UnmappedAccountsPanel'
 import MonthlyReportsPanel from '../components/MonthlyReportsPanel'
 import WeeklyReportsPanel from '../components/WeeklyReportsPanel'
 import ClientDashboardsPanel from '../components/ClientDashboardsPanel'
+import GoogleAdsIdInput from '../components/GoogleAdsIdInput'
+import { dashedId, explainSyncError, isAccessError } from '../lib/googleAdsId'
+import { ourBusinessRows } from '../lib/ourBusinesses'
 import { fetchAdRowsForRange, formatDate, getMonday, isLive, money } from '../lib/queries'
 import { buildDailySeries, daysAgo, pctChange, totals as sumSeries } from '../lib/dailySeries'
 import ChannelDailyChart from '../components/reports/ChannelDailyChart'
@@ -53,6 +56,8 @@ export default function ReportsPage() {
   const [adRows, setAdRows] = useState([])
   const [googleRows, setGoogleRows] = useState([])
   const [lsaRows, setLsaRows] = useState([])
+  // Our own businesses (is_internal), for the My businesses rows.
+  const [ourClients, setOurClients] = useState([])
   const [scope, setScope] = useState('live')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -69,7 +74,7 @@ export default function ReportsPage() {
   // with. Google and LSA fail soft: a missing table must not blank Meta.
   const load = async () => {
     const since = daysAgo(days * 2 - 1)
-    const [meta, google, lsa] = await Promise.all([
+    const [meta, google, lsa, ours] = await Promise.all([
       fetchAdRowsForRange(since),
       supabase
         .from('google_campaign_daily')
@@ -82,10 +87,21 @@ export default function ReportsPage() {
         .eq('channel', 'LSA')
         .gte('week_of', formatDate(getMonday(new Date(`${since}T00:00:00`))))
         .then(({ data }) => data || [], () => []),
+      // Our own businesses, as rows of their own (src/lib/ourBusinesses.js):
+      // the connect box for Google Ads lives on the row, so a business with
+      // nothing spent yet still has to be there.
+      supabase
+        .from('clients')
+        .select('id, name, is_internal, archived, meta_ad_account_id, google_ads_customer_id, google_ads_sync_error')
+        .eq('is_internal', true)
+        .eq('archived', false)
+        .order('name')
+        .then(({ data }) => data || [], () => []),
     ])
     setAdRows(meta)
     setGoogleRows(google)
     setLsaRows(lsa)
+    setOurClients(ours)
   }
 
   useEffect(() => {
@@ -199,17 +215,9 @@ export default function ReportsPage() {
   }, [metaNowRows, googleNowRows, clientLsa, windowMonday])
   const topSpend = Math.max(...clientTable.map((r) => r.spend), 1)
 
-  // Our own businesses: Meta only, as before, never in a total.
-  const internalRows = useMemo(() => {
-    const by = new Map()
-    for (const r of scopedRows.filter((x) => x.clients?.is_internal && x.date >= windowStart)) {
-      const x = by.get(r.client_id) || { id: r.client_id, name: r.clients?.name || 'Unknown', spend: 0, leads: 0 }
-      x.spend += Number(r.spend) || 0
-      x.leads += r.leads || 0
-      by.set(r.client_id, x)
-    }
-    return [...by.values()].map((r) => ({ ...r, cpl: r.leads > 0 ? r.spend / r.leads : 0 })).sort((a, b) => b.spend - a.spend)
-  }, [scopedRows, windowStart])
+  // Our own businesses: Meta and Google, never in a total, with the Google
+  // Ads connect box on the row (there is no client card to reach them from).
+  const internalRows = useMemo(() => ourBusinessRows({ clients: ourClients, metaRows: scopedRows, googleRows, windowStart }), [ourClients, scopedRows, googleRows, windowStart])
 
   const actions = (
     <div className="flex min-w-0 max-w-full items-center gap-2 overflow-x-auto pb-1">
@@ -429,8 +437,8 @@ export default function ReportsPage() {
           </section>
 
           {internalRows.length > 0 && (
-            <section>
-              <SectionTitle title="My businesses" sub="Not clients · Meta · left out of every total above" />
+            <section data-our-businesses>
+              <SectionTitle title="My businesses" sub="Not clients · Meta and Google · left out of every total above · connect a Google Ads account on the row" />
               <DTable>
                 <thead>
                   <tr>
@@ -438,19 +446,52 @@ export default function ReportsPage() {
                     <DTh numeric>Meta spend</DTh>
                     <DTh numeric>Leads</DTh>
                     <DTh numeric>Cost/lead</DTh>
+                    <DTh numeric>Google spend</DTh>
+                    <DTh numeric>Leads</DTh>
+                    <DTh numeric>Cost/lead</DTh>
+                    <DTh>Google Ads</DTh>
                   </tr>
                 </thead>
                 <tbody>
                   {internalRows.map((r) => (
-                    <DTr key={r.id}>
+                    <DTr key={r.id} data-our-business={r.name}>
                       <DTd className="whitespace-nowrap"><Link to={`/client/${r.id}#ad-performance`} className="font-medium text-white hover:text-sky-300">{r.name}</Link></DTd>
-                      <DTd numeric>{money(r.spend)}</DTd>
-                      <DTd numeric>{r.leads}</DTd>
-                      <DTd numeric>{cplText(r.cpl)}</DTd>
+                      <DTd numeric>{money(r.metaSpend)}</DTd>
+                      <DTd numeric>{r.metaLeads}</DTd>
+                      <DTd numeric>{cplText(r.metaCpl)}</DTd>
+                      <DTd numeric>{r.googleConnected ? money(r.googleSpend) : <span className="text-slate-600">not connected</span>}</DTd>
+                      <DTd numeric>{r.googleConnected ? r.googleLeads : ''}</DTd>
+                      <DTd numeric>{r.googleConnected ? cplText(r.googleCpl) : ''}</DTd>
+                      <DTd>
+                        {/* The same box the Google Search report puts beside a
+                            client still to connect: paste the customer ID,
+                            it saves and syncs on the spot. A connected
+                            business shows its ID and a link to its report;
+                            one Google refuses keeps the box, with the reason. */}
+                        {r.client && r.googleConnected && !isAccessError(r.googleError) ? (
+                          <span className="whitespace-nowrap text-xs text-slate-300" data-google-connected>
+                            {dashedId(r.googleId)} ·{' '}
+                            <Link to={`/reports/google-search/${r.id}`} className="text-emerald-300 hover:underline">
+                              Google report
+                            </Link>
+                          </span>
+                        ) : r.client ? (
+                          <div className="min-w-[14rem]">
+                            <GoogleAdsIdInput client={r.client} onSaved={load} compact dark />
+                            {r.googleError && <p className="mt-1 text-[11px] text-amber-300/90">{explainSyncError(r.googleError)}</p>}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-600">loading</span>
+                        )}
+                      </DTd>
                     </DTr>
                   ))}
                 </tbody>
               </DTable>
+              <p className="mt-2 text-[11px] text-slate-500">
+                Our own accounts, so no access request to send: read the customer ID off the top right of that Google Ads account (or off our manager account under Accounts) and paste it here.
+                The nightly sync then reads it like any client's.
+              </p>
             </section>
           )}
 

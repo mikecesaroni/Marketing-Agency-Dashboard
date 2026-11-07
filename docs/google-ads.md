@@ -228,6 +228,21 @@ syncs one client's spend onto another's report.
 The manager id is a constant in `src/lib/googleAdsAccessMessage.js`. It has
 to be the same account as the `GOOGLE_ADS_LOGIN_CUSTOMER_ID` secret.
 
+**Our own businesses** (Horizon HVAC, Horizon Water Co; `is_internal`,
+never a client, never in a total) connect on the Reports page, under **My
+businesses** (since 2026-11-07: "make so I can connect Google Ads accounts
+to the Horizon businesses"). Each has a row there whether or not anything
+has spent, with its Meta and its Google numbers for the range and the same
+box the Google Search report puts beside a client still to connect: paste
+the customer ID, **Save & sync**, and it syncs on the spot. No access
+request to send, since they are our own accounts: read the ID off the top
+right of that Google Ads account or off the manager account under Accounts.
+A connected business shows its ID and a link to its Google report
+(`/reports/google-search/<id>`); one Google refuses keeps the box with the
+reason. The nightly sync does not filter on `is_internal`, so from then on
+it reads the account like any client's. `src/lib/ourBusinesses.js` builds
+the rows, pinned by `scripts/check-our-businesses.mjs`.
+
 ---
 
 ## Checking it worked
