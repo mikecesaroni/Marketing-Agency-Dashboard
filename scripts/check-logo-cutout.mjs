@@ -77,9 +77,10 @@ const RED = [200, 40, 40]
   check('a transparent border means cut out already', borderColour(c.px, c.w, c.h).alreadyCut, true)
 }
 
-// The photo looks paint the knocked-out logo, not the original on a pill.
+// The photo looks paint the knocked-out logo, not the original on a pill:
+// the stack, the Story text look (small, as a watermark) and the split.
 const looks = readFileSync(new URL('../src/lib/adLooks.js', import.meta.url), 'utf8')
-check('the photo looks hand the assets to the logo painter, which picks the cut mark', [looks.split('drawLogoPill(ctx, assets,').length - 1, /logoFor\(assetsOrLogo, true\)/.test(looks), /rgba\(255,255,255,0\.92\)/.test(looks)], [2, true, false])
+check('the photo looks hand the assets to the logo painter, which picks the cut mark', [looks.split('drawLogoPill(ctx, assets,').length - 1, /logoFor\(assetsOrLogo, true\)/.test(looks), /rgba\(255,255,255,0\.92\)/.test(looks)], [3, true, false])
 
 console.log(failures === 0 ? '\nAll logo cutout checks pass' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

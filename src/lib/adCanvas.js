@@ -52,7 +52,7 @@ import { readableTextOn } from './logoColours'
 // logo-heavy layout or a photo whose edges are not worth showing, and it is
 // never chosen for someone.
 export { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_LAYOUTS, TEXT_LAYOUTS, TWO_PHOTO_LAYOUTS, accentWord, containRect, coverRect, dragFocus, dragPhoto, photoRect } from './adLayout'
-import { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, coverRect, photoRect } from './adLayout'
+import { DEFAULT_BG, DEFAULT_FOCUS, DEFAULT_PHOTO, coverRect, photoRect, typedColours, typedWords } from './adLayout'
 
 export const DEFAULT_ACCENT = '#C81E1E' // offer block
 export const DEFAULT_BADGE = '#1E3A8A' // location badge
@@ -88,7 +88,7 @@ export function brandColours(intake) {
 // The type helpers (font stack, measuring, wrapping, fit-to-width, rounded
 // boxes) live in adText.js so the looks in adLooks.js draw with the same type.
 import { PAD, fitText, roundRect, setFont, typographic } from './adText'
-import { hasLook, renderLook } from './adLooks'
+import { drawLocationSticker, drawTypedBlock, hasLook, renderLook } from './adLooks'
 import { hasTemplate, renderAiArt, renderTemplate } from './adTemplates'
 
 // Inter is loaded from the stylesheet, but a font declared in CSS is only
@@ -187,6 +187,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     badgeColor = DEFAULT_BADGE,
     hookPlate = false,
     subheadPlate = false,
+    typedText = false,
     layout = 'cover',
     bgColor = DEFAULT_BG,
     photo = DEFAULT_PHOTO,
@@ -231,6 +232,14 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   const lightInk = ink.toUpperCase() === '#FFFFFF'
   const deckInk = lightInk ? '#E2E8F0' : '#334155'
   const plateFill = card && !lightInk ? 'rgba(255,255,255,0.72)' : 'rgba(2,6,23,0.55)'
+  // "Typed on Instagram": the headline and the subhead typed the way the
+  // app types text with a background (a black box per line, white words,
+  // the numbers in the brand colour, the headline tipped a touch), the
+  // badge as a location sticker, no scrim behind them. The offer block,
+  // the proof and the logo stay: the look keeps its shape.
+  const typed = Boolean(typedText) && !card
+  const tc = typed ? typedColours(accent, badgeColor) : null
+  const tPad = (px) => Math.round(px * 0.18)
 
   canvas.width = w
   canvas.height = h
@@ -246,7 +255,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
 
   // ---- MEASURE ----
   const badgeLabel = badge?.trim() ? badge.trim().toUpperCase() : ''
-  const badgeH = badgeLabel ? 52 : 0
+  const badgeH = badgeLabel ? (typed ? 56 : 52) : 0
   const headerTop = contentTop
   const hookTop = headerTop + (badgeH ? badgeH + 26 : 0)
 
@@ -277,11 +286,13 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   //
   // Measured here, before the hook is sized, because the hook takes whatever
   // room is left over and has to know what the deck is going to use.
+  const deckRatio = typed ? 1.24 : 1.34
+  const deckWords = typed && subhead?.trim() ? typedWords(typographic(subhead)) : null
   const deck = subhead?.trim()
-    ? fitText(ctx, typographic(subhead), maxWidth, 3, 30, 23, '500', 0, { lineRatio: 1.34 })
+    ? fitText(ctx, typed ? deckWords.map((x) => x.word).join(' ') : typographic(subhead), maxWidth - (typed ? 30 : 0), 3, 30, 23, typed ? '600' : '500', 0, { lineRatio: deckRatio })
     : null
-  const deckH = deck ? deck.lines.length * deck.px * 1.34 : 0
-  const deckGap = deck ? 22 : 0
+  const deckH = deck ? deck.lines.length * deck.px * deckRatio + (typed ? 2 * tPad(deck.px) : 0) : 0
+  const deckGap = deck ? (typed ? 14 : 22) : 0
 
   // The offer block and the proof are measured against the width left beside
   // the logo, so a wide offer reflows instead of running under it.
@@ -296,21 +307,26 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   let hookPx = 0
   let hookFirstBaseline = 0
   let hookLastBaseline = 0
+  let hookBlockH = 0
   let deckTop = hookTop
+  const hookWords = typed && hook?.trim() ? typedWords(typographic(hook)) : null
 
   if (hook?.trim()) {
     const room = footerTop - 30 - hookTop - deckH - deckGap
-    const fit = fitText(ctx, typographic(hook), maxWidth, 3, 60, 38, '800', -0.5, {
+    const hookRatio = typed ? 1.24 : 1.13
+    const fit = fitText(ctx, typed ? hookWords.map((x) => x.word).join(' ') : typographic(hook), maxWidth - (typed ? 56 : 0), 3, 60, 38, '800', typed ? -0.6 : -0.5, {
       maxHeight: room,
-      lineRatio: 1.13,
+      lineRatio: hookRatio,
     })
     hookLines = fit.lines
     hookPx = fit.px
     hookFirstBaseline = hookTop + hookPx
-    hookLastBaseline = hookFirstBaseline + (hookLines.length - 1) * hookPx * 1.13
+    hookLastBaseline = hookFirstBaseline + (hookLines.length - 1) * hookPx * hookRatio
+    hookBlockH = hookLines.length * hookPx * hookRatio + 2 * tPad(hookPx)
     // Descenders reach about 0.24em below the baseline, so the deck clears
-    // them rather than tucking under a comma.
-    deckTop = hookLastBaseline + hookPx * 0.24 + deckGap
+    // them rather than tucking under a comma. Typed, the deck's box starts
+    // under the hook's box.
+    deckTop = typed ? hookTop + hookBlockH + deckGap : hookLastBaseline + hookPx * 0.24 + deckGap
   }
 
   // Worked out before anything is painted, so the plate below can cover the
@@ -327,11 +343,17 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   // The free band: from under the last line of text to above the offer block.
   // On the card layout the photo lives here, so it can never sit on the
   // headline or the footer unless somebody drags it there on purpose.
-  const textBottom = deckBaselines.length
-    ? deckBaselines[deckBaselines.length - 1] + (deck?.px || 0) * 0.3
-    : hookLines?.length
-      ? hookLastBaseline + hookPx * 0.24
-      : hookTop
+  const textBottom = typed
+    ? deck
+      ? deckTop + deckH
+      : hookLines?.length
+        ? hookTop + hookBlockH
+        : hookTop
+    : deckBaselines.length
+      ? deckBaselines[deckBaselines.length - 1] + (deck?.px || 0) * 0.3
+      : hookLines?.length
+        ? hookLastBaseline + hookPx * 0.24
+        : hookTop
   const band = { top: Math.min(textBottom + 36, footerTop - 60), bottom: footerTop - 36 }
 
   // ---- BACKGROUND ----
@@ -348,9 +370,12 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     // an overall knock-down so the photo reads as a backdrop, then extra weight
     // behind the header and behind the footer. The lower ramp is anchored to the
     // footer rather than to a fixed fraction, so it still sits behind the text
-    // when Reels pushes everything up the frame.
-    ctx.fillStyle = 'rgba(2,6,23,0.20)'
-    ctx.fillRect(0, 0, w, h)
+    // when Reels pushes everything up the frame. Typed words carry their own
+    // boxes, so the photo stays clean up top and only the footer gets a lift.
+    if (!typed) {
+      ctx.fillStyle = 'rgba(2,6,23,0.20)'
+      ctx.fillRect(0, 0, w, h)
+    }
 
     // Reaches past the deck as well, or a subhead under a three-line hook falls
     // off the bottom of the gradient onto the bare photo.
@@ -360,7 +385,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     topScrim.addColorStop(0.55, 'rgba(2,6,23,0.28)')
     topScrim.addColorStop(1, 'rgba(2,6,23,0)')
     ctx.fillStyle = topScrim
-    ctx.fillRect(0, 0, w, topEnd)
+    if (!typed) ctx.fillRect(0, 0, w, topEnd)
 
     // Ramped over more stops than feels necessary: with only two, a tall frame
     // shows a visible horizontal seam where the gradient begins.
@@ -376,7 +401,9 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   }
 
   // ---- HEADER ----
-  if (badgeLabel) {
+  if (badgeLabel && typed) {
+    drawLocationSticker(ctx, badge.trim(), padX, headerTop + 56, maxWidth * 0.6)
+  } else if (badgeLabel) {
     setFont(ctx, '800', 22, 1.4)
     const boxW = Math.min(ctx.measureText(badgeLabel).width + 38, maxWidth)
 
@@ -397,7 +424,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
   // panel sized to the text rather than a full-width band, so it reads as
   // design instead of a bug. It wraps the deck too — a subhead sitting just
   // outside it would be the one unreadable line on the frame.
-  if (hookPlate && (hookLines?.length || deck)) {
+  if (!typed && hookPlate && (hookLines?.length || deck)) {
     let widest = 0
     if (hookLines?.length) {
       setFont(ctx, '800', hookPx, -0.5)
@@ -433,7 +460,7 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
 
   // Or just behind the subhead: the hook reads fine over the scrim and only
   // the smaller line is fighting the photo.
-  if (subheadPlate && !hookPlate && deck && deckBaselines.length) {
+  if (!typed && subheadPlate && !hookPlate && deck && deckBaselines.length) {
     setFont(ctx, '500', deck.px, 0)
     let widest = 0
     for (const line of deck.lines) widest = Math.max(widest, ctx.measureText(line).width)
@@ -446,7 +473,9 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
     ctx.fill()
   }
 
-  if (hookLines?.length) {
+  if (hookLines?.length && typed) {
+    drawTypedBlock(ctx, { words: hookWords, lines: hookLines, px: hookPx, weight: '800', tracking: -0.6, x: padX + Math.round(hookPx * 0.42), y: hookTop, lineRatio: 1.24, tilt: (-2.2 * Math.PI) / 180, pill: tc.pill, ink: tc.ink, pop: tc.pop })
+  } else if (hookLines?.length) {
     setFont(ctx, '800', hookPx, -0.5)
     ctx.fillStyle = ink
     ctx.textAlign = 'left'
@@ -461,7 +490,9 @@ export function renderAd(canvas, size, content, assets, opts = {}) {
 
   // Lighter and smaller than the hook on purpose: it is support, and matching
   // the hook's weight would give the frame two things shouting at once.
-  if (deck) {
+  if (deck && typed) {
+    drawTypedBlock(ctx, { words: deckWords, lines: deck.lines, px: deck.px, weight: '600', tracking: 0, x: padX + Math.round(deck.px * 0.42), y: deckTop, lineRatio: 1.24, pill: tc.pill, ink: tc.ink, pop: tc.pop })
+  } else if (deck) {
     setFont(ctx, '500', deck.px, 0)
     ctx.fillStyle = deckInk
     ctx.textAlign = 'left'

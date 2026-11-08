@@ -29,7 +29,8 @@
 
 import { hexToRgb, readableTextOn } from './logoColours'
 import { CONDENSED, FONT, SCRIPT, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
-import { SLATE, badgeSize, drawCoverIn, frameMargins } from './adLooks'
+import { SLATE, badgeSize, drawCoverIn, drawLocationSticker, drawTypedBlock, frameMargins } from './adLooks'
+import { typedColours, typedWords } from './adLayout'
 import { logoFor } from './logoCutout'
 import { createAudit } from './adAudit'
 import { TEMPLATE_ART, artKeyFor } from '../../supabase/functions/_shared/aiAds.js'
@@ -2757,11 +2758,34 @@ function photoSale(ctx, size, content, assets, opts) {
   ctx.fillStyle = g
   ctx.fillRect(0, 0, w, h * 0.4)
   let y = contentTop
-  const badgeH = badge(ctx, content.badge, padX, y, maxWidth - 300, badgeColor)
-  if (badgeH) y += badgeH + 18
-  ribbon(ctx, w, stickerWords(content) || 'SALE', { fill: accent, ink: WHITE, size: 360 })
-  y += shout(ctx, kickerWords(content), padX, y, maxWidth - 260, { px: 90, minPx: 40, lines: 1, fill: WHITE, stroke: 'rgba(2,6,23,0.6)', strokeW: 8, tracking: 3, label: 'the kicker' })
-  shout(ctx, content.hook, padX, y, y < 300 ? maxWidth - 260 : maxWidth - 60, { px: 84, minPx: 36, lines: 3, fill: WHITE, stroke: 'rgba(2,6,23,0.6)', strokeW: 8, maxHeight: (bandTop - y) * 0.6, label: 'the headline' })
+  if (content.typedText) {
+    // "Typed on Instagram": the badge as a location sticker, the kicker and
+    // the headline typed on black boxes (the kicker in the brand colour, the
+    // headline white with its numbers in the colour, tipped a touch); the
+    // ribbon, the band, the offers and the footer stay the template's.
+    const tc = typedColours(accent, badgeColor)
+    const sticker = drawLocationSticker(ctx, content.badge, padX, y + 56, maxWidth - 300)
+    if (sticker) y += 56 + 18
+    ribbon(ctx, w, stickerWords(content) || 'SALE', { fill: accent, ink: WHITE, size: 360 })
+    const kick = String(kickerWords(content) || '').trim()
+    if (kick) {
+      const kf = fitText(ctx, typographic(kick), maxWidth - 260 - 56, 1, 64, 36, '800', -0.6, { lineRatio: 1.24 })
+      const o = drawTypedBlock(ctx, { words: kf.lines.flatMap((l) => l.split(' ').map((wd) => ({ word: wd, hot: true }))), lines: kf.lines, px: kf.px, weight: '800', tracking: -0.6, x: padX + Math.round(kf.px * 0.42), y, lineRatio: 1.24, pill: tc.pill, ink: tc.ink, pop: tc.pop })
+      y += (o ? o.h : 0) + 12
+    }
+    const hookWords = typedWords(typographic(content.hook || ''))
+    const hookText = hookWords.map((x) => x.word).join(' ')
+    if (hookText) {
+      const hf = fitText(ctx, hookText, (y < 300 ? maxWidth - 260 : maxWidth - 60) - 56, 3, 72, 36, '800', -0.6, { maxHeight: Math.max(90, (bandTop - y) * 0.6), lineRatio: 1.24 })
+      drawTypedBlock(ctx, { words: hookWords, lines: hf.lines, px: hf.px, weight: '800', tracking: -0.6, x: padX + Math.round(hf.px * 0.42), y, lineRatio: 1.24, tilt: (-2.2 * Math.PI) / 180, pill: tc.pill, ink: tc.ink, pop: tc.pop })
+    }
+  } else {
+    const badgeH = badge(ctx, content.badge, padX, y, maxWidth - 300, badgeColor)
+    if (badgeH) y += badgeH + 18
+    ribbon(ctx, w, stickerWords(content) || 'SALE', { fill: accent, ink: WHITE, size: 360 })
+    y += shout(ctx, kickerWords(content), padX, y, maxWidth - 260, { px: 90, minPx: 40, lines: 1, fill: WHITE, stroke: 'rgba(2,6,23,0.6)', strokeW: 8, tracking: 3, label: 'the kicker' })
+    shout(ctx, content.hook, padX, y, y < 300 ? maxWidth - 260 : maxWidth - 60, { px: 84, minPx: 36, lines: 3, fill: WHITE, stroke: 'rgba(2,6,23,0.6)', strokeW: 8, maxHeight: (bandTop - y) * 0.6, label: 'the headline' })
+  }
   // The band: the offers, the subhead, then the logo and the stars.
   const bandFill = badgeColor || SLATE
   const onBandDark = readableTextOn(bandFill) === WHITE

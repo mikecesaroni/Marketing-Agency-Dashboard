@@ -732,10 +732,16 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // Or a smaller one behind the subhead only, when the hook reads fine and
   // the small line is the one fighting the photo. One or the other.
   const [subheadPlate, setSubheadPlate] = useState(false)
-  const panel = hookPlate ? 'hook' : subheadPlate ? 'subhead' : 'none'
+  // Or "Typed on Instagram": the headline and the subhead typed on black
+  // boxes the way the app types text with a background, the badge as a
+  // location sticker, no scrim; on the looks that paint words over the
+  // photo (the classic, the stack, the before-and-after labels, Photo sale).
+  const [typedText, setTypedText] = useState(false)
+  const panel = hookPlate ? 'hook' : subheadPlate ? 'subhead' : typedText ? 'typed' : 'none'
   const choosePanel = (key) => {
     setHookPlate(key === 'hook')
     setSubheadPlate(key === 'subhead')
+    setTypedText(key === 'typed')
   }
   // Photo layout. 'cover' unless somebody switches it; see LAYOUTS in adCanvas.
   const [layout, setLayout] = useState('cover')
@@ -1232,9 +1238,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   const aiPick = aiOn ? aiMatch : null
   const aiKey = aiPick ? `${aiPick.square}|${aiPick.tall}` : ''
   const paintContent = useMemo(
-    () => ({ badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, season: seasonNow, aiArt: aiPick }),
+    () => ({ badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, typedText, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, season: seasonNow, aiArt: aiPick }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, seasonNow, aiKey]
+    [badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, hookPlate, subheadPlate, typedText, layout, bgColor, photo, focus, kicker, sticker, offers, cutout, theme, seasonNow, aiKey]
   )
 
   // The ChatGPT pictures' bitmaps, for the renderer (assets.aiArt).
@@ -1373,6 +1379,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     if (r.badgeColor) setBadgeColor(r.badgeColor)
     setHookPlate(Boolean(r.hookPlate))
     setSubheadPlate(Boolean(r.subheadPlate))
+    setTypedText(Boolean(r.typedText))
     setLayout(r.layout || 'cover')
     setBgColor(r.bgColor || DEFAULT_BG)
     setPhoto(r.photo || DEFAULT_PHOTO)
@@ -1435,6 +1442,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
     badgeColor,
     hookPlate,
     subheadPlate,
+    typedText,
     layout,
     bgColor,
     photo,
@@ -1574,6 +1582,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           badgeColor: set.badgeColor || badgeColor,
           hookPlate,
           subheadPlate,
+          typedText,
           layout: set.layout || 'cover',
           bgColor,
           photo,
@@ -1684,7 +1693,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
       looks: LAYOUTS.map((l) => l.key),
       words: { badge, hook, offerAmount, offerDetail, subhead, proof, primaryText, headline: metaHeadline, description: metaDescription },
       colours: { accent, badgeColor },
-      panel: panel === 'none' ? 'none' : panel === 'hook' ? 'behind hook and subhead' : 'behind subhead only',
+      panel: panel === 'none' ? 'none' : panel === 'hook' ? 'behind hook and subhead' : panel === 'typed' ? 'typed on Instagram (the words on black boxes)' : 'behind subhead only',
       season_playbook: {
         phase: phase.label,
         summary: phase.summary,
@@ -1737,7 +1746,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
             description: { type: 'string' },
             accent: { type: 'string' },
             badgeColor: { type: 'string' },
-            panel: { type: 'string', enum: ['none', 'hook', 'subhead'], description: 'A card behind the words: none, behind the hook and subhead, or behind the subhead only' },
+            panel: { type: 'string', enum: ['none', 'hook', 'subhead', 'typed'], description: 'How the words sit on the photo: none (the scrim), hook (a card behind the hook and subhead), subhead (a card behind the subhead only), or typed (typed on Instagram: the headline and subhead on black boxes, white words, the numbers in the brand colour, the badge as a location sticker; for an ad that should read as a post somebody typed, not a designed ad)' },
             kicker: { type: 'string', description: 'Templates only: the shout above the headline (FALL SPECIAL, MASSIVE DEALS). Empty means the season\'s.' },
             sticker: { type: 'string', description: 'Templates only: the words in the starburst or seal (EASY FINANCING, 24/7). Empty means none.' },
             offers: { type: 'array', description: 'Templates only: up to four offer tiles. Empty means the main offer as one tile.', items: { type: 'object', properties: { amount: { type: 'string' }, detail: { type: 'string' } } } },
@@ -1753,7 +1762,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           }
           if (typeof i.accent === 'string' && /^#[0-9a-f]{6}$/i.test(i.accent)) { setAccent(i.accent); setFromLogo(false); changed.push('accent') }
           if (typeof i.badgeColor === 'string' && /^#[0-9a-f]{6}$/i.test(i.badgeColor)) { setBadgeColor(i.badgeColor); setFromLogo(false); changed.push('badgeColor') }
-          if (['none', 'hook', 'subhead'].includes(i.panel)) { choosePanel(i.panel); changed.push('panel') }
+          if (['none', 'hook', 'subhead', 'typed'].includes(i.panel)) { choosePanel(i.panel); changed.push('panel') }
           if (Array.isArray(i.offers)) {
             setOffers(i.offers.slice(0, 4).map((o) => ({ amount: String(o?.amount || ''), detail: String(o?.detail || '') })))
             changed.push('offers')
@@ -2547,18 +2556,34 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
           ))}
         </div>
         {/* The plate, split and AI looks already put the words on a panel, so
-            the switch would be a lie there; it says so instead of doing nothing. */}
-        {['plate', 'wash', 'typed', 'split', 'ai'].includes(layout) || isTemplate(layout) ? (
+            the switch would be a lie there; it says so instead of doing nothing.
+            The Story text look is typed through and through. On Photo sale
+            (the one template that paints words over the photo) only the
+            typed choice applies. */}
+        {layout === 'typed' ? (
+          <span className="text-xs text-slate-400" data-hook-plate title="This look types every word the way Instagram does">
+            Words: typed on Instagram, built into this look
+          </span>
+        ) : (['plate', 'wash', 'split', 'ai'].includes(layout) || (isTemplate(layout) && layout !== 'photo_sale')) ? (
           <span className="text-xs text-slate-400" data-hook-plate title="On this look the words already sit on a solid panel">
             Panel: built into this look
           </span>
         ) : (
           <div className="flex flex-wrap items-center gap-1 text-xs text-slate-600" data-hook-plate>
-            <span className="mr-0.5">Panel</span>
+            <span className="mr-0.5">Words</span>
             {[
-              ['none', 'None', 'No panel; the scrim or haze does the work'],
-              ['hook', 'Behind hook + subhead', layout === 'stack' ? 'A white card behind the big word, the headline and the subhead' : 'A plate behind the headline and the subhead'],
-              ['subhead', 'Behind subhead only', 'A smaller card behind the subhead alone, when the headline reads fine and the small line does not'],
+              ...(layout === 'photo_sale'
+                ? [['none', 'Painted', 'The template’s own: the kicker and the headline in outlined capitals over the photo']]
+                : [
+                    ['none', 'Plain', 'No panel; the scrim or haze does the work'],
+                    ['hook', 'Card behind hook + subhead', layout === 'stack' ? 'A white card behind the big word, the headline and the subhead' : layout === 'before' ? 'A plate behind the words' : 'A plate behind the headline and the subhead'],
+                    ['subhead', 'Card behind subhead', 'A smaller card behind the subhead alone, when the headline reads fine and the small line does not'],
+                  ]),
+              ['typed', 'Typed on Instagram', layout === 'before'
+                ? 'BEFORE and AFTER typed on the photos the way people write them in the app: a black box, white capitals'
+                : layout === 'stack'
+                  ? 'The big word, the headline and the subhead each typed on a black box the way Instagram types text with a background, the big word in the brand colour; no haze, the badge as a location sticker. The offer card and the logo stay'
+                  : 'The headline and the subhead typed on black boxes the way Instagram types text with a background: white words, the numbers and the price in the brand colour, tipped a touch; the badge as a location sticker, no scrim. For an ad that should read as a post somebody typed, not a designed ad'],
             ].map(([key, label, hint]) => (
               <button
                 key={key}

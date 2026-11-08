@@ -51,6 +51,12 @@ alter table saved_ads add column if not exists season text;
 -- 2026-10-14: a panel behind the subhead only (the Studio's "Panel" choice).
 alter table saved_ads add column if not exists subhead_plate boolean default false;
 
+-- 2026-11-08: "Typed on Instagram", the Studio's Words choice: the headline
+-- and the subhead typed on black boxes the way the app types text with a
+-- background, on the looks that paint words over the photo (the classic,
+-- the headline stack, the before-and-after labels, the Photo sale template).
+alter table saved_ads add column if not exists typed_text boolean default false;
+
 -- 2026-10-15: the second photo of a before-and-after static, and the look itself.
 alter table saved_ads add column if not exists background_path_2 text;
 do $$

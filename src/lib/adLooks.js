@@ -212,6 +212,13 @@ function renderStack(ctx, size, content, assets, opts) {
   const { w, h, padX, contentTop, contentBottom, maxWidth } = m
   const { badge, hook, offerAmount, offerDetail, subhead, proof, accent, badgeColor, focus, hookPlate, subheadPlate } = content
   const { background } = assets || {}
+  // "Typed on Instagram": the giant word, the rest and the subhead each on
+  // their own black boxes, no haze, the badge as a location sticker. The
+  // offer card and the logo stay: the look keeps its shape, the words get
+  // the typed treatment.
+  const typed = Boolean(content.typedText)
+  const tc = typed ? typedColours(accent, badgeColor) : null
+  const tPad = (px) => Math.round(px * 0.18)
 
   // The photo first. The haze comes after the stack is measured, because it
   // has to reach under the last line of the subhead rather than stop at a
@@ -226,35 +233,40 @@ function renderStack(ctx, size, content, assets, opts) {
 
   // Measure the stack: accent word, the rest of the hook, the subhead.
   const { accent: word, rest } = accentWord(hook)
+  const restWords = typed ? typedWords(typographic(rest)) : null
+  const restText = typed ? restWords.map((x) => x.word).join(' ') : typographic(rest)
   let y = contentTop
-  const badgeH = badge ? 52 : 0
+  const badgeH = badge ? (typed ? 56 : 52) : 0
   if (badgeH) y += badgeH + 28
   const stackTop = y
 
   const room = contentBottom - y - 40
   let wordFit = null
   if (word) {
-    wordFit = fitText(ctx, word.toUpperCase(), colW, 1, 190, 90, '900', -6, { lineRatio: 0.98 })
+    wordFit = fitText(ctx, word.toUpperCase(), colW - (typed ? 2 * Math.round(190 * 0.42) : 0), 1, 190, 90, '900', -6, { lineRatio: typed ? 1.0 : 0.98 })
   }
   const restFit = rest
-    ? fitText(ctx, typographic(rest), colW, 3, word ? 74 : 92, 40, '900', -2, {
+    ? fitText(ctx, restText, colW - (typed ? 56 : 0), 3, word ? 74 : 92, 40, typed ? '800' : '900', typed ? -1 : -2, {
         maxHeight: Math.max(120, room * 0.42),
-        lineRatio: 1.02,
+        lineRatio: typed ? 1.18 : 1.02,
       })
     : null
   const deck = subhead?.trim()
-    ? fitText(ctx, typographic(subhead), colW, 2, 30, 22, '600', 0, { lineRatio: 1.3 })
+    ? fitText(ctx, typographic(subhead), colW - (typed ? 30 : 0), 2, 30, 22, '600', 0, { lineRatio: typed ? 1.24 : 1.3 })
     : null
-  const wordH = wordFit ? wordFit.px * 0.98 + 6 : 0
-  const restH = restFit ? restFit.lines.length * restFit.px * 1.02 + 8 : 0
-  const deckH = deck ? deck.lines.length * deck.px * 1.3 + 10 : 0
+  // The giant word's box hugs its capitals (a 190px word with the usual
+  // padding sat in a box twice its height).
+  const wordH = wordFit ? (typed ? wordFit.px * 0.95 + 2 * Math.round(wordFit.px * 0.06) + 12 : wordFit.px * 0.98 + 6) : 0
+  const restH = restFit ? (typed ? restFit.lines.length * restFit.px * 1.18 + 2 * tPad(restFit.px) + 12 : restFit.lines.length * restFit.px * 1.02 + 8) : 0
+  const deckH = deck ? (typed ? deck.lines.length * deck.px * 1.24 + 2 * tPad(deck.px) + 10 : deck.lines.length * deck.px * 1.3 + 10) : 0
   const stackH = wordH + restH + deckH
   const stackBottom = stackTop + stackH
 
   // The haze: white, strong under every line of the stack, gone a little
-  // below it; and a dark lift along the bottom for the logo.
+  // below it; and a dark lift along the bottom for the logo. Typed words
+  // carry their own boxes, so no haze.
   const hazeTo = Math.min(h, stackBottom + 70)
-  scrim(ctx, 0, 0, w, hazeTo, [
+  if (!typed) scrim(ctx, 0, 0, w, hazeTo, [
     [0, 'rgba(255,255,255,0.86)'],
     [0.72, 'rgba(255,255,255,0.66)'],
     [1, 'rgba(255,255,255,0)'],
@@ -263,15 +275,33 @@ function renderStack(ctx, size, content, assets, opts) {
     [0, 'rgba(2,6,23,0)'],
     [1, 'rgba(2,6,23,0.55)'],
   ])
-  drawBadge(ctx, badge, padX, contentTop, maxWidth, badgeColor)
+  if (typed) drawLocationSticker(ctx, badge, padX, contentTop + 56, maxWidth * 0.6)
+  else drawBadge(ctx, badge, padX, contentTop, maxWidth, badgeColor)
 
   // Draw the stack, right-aligned to the column.
   const right = colX + colW
 
+  if (typed) {
+    // Each block's box ends at the column's right edge, so the text sits a
+    // pad in from it.
+    if (wordFit) {
+      const o = drawTypedBlock(ctx, { words: wordFit.lines.flatMap((l) => l.split(' ').map((wd) => ({ word: wd, hot: true }))), lines: wordFit.lines, px: wordFit.px, weight: '900', tracking: -6, x: right - Math.round(wordFit.px * 0.42), y, lineRatio: 0.95, padYRatio: 0.06, align: 'right', pill: tc.pill, ink: tc.ink, pop: tc.pop })
+      y += (o ? o.h : 0) + 12
+    }
+    if (restFit) {
+      const o = drawTypedBlock(ctx, { words: restWords, lines: restFit.lines, px: restFit.px, weight: '800', tracking: -1, x: right - Math.round(restFit.px * 0.42), y, lineRatio: 1.18, align: 'right', tilt: (-1.6 * Math.PI) / 180, pill: tc.pill, ink: tc.ink, pop: tc.pop })
+      y += (o ? o.h : 0) + 12
+    }
+    if (deck) {
+      const o = drawTypedBlock(ctx, { words: typedWords(typographic(subhead)), lines: deck.lines, px: deck.px, weight: '600', tracking: 0, x: right - Math.round(deck.px * 0.42), y, lineRatio: 1.24, align: 'right', pill: tc.pill, ink: tc.ink, pop: tc.pop })
+      y += (o ? o.h : 0) + 10
+    }
+  }
+
   // "Panel behind the hook": a white card behind the whole stack, sized to
   // its widest line, for a photo too busy for any haze. Same switch as on
   // the classic look, so it does what it says on this one too.
-  if (hookPlate && (wordFit || restFit || deck)) {
+  if (!typed && hookPlate && (wordFit || restFit || deck)) {
     let widest = 0
     const measure = (fit, weight, spacing) => {
       if (!fit) return
@@ -290,7 +320,7 @@ function renderStack(ctx, size, content, assets, opts) {
 
   // Or just behind the subhead: the giant word and the headline read over
   // the haze, and only the small line needs the help.
-  if (subheadPlate && !hookPlate && deck) {
+  if (!typed && subheadPlate && !hookPlate && deck) {
     setFont(ctx, '600', deck.px, 0)
     let widest = 0
     for (const line of deck.lines) widest = Math.max(widest, ctx.measureText(line).width)
@@ -302,19 +332,19 @@ function renderStack(ctx, size, content, assets, opts) {
     ctx.fill()
   }
 
-  if (wordFit) {
+  if (!typed && wordFit) {
     setFont(ctx, '900', wordFit.px, -6)
     ctx.fillStyle = accent
     drawLines(ctx, wordFit.lines, right, y + wordFit.px * 0.86, wordFit.px, 0.98, 'right')
     y += wordFit.px * 0.98 + 6
   }
-  if (restFit) {
+  if (!typed && restFit) {
     setFont(ctx, '900', restFit.px, -2)
     ctx.fillStyle = ink
     drawLines(ctx, restFit.lines, right, y + restFit.px * 0.86, restFit.px, 1.02, 'right')
     y += restFit.lines.length * restFit.px * 1.02 + 8
   }
-  if (deck) {
+  if (!typed && deck) {
     setFont(ctx, '600', deck.px, 0)
     ctx.fillStyle = '#1E293B'
     drawLines(ctx, deck.lines, right, y + deck.px * 0.9, deck.px, 1.3, 'right')
@@ -692,18 +722,23 @@ function fillet(ctx, x, y, dx, dy, r) {
  * One typed block: the lines on their boxes (typedBoxes), the joints filled
  * and the inner corners rounded so the boxes read as one shape, then the
  * words painted one at a time so the hot ones take the colour. `x` is the
- * text's left edge; `tilt` turns the whole block about its centre. Returns
- * the block's outer box before the tilt.
+ * text's left edge, right edge or centre by `align`; `tilt` turns the whole
+ * block about its centre. Returns the block's outer box before the tilt.
+ * Shared with the classic look, the stack, the before-and-after labels and
+ * the Photo sale template, which type their words this way when the ad's
+ * "Typed on Instagram" words choice is on.
  */
-function drawTypedBlock(ctx, { words, lines, px, weight, tracking, x, y, lineRatio, tilt = 0, pill, ink, pop }) {
+export function drawTypedBlock(ctx, { words, lines, px, weight, tracking = 0, x, y, lineRatio = 1.24, padYRatio = 0.18, align = 'left', tilt = 0, pill = '#000000', ink = '#FFFFFF', pop = '#FFFFFF' }) {
   if (!lines?.length) return null
   setFont(ctx, weight, px, tracking)
   const lineH = px * lineRatio
   const padX = Math.round(px * 0.42)
-  const padY = Math.round(px * 0.18)
+  const padY = Math.round(px * padYRatio)
   const radius = Math.round(px * 0.36)
   const widths = lines.map((l) => ctx.measureText(l).width)
-  const boxes = typedBoxes(widths, { x: x - padX, y: y + padY, lineH, padX, radius, align: 'left' })
+  const anchor = align === 'right' ? x + padX : align === 'center' ? x : x - padX
+  const lineX = (i) => (align === 'right' ? x - widths[i] : align === 'center' ? x - widths[i] / 2 : x)
+  const boxes = typedBoxes(widths, { x: anchor, y: y + padY, lineH, padX, radius, align })
   boxes[0].y -= padY
   boxes[0].h += padY
   boxes[boxes.length - 1].h += padY
@@ -753,11 +788,12 @@ function drawTypedBlock(ctx, { words, lines, px, weight, tracking, x, y, lineRat
     const line = lines[i]
     const base = boxes[i].y + (i === 0 ? padY : 0) + lineH / 2 + px * 0.35
     let from = 0
+    const tx = lineX(i)
     for (const word of line.split(' ')) {
       const at = line.indexOf(word, from)
       const dx = ctx.measureText(line.slice(0, at)).width
       ctx.fillStyle = words?.[wi]?.hot ? pop : ink
-      ctx.fillText(word, x + dx, base)
+      ctx.fillText(word, tx + dx, base)
       from = at + word.length
       wi++
     }
@@ -770,7 +806,7 @@ function drawTypedBlock(ctx, { words, lines, px, weight, tracking, x, y, lineRat
  * Instagram's location sticker: a white pill with a pin and the place in
  * bold, carrying the badge's words. Returns its box; null without a badge.
  */
-function drawLocationSticker(ctx, label, x, bottom, maxW) {
+export function drawLocationSticker(ctx, label, x, bottom, maxW) {
   const text = String(label || '').trim()
   if (!text || maxW < 120) return null
   const pinW = 22
@@ -942,12 +978,18 @@ function renderBefore(ctx, size, content, assets, opts) {
       ctx.textBaseline = 'alphabetic'
     }
     // The label, top-right of its half, clear of the badge top-left and of
-    // the Story's own chrome at the top of the frame.
-    setFont(ctx, '800', 22, 1.4)
+    // the Story's own chrome at the top of the frame. With "Typed on
+    // Instagram" on it is typed the way people write BEFORE and AFTER on
+    // their own photos: a black box, white capitals.
     const text = label.toUpperCase()
+    const py = Math.max(rect.y + 20, safeTop + 20)
+    if (content.typedText) {
+      drawTypedBlock(ctx, { words: [{ word: text, hot: false }], lines: [text], px: 26, weight: '800', tracking: 1, x: rect.x + rect.w - 20 - Math.round(26 * 0.42), y: py, lineRatio: 1.24, align: 'right' })
+      return
+    }
+    setFont(ctx, '800', 22, 1.4)
     const pw = ctx.measureText(text).width + 38
     const px = rect.x + rect.w - 20 - pw
-    const py = Math.max(rect.y + 20, safeTop + 20)
     ctx.fillStyle = 'rgba(2,6,23,0.72)'
     roundRect(ctx, px, py, pw, 44, 8)
     ctx.fill()
