@@ -13,6 +13,7 @@ export const PHOTO_LOOKS = [
   { key: 'stack', label: 'Headline stack', hint: 'one giant accent word over the photo, with a white offer card', group: 'photo' },
   { key: 'plate', label: 'Bottom plate', hint: 'photo on top, the words on a brand-colour plate below', group: 'photo' },
   { key: 'wash', label: 'Brand wash', hint: 'the photo whole, its lower part under a wash of the brand colour behind a curved seam in the accent, the logo in a white pill on the seam, the offer huge in the accent with a white outline', group: 'photo' },
+  { key: 'typed', label: 'Story text', hint: 'the photo whole, the headline typed over it the way Instagram types text with a background: each line on its own black box, white words, the numbers and the price in the brand colour, tipped a touch; the offer typed smaller below, a location sticker and a small logo', group: 'photo' },
   { key: 'split', label: 'Split panel', hint: 'brand-colour panel with the words beside the photo', group: 'photo' },
   { key: 'before', label: 'Before and after', hint: 'two photos side by side (one above the other on the Story), Before and After labelled, the words on a plate below', group: 'photo' },
 ]
@@ -24,9 +25,9 @@ export const PHOTO_LOOKS = [
 export const LAYOUTS = [...PHOTO_LOOKS, ...TEMPLATE_LAYOUTS.map((t) => ({ ...t, group: 'template' }))]
 export { TEMPLATE_LAYOUTS, TEMPLATE_KEYS }
 // Looks that paint the words themselves (an AI concept carries its own).
-export const TEXT_LAYOUTS = ['cover', 'stack', 'plate', 'wash', 'split', 'before', 'card', ...TEMPLATE_KEYS]
+export const TEXT_LAYOUTS = ['cover', 'stack', 'plate', 'wash', 'typed', 'split', 'before', 'card', ...TEMPLATE_KEYS]
 // Looks where dragging the artboard moves the photo's focal point.
-export const FOCUS_LAYOUTS = ['cover', 'stack', 'plate', 'wash', 'split', 'before', ...PHOTO_TEMPLATES]
+export const FOCUS_LAYOUTS = ['cover', 'stack', 'plate', 'wash', 'typed', 'split', 'before', ...PHOTO_TEMPLATES]
 // Looks that take a second photo: the "After photo" picker appears and the
 // first picker reads "Before photo".
 export const TWO_PHOTO_LAYOUTS = ['before', ...TWO_PHOTO_TEMPLATES]
@@ -264,6 +265,98 @@ export function washColours(accent, badgeColor) {
   // instead of hollow.
   const popReads = contrastBetween(pop, wash) >= 1.8 || hueApart
   return { wash, pop, popReads }
+}
+
+/** Two hex colours mixed: `t` of the second into the first, as #RRGGBB. */
+export function mixHex(a, b, t) {
+  const ca = rgbOf(a)
+  const cb = rgbOf(b)
+  const k = Math.min(1, Math.max(0, Number(t) || 0))
+  const hex = (n) => Math.round(n).toString(16).padStart(2, '0')
+  return `#${ca.map((c, i) => hex(c + (cb[i] - c) * k)).join('')}`.toUpperCase()
+}
+
+/**
+ * The Story text look's colours. The box behind the words is black and the
+ * words white, the way Instagram paints typed text with a background, and
+ * the words that get the colour (the numbers, the price, the marked words)
+ * take the brighter of the brand's two colours, lifted towards white until
+ * it reads on black at 3.5:1, so a navy-only brand gets a light periwinkle
+ * rather than navy on black. `lifted` says whether it had to be.
+ */
+export function typedColours(accent, badgeColor) {
+  const a = accent || DEFAULT_BG
+  const b = badgeColor || DEFAULT_BG
+  let pop = (luminance(a) >= luminance(b) ? a : b).toUpperCase()
+  let lifted = false
+  for (let i = 0; i < 8 && contrastBetween(pop, '#000000') < 3.5; i++) {
+    pop = mixHex(pop, '#FFFFFF', 0.18)
+    lifted = true
+  }
+  return { pill: '#000000', ink: '#FFFFFF', pop, lifted }
+}
+
+/**
+ * The boxes behind typed lines, the way Instagram draws text with a
+ * background: one rounded box per line hugging that line's width, stacked
+ * with no gap so they read as one shape. A line whose edge lands within two
+ * radii of its neighbour's is widened to meet it, so the outline never has
+ * a step too small to look meant (the renderer rounds the inner corners
+ * where the steps that remain meet). Widths are the measured text widths;
+ * `x` is the block's left edge for 'left', its centre for 'center'.
+ */
+export function typedBoxes(widths, { x = 0, y = 0, lineH = 60, padX = 24, radius = 18, align = 'left' } = {}) {
+  const boxes = (widths || []).map((tw, i) => {
+    const w = (Number(tw) || 0) + padX * 2
+    const left = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x
+    return { x: left, y: y + i * lineH, w, h: lineH }
+  })
+  const snap = radius * 2
+  // Two passes: widening a box for one neighbour can bring it within snapping
+  // distance of the other.
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < boxes.length - 1; i++) {
+      const a = boxes[i]
+      const b = boxes[i + 1]
+      const dl = Math.abs(a.x - b.x)
+      if (dl > 0 && dl < snap) {
+        const l = Math.min(a.x, b.x)
+        a.w += a.x - l
+        a.x = l
+        b.w += b.x - l
+        b.x = l
+      }
+      const aR = a.x + a.w
+      const bR = b.x + b.w
+      const dr = Math.abs(aR - bR)
+      if (dr > 0 && dr < snap) {
+        const rr = Math.max(aR, bR)
+        a.w = rr - a.x
+        b.w = rr - b.x
+      }
+    }
+  }
+  return boxes.map((b) => ({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) }))
+}
+
+/**
+ * Which typed words take the colour. Words wrapped in asterisks when there
+ * are any (*free* means that one; a phrase works too); otherwise every
+ * number, price or percentage (2-3%, $89, 24/7) and the word FREE, the way
+ * the reference ad had its one stat in lime. The rest stay white. Returns
+ * the words in order, asterisks gone, with a flag each; the caller wraps
+ * the clean words and reads the flags back in the same order.
+ */
+export function typedWords(text) {
+  const src = String(text || '').trim()
+  const hasMarks = /\*[^*]+\*/.test(src)
+  const marked = hasMarks
+    ? src.replace(/\*([^*]+)\*/g, (_, inner) => inner.trim().split(/\s+/).map((w) => `\u0001${w}`).join(' '))
+    : src
+  return marked.split(/\s+/).filter(Boolean).map((w) => {
+    const hot = hasMarks ? w.startsWith('\u0001') : /\d/.test(w) || /^free\W*$/i.test(w)
+    return { word: w.replace(/\u0001/g, ''), hot }
+  })
 }
 
 /**

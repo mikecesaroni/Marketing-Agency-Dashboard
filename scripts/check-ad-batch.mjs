@@ -45,12 +45,13 @@ check('a plan does not ask the chat to pick a template', /"template" key/.test(p
 const same = makeAdsPrompt({ clientName: 'Prime', count: 2, templates: ['price_grid', 'price_grid', 'price_grid', 'price_grid'] })
 check('the same template four times: four ads on it, each its own hook', [/Write 4 static ads/.test(same), /"Price grid" template/.test(same), /All 4 ads go on it, each on its own hook/.test(same)], [true, true, true])
 check('a photo look can be asked for too', /"Brand wash" look/.test(templateAsk('wash')) && /5% OFF/.test(templateAsk('wash')), true)
+check('the story text look asks for a claim with one number in it', /"Story text" look/.test(templateAsk('typed')) && /2-3% of roofers/.test(templateAsk('typed')), true)
 check('a look shape: a template, a photo look, nothing', [lookShape('coupon')?.label, lookShape('coupon')?.photo, lookShape('stack')?.label, lookShape('stack')?.photo, lookShape('zzz')], ['Coupon', false, 'Headline stack', true, null])
 
 // The looks.
-check('a poster for the offer, the season template for the time of year, the owner photo for proof, then another round (the offer on the brand wash)', BATCH_LOOKS, ['sun_deal', 'season_sale', 'stack', 'wash', 'price_grid', 'plate'])
-check('each set gets the next look', assignLooks([{ hook: 'a' }, { hook: 'b' }, { hook: 'c' }, { hook: 'd' }]).map((s) => s.layout), ['sun_deal', 'season_sale', 'stack', 'wash'])
-check('the brand wash has a name', lookName('wash'), 'Brand wash')
+check('a poster for the offer, the season template for the time of year, the owner photo for proof, then another round (the offer on the brand wash, the proof typed over a job photo)', BATCH_LOOKS, ['sun_deal', 'season_sale', 'stack', 'wash', 'price_grid', 'typed'])
+check('each set gets the next look', assignLooks([{ hook: 'a' }, { hook: 'b' }, { hook: 'c' }, { hook: 'd' }, { hook: 'e' }, { hook: 'f' }]).map((s) => s.layout), ['sun_deal', 'season_sale', 'stack', 'wash', 'price_grid', 'typed'])
+check('the brand wash and the story text have names', [lookName('wash'), lookName('typed')], ['Brand wash', 'Story text'])
 check('the batch asks for a sticker and offer tiles', /"sticker"/.test(makeAdsPrompt({ clientName: 'Prime' })) && /"offers"/.test(makeAdsPrompt({ clientName: 'Prime' })), true)
 check('tiles: blanks dropped, four at most, either key spelling', tilesFrom([{ amount: ' $0 ', detail: 'Down' }, { offer_amount: '$89', offer_detail: 'Tune-up' }, {}, { amount: '1' }, { amount: '2' }, { amount: '3' }]).map((o) => o.amount), ['$0', '$89', '1', '2'])
 check('tiles: junk is an empty list', tilesFrom('no'), [])

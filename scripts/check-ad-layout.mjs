@@ -7,7 +7,7 @@
 // photo over the offer block on Stories. Everything resolves through
 // photoRect, so the 216px preview and the 1080px export agree.
 
-import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_KEYS, TEXT_LAYOUTS, TWO_PHOTO_LAYOUTS, accentWord, beforeRects, containRect, contrastBetween, coverRect, dragFocus, dragPhoto, luminance, photoRect, plateRects, splitRects, washColours, washRects } from '../src/lib/adLayout.js'
+import { DEFAULT_FOCUS, DEFAULT_PHOTO, FOCUS_LAYOUTS, LAYOUTS, PHOTO_LOOKS, TEMPLATE_KEYS, TEXT_LAYOUTS, TWO_PHOTO_LAYOUTS, accentWord, beforeRects, containRect, contrastBetween, coverRect, dragFocus, dragPhoto, luminance, mixHex, photoRect, plateRects, splitRects, typedBoxes, typedColours, typedWords, washColours, washRects } from '../src/lib/adLayout.js'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -18,10 +18,35 @@ function check(name, actual, expected) {
 }
 
 check('cover is first and therefore the default', LAYOUTS[0].key, 'cover')
-check('the six photo looks, classic first (the card and the AI concept are retired from the row)', PHOTO_LOOKS.map((l) => l.key), ['cover', 'stack', 'plate', 'wash', 'split', 'before'])
+check('the seven photo looks, classic first (the card and the AI concept are retired from the row)', PHOTO_LOOKS.map((l) => l.key), ['cover', 'stack', 'plate', 'wash', 'typed', 'split', 'before'])
 check('the templates follow the photo looks in the full list', LAYOUTS.map((l) => l.key), [...PHOTO_LOOKS.map((l) => l.key), ...TEMPLATE_KEYS])
-check('every look but the AI concept paints the words, the retired card included so old saved ads still edit, the templates too', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'wash', 'split', 'before', 'card', ...TEMPLATE_KEYS])
-check('dragging moves the focal point on the photo looks and the photo templates', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'wash', 'split', 'before', 'photo_sale', 'before_sale', 'reveal'])
+check('every look but the AI concept paints the words, the retired card included so old saved ads still edit, the templates too', TEXT_LAYOUTS, ['cover', 'stack', 'plate', 'wash', 'typed', 'split', 'before', 'card', ...TEMPLATE_KEYS])
+check('dragging moves the focal point on the photo looks and the photo templates', FOCUS_LAYOUTS, ['cover', 'stack', 'plate', 'wash', 'typed', 'split', 'before', 'photo_sale', 'before_sale', 'reveal'])
+
+// The Story text look: typed on Instagram. Black boxes, white words, the
+// numbers in the brighter brand colour, lifted until it reads on black.
+check('mixing: halfway from black to white is mid grey', mixHex('#000000', '#FFFFFF', 0.5), '#808080')
+check('a lime brand pops lime on black, untouched', typedColours('#0F3B2E', '#C8F03C'), { pill: '#000000', ink: '#FFFFFF', pop: '#C8F03C', lifted: false })
+check('navy and red: red is the brighter and reads on black as it is', typedColours('#1F3B8B', '#CC2E2E'), { pill: '#000000', ink: '#FFFFFF', pop: '#CC2E2E', lifted: false })
+const navyOnly = typedColours('#1E3A8A', '#1E3A8A')
+check('a navy-only brand is lifted towards white until it reads on black', [navyOnly.lifted, navyOnly.pop !== '#1E3A8A', contrastBetween(navyOnly.pop, '#000000') >= 3.5], [true, true, true])
+check('no colours at all: slate, lifted', typedColours('', '').lifted, true)
+// The boxes: one per line hugging its width, stacked with no gap; edges
+// within two radii of a neighbour's are widened to meet it.
+const tb = { x: 100, y: 200, lineH: 60, padX: 20, radius: 18, align: 'left' }
+check('left-aligned boxes share a left edge and hug each line', typedBoxes([500, 300, 480], tb), [{ x: 100, y: 200, w: 540, h: 60 }, { x: 100, y: 260, w: 340, h: 60 }, { x: 100, y: 320, w: 520, h: 60 }])
+check('a right edge within two radii of its neighbour is widened to meet it', typedBoxes([500, 480], tb).map((b) => b.w), [540, 540])
+check('a chain of near-equal lines all meet the widest (two passes)', typedBoxes([470, 490, 500], tb).map((b) => b.w), [540, 540, 540])
+check('a real step is kept', typedBoxes([500, 420], tb).map((b) => b.w), [540, 460])
+check('centred boxes step in on both sides', typedBoxes([400, 200], { ...tb, x: 540, y: 0, align: 'center' }), [{ x: 320, y: 0, w: 440, h: 60 }, { x: 420, y: 60, w: 240, h: 60 }])
+check('no lines, no boxes', typedBoxes([], tb), [])
+// The hot words: the numbers, the price and FREE; or the marked words.
+const hot = (t) => typedWords(t).filter((x) => x.hot).map((x) => x.word)
+check('the one stat in the sentence takes the colour', hot('A GAF Master Elite Contractor, only about 2-3% of roofers earn this'), ['2-3%'])
+check('a price, a FREE with its comma, a 24/7', [hot('$89 furnace tune-up before the first freeze'), hot('Free, second opinion on any quote'), hot('Open 24/7 in Westchester')], [['$89'], ['Free,'], ['24/7']])
+check('asterisks choose the words instead, a phrase too, and the asterisks go', [hot('Get a *second opinion* on any quote'), typedWords('Get a *second opinion* on any quote').map((x) => x.word).join(' ')], [['second', 'opinion'], 'Get a second opinion on any quote'])
+check('with marks the numbers stay white', hot('*Free* tune-up, $89 after'), ['Free'])
+check('nothing typed, nothing hot', typedWords(''), [])
 
 // The brand wash: the photo whole, the wash under a seam that curves down
 // into the frame, lowest in the middle, with the same room for the words on

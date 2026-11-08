@@ -59,7 +59,7 @@ export function globalHelpTools({ navigate }) {
     },
     {
       name: 'make_ads',
-      description: "Open a client's Make Static Ads already writing N ads from their brief (the Content tab's \"Make ads\"). Optional \"templates\": the look key for each ad, in order (a template key such as price_grid, coupon, sun_deal, or a photo look: cover, stack, plate, wash, split); the same key N times makes N ads on it, three different keys make one each; at most six. The ads take about half a minute; call page_state afterwards to see them, then studio_save_batch to save them all.",
+      description: "Open a client's Make Static Ads already writing N ads from their brief (the Content tab's \"Make ads\"). Optional \"templates\": the look key for each ad, in order (a template key such as price_grid, coupon, sun_deal, or a photo look: cover, stack, plate, wash, typed, split); the same key N times makes N ads on it, three different keys make one each; at most six. The ads take about half a minute; call page_state afterwards to see them, then studio_save_batch to save them all.",
       input_schema: {
         type: 'object',
         properties: { client: { type: 'string' }, count: { type: 'integer', minimum: 1, maximum: 6, description: 'Default 3; ignored when templates are given' }, templates: { type: 'array', items: { type: 'string' }, description: 'The look for each ad, in order' } },

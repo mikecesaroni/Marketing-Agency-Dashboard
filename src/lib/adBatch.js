@@ -17,9 +17,10 @@ import { pickTemplate } from './seasonPlaybook.js'
 // The looks a batch cycles through, in order, matched to the angles the
 // prompt asks for: the offer on a poster that shouts the price, the time of
 // year on the season's template, proof on the owner's photo with the stars;
-// then another round of the same three ideas in other clothes. A batch reads
-// as a campaign rather than one template three times.
-export const BATCH_LOOKS = ['sun_deal', 'season_sale', 'stack', 'wash', 'price_grid', 'plate']
+// then another round of the same three ideas in other clothes, the proof
+// the second time as a claim typed over a job photo. A batch reads as a
+// campaign rather than one template three times.
+export const BATCH_LOOKS = ['sun_deal', 'season_sale', 'stack', 'wash', 'price_grid', 'typed']
 export const BATCH_SIZE = 3
 // The most one ask writes: past this the chat's answer gets long and thin.
 export const BATCH_MAX = 6
@@ -67,7 +68,7 @@ export function planLabel(picked = [], count = BATCH_SIZE) {
   return each > 1 ? `Make ${ads}: ${each} each on ${names}` : `Make ${ads}: ${names}`
 }
 
-const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', wash: 'Brand wash', split: 'Split panel', before: 'Before and after', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept',
+const LOOK_NAMES = { stack: 'Headline stack', plate: 'Bottom plate', wash: 'Brand wash', typed: 'Story text', split: 'Split panel', before: 'Before and after', cover: 'Classic', card: 'Photo on a colour', ai: 'AI concept',
   ...Object.fromEntries(TEMPLATE_LAYOUTS.map((t) => [t.key, t.label])) }
 
 export function lookName(key) {
@@ -100,7 +101,7 @@ export function chooseLooks(sets, { phase, hasPhoto = false, pick = pickTemplate
     // The chat's own pick wins when it is a real key, fits the photos there
     // are, and nothing in the batch has it yet; the scorer is the safety net.
     const wanted = String(s.suggestedLayout || '').trim()
-    const fits = wanted && isLookKey(wanted) && !used.includes(wanted) && !TWO_PHOTO_TEMPLATES.includes(wanted) && !(['before'].includes(wanted)) && (hasPhoto || !(PHOTO_TEMPLATES.includes(wanted) || ['cover', 'stack', 'plate', 'wash', 'split'].includes(wanted)))
+    const fits = wanted && isLookKey(wanted) && !used.includes(wanted) && !TWO_PHOTO_TEMPLATES.includes(wanted) && !(['before'].includes(wanted)) && (hasPhoto || !(PHOTO_TEMPLATES.includes(wanted) || ['cover', 'stack', 'plate', 'wash', 'typed', 'split'].includes(wanted)))
     if (fits) layout = wanted
     else if (proof && hasPhoto && !used.includes('stack')) layout = 'stack'
     else layout = pick({ phase, content: s, hasPhoto, hasAfter: false, exclude: used }).key

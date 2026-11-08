@@ -2355,6 +2355,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
               crop keeps; the other two sizes follow the same spot.
               {layout === 'stack' && ' Wrap a word in asterisks (*Free* second opinion) to choose the giant word; otherwise a short first word is used.'}
               {layout === 'wash' && ' The offer amount is the huge word (5% OFF, $89, FREE); with no amount the headline takes its place. The wash is the darker of the two colours, the big word and the seam the other; a big word that would not read on the wash goes white with a dark outline.'}
+              {layout === 'typed' && ' The headline is typed up top, the offer (or the subhead, with no offer) smaller above the footer; the proof stays off the photo. The numbers, the price and FREE take the brighter brand colour; wrap words in asterisks (*any quote*) to choose them instead. Write the headline the way a person talks: a claim or a stat with one number in it.'}
             </p>
           </>
         )}
@@ -2547,7 +2548,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         </div>
         {/* The plate, split and AI looks already put the words on a panel, so
             the switch would be a lie there; it says so instead of doing nothing. */}
-        {['plate', 'wash', 'split', 'ai'].includes(layout) || isTemplate(layout) ? (
+        {['plate', 'wash', 'typed', 'split', 'ai'].includes(layout) || isTemplate(layout) ? (
           <span className="text-xs text-slate-400" data-hook-plate title="On this look the words already sit on a solid panel">
             Panel: built into this look
           </span>

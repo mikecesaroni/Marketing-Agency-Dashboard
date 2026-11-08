@@ -359,7 +359,7 @@ export default function ClientDetailPage() {
       },
       {
         name: 'client_make_ads',
-        description: "Open Make Static Ads for this client already writing N ads from their brief (\"Make ads\"). Optional \"templates\": the look key for each ad in order (price_grid, coupon, sun_deal, wash, stack...); the same key N times makes N ads on it; at most six.",
+        description: "Open Make Static Ads for this client already writing N ads from their brief (\"Make ads\"). Optional \"templates\": the look key for each ad in order (price_grid, coupon, sun_deal, wash, typed, stack...); the same key N times makes N ads on it; at most six.",
         input_schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 6 }, templates: { type: 'array', items: { type: 'string' } } } },
         run: ({ count, templates }) => {
           const plan = (Array.isArray(templates) ? templates : []).map((t) => String(t || '').trim()).filter(Boolean).slice(0, 6)

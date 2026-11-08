@@ -9,6 +9,10 @@
 //   wash   the photo whole, its lower part under a wash of the brand colour
 //          behind a curved seam in the accent, the logo in a white pill on
 //          the seam, the offer huge in the accent with a white outline
+//   typed  the photo whole, the headline typed over it the way Instagram
+//          types text with a background: a black box per line, white words,
+//          the numbers in the brand colour, tipped a touch; the offer typed
+//          smaller below, a location sticker and a small logo
 //   split  a brand-colour panel beside (or above) the photo
 //   ai     a finished AI concept, fitted whole with a blurred surround, no
 //          words painted
@@ -21,7 +25,7 @@
 import { readableTextOn } from './logoColours'
 import { logoFor } from './logoCutout'
 import { PAD, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
-import { DEFAULT_BG, accentWord, containRect, coverRect, beforeRects, plateRects, splitRects, washColours, washRects } from './adLayout'
+import { DEFAULT_BG, accentWord, containRect, coverRect, beforeRects, plateRects, splitRects, typedBoxes, typedColours, typedWords, washColours, washRects } from './adLayout'
 
 export const SLATE = '#0F172A'
 const r = (n) => Math.round(n)
@@ -658,6 +662,253 @@ function renderWash(ctx, size, content, assets, opts) {
 }
 
 // ---------------------------------------------------------------------------
+// story text: typed on Instagram
+// ---------------------------------------------------------------------------
+
+/**
+ * A concave quarter-round at the corner where a wider box meets a narrower
+ * one: the corner at (x, y), the square it fills reaching `dx` (1 or -1)
+ * across and `dy` (1 or -1) down, minus the quarter disc. Instagram rounds
+ * the inner corners of stacked text boxes like the outer ones; without this
+ * the steps between lines are sharp notches.
+ */
+function fillet(ctx, x, y, dx, dy, r) {
+  const cx = x + dx * r
+  const cy = y + dy * r
+  const a1 = Math.atan2(y - cy, x + dx * r - cx)
+  const a2 = Math.atan2(y + dy * r - cy, x - cx)
+  let sweep = a2 - a1
+  while (sweep <= -Math.PI) sweep += Math.PI * 2
+  while (sweep > Math.PI) sweep -= Math.PI * 2
+  ctx.beginPath()
+  ctx.moveTo(x, y)
+  ctx.lineTo(x + dx * r, y)
+  ctx.arc(cx, cy, r, a1, a2, sweep < 0)
+  ctx.closePath()
+  ctx.fill()
+}
+
+/**
+ * One typed block: the lines on their boxes (typedBoxes), the joints filled
+ * and the inner corners rounded so the boxes read as one shape, then the
+ * words painted one at a time so the hot ones take the colour. `x` is the
+ * text's left edge; `tilt` turns the whole block about its centre. Returns
+ * the block's outer box before the tilt.
+ */
+function drawTypedBlock(ctx, { words, lines, px, weight, tracking, x, y, lineRatio, tilt = 0, pill, ink, pop }) {
+  if (!lines?.length) return null
+  setFont(ctx, weight, px, tracking)
+  const lineH = px * lineRatio
+  const padX = Math.round(px * 0.42)
+  const padY = Math.round(px * 0.18)
+  const radius = Math.round(px * 0.36)
+  const widths = lines.map((l) => ctx.measureText(l).width)
+  const boxes = typedBoxes(widths, { x: x - padX, y: y + padY, lineH, padX, radius, align: 'left' })
+  boxes[0].y -= padY
+  boxes[0].h += padY
+  boxes[boxes.length - 1].h += padY
+  const left = Math.min(...boxes.map((b) => b.x))
+  const right = Math.max(...boxes.map((b) => b.x + b.w))
+  const last = boxes[boxes.length - 1]
+  const outer = { x: left, y: boxes[0].y, w: right - left, h: last.y + last.h - boxes[0].y }
+
+  ctx.save()
+  if (tilt) {
+    const cx = outer.x + outer.w / 2
+    const cy = outer.y + outer.h / 2
+    ctx.translate(cx, cy)
+    ctx.rotate(tilt)
+    ctx.translate(-cx, -cy)
+  }
+  ctx.fillStyle = pill
+  for (const b of boxes) {
+    roundRect(ctx, b.x, b.y, b.w, b.h, radius)
+    ctx.fill()
+  }
+  for (let i = 0; i < boxes.length - 1; i++) {
+    const a = boxes[i]
+    const b = boxes[i + 1]
+    const aR = a.x + a.w
+    const bR = b.x + b.w
+    const seam = b.y
+    // The joint across the shared width, so the two boxes' rounded corners
+    // leave no notch at the seam; then the inner corners where one box steps
+    // in from the other.
+    const l = Math.max(a.x, b.x)
+    const rr = Math.min(aR, bR)
+    if (rr > l) ctx.fillRect(l, seam - radius, rr - l, radius * 2)
+    if (b.x > a.x) fillet(ctx, b.x, seam, -1, 1, radius)
+    else if (b.x < a.x) fillet(ctx, a.x, seam, -1, -1, radius)
+    if (bR < aR) fillet(ctx, bR, seam, 1, 1, radius)
+    else if (bR > aR) fillet(ctx, aR, seam, 1, -1, radius)
+  }
+
+  // The words, one at a time, each at the x it has in its line so the
+  // spacing is the line's own; the hot ones in the colour.
+  setFont(ctx, weight, px, tracking)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  let wi = 0
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const base = boxes[i].y + (i === 0 ? padY : 0) + lineH / 2 + px * 0.35
+    let from = 0
+    for (const word of line.split(' ')) {
+      const at = line.indexOf(word, from)
+      const dx = ctx.measureText(line.slice(0, at)).width
+      ctx.fillStyle = words?.[wi]?.hot ? pop : ink
+      ctx.fillText(word, x + dx, base)
+      from = at + word.length
+      wi++
+    }
+  }
+  ctx.restore()
+  return outer
+}
+
+/**
+ * Instagram's location sticker: a white pill with a pin and the place in
+ * bold, carrying the badge's words. Returns its box; null without a badge.
+ */
+function drawLocationSticker(ctx, label, x, bottom, maxW) {
+  const text = String(label || '').trim()
+  if (!text || maxW < 120) return null
+  const pinW = 22
+  const padL = 18
+  const padR = 22
+  const gap = 8
+  let px = 26
+  setFont(ctx, '700', px, -0.2)
+  while (ctx.measureText(text).width + padL + pinW + gap + padR > maxW && px > 16) {
+    px -= 1
+    setFont(ctx, '700', px, -0.2)
+  }
+  const tw = Math.min(ctx.measureText(text).width, maxW - padL - pinW - gap - padR)
+  const bw = Math.round(tw + padL + pinW + gap + padR)
+  const bh = 56
+  const y = bottom - bh
+  ctx.save()
+  ctx.shadowColor = 'rgba(2,6,23,0.25)'
+  ctx.shadowBlur = 14
+  ctx.shadowOffsetY = 3
+  ctx.fillStyle = '#FFFFFF'
+  roundRect(ctx, x, y, bw, bh, 16)
+  ctx.fill()
+  ctx.restore()
+  // The pin: a drop with a hole in it.
+  const pcx = x + padL + pinW / 2
+  const pcy = y + bh / 2 - 1
+  ctx.fillStyle = '#111827'
+  ctx.beginPath()
+  ctx.arc(pcx, pcy - 3, 8, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.moveTo(pcx - 7.2, pcy + 0.5)
+  ctx.lineTo(pcx + 7.2, pcy + 0.5)
+  ctx.lineTo(pcx, pcy + 12)
+  ctx.closePath()
+  ctx.fill()
+  ctx.fillStyle = '#FFFFFF'
+  ctx.beginPath()
+  ctx.arc(pcx, pcy - 3, 3, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#111827'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(x, y, bw - padR + 12, bh)
+  ctx.clip()
+  ctx.fillText(text, x + padL + pinW + gap, y + bh / 2 + 1)
+  ctx.restore()
+  ctx.textBaseline = 'alphabetic'
+  return { x, y, w: bw, h: bh }
+}
+
+/**
+ * The words the way Instagram paints typed text with a background: each
+ * line on its own black box hugging its width, the boxes stacked into one
+ * rounded shape, white words with the numbers, the price or the words
+ * marked with asterisks in the brand's bright colour, the block tipped a
+ * couple of degrees the way a thumb leaves it. The photo is the whole frame
+ * and nothing is drawn on it but the words, a location sticker and a small
+ * logo, so the ad reads as a post somebody typed over their own photo and
+ * not as a designed ad. Modelled on a State Solar ad (2026-11-08): "A GAF
+ * Master Elite Contractor, only about 2-3% of roofers earn this" over a
+ * roof being replaced, the 2-3% in the brand's lime.
+ *
+ * The headline is the block up top; the offer (amount and detail, else the
+ * subhead) is typed smaller just above the footer, straight. The proof is
+ * left for the caption: nobody types their review count on a photo.
+ */
+function renderTyped(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, contentBottom, maxWidth } = m
+  const { badge, hook, offerAmount, offerDetail, subhead, accent, badgeColor, focus } = content
+  const { background } = assets || {}
+  const { pill, ink, pop } = typedColours(accent, badgeColor)
+
+  ctx.fillStyle = SLATE
+  ctx.fillRect(0, 0, w, h)
+  if (background) drawCoverIn(ctx, background, { x: 0, y: 0, w, h }, focus)
+  else {
+    ctx.fillStyle = '#1E293B'
+    ctx.fillRect(0, 0, w, h)
+  }
+
+  // The footer: the logo small bottom-right the way a watermark sits, the
+  // location sticker bottom-left. No scrim: the photo is the point.
+  let footTop = contentBottom
+  const logoBox = drawLogoPill(ctx, assets, w - padX, contentBottom, 84, { align: 'right', bottom: true })
+  if (logoBox) footTop = Math.min(footTop, logoBox.y)
+  const sticker = drawLocationSticker(ctx, badge, padX, contentBottom, Math.min(maxWidth * 0.62, maxWidth - (logoBox ? logoBox.w + 24 : 0)))
+  if (sticker) footTop = Math.min(footTop, sticker.y)
+  if (footTop < contentBottom) footTop -= 28
+
+  const room = footTop - contentTop
+  const blockMax = Math.min(maxWidth - 48, 900)
+  const tilt = (-2.2 * Math.PI) / 180
+
+  // The headline, typed up top. fitText wraps the clean words; the flags
+  // are read back in the same order while they are painted.
+  const hookWords = typedWords(typographic(hook || ''))
+  const hookText = hookWords.map((x) => x.word).join(' ')
+  let y = contentTop + Math.round(room * 0.06)
+  const band = { top: y, bottom: footTop }
+  if (hookText) {
+    const fit = fitText(ctx, hookText, blockMax - 56, 4, 66, 40, '800', -0.6, { maxHeight: Math.max(120, room * 0.55), lineRatio: 1.24 })
+    const padXpx = Math.round(fit.px * 0.42)
+    const textW = widest(ctx, fit.lines)
+    const left = Math.round((w - (textW + padXpx * 2)) / 2) + padXpx
+    const outer = drawTypedBlock(ctx, { words: hookWords, lines: fit.lines, px: fit.px, weight: '800', tracking: -0.6, x: left, y, lineRatio: 1.24, tilt, pill, ink, pop })
+    if (outer) {
+      y = outer.y + outer.h + Math.round(fit.px * 0.6)
+      band.top = y
+    }
+  }
+
+  // The offer, typed smaller and straight, just above the footer.
+  const offerText = [offerAmount, offerDetail].map((s) => String(s || '').trim()).filter(Boolean).join(' ') || String(subhead || '').trim()
+  if (offerText && footTop - y > 80) {
+    const words = typedWords(typographic(offerText))
+    const text = words.map((x) => x.word).join(' ')
+    const fit = fitText(ctx, text, Math.min(blockMax, maxWidth * 0.8) - 40, 3, 46, 30, '700', -0.3, { maxHeight: Math.max(60, (footTop - y) * 0.5), lineRatio: 1.24 })
+    const padY = Math.round(fit.px * 0.18)
+    const blockH = fit.lines.length * fit.px * 1.24 + padY * 2
+    const padXpx = Math.round(fit.px * 0.42)
+    const textW = widest(ctx, fit.lines)
+    const left = Math.round((w - (textW + padXpx * 2)) / 2) + padXpx
+    const top = Math.round(footTop - blockH)
+    if (top > y) {
+      drawTypedBlock(ctx, { words, lines: fit.lines, px: fit.px, weight: '700', tracking: -0.3, x: left, y: top, lineRatio: 1.24, tilt: 0, pill, ink, pop })
+      band.bottom = top - 16
+    }
+  }
+  ctx.textAlign = 'left'
+  return { band }
+}
+
+// ---------------------------------------------------------------------------
 // before and after
 // ---------------------------------------------------------------------------
 
@@ -872,7 +1123,7 @@ function renderAiConcept(ctx, size, content, assets) {
   return { band: { top: fit.y, bottom: fit.y + fit.h } }
 }
 
-export const LOOKS = { stack: renderStack, plate: renderPlate, wash: renderWash, split: renderSplit,
+export const LOOKS = { stack: renderStack, plate: renderPlate, wash: renderWash, typed: renderTyped, split: renderSplit,
   before: renderBefore, ai: renderAiConcept }
 
 /** True when adCanvas should hand this layout to a look in this file. */
