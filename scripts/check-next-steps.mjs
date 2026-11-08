@@ -4,6 +4,7 @@
 // EVERYTHING OPEN IS THE CLIENT'S, THE NEXT MOVE IS THE CHASE; A STEP NEVER
 // SHOWS AS NEXT WHILE THE STEP IT DEPENDS ON IS OPEN.
 
+import { readFileSync } from 'node:fs'
 import { PHASES, currentPhase, nextLine, nextSteps, urgency } from '../src/lib/nextSteps.js'
 
 let failures = 0
@@ -85,6 +86,19 @@ const dl = (key, status = 'done') => ({ template_key: key, status })
     })
   )
   check('GHL steps appear in order', keys(r).filter((k) => k.startsWith('ghl')), ['ghl-form', 'ghl-build', 'ghl-live'])
+  // "Make so I can click if the onboarding call has been done yet, so the
+  // morning brief does not say it is on us": one 'marked-done' row on the
+  // call sheet is the click; any other tick on the sheet counts the same.
+  const formIn = { created_at: '2026-09-01', intake_submitted_at: '2026-09-02' }
+  const marked = nextSteps(base({ link: formIn, payments: [{ payment_type: 'setup', status: 'paid' }], callSteps: [{ step_key: 'marked-done' }] })).steps.find((s) => s.key === 'onboarding-call')
+  check('the call marked done by hand is done, says so, and can be taken back', [marked.done, marked.detail, marked.markedDone], [true, 'Marked done by hand.', true])
+  const ticked = nextSteps(base({ link: formIn, payments: [{ payment_type: 'setup', status: 'paid' }], callSteps: [{ step_key: 'ghl-admin' }] })).steps.find((s) => s.key === 'onboarding-call')
+  check('a tick made on the call counts too, with no undo from the board', [ticked.done, ticked.detail, ticked.markedDone], [true, 'Notes on file.', false])
+  const open = nextSteps(base({ link: formIn, payments: [{ payment_type: 'setup', status: 'paid' }] })).steps.find((s) => s.key === 'onboarding-call')
+  check('until then the call is our next move, and the detail says where to mark it', [open.done, /mark the call done there/.test(open.detail)], [false, true])
+  const completeStep = readFileSync(new URL('../src/lib/completeStep.js', import.meta.url), 'utf8')
+  check('the mark writes one named row on the call sheet and undo deletes only that row', [completeStep.includes("step_key: MARKED_DONE, done_at: new Date().toISOString(), done_by: by || null"), completeStep.includes(".from('onboarding_call_steps').delete().eq('client_id', client.id).eq('step_key', MARKED_DONE)")], [true, true])
+  check('the client page has the button', readFileSync(new URL('../src/components/OnboardingCallPanel.jsx', import.meta.url), 'utf8').includes('data-mark-call-done'), true)
   check('GHL form open names the blanks', r.steps.find((s) => s.key === 'ghl-form').detail, '2 required fields still blank.')
   check('GHL build is blocked by the form', r.steps.find((s) => s.key === 'ghl-build').blocked, true)
   check('creatives are ours and unblocked (Meta and photos in)', r.next.key, 'creatives')

@@ -24,6 +24,9 @@ const FLAG_UNDO = {
 /** Steps a person is not allowed to wave through: money is recorded on Payments. */
 export const NOT_MARKABLE = new Set(['setup-fee'])
 
+/** The call sheet row that says "the call happened", written by hand rather than by ticking a step. */
+export const MARKED_DONE = 'marked-done'
+
 async function latestLink(clientId) {
   const { data } = await supabase
     .from('onboarding_links')
@@ -81,9 +84,12 @@ export async function markStepDone(client, step, { by = '', note = '' } = {}) {
     return { how: 'link' }
   }
   if (key === 'onboarding-call') {
+    // One row on the call sheet, 'marked-done', with the name: the pipeline
+    // reads any row as "the call happened", so the Client tiers board and the
+    // morning brief stop calling the call our next move.
     const { error } = await supabase
       .from('onboarding_call_steps')
-      .upsert({ client_id: client.id, step_key: 'marked-done', done_at: new Date().toISOString() }, { onConflict: 'client_id,step_key' })
+      .upsert({ client_id: client.id, step_key: MARKED_DONE, done_at: new Date().toISOString(), done_by: by || null }, { onConflict: 'client_id,step_key' })
     if (error) throw error
     return { how: 'call' }
   }
@@ -93,9 +99,10 @@ export async function markStepDone(client, step, { by = '', note = '' } = {}) {
 
 /**
  * Take a mark back. A flag step flips its toggle off; an override row is
- * deleted; the link stamps and the call sheet are left alone, because those
- * record that something happened and the client page is where to change
- * them.
+ * deleted; a call marked done by hand loses its 'marked-done' row (the
+ * ticks made on the call itself stay); the link stamps are left alone,
+ * because those record that something happened and the client page is
+ * where to change them.
  */
 export async function undoStepDone(client, step) {
   const key = step?.key
@@ -103,6 +110,11 @@ export async function undoStepDone(client, step) {
     const { error } = await supabase.from('clients').update(FLAG_UNDO[key]).eq('id', client.id)
     if (error) throw error
     return { how: 'flag' }
+  }
+  if (key === 'onboarding-call') {
+    const { error } = await supabase.from('onboarding_call_steps').delete().eq('client_id', client.id).eq('step_key', MARKED_DONE)
+    if (error) throw error
+    return { how: 'call' }
   }
   const { error } = await supabase.from('step_overrides').delete().eq('client_id', client.id).eq('step_key', key)
   if (error) throw error
@@ -127,7 +139,7 @@ export function whoAmI() {
   return name
 }
 
-/** Whether a done step can be undone from the board. */
+/** Whether a done step can be undone from the board: an override, a flag, or a call marked done by hand. */
 export function canUndo(step) {
-  return Boolean(step?.done) && (Boolean(step.manual) || Boolean(FLAG_UNDO[step.key]))
+  return Boolean(step?.done) && (Boolean(step.manual) || Boolean(FLAG_UNDO[step.key]) || (step.key === 'onboarding-call' && Boolean(step.markedDone)))
 }

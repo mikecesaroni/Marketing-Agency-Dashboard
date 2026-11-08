@@ -12,6 +12,7 @@ import { Button, Card } from './ui'
 import { copyText } from '../lib/intakeSummary'
 import { driveServiceAccount } from '../lib/driveAssets'
 import { publicLink } from '../lib/publicSite'
+import { MARKED_DONE, markStepDone, undoStepDone, whoAmI } from '../lib/completeStep'
 import {
   COPY_BLOCKS,
   callProgress,
@@ -34,11 +35,14 @@ export default function OnboardingCallPanel({ client, intake }) {
   const [copied, setCopied] = useState('')
   const [crmDriveEmail, setCrmDriveEmail] = useState('')
   const [error, setError] = useState('')
+  // The 'marked-done' row, when the call was marked done by hand: who and when.
+  const [marked, setMarked] = useState(null)
+  const [marking, setMarking] = useState(false)
 
   const load = useCallback(async () => {
     if (!client?.id) return
     const [steps, links, setup] = await Promise.all([
-      supabase.from('onboarding_call_steps').select('step_key').eq('client_id', client.id),
+      supabase.from('onboarding_call_steps').select('step_key, done_at, done_by').eq('client_id', client.id),
       supabase
         .from('onboarding_links')
         .select('token, ghl_submitted_at, intake_submitted_at, revoked')
@@ -50,9 +54,42 @@ export default function OnboardingCallPanel({ client, intake }) {
     ])
     if (steps.error) setError(steps.error.message)
     setDone(new Set((steps.data || []).map((r) => r.step_key)))
+    setMarked((steps.data || []).find((r) => r.step_key === MARKED_DONE) || null)
     setLink(links.data?.[0] || null)
     setGhl(setup.data || null)
   }, [client?.id])
+
+  // "Mark the call done": one row on the sheet, so the Client tiers board and
+  // the morning brief stop calling the call our next move ("make so I can
+  // click if the onboarding call has been done yet"). Undo takes that one
+  // row back and leaves the ticks made on the call alone.
+  const markCallDone = async () => {
+    setMarking(true)
+    setError('')
+    try {
+      await markStepDone(client, { key: 'onboarding-call' }, { by: whoAmI() })
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setMarking(false)
+    }
+  }
+  const unmarkCallDone = async () => {
+    setMarking(true)
+    setError('')
+    try {
+      await undoStepDone(client, { key: 'onboarding-call' })
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setMarking(false)
+    }
+  }
+  // The call counts as done with any tick on the sheet (nextSteps.js reads it
+  // the same way), so the button only shows while nothing says it happened.
+  const callHappened = [...done].some((k) => k !== MARKED_DONE) || Boolean(marked)
 
   useEffect(() => {
     load()
@@ -155,7 +192,26 @@ export default function OnboardingCallPanel({ client, intake }) {
             are things the CRM can already see.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Whether the call happened, in one click. The board and the
+              morning brief read the same row, so once this is ticked the
+              line stops saying "do the onboarding call". */}
+          {marked ? (
+            <span className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-800" data-call-done="marked">
+              ✓ Call done{marked.done_by ? ` · ${marked.done_by}` : ''}{marked.done_at ? ` · ${new Date(marked.done_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
+              <button type="button" onClick={unmarkCallDone} disabled={marking} className="text-green-700 underline-offset-2 hover:underline disabled:opacity-50" title="Take the mark back; the ticks made on the call stay">
+                Undo
+              </button>
+            </span>
+          ) : callHappened ? (
+            <span className="rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-800" data-call-done="sheet" title="Steps were ticked on the call, so the board and the brief count it done">
+              ✓ Call done
+            </span>
+          ) : (
+            <Button variant="outline" size="sm" onClick={markCallDone} disabled={marking} data-mark-call-done title="The call happened: tell the Client tiers board and the morning brief, so it stops being our next move">
+              {marking ? 'Saving…' : '✓ Mark the call done'}
+            </Button>
+          )}
           <div className="w-32 h-2 rounded-full bg-slate-200 overflow-hidden">
             <div
               className={`h-full transition-all ${complete ? 'bg-green-500' : 'bg-blue-500'}`}

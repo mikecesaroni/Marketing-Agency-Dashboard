@@ -112,7 +112,12 @@ export function nextSteps(ctx) {
   const setupApplies = setupRows.length > 0 || Number(c.setup_fee) > 0
 
   const formDone = Boolean(link?.intake_submitted_at) || intakeFilled(intake)
-  const callDone = (ctx.callSteps || []).length > 0 || filled(intake?.call_notes)
+  // Any tick on the call sheet means the call happened; 'marked-done' is the
+  // one tick a person makes to say so without working the sheet (the button
+  // on the client page, or the tick on the Client tiers board).
+  const callSteps = ctx.callSteps || []
+  const callMarked = callSteps.some((s) => s?.step_key === 'marked-done')
+  const callDone = callSteps.length > 0 || filled(intake?.call_notes)
   const metaAccount = Boolean(c.meta_ad_account_id)
   const metaPage = Boolean(c.meta_page_id)
   const metaDone = metaAccount && metaPage
@@ -206,7 +211,8 @@ export function nextSteps(ctx) {
     done: callDone,
     blockedBy: formDone ? null : 'onboarding-form',
     action: { kind: 'call', label: 'Open the call script' },
-    detail: callDone ? 'Notes on file.' : 'Run the live call from the client page; it fills the brief as you go.',
+    detail: callMarked && callSteps.length === 1 && !filled(intake?.call_notes) ? 'Marked done by hand.' : callDone ? 'Notes on file.' : 'Run the live call from the client page; it fills the brief as you go. Or mark the call done there.',
+    markedDone: callMarked,
   })
 
   // ---- ACCESS -----------------------------------------------------------------
