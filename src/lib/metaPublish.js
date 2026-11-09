@@ -487,6 +487,9 @@ async function callLeadForms(body) {
     // just showing: none of the clients have one on file, so the panel offers
     // the field instead of just refusing.
     err.needsPrivacyUrl = Boolean(data.needs_privacy_url)
+    // A create with a cover photo that Meta refused: the Studio offers the
+    // same form without the photo rather than leaving the person guessing.
+    err.coverRefused = Boolean(data.cover_refused)
     throw err
   }
   return data
@@ -496,7 +499,10 @@ async function callLeadForms(body) {
  * Builds a new instant form on the Page, from the CRM.
  *
  * `questions` is a list of {type} for standard fields and {type:'CUSTOM',label}
- * for anything asked in the client's own words.
+ * for anything asked in the client's own words. `headline` goes over the
+ * questions, `intro` ({title, content: [lines], button_text}) is the card
+ * before them, and `coverImage` is the cover photo as a JPEG data URL
+ * (src/lib/coverImage.js), sent to Meta as a file.
  */
 export async function createLeadForm({
   clientId,
@@ -508,6 +514,9 @@ export async function createLeadForm({
   // Higher Intent (Meta's review screen before submit). Defaults to on in the
   // function as well, so a caller that does not know about it still gets it.
   higherIntent = true,
+  headline,
+  intro,
+  coverImage,
 }) {
   return callLeadForms({
     action: 'create',
@@ -518,6 +527,9 @@ export async function createLeadForm({
     follow_up_url: followUpUrl,
     thank_you_message: thankYouMessage,
     higher_intent: higherIntent,
+    headline: headline || undefined,
+    intro: intro || undefined,
+    cover_image: coverImage || undefined,
   })
 }
 
@@ -729,5 +741,10 @@ export async function recommendFormQuestions(clientId) {
     thankYou: data?.thank_you || '',
     questions: data?.questions || [],
     usedChat: Boolean(data?.used_chat),
+    // The intro card and the headline over the questions (an older
+    // deployment of form-questions has neither; the Studio keeps its own).
+    headline: data?.headline || '',
+    introTitle: data?.intro_title || '',
+    introLines: Array.isArray(data?.intro_lines) ? data.intro_lines.map((s) => String(s || '').trim()).filter(Boolean) : [],
   }
 }

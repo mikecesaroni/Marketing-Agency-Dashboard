@@ -26,6 +26,14 @@
 // v4: list returns each form's questions, thank-you page, privacy URL and
 //     intent setting, so the Studio can show what an existing form asks and
 //     reuse it, instead of a name and an id that mean nothing a week later.
+// v5: the intro card (context_card: a title, bullet lines, a button), the
+//     question page headline, and a COVER PHOTO sent as a file on the create
+//     call, from a data URL the Studio makes out of the client's upload or
+//     their Drive photo ("add a background photo on the form, pulled from
+//     Drive"). list returns the intro card and headline too, so "start from
+//     this form" carries them. A cover Meta refuses (the token lacks
+//     pages_manage_posts, or the picture is wrong) fails the create with
+//     cover_refused, so the Studio can offer the same form without it.
 
 const GRAPH = 'https://graph.facebook.com/v21.0'
 
@@ -47,6 +55,11 @@ const STANDARD_QUESTIONS = new Set([
   'COMPANY_NAME',
   'JOB_TITLE',
 ])
+
+// The most a cover photo may weigh on the wire. The Studio sends a JPEG no
+// wider than 1200px, a few hundred kilobytes; anything near this is a raw
+// phone photo that slipped through.
+const COVER_MAX_BYTES = 4 * 1024 * 1024
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -111,6 +124,38 @@ function buildQuestions(questions: any[]): Record<string, unknown>[] {
     }
   }
   return built
+}
+
+/**
+ * The intro card, from what the Studio sent: a title, up to five lines (a
+ * list when there is more than one, a paragraph otherwise) and the button
+ * that opens the questions. Nothing when nothing was typed.
+ */
+function buildContextCard(intro: any, fallbackTitle: string): Record<string, unknown> | null {
+  if (!intro || typeof intro !== 'object') return null
+  const title = String(intro.title || '').trim().slice(0, 60)
+  const content = (Array.isArray(intro.content) ? intro.content : [])
+    .map((s: unknown) => String(s ?? '').trim())
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((s: string) => s.slice(0, 80))
+  if (!title && content.length === 0) return null
+  return {
+    title: title || fallbackTitle.slice(0, 60),
+    style: content.length > 1 ? 'LIST_STYLE' : 'PARAGRAPH_STYLE',
+    content: content.length ? content : [title],
+    button_text: String(intro.button_text || '').trim().slice(0, 30) || 'Continue',
+  }
+}
+
+/** A data URL's bytes and type, or null for anything that is not a JPEG, PNG or WebP picture. */
+function parseCover(dataUrl: unknown): { bytes: Uint8Array; mime: string } | null {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''))
+  if (!m) return null
+  const bin = atob(m[2])
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return { bytes, mime: m[1] }
 }
 
 /**
@@ -191,7 +236,8 @@ Deno.serve(async (req) => {
         `${GRAPH}/${client.meta_page_id}/leadgen_forms` +
           `?fields=id,name,status,leads_count,expired_leads_count,created_time,` +
           `questions{type,key,label,options},privacy_policy_url,thank_you_page,` +
-          `follow_up_action_url,is_optimized_for_quality&limit=50` +
+          `follow_up_action_url,is_optimized_for_quality,question_page_custom_headline,` +
+          `context_card{title,style,content,button_text}&limit=50` +
           `&access_token=${encodeURIComponent(pToken)}`
       )
       const found = await res.json()
@@ -244,6 +290,13 @@ Deno.serve(async (req) => {
       block_display_for_non_targeted_viewer: 'false',
     }
 
+    // The headline over the questions, and the intro card before them. Both
+    // optional; a form with neither is the form it always was.
+    const headline = String(body.headline || '').trim().slice(0, 60)
+    if (headline) payload.question_page_custom_headline = headline
+    const card = buildContextCard(body.intro, headline || client.name)
+    if (card) payload.context_card = JSON.stringify(card)
+
     if (body.thank_you_message) {
       // THE TWO THINGS THAT WERE WRONG.
       //
@@ -265,23 +318,44 @@ Deno.serve(async (req) => {
       })
     }
 
-    const form = new URLSearchParams(payload)
-    form.set('access_token', pToken)
+    // THE COVER PHOTO goes as a file, so the whole call is multipart when
+    // there is one and the plain form it always was when there is not.
+    const cover = body.cover_image ? parseCover(body.cover_image) : null
+    if (body.cover_image && !cover) {
+      return json({ error: 'The cover photo has to be a JPEG, PNG or WebP picture.', cover_refused: true }, 400)
+    }
+    if (cover && cover.bytes.length > COVER_MAX_BYTES) {
+      return json({ error: 'The cover photo is too big to send. Pick a smaller photo.', cover_refused: true }, 400)
+    }
 
-    const res = await fetch(`${GRAPH}/${client.meta_page_id}/leadgen_forms`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form,
-    })
+    let res: Response
+    if (cover) {
+      const fd = new FormData()
+      for (const [k, v] of Object.entries(payload)) fd.append(k, v)
+      fd.append('access_token', pToken)
+      fd.append('cover_photo', new Blob([cover.bytes], { type: cover.mime }), cover.mime === 'image/png' ? 'cover.png' : cover.mime === 'image/webp' ? 'cover.webp' : 'cover.jpg')
+      res = await fetch(`${GRAPH}/${client.meta_page_id}/leadgen_forms`, { method: 'POST', body: fd })
+    } else {
+      const form = new URLSearchParams(payload)
+      form.set('access_token', pToken)
+      res = await fetch(`${GRAPH}/${client.meta_page_id}/leadgen_forms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: form,
+      })
+    }
     const made = await res.json()
 
     if (!res.ok || !made?.id) {
       const detail =
         made?.error?.error_user_msg || made?.error?.message || `Meta returned ${res.status}`
-      return json({ error: `Could not create the form: ${detail}` }, 502)
+      // With a cover on the call, a refusal is most likely the cover (the
+      // token lacking pages_manage_posts, the picture's shape or size), so
+      // the Studio can offer the same form without it.
+      return json({ error: `Could not create the form: ${detail}`, cover_refused: Boolean(cover) }, 502)
     }
 
-    return json({ ok: true, form_id: made.id, name: payload.name })
+    return json({ ok: true, form_id: made.id, name: payload.name, with_cover: Boolean(cover) })
   } catch (err) {
     return json({ error: String(err instanceof Error ? err.message : err) }, 500)
   }

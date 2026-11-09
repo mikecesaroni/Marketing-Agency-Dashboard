@@ -76,6 +76,12 @@ const Reply = z.object({
   form_name: z.string(),
   questions: z.array(Question),
   thank_you: z.string(),
+  // The intro card a person sees before the questions (Meta's context card):
+  // a headline and two or three short lines of what they get. And the
+  // headline over the questions themselves.
+  headline: z.string(),
+  intro_title: z.string(),
+  intro_lines: z.array(z.string()),
   note: z.string(),
 })
 
@@ -134,6 +140,17 @@ lead, that answer outranks your own judgement. Use their wording.
 The thank-you line is read straight after somebody submits. Say what happens
 next and when, in one plain sentence, and never promise a timeframe the client
 has not said they can hit.
+
+THE INTRO CARD. Before the questions, Meta shows a card with the business's
+cover photo, a title and a short list. Write intro_title as the offer or the
+outcome in four to eight words, the way the ad would say it ("Free second
+opinion on any quote", "$89 furnace tune-up before the freeze"), never the
+business name alone. Write intro_lines as two or three lines of five to ten
+words each: what they get and what happens next ("A real person calls you
+back today", "No obligation, no pressure"). Only promises the facts support;
+never a price the facts do not state. Write headline as the line over the
+questions, three to seven words that ask for the details ("Where should we
+call you?", "Tell us about your system").
 
 In the note, say in one or two sentences why this set and what you left out.`
 
@@ -332,6 +349,12 @@ Deno.serve(async (req) => {
       note: full.note,
       form_name: full.form_name,
       thank_you: full.thank_you,
+      headline: String(full.headline || '').trim().slice(0, 60),
+      intro_title: String(full.intro_title || '').trim().slice(0, 60),
+      intro_lines: (Array.isArray(full.intro_lines) ? full.intro_lines : [])
+        .map((s: unknown) => String(s ?? '').trim().slice(0, 80))
+        .filter(Boolean)
+        .slice(0, 5),
       // Belt and braces on the type even though the schema constrains it: a
       // type meta-publish does not accept would be dropped there and the form
       // would quietly not ask the question.

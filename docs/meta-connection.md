@@ -233,9 +233,6 @@ on the next attempt.
 
 ### What is not built yet
 
-- **Lead forms (Instant Forms).** These live on the Facebook Page rather than
-  the ad account, need a privacy policy URL and a defined question set, and are
-  their own build.
 - **Call ads.** Objective, destination and creative all differ from a website
   ad, and call ads have their own eligibility rules.
 - **Editing what already exists.** This creates; it never modifies. Changing an
@@ -261,6 +258,48 @@ stacked, in each of the three paths that create things:
 Renaming an existing object through the chat is left alone on purpose. The
 rule is `src/lib/adNaming.js`; the two edge functions carry a copy, and
 `scripts/check-ad-naming.mjs` fails if any of the three drifts.
+
+## Instant forms from the Studio: the live preview and the cover photo
+
+The Form tab of Make Static Ads (`src/components/LeadFormStudio.jsx`) builds
+an instant form on the client's Page through the `lead-forms` function:
+the forms already there (click one to see what it asks), the questions
+(Recommend the questions reads the intake and the chat), the thank-you line,
+Higher Intent, the privacy URL, and the form id big with a copy button once
+it exists. Since 2026-11-09 ("is there a way to see a preview of the instant
+form live, add a background photo on the form, and pull it from Drive"):
+
+- **The live preview.** Meta has no preview to embed before a form exists,
+  so the Studio draws its own beside the builder, a phone that redraws on
+  every keystroke: the intro card with the cover photo, the questions with
+  the answers Meta would prefill already in (a sample person, the city from
+  the client's market), the review screen when Higher Intent is on, and the
+  thank-you page. The page names above the phone and the button on each
+  page walk through it. `previewPages` in `src/lib/leadFormPreview.js`
+  (pinned by `scripts/check-lead-form-preview.mjs`) decides the pages;
+  `src/components/InstantFormPreview.jsx` draws them in Meta's shapes.
+- **How it opens.** A new box above the questions: the cover photo, picked
+  the way an ad's background is (the client's uploads or their Drive
+  folder, `AdImagePicker`), an intro title (the offer in a line), intro
+  lines (one per line, a list on the form), the intro button, and a
+  headline over the questions. All optional; with none of it the form
+  opens on the questions as before. Recommend the questions writes the
+  intro card and the headline too (`form-questions`), and "Start a new
+  form from this one" carries an existing form's intro and headline across
+  (Meta does not hand the cover back, so that is picked again).
+- **What goes to Meta.** The intro is `context_card` (title, content lines,
+  LIST_STYLE with more than one line, button_text), the headline is
+  `question_page_custom_headline`, and the cover is `cover_photo`, sent as
+  a file on a multipart create: the Studio turns whatever was picked into
+  one JPEG no wider than 1200 pixels (`src/lib/coverImage.js`) and the
+  function forwards the bytes. Meta shows the cover at about 1.91 to 1, so
+  a tall photo gets a note that only its middle band shows.
+- **A cover Meta refuses.** Uploading a photo to the Page needs the
+  `pages_manage_posts` permission on the token, which the scopes table
+  above does not list; if Meta refuses, the function answers
+  `cover_refused` and the form is not created, and the Studio shows Meta's
+  words with "Create it without the photo" one click away. Add the scope
+  to the system user token and the cover goes through.
 
 ## The funnel on instant forms
 

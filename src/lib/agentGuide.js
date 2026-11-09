@@ -515,6 +515,11 @@ export const LOOKUPS = [
     how: '"← <page name>" appears once you have come from another page in this tab, named after that page ("← Google Search" on a client opened from the Google Search report). It is browser back underneath, so it returns to exactly where you were, filters and all, and pressing it again keeps stepping back. It survives a reload; the first page of a tab has none.',
   },
   {
+    need: 'Build an instant form (a Meta lead form) for a client, see it before it exists, give it a cover photo',
+    where: 'The client page → Make Static Ads → the Form tab',
+    how: 'The forms already on the Page come first (click one to see what it asks; "Start a new form from this one" copies its questions, intro and headline). "How it opens" takes the cover photo (from the client\'s uploads or their Drive folder, like an ad\'s background), an intro title, intro lines and button, and a headline over the questions; "Recommend the questions" writes the questions, the thank-you line, the intro and the headline from the intake and the chat. The phone beside the builder is a live preview that redraws as you type: the intro card with the cover, the questions with Meta\'s prefilled answers in, the review screen (Higher Intent), the thank-you page; the page names above it walk through. "Create the form" builds it on the Page and shows the form id big with a copy button for the GoHighLevel workflow. If Meta refuses the cover (the token needs pages_manage_posts), the Studio offers the same form without the photo. See docs/meta-connection.md.',
+  },
+  {
     need: 'How much a client pays, or whether they have paid',
     where: 'Payments, or the "Payments & Billing" section on the client\'s own page',
     how: 'The client page shows one client\'s setup fee, monthly payment and what is collected. /payments shows all of them at once and is the better place to compare. To have a client pay: send them their billing page (the client page\'s Payments card, "Client billing page", Copy link; or "Copy billing link" on the /payments chase lists), where the setup fee and the subscription are one Stripe button each.',

@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Button from './ui/Button'
+import AdImagePicker from './AdImagePicker'
+import InstantFormPreview from './InstantFormPreview'
 import { copyText } from '../lib/intakeSummary'
 import { wcName } from '../lib/adNaming'
-import { describeForm, formToBuilder, isHigherIntent, metaFormsLibraryUrl, summariseForm } from '../lib/leadFormDetails'
+import { coverDataUrl, coverSrcFor, imageSize } from '../lib/coverImage'
+import { describeForm, formToBuilder, introOf, isHigherIntent, metaFormsLibraryUrl, summariseForm } from '../lib/leadFormDetails'
+import { coverShapeNote, formExtras, previewPages } from '../lib/leadFormPreview'
 import {
   FORM_QUESTIONS,
   createLeadForm,
@@ -25,6 +29,15 @@ import {
  *
  * So the form id is the deliverable here, not the form. It is shown big, with
  * a copy button, the moment the form exists.
+ *
+ * THE LIVE PREVIEW (2026-11-09: "see a preview of the instant form live, add
+ * a background photo on the form, pulled from Drive"). Meta has no preview to
+ * embed before a form exists, so the Studio draws its own beside the builder:
+ * the intro card with the cover photo, the questions with Meta's prefilled
+ * answers already in, the review screen, the thank-you page, redrawn on every
+ * keystroke (InstantFormPreview.jsx, leadFormPreview.js). The cover photo is
+ * picked the way an ad's background is, from the client's uploads or their
+ * Drive folder, and sent to Meta as a file on the create call.
  */
 
 // Meta's own field names read like a database. These are what a person calls
@@ -152,10 +165,10 @@ function CustomRow({ c, onOptions, replacing, reason, onReason, onUntick, onAsk,
  *
  * A form's name and id say nothing about what it asks, and the question that
  * actually comes up is "which of these is the one with the ZIP on it?" Each
- * row opens to the questions Meta says are on it, the thank-you text, the
- * privacy URL and whether the review screen is on. From there: copy the id
- * for GoHighLevel, open Meta's forms library (edit, preview, download leads),
- * or start a new form from this one's questions.
+ * row opens to the questions Meta says are on it, the intro card, the
+ * thank-you text, the privacy URL and whether the review screen is on. From
+ * there: copy the id for GoHighLevel, open Meta's forms library (edit,
+ * preview, download leads), or start a new form from this one's questions.
  */
 function ExistingForms({ forms, pageId, copied, onCopy, onStartFrom }) {
   const [open, setOpen] = useState(null)
@@ -169,6 +182,7 @@ function ExistingForms({ forms, pageId, copied, onCopy, onStartFrom }) {
       {forms.map((f) => {
         const isOpen = open === f.id
         const questions = describeForm(f)
+        const intro = introOf(f)
         const leads = Number(f.leads_count) || 0
         const made = f.created_time ? new Date(f.created_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
         return (
@@ -224,6 +238,21 @@ function ExistingForms({ forms, pageId, copied, onCopy, onStartFrom }) {
                 </div>
 
                 <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
+                  {(intro.title || intro.lines.length > 0) && (
+                    <>
+                      <dt className="text-slate-500">Intro card</dt>
+                      <dd className="text-slate-800" data-form-intro>
+                        {intro.title && <span className="font-medium">{intro.title}</span>}
+                        {intro.lines.length > 0 && <span className="text-slate-600">{intro.title ? ' · ' : ''}{intro.lines.join(' · ')}</span>}
+                      </dd>
+                    </>
+                  )}
+                  {f.question_page_custom_headline && (
+                    <>
+                      <dt className="text-slate-500">Over the questions</dt>
+                      <dd className="text-slate-800">{f.question_page_custom_headline}</dd>
+                    </>
+                  )}
                   <dt className="text-slate-500">Review screen</dt>
                   <dd className="text-slate-800">{isHigherIntent(f) ? 'On (Higher Intent)' : 'Off (More Volume)'}</dd>
                   {f.thank_you_page && (f.thank_you_page.body || f.thank_you_page.title) && (
@@ -259,7 +288,7 @@ function ExistingForms({ forms, pageId, copied, onCopy, onStartFrom }) {
                 </div>
                 <p className="text-[11px] text-slate-500">
                   Meta does not let a form change once it has leads, so edits mean a new form. The library is
-                  where to preview it as a person sees it and download the leads it already holds.
+                  where to see the real thing as a person sees it and download the leads it already holds.
                 </p>
               </div>
             )}
@@ -270,7 +299,7 @@ function ExistingForms({ forms, pageId, copied, onCopy, onStartFrom }) {
   )
 }
 
-export default function LeadFormStudio({ client }) {
+export default function LeadFormStudio({ client, files = [], driveFolderId = '', onFolderSaved, onUpload, onRefresh }) {
   const [forms, setForms] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
@@ -293,6 +322,18 @@ export default function LeadFormStudio({ client }) {
   const [thankYou, setThankYou] = useState(
     'Thanks — we have your details and will call you shortly.'
   )
+  // The intro card (Meta's context card) and the headline over the
+  // questions, both optional; and the cover photo, picked like an ad's
+  // background: an upload's path or drive:<id>.
+  const [introTitle, setIntroTitle] = useState('')
+  const [introText, setIntroText] = useState('')
+  const [introButton, setIntroButton] = useState('')
+  const [headline, setHeadline] = useState('')
+  const [coverPath, setCoverPath] = useState('')
+  const [coverSrc, setCoverSrc] = useState('')
+  const [coverNote, setCoverNote] = useState('')
+  const [coverRefused, setCoverRefused] = useState('')
+  const [previewPage, setPreviewPage] = useState(null)
   const [why, setWhy] = useState({})
   const [note, setNote] = useState('')
   const [made, setMade] = useState(null)
@@ -312,6 +353,39 @@ export default function LeadFormStudio({ client }) {
     load()
   }, [client.id])
 
+  // The cover as something the preview can show (a public URL, or the Drive
+  // bytes as a blob: URL), and a word about its shape.
+  useEffect(() => {
+    let alive = true
+    setCoverNote('')
+    setCoverRefused('')
+    if (!coverPath) {
+      setCoverSrc('')
+      return undefined
+    }
+    coverSrcFor(client.id, coverPath)
+      .then(async (src) => {
+        if (!alive) return
+        setCoverSrc(src)
+        // The cover lives on the intro page, so the phone turns to it.
+        setPreviewPage('intro')
+        try {
+          const { width, height } = await imageSize(src)
+          if (alive) setCoverNote(coverShapeNote(width, height))
+        } catch {
+          /* the shape note is a nicety */
+        }
+      })
+      .catch((err) => {
+        if (!alive) return
+        setCoverSrc('')
+        setError(err.message)
+      })
+    return () => {
+      alive = false
+    }
+  }, [client.id, coverPath])
+
   const copy = async (key, text) => {
     const ok = await copyText(text)
     setCopied(ok ? key : '')
@@ -325,7 +399,7 @@ export default function LeadFormStudio({ client }) {
    * so this only sends a client id. The reply is applied straight into the
    * ticks and boxes rather than offered as a suggestion to accept: everything
    * it sets is visible and editable right here, and a form nobody adjusts is
-   * the normal case.
+   * the normal case. The intro card and the headline come with it.
    */
   const recommend = async () => {
     setBusy('recommend')
@@ -340,6 +414,9 @@ export default function LeadFormStudio({ client }) {
       setWhy(Object.fromEntries(out.questions.map((q) => [q.type === 'CUSTOM' ? q.label : q.type, q.why])))
       if (out.formName) setFormName(wcName(out.formName))
       if (out.thankYou) setThankYou(out.thankYou)
+      if (out.headline) setHeadline(out.headline)
+      if (out.introTitle) setIntroTitle(out.introTitle)
+      if (out.introLines?.length) setIntroText(out.introLines.join('\n'))
       setNote(
         out.usedChat
           ? out.note
@@ -396,6 +473,8 @@ export default function LeadFormStudio({ client }) {
   // Loads an existing form's questions into the builder. Meta forms cannot be
   // edited once they hold leads, so "change the ZIP question" is really "make
   // the same form again with that one difference", and this saves retyping it.
+  // The intro card and the headline come across; the cover photo does not
+  // (Meta does not hand it back), so pick it again.
   const startFrom = (f) => {
     const b = formToBuilder(f)
     setFormName(wcName(b.formName))
@@ -405,19 +484,32 @@ export default function LeadFormStudio({ client }) {
     if (b.thankYou) setThankYou(b.thankYou)
     if (b.privacyUrl) setPrivacyUrl(b.privacyUrl)
     setHigherIntent(b.higherIntent)
+    setHeadline(b.headline || '')
+    setIntroTitle(b.introTitle || '')
+    setIntroText(b.introText || '')
+    setIntroButton(b.introButton || '')
     setMade(null)
-    setNote(`Loaded the questions from "${f.name}". Change what you need and create it as a new form.`)
+    setNote(`Loaded the questions from "${f.name}". Change what you need and create it as a new form.${coverPath ? '' : ' Pick a cover photo if it should have one.'}`)
   }
 
-  const build = async () => {
+  const build = async ({ withoutCover = false } = {}) => {
     setBusy('build')
     setError('')
+    setCoverRefused('')
     try {
       const questions = [
         ...picked.map((type) => ({ type })),
         ...customs.map((c) => ({ type: 'CUSTOM', label: c.label, options: c.options || [] })),
       ]
       const name = wcName(formName.trim())
+      const extras = formExtras({ headline, introTitle, introText, introButton })
+      // The cover goes as one JPEG no wider than 1200px, whatever was picked.
+      let coverImage
+      if (coverPath && coverSrc && !withoutCover) {
+        setBusy('cover')
+        coverImage = await coverDataUrl(coverSrc)
+        setBusy('build')
+      }
       const out = await createLeadForm({
         clientId: client.id,
         formName: name,
@@ -425,17 +517,42 @@ export default function LeadFormStudio({ client }) {
         privacyPolicyUrl: privacyUrl.trim() || undefined,
         thankYouMessage: thankYou.trim() || undefined,
         higherIntent,
+        headline: extras.headline,
+        intro: extras.intro,
+        coverImage,
       })
-      setMade({ id: out.form_id, name: out.name || name })
+      setMade({ id: out.form_id, name: out.name || name, withCover: Boolean(out.with_cover) })
       await load()
     } catch (err) {
-      setError(err.message)
+      if (err.coverRefused) setCoverRefused(err.message)
+      else setError(err.message)
     } finally {
       setBusy('')
     }
   }
 
   const total = picked.length + customs.length
+
+  // The preview, redrawn from the builder on every change.
+  const pages = useMemo(
+    () =>
+      previewPages({
+        pageName: client.name,
+        headline,
+        introTitle,
+        introText,
+        introButton,
+        picked,
+        customs,
+        higherIntent,
+        thankYou,
+        privacyUrl,
+        market: client.market,
+        hasCover: Boolean(coverSrc),
+        websiteUrl: client.website_url,
+      }),
+    [client.name, client.market, client.website_url, headline, introTitle, introText, introButton, picked, customs, higherIntent, thankYou, privacyUrl, coverSrc]
+  )
 
   return (
     <div className="space-y-3">
@@ -444,7 +561,7 @@ export default function LeadFormStudio({ client }) {
         <p className="mt-0.5 text-xs text-slate-600">
           Built on {client.name}&rsquo;s Facebook Page, without publishing anything. Make it here
           first, wire the GoHighLevel workflow to the id, then attach it to an ad when you are
-          ready.
+          ready. The phone on the right shows the form as you build it.
         </p>
       </div>
 
@@ -487,7 +604,7 @@ export default function LeadFormStudio({ client }) {
       {made && (
         <div className="rounded-lg border border-green-200 bg-green-50 p-3">
           <p className="text-xs font-semibold text-green-900">
-            &ldquo;{made.name}&rdquo; is live on the Page.
+            &ldquo;{made.name}&rdquo; is live on the Page{made.withCover ? ', cover photo and all' : ''}.
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <code className="rounded border border-green-300 bg-white px-2 py-1 font-mono text-sm text-slate-900">
@@ -504,138 +621,235 @@ export default function LeadFormStudio({ client }) {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 p-3 space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold text-slate-700">What it asks</p>
-          <Button size="sm" variant="outline" disabled={busy === 'recommend'} onClick={recommend}>
-            {busy === 'recommend' ? 'Reading the chat and intake…' : '✨ Recommend the questions'}
-          </Button>
-        </div>
-
-        {note && <p className="text-[11px] text-slate-600">{note}</p>}
-
-        <div className="grid gap-1.5 sm:grid-cols-2">
-          {FORM_QUESTIONS.map((q) => (
-            <QuestionRow
-              key={q.type}
-              q={q}
-              on={picked.includes(q.type)}
-              toggle={() => toggle(q.type)}
-              why={why[q.type]}
-            />
-          ))}
-        </div>
-
-        {customs.length > 0 && (
-          <div className="space-y-1.5">
-            {customs.map((c, i) => (
-              <CustomRow
-                key={`${c.label}-${i}`}
-                c={c}
-                onOptions={(options) =>
-                  setCustoms((cur) => cur.map((x, j) => (j === i ? { ...x, options } : x)))
-                }
-                replacing={swap?.index === i}
-                reason={swap?.index === i ? swap.reason : ''}
-                onReason={(reason) => setSwap((s) => ({ ...s, reason }))}
-                onUntick={() => setSwap({ index: i, reason: '' })}
-                onAsk={askReplacement}
-                onDrop={() => {
-                  setCustoms((cur) => cur.filter((_, j) => j !== i))
-                  setSwap(null)
-                }}
-                onCancel={() => setSwap(null)}
-                busy={busy === 'replace'}
-              />
-            ))}
+      {/* THE COVER META REFUSED. The same form without the photo is one click
+          away, and the reason is shown so the token or the photo can be fixed. */}
+      {coverRefused && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" data-cover-refused>
+          <p className="font-semibold">Meta would not take the cover photo.</p>
+          <p className="mt-0.5">{coverRefused}</p>
+          <p className="mt-1 text-[11px]">
+            Usually the token lacks the pages_manage_posts permission, which uploading a photo to the
+            Page needs (docs/meta-connection.md), or the picture is an odd shape. The form itself was not
+            created.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => build({ withoutCover: true })} disabled={busy === 'build'}>
+              Create it without the photo
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setCoverPath('')}>
+              Pick another photo
+            </Button>
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-          <input
-            value={newCustom}
-            onChange={(e) => setNewCustom(e.target.value)}
-            placeholder="Ask something in their words — e.g. What is the unit doing?"
-            className="min-w-0 rounded border border-slate-300 px-2 py-1.5 text-xs"
-          />
-          <input
-            value={newOptions}
-            onChange={(e) => setNewOptions(e.target.value)}
-            placeholder="Options, comma separated — e.g. No cooling, Weird noise, Want a quote"
-            className="min-w-0 rounded border border-slate-300 px-2 py-1.5 text-xs"
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!newCustom.trim() || parseOptions(newOptions).length < 2}
-            title={parseOptions(newOptions).length < 2 ? 'Give it at least two options so it is a tap, not a typed box' : ''}
-            onClick={() => {
-              setCustoms((cur) => [...cur, { label: newCustom.trim(), why: '', options: parseOptions(newOptions) }])
-              setNewCustom('')
-              setNewOptions('')
-            }}
-          >
-            Add
-          </Button>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-3">
+          {/* THE INTRO: what a person sees before the questions. The cover is
+              picked from the client's uploads or their Drive folder, the way
+              an ad's photo is. */}
+          <div className="rounded-lg border border-slate-200 p-3 space-y-2.5" data-form-intro-builder>
+            <div>
+              <p className="text-xs font-semibold text-slate-700">How it opens</p>
+              <p className="text-[11px] text-slate-500">
+                The cover photo and the intro card a person sees first. All optional: with none of it the form opens on the questions.
+              </p>
+            </div>
+            <AdImagePicker
+              label="Cover photo"
+              client={client}
+              files={files}
+              value={coverPath}
+              onChange={setCoverPath}
+              onUpload={(f) => onUpload?.(f, setCoverPath)}
+              onRefresh={onRefresh}
+              driveFolderId={driveFolderId}
+              onFolderSaved={onFolderSaved}
+            />
+            {coverNote && <p className="text-[11px] text-amber-800">{coverNote}</p>}
+            {/* The phone turns to the page being typed on: the intro here,
+                the questions for the headline, the thank-you page below. */}
+            <input
+              value={introTitle}
+              onChange={(e) => setIntroTitle(e.target.value)}
+              onFocus={() => setPreviewPage('intro')}
+              maxLength={60}
+              placeholder="Intro title — the offer in a line, e.g. Free second opinion on any quote"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
+              data-intro-title
+            />
+            <textarea
+              value={introText}
+              onChange={(e) => setIntroText(e.target.value)}
+              onFocus={() => setPreviewPage('intro')}
+              rows={3}
+              placeholder={'Intro lines, one per line, e.g.\nA real person calls you back today\nNo obligation, no pressure'}
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
+              data-intro-text
+            />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input
+                value={introButton}
+                onChange={(e) => setIntroButton(e.target.value)}
+                onFocus={() => setPreviewPage('intro')}
+                maxLength={30}
+                placeholder="Intro button — Continue"
+                className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
+              />
+              <input
+                value={headline}
+                onChange={(e) => setHeadline(e.target.value)}
+                onFocus={() => setPreviewPage('questions')}
+                maxLength={60}
+                placeholder="Headline over the questions — e.g. Where should we call you?"
+                className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
+                data-form-headline
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-3 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-slate-700">What it asks</p>
+              <Button size="sm" variant="outline" disabled={busy === 'recommend'} onClick={recommend}>
+                {busy === 'recommend' ? 'Reading the chat and intake…' : '✨ Recommend the questions'}
+              </Button>
+            </div>
+
+            {note && <p className="text-[11px] text-slate-600">{note}</p>}
+
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {FORM_QUESTIONS.map((q) => (
+                <QuestionRow
+                  key={q.type}
+                  q={q}
+                  on={picked.includes(q.type)}
+                  toggle={() => toggle(q.type)}
+                  why={why[q.type]}
+                />
+              ))}
+            </div>
+
+            {customs.length > 0 && (
+              <div className="space-y-1.5">
+                {customs.map((c, i) => (
+                  <CustomRow
+                    key={`${c.label}-${i}`}
+                    c={c}
+                    onOptions={(options) =>
+                      setCustoms((cur) => cur.map((x, j) => (j === i ? { ...x, options } : x)))
+                    }
+                    replacing={swap?.index === i}
+                    reason={swap?.index === i ? swap.reason : ''}
+                    onReason={(reason) => setSwap((s) => ({ ...s, reason }))}
+                    onUntick={() => setSwap({ index: i, reason: '' })}
+                    onAsk={askReplacement}
+                    onDrop={() => {
+                      setCustoms((cur) => cur.filter((_, j) => j !== i))
+                      setSwap(null)
+                    }}
+                    onCancel={() => setSwap(null)}
+                    busy={busy === 'replace'}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+              <input
+                value={newCustom}
+                onChange={(e) => setNewCustom(e.target.value)}
+                placeholder="Ask something in their words — e.g. What is the unit doing?"
+                className="min-w-0 rounded border border-slate-300 px-2 py-1.5 text-xs"
+              />
+              <input
+                value={newOptions}
+                onChange={(e) => setNewOptions(e.target.value)}
+                placeholder="Options, comma separated — e.g. No cooling, Weird noise, Want a quote"
+                className="min-w-0 rounded border border-slate-300 px-2 py-1.5 text-xs"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!newCustom.trim() || parseOptions(newOptions).length < 2}
+                title={parseOptions(newOptions).length < 2 ? 'Give it at least two options so it is a tap, not a typed box' : ''}
+                onClick={() => {
+                  setCustoms((cur) => [...cur, { label: newCustom.trim(), why: '', options: parseOptions(newOptions) }])
+                  setNewCustom('')
+                  setNewOptions('')
+                }}
+              >
+                Add
+              </Button>
+            </div>
+
+            <input
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              onBlur={() => setFormName((v) => (v.trim() ? wcName(v.trim()) : v))}
+              placeholder="Form name — what you will see in Meta (WC_ goes on the front)"
+              title="Every form the CRM makes is named WC_… so ours stand out from the client's own in Meta"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
+              data-form-name
+            />
+            <textarea
+              value={thankYou}
+              onChange={(e) => setThankYou(e.target.value)}
+              onFocus={() => setPreviewPage('thanks')}
+              rows={2}
+              placeholder="What they read after submitting"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
+            />
+            <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2 text-xs">
+              <input
+                type="checkbox"
+                checked={higherIntent}
+                onChange={(e) => setHigherIntent(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium text-slate-900">Higher Intent</span>
+                <span className="ml-1.5 text-[10px] text-green-700">recommended</span>
+                <span className="mt-0.5 block text-slate-500">
+                  Meta shows a review screen before the lead submits. About 30 to 40% fewer junk leads for
+                  15 to 20% fewer submissions. Off is the "More Volume" form, which people submit by
+                  accident. There is no text-a-code step on Meta forms; that is a GoHighLevel workflow
+                  after the lead lands.
+                </span>
+              </span>
+            </label>
+            <input
+              value={privacyUrl}
+              onChange={(e) => setPrivacyUrl(e.target.value)}
+              placeholder="Privacy policy URL — Meta requires one on every form"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
+            />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button disabled={busy === 'build' || busy === 'cover' || total === 0 || !formName.trim()} onClick={() => build()}>
+                {busy === 'cover' ? 'Preparing the cover photo…' : busy === 'build' ? 'Building it on the Page…' : 'Create the form'}
+              </Button>
+              <span className="text-[11px] text-slate-500">
+                {total} question{total === 1 ? '' : 's'}
+                {customs.length > 0 &&
+                  ` · ${customs.length} multiple choice${
+                    customs.some((c) => (c.options || []).length < 2)
+                      ? ` (${customs.filter((c) => (c.options || []).length < 2).length} still typed)`
+                      : ''
+                  }`}
+                {coverSrc ? ' · cover photo on' : ''}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <input
-          value={formName}
-          onChange={(e) => setFormName(e.target.value)}
-          onBlur={() => setFormName((v) => (v.trim() ? wcName(v.trim()) : v))}
-          placeholder="Form name — what you will see in Meta (WC_ goes on the front)"
-          title="Every form the CRM makes is named WC_… so ours stand out from the client's own in Meta"
-          className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
-          data-form-name
-        />
-        <textarea
-          value={thankYou}
-          onChange={(e) => setThankYou(e.target.value)}
-          rows={2}
-          placeholder="What they read after submitting"
-          className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
-        />
-        <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2 text-xs">
-          <input
-            type="checkbox"
-            checked={higherIntent}
-            onChange={(e) => setHigherIntent(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>
-            <span className="font-medium text-slate-900">Higher Intent</span>
-            <span className="ml-1.5 text-[10px] text-green-700">recommended</span>
-            <span className="mt-0.5 block text-slate-500">
-              Meta shows a review screen before the lead submits. About 30 to 40% fewer junk leads for
-              15 to 20% fewer submissions. Off is the "More Volume" form, which people submit by
-              accident. There is no text-a-code step on Meta forms; that is a GoHighLevel workflow
-              after the lead lands.
-            </span>
-          </span>
-        </label>
-        <input
-          value={privacyUrl}
-          onChange={(e) => setPrivacyUrl(e.target.value)}
-          placeholder="Privacy policy URL — Meta requires one on every form"
-          className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs"
-        />
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button disabled={busy === 'build' || total === 0 || !formName.trim()} onClick={build}>
-            {busy === 'build' ? 'Building it on the Page…' : 'Create the form'}
-          </Button>
-          <span className="text-[11px] text-slate-500">
-            {total} question{total === 1 ? '' : 's'}
-            {customs.length > 0 &&
-              ` · ${customs.length} multiple choice${
-                customs.some((c) => (c.options || []).length < 2)
-                  ? ` (${customs.filter((c) => (c.options || []).length < 2).length} still typed)`
-                  : ''
-              }`}
-          </span>
+        {/* THE PREVIEW, beside the builder on a wide screen and under it on a
+            narrow one, stuck to the top so it stays in view while the long
+            list scrolls. */}
+        <div className="lg:sticky lg:top-3 lg:self-start">
+          <InstantFormPreview pages={pages} pageName={client.name} coverSrc={coverSrc} coverNote={coverNote} active={previewPage} onActive={setPreviewPage} />
         </div>
       </div>
-
     </div>
   )
 }

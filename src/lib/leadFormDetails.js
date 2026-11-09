@@ -57,6 +57,7 @@ export function formToBuilder(form) {
   const picked = described.filter((d) => !d.custom).map((d) => d.type)
   const customs = described.filter((d) => d.custom).map((d) => ({ label: d.label, why: '', options: d.options }))
   const ty = form?.thank_you_page
+  const intro = introOf(form)
   return {
     formName: `${form?.name || 'Form'} (copy)`,
     picked,
@@ -64,6 +65,26 @@ export function formToBuilder(form) {
     thankYou: (ty && (ty.body || ty.title)) || '',
     privacyUrl: form?.privacy_policy_url || '',
     higherIntent: isHigherIntent(form),
+    headline: String(form?.question_page_custom_headline || '').trim(),
+    introTitle: intro.title,
+    introText: intro.lines.join('\n'),
+    introButton: intro.button,
+  }
+}
+
+/**
+ * The intro card Meta returns on an existing form (context_card), as the
+ * builder holds it: a title, its lines and the button. Empty when the form
+ * has none. Meta's content is a list of strings; a lone string is one line.
+ */
+export function introOf(form) {
+  const card = form?.context_card
+  if (!card || typeof card !== 'object') return { title: '', lines: [], button: '' }
+  const raw = Array.isArray(card.content) ? card.content : card.content ? [card.content] : []
+  return {
+    title: String(card.title || '').trim(),
+    lines: raw.map((s) => String(s ?? '').trim()).filter(Boolean),
+    button: String(card.button_text || '').trim(),
   }
 }
 

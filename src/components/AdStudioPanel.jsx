@@ -1911,7 +1911,9 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   if (tab === 'form') {
     return frame(
       <div className="space-y-3">
-        <LeadFormStudio client={client} />
+        {/* The form's cover photo is picked like an ad's background: the same
+            uploads, the same Drive folder, the same upload path. */}
+        <LeadFormStudio client={client} files={files} driveFolderId={driveFolderId} onFolderSaved={setDriveFolderId} onUpload={upload} onRefresh={loadFiles} />
       </div>
     )
   }
