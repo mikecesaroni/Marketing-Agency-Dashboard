@@ -126,7 +126,7 @@ export default function StripePanel() {
     }
   }
 
-  const configured = links.setup || links.monthly || links.monthly1500 || links.monthly2500
+  const configured = links.setup || links.monthly || links.monthly1500 || links.monthly2500 || links.monthly3500
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl mb-4 overflow-hidden">
@@ -164,9 +164,11 @@ export default function StripePanel() {
             </p>
             {[
               ['Setup fee link', 'setup', 'https://buy.stripe.com/...'],
+              ['What the setup fee link charges, in dollars (the client’s Billing tab offers it only to a client who owes exactly this)', 'setupAmount', '2500'],
               ['Monthly subscription link ($998)', 'monthly', 'https://buy.stripe.com/...'],
               ['Monthly subscription link ($1,500)', 'monthly1500', 'https://buy.stripe.com/...'],
               ['Monthly subscription link ($2,500, Meta and Google)', 'monthly2500', 'https://buy.stripe.com/...'],
+              ['Monthly subscription link ($3,500, Runs Without You)', 'monthly3500', 'https://buy.stripe.com/...'],
             ].map(([label, key, placeholder]) => (
               <div key={key}>
                 <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
@@ -291,6 +293,7 @@ const MONTHLY_TIERS = [
   { key: 'monthly', amount: 998, label: '$998/mo link' },
   { key: 'monthly1500', amount: 1500, label: '$1,500/mo link' },
   { key: 'monthly2500', amount: 2500, label: '$2,500/mo link' },
+  { key: 'monthly3500', amount: 3500, label: '$3,500/mo link' },
 ]
 
 // The per-client copy buttons, used on the client's own Payments card.

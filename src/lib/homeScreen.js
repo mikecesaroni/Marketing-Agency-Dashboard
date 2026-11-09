@@ -29,6 +29,7 @@ const LABELS = {
   '/onboarding/': 'Onboarding',
   '/scripts/': 'Video Scripts',
   '/videos/': 'My Videos',
+  '/pay/': 'Billing',
 }
 
 /** The name the icon gets on the phone, by which client page this is; '' for a CRM page. */

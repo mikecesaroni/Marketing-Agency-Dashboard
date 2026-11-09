@@ -54,6 +54,10 @@
 #   to = "/index.html"
 #   status = 200
 # [[redirects]]
+#   from = "https://clients.example.com/pay/*"
+#   to = "/index.html"
+#   status = 200
+# [[redirects]]
 #   from = "https://clients.example.com/*"
 #   to = "/nothing-here.html"
 #   status = 404
@@ -91,6 +95,11 @@
 
 [[redirects]]
   from = "/videos/*"
+  to = "/client.html"
+  status = 200
+
+[[redirects]]
+  from = "/pay/*"
   to = "/client.html"
   status = 200
 

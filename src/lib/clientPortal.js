@@ -2,8 +2,8 @@
 //
 // A client gets one link (their dashboard token). The pages behind it are
 // tabs of the same place: their numbers (/dashboard/<token>), their video
-// scripts (/scripts/<token>) and their videos (/videos/<token>), with room
-// for more. Each tab keeps its own address, so a deep link, a link preview
+// scripts (/scripts/<token>), their videos (/videos/<token>) and their
+// billing (/pay/<token>), with room for more. Each tab keeps its own address, so a deep link, a link preview
 // and the browser's back button all keep working; the tab bar just moves
 // between them.
 //
@@ -18,6 +18,7 @@ export const PORTAL_TABS = [
   { key: 'numbers', label: 'Live KPIs', prefix: '/dashboard/', hint: 'Leads, spend and what they mean' },
   { key: 'scripts', label: 'Video scripts', prefix: '/scripts/', hint: 'What to film this week' },
   { key: 'videos', label: 'Your videos', prefix: '/videos/', hint: 'Watch and download your ads' },
+  { key: 'billing', label: 'Billing', prefix: '/pay/', hint: 'Your plan and payments' },
 ]
 
 /** The address of one tab for a token. */

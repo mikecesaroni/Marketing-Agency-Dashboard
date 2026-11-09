@@ -26,6 +26,8 @@ check('a scripts link', matchClientPath('/scripts/abcdefghijklmnopqrstuvwx'), { 
 check('the scripts page has its own words and card', [previewMeta({ kind: 'scripts', name: 'Belk', origin: 'https://x', pathname: '/s' }).title, previewMeta({ kind: 'scripts', name: '', origin: 'https://x', pathname: '/s' }).image], ['Video scripts for Belk', 'https://x/og-video-scripts.png'])
 check('a videos link', matchClientPath('/videos/abcdefghijklmnopqrstuvwx'), { kind: 'videos', token: 'abcdefghijklmnopqrstuvwx' })
 check('the videos page has its own words and card', [previewMeta({ kind: 'videos', name: 'Belk', origin: 'https://x', pathname: '/v' }).title, previewMeta({ kind: 'videos', name: '', origin: 'https://x', pathname: '/v' }).image], ['Your videos for Belk', 'https://x/og-your-videos.png'])
+check('a billing link', matchClientPath('/pay/abcdefghijklmnopqrstuvwx'), { kind: 'pay', token: 'abcdefghijklmnopqrstuvwx' })
+check('the billing page has its own words and card', [previewMeta({ kind: 'pay', name: 'Belk', origin: 'https://x', pathname: '/p' }).title, previewMeta({ kind: 'pay', name: '', origin: 'https://x', pathname: '/p' }).image], ['Billing for Belk', 'https://x/og-billing.png'])
 check('no em dashes in the preview words', /[—–]/.test(Object.values(KINDS).map((k) => `${k.title('X')} ${k.description}`).join(' ')), false)
 
 // -------------------------------------------------------------- the rewrite
@@ -50,12 +52,12 @@ check('a failing call gives no name rather than an error', await lookupName({ ki
 // --------------------------------------------------------------- the pieces
 check('every kind has its card image', Object.values(KINDS).map((k) => existsSync(new URL(`../public${k.image}`, import.meta.url))), Object.values(KINDS).map(() => true))
 const edge = readFileSync(new URL('../netlify/edge-functions/client-preview.ts', import.meta.url), 'utf8')
-check('the edge function covers the four paths and bypasses on error', edge.includes("path: ['/dashboard/*', '/report/*', '/scripts/*', '/videos/*']") && edge.includes("onError: 'bypass'"), true)
+check('the edge function covers the five paths and bypasses on error', edge.includes("path: ['/dashboard/*', '/report/*', '/scripts/*', '/videos/*', '/pay/*']") && edge.includes("onError: 'bypass'"), true)
 const sql = readFileSync(new URL('../supabase/client-dashboard.sql', import.meta.url), 'utf8')
 check('the name lookup is in the SQL file', sql.includes('function client_link_name(p_kind text, p_token text)'), true)
 // The lookup has grown a kind per tab since; the newest definition names them all.
-const newest = readFileSync(new URL('../supabase/client-videos.sql', import.meta.url), 'utf8')
-check('the newest lookup knows every tab with the dashboard token', newest.includes("p_kind in ('dashboard', 'scripts', 'videos')"), true)
+const newest = readFileSync(new URL('../supabase/client-billing.sql', import.meta.url), 'utf8')
+check('the newest lookup knows every tab with the dashboard token', newest.includes("p_kind in ('dashboard', 'scripts', 'videos', 'pay')"), true)
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

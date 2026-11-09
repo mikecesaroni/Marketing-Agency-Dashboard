@@ -38,6 +38,12 @@ export const KINDS = {
     description: 'Every video ad that has gone live on your account, to watch here and download to post on your own pages.',
     image: '/og-your-videos.png',
   },
+  pay: {
+    prefix: '/pay/',
+    title: (name) => (name ? `Billing for ${name}` : 'Billing'),
+    description: 'Your plan, your setup fee and your monthly subscription, with a secure Stripe checkout to pay or to start.',
+    image: '/og-billing.png',
+  },
 }
 
 /** Which client page an address is, and its token; null for anything else. */

@@ -18,7 +18,7 @@
  * projection is what stops that happening again.
  */
 export const CLIENT_BILLING_COLUMNS =
-  'id, name, status, setup_fee, monthly_fee, stripe_customer_id, ghl_plan, archived, paused_at'
+  'id, name, status, setup_fee, monthly_fee, stripe_customer_id, ghl_plan, archived, paused_at, dashboard_token'
 
 /**
  * A client on pause: still a client, not billing right now.

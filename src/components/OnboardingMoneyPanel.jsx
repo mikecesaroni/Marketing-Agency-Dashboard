@@ -1,6 +1,10 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { money } from '../lib/queries'
 import { onboardingGaps } from '../lib/billing'
+import { billingPath } from '../lib/clientBilling'
+import { copyText } from '../lib/intakeSummary'
+import { publicLink } from '../lib/publicSite'
 import { Badge, Card } from './ui'
 
 /**
@@ -92,7 +96,8 @@ function Column({ title, count, total, empty, children }) {
 }
 
 // The client's name is the link, because every one of these ends in opening
-// that client to chase it.
+// that client to chase it. Beside it, the thing to send them: their Billing
+// tab, where the setup fee and the subscription are one button each.
 function Row({ client, children }) {
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-200/70 pt-1.5 first:border-0 first:pt-0">
@@ -103,6 +108,22 @@ function Row({ client, children }) {
         {client.name}
       </Link>
       {children}
+      <CopyBilling token={client.dashboard_token} />
     </div>
+  )
+}
+
+function CopyBilling({ token }) {
+  const [copied, setCopied] = useState(false)
+  if (!token) return null
+  const copy = async () => {
+    const ok = await copyText(publicLink(billingPath(token)))
+    setCopied(ok)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <button type="button" onClick={copy} title="Copy the client's billing page link: their plan, the setup fee and the subscription, each one button" className={`rounded px-2 py-0.5 text-[11px] font-medium transition ${copied ? 'bg-green-600 text-white' : 'border border-slate-300 bg-white text-slate-600 hover:bg-slate-100'}`} data-copy-billing>
+      {copied ? '✓ Copied' : 'Copy billing link'}
+    </button>
   )
 }

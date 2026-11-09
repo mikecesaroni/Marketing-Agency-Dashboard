@@ -12,30 +12,54 @@ export const MONTHLY_1500_KEY = 'stripe_monthly_1500_link'
 // link to send, and Don Air Co's first month came in through a one-time link
 // that Stripe made no subscription from.
 export const MONTHLY_2500_KEY = 'stripe_monthly_2500_link'
+// The $3,500 plan (Runs Without You), so the client's Billing tab has a
+// subscription link to offer at that price too.
+export const MONTHLY_3500_KEY = 'stripe_monthly_3500_link'
+// What the setup link charges. The client's Billing tab offers the standard
+// setup link only to a client who owes exactly this, so a client with
+// another fee is never sent a wrong charge (they get a custom link instead).
+export const SETUP_AMOUNT_KEY = 'stripe_setup_link_amount'
 
-export const EMPTY_LINKS = { setup: '', monthly: '', monthly1500: '', monthly2500: '' }
+export const EMPTY_LINKS = { setup: '', setupAmount: '', monthly: '', monthly1500: '', monthly2500: '', monthly3500: '' }
 
 export async function fetchStripeLinks() {
   const { data } = await supabase.from('app_settings').select('key, value')
   const map = Object.fromEntries((data || []).map((r) => [r.key, r.value || '']))
   return {
     setup: map[SETUP_KEY] || '',
+    setupAmount: map[SETUP_AMOUNT_KEY] || '',
     monthly: map[MONTHLY_KEY] || '',
     monthly1500: map[MONTHLY_1500_KEY] || '',
     monthly2500: map[MONTHLY_2500_KEY] || '',
+    monthly3500: map[MONTHLY_3500_KEY] || '',
   }
 }
 
-export async function saveStripeLinks({ setup, monthly, monthly1500, monthly2500 }) {
+export async function saveStripeLinks({ setup, setupAmount, monthly, monthly1500, monthly2500, monthly3500 }) {
   const stamp = new Date().toISOString()
   const rows = [
     { key: SETUP_KEY, value: setup || '', updated_at: stamp },
+    { key: SETUP_AMOUNT_KEY, value: String(setupAmount || '').replace(/[^0-9.]/g, ''), updated_at: stamp },
     { key: MONTHLY_KEY, value: monthly || '', updated_at: stamp },
     { key: MONTHLY_1500_KEY, value: monthly1500 || '', updated_at: stamp },
     { key: MONTHLY_2500_KEY, value: monthly2500 || '', updated_at: stamp },
+    { key: MONTHLY_3500_KEY, value: monthly3500 || '', updated_at: stamp },
   ]
   const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
   if (error) throw error
+}
+
+/** The Stripe settings as the client's Billing tab reads them: app_settings key to value. */
+export function linksAsSettings(links) {
+  const l = links || {}
+  return {
+    [SETUP_KEY]: l.setup || '',
+    [SETUP_AMOUNT_KEY]: l.setupAmount || '',
+    [MONTHLY_KEY]: l.monthly || '',
+    [MONTHLY_1500_KEY]: l.monthly1500 || '',
+    [MONTHLY_2500_KEY]: l.monthly2500 || '',
+    [MONTHLY_3500_KEY]: l.monthly3500 || '',
+  }
 }
 
 /**

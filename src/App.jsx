@@ -8,6 +8,7 @@ import WeeklyReportPage from './pages/WeeklyReportPage'
 import ClientDashboardPage from './pages/ClientDashboardPage'
 import ScriptStudioPage from './pages/ScriptStudioPage'
 import ClientVideosPage from './pages/ClientVideosPage'
+import ClientBillingPage from './pages/ClientBillingPage'
 import ClientOnboardingPage from './pages/ClientOnboardingPage'
 import AdApprovalPage from './pages/AdApprovalPage'
 import LoginPage from './pages/LoginPage'
@@ -101,6 +102,7 @@ export default function App() {
         <Route path="/dashboard/:token" element={<ClientDashboardPage />} />
         <Route path="/scripts/:token" element={<ScriptStudioPage />} />
         <Route path="/videos/:token" element={<ClientVideosPage />} />
+        <Route path="/pay/:token" element={<ClientBillingPage />} />
         <Route path="*" element={<NothingHerePage />} />
       </Routes>
       </>
@@ -140,6 +142,10 @@ export default function App() {
       {/* Public, the same token again: every video ad that went live on the
           client's account, to watch and download, through client_videos_load. */}
       <Route path="/videos/:token" element={<ClientVideosPage />} />
+      {/* Public, the same token again: the client's plan, the setup fee and
+          the subscription, with Stripe's checkout behind the buttons, through
+          client_billing_load. */}
+      <Route path="/pay/:token" element={<ClientBillingPage />} />
       {/* A tab that opened a client link never sees the sign-in form. */}
       <Route path="/login" element={cameFromClientLink() ? <NothingHerePage /> : <LoginPage />} />
       {/* Everything else needs a login. RequireAuth also turns a VA away from

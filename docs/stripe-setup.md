@@ -189,3 +189,16 @@ true whichever row the money lands on (2026-10-29):
 - **The money for an invoice clears that invoice's decline from any other open
   month** still carrying it (back to pending, failure columns off), and the
   failed-payments card drops a decline whose invoice is paid on any row.
+
+## The client's billing page (2026-11-09)
+
+The same links, on a page the client opens themselves: the **Billing** tab
+of their one portal link (`/pay/<token>`) shows their plan, the setup fee
+and the subscription with one Stripe button each, stamped with their id the
+way the copy buttons stamp it, so a payment from the page books itself. The
+page offers the standard setup link only to a client who owes exactly what
+it charges (the new **What the setup fee link charges** box here, 2500 to
+start) and a subscription link only at the exact price ($998, $1,500,
+$2,500, and a new $3,500 slot); any other fee needs a custom Payment Link
+pasted on the client's Payments card, and until then the page says a link
+is on its way. See `docs/client-billing.md`.

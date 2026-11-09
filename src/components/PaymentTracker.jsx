@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Modal from './Modal'
 import { StripeLinkButtons } from './StripePanel'
 import { formatDate, isOverdue, money, today } from '../lib/queries'
 import { isPaused, isPausedPayment } from '../lib/billing'
+import { billingPath, billingPlan } from '../lib/clientBilling'
+import { saveClientPayLinks } from '../lib/clientBillingStore'
+import { copyText } from '../lib/intakeSummary'
+import { publicLink } from '../lib/publicSite'
+import { fetchStripeLinks, linksAsSettings } from '../lib/stripeLinks'
 
 const METHODS = ['card', 'ach', 'check', 'paypal', 'other']
 
@@ -29,6 +34,109 @@ function monthLabel(dueDate) {
     month: 'long',
     year: 'numeric',
   })
+}
+
+const STATE_WORDS = {
+  setup: { paid: 'setup fee paid', due: 'setup fee due', overdue: 'setup fee past due', none: 'no setup fee' },
+  monthly: { active: 'subscription active', failing: 'card failing', paused: 'on pause', 'not-started': 'not subscribed yet' },
+}
+
+/**
+ * The client's Billing tab, from the agency side: the link to send (it is
+ * the client's one portal link, on its Billing tab), what the tab says
+ * right now, and the custom Stripe links for a client whose fee no standard
+ * link charges (a $1,750 plan, a split setup fee), which the tab offers in
+ * place of the standard ones. Until such a client has one, the tab tells
+ * them a link is coming and this row says so in amber.
+ */
+function BillingPageRow({ client, payments, onClientUpdate }) {
+  const [links, setLinks] = useState(null)
+  const [copied, setCopied] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [setupLink, setSetupLink] = useState(client.pay_setup_link || '')
+  const [monthlyLink, setMonthlyLink] = useState(client.pay_monthly_link || '')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  useEffect(() => {
+    fetchStripeLinks().then(setLinks).catch(() => setLinks({}))
+  }, [])
+  useEffect(() => {
+    setSetupLink(client.pay_setup_link || '')
+    setMonthlyLink(client.pay_monthly_link || '')
+  }, [client.pay_setup_link, client.pay_monthly_link])
+
+  const plan = useMemo(
+    () => billingPlan({ client, payments, links: linksAsSettings(links || {}), today: today() }),
+    [client, payments, links]
+  )
+  if (!client.dashboard_token) return null
+  const url = publicLink(billingPath(client.dashboard_token))
+
+  const copy = async () => {
+    const ok = await copyText(url)
+    setCopied(ok)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  const save = async () => {
+    setSaving(true)
+    setSaveError('')
+    try {
+      await saveClientPayLinks(client.id, { setup: setupLink, monthly: monthlyLink })
+      await onClientUpdate?.()
+    } catch (err) {
+      setSaveError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const missing = links ? plan.missing : []
+  const needs = missing.map((m) => (m === 'setup' ? `the ${money(plan.setup.amount)} setup fee` : `a ${money(plan.monthly.amount)} a month plan`))
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-billing-page>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-slate-700">Client billing page</span>
+        <a href={url} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100" title="The Billing tab of the client's own page: their plan, the setup fee and the subscription, with Stripe's checkout behind the buttons">
+          Open
+        </a>
+        <button type="button" onClick={copy} className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${copied ? 'bg-green-600 text-white' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`} data-copy-billing>
+          {copied ? '✓ Copied' : 'Copy link'}
+        </button>
+        <span className="text-[11px] text-slate-500" data-billing-state>
+          Says: {STATE_WORDS.setup[plan.setup.status]}, {STATE_WORDS.monthly[plan.monthly.status]}.
+        </span>
+      </div>
+      {needs.length > 0 && (
+        <p className="mt-2 text-[11px] text-amber-800" data-billing-missing>
+          No Stripe link charges {needs.join(' or ')}, so the page tells them a link is coming. Paste a custom Payment Link below (Stripe: Payment Links, New) and the page offers it.
+        </p>
+      )}
+      <button type="button" onClick={() => setOpen((o) => !o)} className="mt-2 text-[11px] font-medium text-blue-700 hover:underline">
+        {open ? 'Hide custom links' : 'Custom Stripe links for this client'}
+      </button>
+      {open && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <label className="block text-[11px] text-slate-600">
+            Setup fee link for this client
+            <input value={setupLink} onChange={(e) => setSetupLink(e.target.value)} placeholder="https://buy.stripe.com/..." className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-xs" data-custom-setup-link />
+          </label>
+          <label className="block text-[11px] text-slate-600">
+            Monthly plan link for this client
+            <input value={monthlyLink} onChange={(e) => setMonthlyLink(e.target.value)} placeholder="https://buy.stripe.com/..." className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-xs" data-custom-monthly-link />
+          </label>
+          <div className="sm:col-span-2 flex items-center gap-2">
+            <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save links'}
+            </button>
+            <span className="text-[11px] text-slate-500">Only when their fee is not one of the standard prices. The page stamps the client&rsquo;s ID on whichever link it offers, so the payment books itself.</span>
+          </div>
+          {saveError && <p className="sm:col-span-2 text-xs text-red-700">{saveError}</p>}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function PaymentTracker({ client, onClientUpdate }) {
@@ -359,12 +467,13 @@ export default function PaymentTracker({ client, onClientUpdate }) {
 
       {/* Send these instead of the raw Stripe links: they carry the client's ID,
           which is the only thing that tells the webhook whose payment it is. */}
-      <div className="mb-4">
+      <div className="mb-4 space-y-3">
         <StripeLinkButtons
           clientId={clientId}
           stripeCustomerId={client.stripe_customer_id}
           monthlyFee={monthlyAmount}
         />
+        <BillingPageRow client={client} payments={payments} onClientUpdate={onClientUpdate} />
       </div>
 
       {error && (

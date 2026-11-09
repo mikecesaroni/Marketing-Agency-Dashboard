@@ -94,9 +94,9 @@ address. Two walls, both in the code and ready to switch on:
 1. **A client-facing site.** Deploy the same build a second time (a second
    Netlify site from the same branch, or a second domain on this one) with
    `VITE_PUBLIC_ONLY=true`, or with its host named in `VITE_PUBLIC_HOST`.
-   That deployment serves only the six kinds of client page (dashboard,
-   report, approval, onboarding, video scripts, videos); every other
-   address is "Nothing here".
+   That deployment serves only the seven kinds of client page (dashboard,
+   report, approval, onboarding, video scripts, videos, billing); every
+   other address is "Nothing here".
    The commented rules in `netlify.toml` make Netlify refuse at the edge as
    well, before any JavaScript runs.
 2. **Links that never carry the CRM's address.** Set `VITE_PUBLIC_APP_URL`

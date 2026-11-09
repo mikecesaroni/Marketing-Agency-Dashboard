@@ -9,7 +9,8 @@ import { PORTAL_TABS, portalPath } from '../lib/clientPortal'
  * hunting. Each tab is a real link to its own address. On a phone the icon
  * sits over the label so three tabs fit at 360px; from sm up they sit
  * side by side with a hint. `dark` matches the dashboard's surface; the
- * default matches the light pages. The current tab is orange on both.
+ * default matches the light pages. The current tab is orange on both. Four
+ * tabs still fit a 360px phone: the icon over a 12px label, one column each.
  *
  * On a computer (lg and up) this bar hides and PortalSidebar takes over,
  * the way the CRM has its pages down the left.
@@ -31,6 +32,12 @@ export const PORTAL_ICONS = {
     <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="3" y="4" width="18" height="13" rx="2" />
       <path d="M10 8l5 2.5-5 2.5zM8 21h8" />
+    </svg>
+  ),
+  billing: (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+      <path d="M2.5 10h19M6.5 15h4" />
     </svg>
   ),
 }
