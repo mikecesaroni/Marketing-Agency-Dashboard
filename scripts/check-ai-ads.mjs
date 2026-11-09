@@ -105,7 +105,7 @@ check(
   [tpl.includes('const pics = art?.pictures?.[artKey]'), tpl.includes("ctx.globalCompositeOperation = 'multiply'"), tpl.includes("if (!ownClouds) clouds("), tpl.includes(".art !== 'clunkers') torn("), tpl.includes("theme.art !== 'rebate_burst') torn(")],
   [true, true, true, true, true]
 )
-check('the Studio, Save all 3 ads and a revision all load the art', [studio.includes('templateArtBitmaps(loadImage)'), studio.includes('templateArt: artBitmaps.current }, { safeMode, guides: false })'), read('src/lib/adRevisionStore.js').includes('await templateArtBitmaps(loadImage)')], [true, true, true])
+check('the Studio, Save all 3 ads and a revision all load the art', [studio.includes('templateArtBitmaps(loadImage)'), studio.includes('templateArt: artBitmaps.current, counties: countyShapes.current }, { safeMode, guides: false })'), read('src/lib/adRevisionStore.js').includes('await templateArtBitmaps(loadImage)')], [true, true, true])
 
 console.log(failures === 0 ? '\nAll ChatGPT ad checks pass' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

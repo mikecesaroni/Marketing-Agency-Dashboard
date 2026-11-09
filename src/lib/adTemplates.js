@@ -31,6 +31,7 @@ import { hexToRgb, readableTextOn } from './logoColours'
 import { CONDENSED, FONT, SCRIPT, drawLines, fitText, roundRect, setFont, typographic, widest } from './adText'
 import { SLATE, badgeSize, drawCoverIn, drawLocationSticker, drawTypedBlock, frameMargins } from './adLooks'
 import { typedColours, typedWords } from './adLayout'
+import { findCounty, placeLines, projectShapes } from './countyMap.js'
 import { logoFor } from './logoCutout'
 import { createAudit } from './adAudit'
 import { TEMPLATE_ART, artKeyFor } from '../../supabase/functions/_shared/aiAds.js'
@@ -2742,6 +2743,169 @@ function bigNumber(ctx, size, content, assets, opts) {
   return { band: { top: y, bottom: B } }
 }
 
+/**
+ * The state as its counties, grey with light seams, the client's county
+ * lit in the brand colour and drawn last so its edge sits on top. The
+ * shapes are the state's file from the geo-shapes function (assets.counties,
+ * loaded by the Studio for the client's state); with none loaded yet the
+ * box is left for the map and nothing is drawn, so the words still read.
+ * Returns the box the state filled, or null.
+ */
+function drawCountyMap(ctx, shapes, box, { highlight = '', fill = '#6F6B68', seam = '#F2F0EC', accent = GOLD } = {}) {
+  const list = Array.isArray(shapes?.counties) ? shapes.counties : []
+  if (!list.length) return null
+  const { counties, bounds } = projectShapes(list, box, { pad: 6 })
+  const lit = findCounty(list, highlight)
+  const path = (rings) => {
+    ctx.beginPath()
+    for (const ring of rings) {
+      ring.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)))
+      ctx.closePath()
+    }
+  }
+  ctx.save()
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = Math.max(1.2, box.w / 420)
+  for (const c of counties) {
+    if (lit && c.id === lit.id) continue
+    path(c.rings)
+    ctx.fillStyle = fill
+    ctx.fill('evenodd')
+    ctx.strokeStyle = seam
+    ctx.stroke()
+  }
+  if (lit) {
+    const c = counties.find((x) => x.id === lit.id)
+    if (c) {
+      path(c.rings)
+      ctx.fillStyle = accent
+      ctx.fill('evenodd')
+      ctx.lineWidth = Math.max(2, box.w / 260)
+      ctx.strokeStyle = WHITE
+      ctx.stroke()
+    }
+  }
+  ctx.restore()
+  return bounds
+}
+
+/**
+ * Up to three outlined tiles: a thin rounded stroke in the brand colour, the
+ * number big in the brand colour, the line under it in white. The one place
+ * a template draws a box round a number on purpose: on the black field the
+ * outline is the design (the Empire Solar ad), not a panel.
+ */
+function outlinedTiles(ctx, offers, rect, { stroke = GOLD, amountInk = GOLD, ink = WHITE, gap = 18 } = {}) {
+  const list = offers.slice(0, 3)
+  if (!list.length) return 0
+  const cols = list.length
+  const tw = (rect.w - gap * (cols - 1)) / cols
+  const th = rect.h
+  list.forEach((o, i) => {
+    const cx = rect.x + i * (tw + gap)
+    const cy = rect.y
+    note('tile', { x: cx, y: cy, w: tw, h: th }, `offer ${i + 1}`)
+    ctx.save()
+    ctx.lineWidth = 3
+    ctx.strokeStyle = stroke
+    roundRect(ctx, cx + 1.5, cy + 1.5, tw - 3, th - 3, 14)
+    ctx.stroke()
+    const pad = Math.min(16, tw * 0.06)
+    const innerW = tw - pad * 2
+    const amountFit = o.amount ? fitText(ctx, o.amount, innerW, 1, Math.min(th * 0.5, 112), 30, '400', 0, { lineRatio: 1, face: CONDENSED }) : null
+    const detailFit = o.detail ? fitText(ctx, o.detail, innerW, 2, Math.min(th * 0.17, 28), 14, '700', 0, { lineRatio: 1.15 }) : null
+    const ah = amountFit ? amountFit.px * 0.95 : 0
+    const dh = detailFit ? detailFit.lines.length * detailFit.px * 1.15 : 0
+    let ty = cy + (th - (ah + (ah && dh ? 10 : 0) + dh)) / 2
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    if (amountFit) {
+      setFont(ctx, '400', amountFit.px, 0, CONDENSED)
+      ctx.fillStyle = amountInk
+      ctx.fillText(amountFit.lines[0] || o.amount, cx + tw / 2, ty + amountFit.px * 0.82)
+      ty += ah + (dh ? 10 : 0)
+    }
+    if (detailFit) {
+      setFont(ctx, '700', detailFit.px, 0)
+      ctx.fillStyle = ink
+      let ly = ty + detailFit.px * 0.9
+      for (const line of detailFit.lines) {
+        ctx.fillText(line, cx + tw / 2, ly)
+        ly += detailFit.px * 1.15
+      }
+    }
+    ctx.restore()
+  })
+  ctx.textAlign = 'left'
+  return th
+}
+
+/**
+ * 24. County map (from an Empire Solar ad, 2026-11-09: "this is dope"). A
+ * black field; the place big in white over two lines (ERIE COUNTY /
+ * HOMEOWNERS, read off the location badge, the sticker as the second line
+ * when one is typed); the client's whole state drawn as its counties with
+ * theirs lit in the brand colour; the headline in the brand colour under
+ * it (the offer in one line: $0 DOWN ON A NEW AC), the subhead in white
+ * (IS STILL AVAILABLE); then up to three outlined tiles for the incentives
+ * or the prices; the logo and the stars in the footer. No button: Meta
+ * draws the real one. The brand colour is the brighter of the two, lifted
+ * until it reads on black (typedColours), so a navy-only brand gets a light
+ * blue rather than navy on black.
+ */
+function countyMap(ctx, size, content, assets, opts) {
+  const m = frameMargins(size, opts.safeMode)
+  const { w, h, padX, contentTop, maxWidth } = m
+  const { accent, badgeColor } = content
+  const gold = typedColours(accent, badgeColor).pop
+  // Black whatever the background pick: the dark field is the design.
+  ctx.fillStyle = '#0B0B0C'
+  ctx.fillRect(0, 0, w, h)
+  const foot = footer(ctx, m, content, assets, { onDark: true, ink: WHITE, logo: 'right', maxW: 260, maxH: 80, starsPx: 22 })
+  const B = foot.top - 18
+  const room = B - contentTop
+  const tall = h / w >= 1.5
+
+  // The top: the place on the left, the state on the right. With no shapes
+  // on file (a client with no state in their market) the place takes the
+  // whole width and the rest moves up.
+  const hasMap = Array.isArray(assets?.counties?.counties) && assets.counties.counties.length > 0
+  const mapW = hasMap ? r(maxWidth * (tall ? 0.52 : 0.5)) : 0
+  const textW = hasMap ? maxWidth - mapW - 28 : maxWidth
+  const topH = r(room * (tall ? 0.4 : 0.44))
+  const { big, small } = placeLines(content.badge, stickerWords(content))
+  let y = contentTop
+  y += shout(ctx, big, padX, y, textW, { px: tall ? 150 : 128, minPx: 54, lines: 2, fill: WHITE, ratio: 0.92, maxHeight: topH * 0.62, label: 'the place' })
+  y += shout(ctx, small, padX, y, textW, { px: 76, minPx: 34, lines: 1, fill: WHITE, tracking: 2, maxHeight: topH * 0.3, label: 'the audience' }) + 8
+  if (hasMap) {
+    const mapBox = { x: padX + textW + 28, y: contentTop, w: mapW, h: topH }
+    const drawn = drawCountyMap(ctx, assets.counties, mapBox, { highlight: content.badge, accent: gold })
+    if (drawn) note('cutout', drawn, 'the map')
+    y = Math.max(y, contentTop + topH)
+  }
+  y += r(room * 0.04)
+
+  // The offer, in the brand colour, and the line that qualifies it.
+  const offerRoom = B - y
+  y += shout(ctx, content.hook, padX, y, maxWidth, { px: tall ? 130 : 112, minPx: 46, lines: 2, fill: gold, ratio: 0.94, maxHeight: offerRoom * 0.36, label: 'the headline' })
+  y += shout(ctx, content.subhead, padX, y, maxWidth, { px: 60, minPx: 28, lines: 1, fill: WHITE, tracking: 1, maxHeight: offerRoom * 0.14, label: 'the subhead' }) + r(room * 0.025)
+
+  // The tiles: the incentives or the prices, outlined in the brand colour.
+  // They grow with the room left, so the feed and a mapless ad do not
+  // leave a hole above the footer.
+  const offers = offersFor(content)
+  if (offers.length) {
+    const left = B - y - 8
+    const th = r(Math.min(tall ? 240 : 220, left, Math.max(96, left * 0.7)))
+    if (th >= 96) {
+      outlinedTiles(ctx, offers, { x: padX, y, w: maxWidth, h: th }, { stroke: gold, amountInk: gold, ink: WHITE })
+      y += th + 8
+    }
+  }
+  foot.draw()
+  return { band: { top: contentTop, bottom: B } }
+}
+
 /** 14. Photo sale: the photo full-bleed, a SALE ribbon in the corner, the offers on a band below. */
 function photoSale(ctx, size, content, assets, opts) {
   const m = frameMargins(size, opts.safeMode)
@@ -3398,6 +3562,7 @@ export const TEMPLATES = {
   photo_sale: photoSale,
   before_sale: beforeSale,
   reveal,
+  county_map: countyMap,
   plan_card: planCard,
 }
 

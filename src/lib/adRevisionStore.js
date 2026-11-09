@@ -9,6 +9,8 @@ import { prepareLogo } from './logoCutout'
 import { listUnitPhotos, loadUnitPhotoBitmaps } from './unitPhotos'
 import { aiArtForAd, aiArtUrl, listAiArt } from './aiArt'
 import { templateArtBitmaps } from './templateArt'
+import { stateAbbrFrom } from './countyMap.js'
+import { loadStateShapes } from './countyMapStore'
 
 /**
  * Applies an owner's note to a saved ad and REPLACES it: same stamp, same
@@ -54,7 +56,9 @@ export async function reviseSavedAd({ client, set, instruction, token }) {
   const [aiSquare, aiTall] = art ? await Promise.all([art.square, art.tall].map((p) => (p ? loadImage(aiArtUrl(p)).catch(() => null) : null))) : [null, null]
   // The ChatGPT template art, so a revised template paints the same background the Studio did.
   const { pictures: templateArt } = await templateArtBitmaps(loadImage)
-  const assets = { background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos, aiArt: { square: aiSquare, tall: aiTall }, templateArt }
+  // The client's state as its counties, so a revised County map paints the same map the Studio did.
+  const counties = await loadStateShapes(stateAbbrFrom(client.market || '')).catch(() => null)
+  const assets = { background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos, aiArt: { square: aiSquare, tall: aiTall }, templateArt, counties }
   const painted = art ? { ...content, aiArt: art } : content
 
   const blobs = {}

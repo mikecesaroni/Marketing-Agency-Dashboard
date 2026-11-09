@@ -34,6 +34,7 @@ export const TEMPLATE_LAYOUTS = [
   { key: 'before_sale', label: 'Before and after sale', hint: 'the two photos side by side (one above the other on the Story), Before and After written on them, the kicker, the headline and the offers on the season below', photo: true, twoPhotos: true },
   { key: 'reveal', label: 'Before inset', hint: 'the After photo whole, the Before as a small framed inset bottom-left, the words on a brand-colour plate', photo: true, twoPhotos: true },
   { key: 'plan_card', label: 'Maintenance plan', hint: 'a membership plan: the plan name over a thin rule, the price a month, and what is included as a checklist (the subhead, split on commas)', theme: 'brand' },
+  { key: 'county_map', label: 'County map', hint: 'black; the place big in white (ERIE COUNTY / HOMEOWNERS, from the location badge), the whole state drawn as its counties in grey with theirs lit in the brand colour, the headline in the brand colour, the subhead in white, up to three outlined tiles for the incentives or prices', theme: 'night' },
 ]
 
 export const TEMPLATE_KEYS = TEMPLATE_LAYOUTS.map((t) => t.key)
@@ -91,6 +92,7 @@ export const TEMPLATE_SHAPES = {
   before_sale: { wins: 'a real before and after pair of the same job', needs: 'a transformation headline, one or two offer tiles; the two photos come from the finder or the pickers' },
   reveal: { wins: 'a real before and after pair where the after is the hero', needs: 'a transformation headline, a dollar offer; the two photos come from the finder or the pickers' },
   plan_card: { wins: 'a maintenance plan, a club, a membership', needs: 'the plan name as the kicker, the price a month as the offer amount, the terms as the offer detail, and the subhead as a comma-separated list of three to five things included' },
+  county_map: { wins: 'a we-serve-your-county ad with stacked incentives, rebates or prices: the place big, the state map with their county lit, the offer in the brand colour, the numbers as tiles', needs: 'the county in the location badge (Erie County), the headline as the offer in one short line ($0 down on a new AC), a subhead that qualifies it (still available this fall), and two or three offer tiles with a number and a line each ($5,000 / NY-Sun incentive, 30% / Federal tax credit); real figures from the brief only' },
 }
 
 /** The templates as a menu for the chat: key, name, when it wins, what it needs. */

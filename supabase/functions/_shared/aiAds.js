@@ -178,6 +178,9 @@ export const AI_DIRECTION = {
   plan_card: {
     look: 'A membership plan without a card: on a soft brand-colour background, the kicker as the plan name in heavy capitals over a thin rule, the price a month huge on the right, the included items as a checklist with round check marks on the left, and the product beside them.',
   },
+  county_map: {
+    look: 'A local poster on a plain black field: the place from the location badge in tall white condensed capitals over two lines (the county, then HOMEOWNERS), beside it the outline of the state drawn as its counties in warm grey with thin light seams and one county filled in the brand colour, the headline in the brand colour in condensed capitals under them, the subhead in white, and the other offers side by side as a row of numbers in the brand colour with a short white line under each. No photo, no people, no product.',
+  },
 }
 
 export const AI_TEMPLATE_KEYS = Object.keys(AI_DIRECTION)

@@ -25,6 +25,8 @@ import TemplateGallery from './TemplateGallery'
 import LookPicker from './LookPicker'
 import SeasonPlaybook from './SeasonPlaybook'
 import { bestTemplates, phaseOf, pickTemplate } from '../lib/seasonPlaybook'
+import { stateAbbrFrom } from '../lib/countyMap.js'
+import { loadStateShapes } from '../lib/countyMapStore'
 import { findBeforeAfterPairs } from '../lib/beforeAfterStore'
 import { auditLine } from '../lib/adAudit'
 import { CUTOUTS, TEMPLATE_LAYOUTS, THEME_LAYOUTS, isLookKey, isTemplate, kickerFor, themeFor } from '../lib/adTemplateMeta'
@@ -1145,7 +1147,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         // The logo with its box knocked out (src/lib/logoCutout.js), for
         // every look: the templates and the photo looks alike. The real
         // equipment photos ride along from their own load below.
-        setAssets({ background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos: unitBitmaps.current, aiArt: aiBitmaps.current, templateArt: artBitmaps.current })
+        setAssets({ background, logo, after, cutoutImage, logoCut: logo ? prepareLogo(logo) : null, unitPhotos: unitBitmaps.current, aiArt: aiBitmaps.current, templateArt: artBitmaps.current, counties: countyShapes.current })
         setError('')
 
         if (!logo) {
@@ -1199,6 +1201,28 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
   // pictures exist, the bitmaps go on the assets for paintTheme.
   const [templateArt, setTemplateArt] = useState({ list: {}, pictures: {} })
   const artBitmaps = useRef({})
+
+  // The client's state as its counties, for the County map template
+  // (assets.counties): one small file per state, built once by geo-shapes
+  // and kept in the bucket (src/lib/countyMapStore.js). Best effort: with
+  // no state on file, or the function missing, the template paints its
+  // words and leaves the map's room empty.
+  const countyShapes = useRef(null)
+  useEffect(() => {
+    let cancelled = false
+    const abbr = stateAbbrFrom(intake?.service_area || client.market || '')
+    if (!abbr) return undefined
+    loadStateShapes(abbr)
+      .then((shapes) => {
+        if (cancelled || !shapes) return
+        countyShapes.current = shapes
+        setAssets((a) => ({ ...a, counties: shapes }))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [client.market, intake?.service_area])
   const takeTemplateArt = useCallback((t) => {
     artBitmaps.current = t.pictures
     setTemplateArt(t)
@@ -1608,7 +1632,7 @@ export default function AdStudioPanel({ client, intake, seed, initialTab, initia
         const stamp = Date.now() + s
         for (let i = 0; i < SIZES.length; i++) {
           const canvas = document.createElement('canvas')
-          renderAd(canvas, SIZES[i], art ? { ...content, aiArt: art } : content, { background: backgrounds[bg], logo, logoCut, after: backgrounds[bg2], cutoutImage: stocks[stock], unitPhotos: unitBitmaps.current, aiArt, templateArt: artBitmaps.current }, { safeMode, guides: false })
+          renderAd(canvas, SIZES[i], art ? { ...content, aiArt: art } : content, { background: backgrounds[bg], logo, logoCut, after: backgrounds[bg2], cutoutImage: stocks[stock], unitPhotos: unitBitmaps.current, aiArt, templateArt: artBitmaps.current, counties: countyShapes.current }, { safeMode, guides: false })
           const blob = await canvasToBlob(canvas)
           const path = `ads/${client.id}/${stamp}-${SIZES[i].key}.png`
           const { error: upErr } = await supabase.storage.from('client-files').upload(path, blob, { contentType: 'image/png' })

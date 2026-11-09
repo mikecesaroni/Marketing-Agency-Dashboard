@@ -679,6 +679,13 @@ export function pickTemplate({ phase, content = {}, hasPhoto = false, hasAfter =
   if (hasPhoto && !hasAfter) {
     add('photo_sale', 6, 'there is a photo to show')
   }
+  // The county map: the badge names a county, and the incentives line up as
+  // tiles under the state (an Empire Solar ad, 2026-11-09).
+  if (/\b(county|parish)\b/i.test(String(content.badge || ''))) {
+    add('county_map', 14, 'the badge names a county')
+    if (offers.length >= 2) add('county_map', 6, 'the incentives line up as tiles under the map')
+    if (WORDS.rebate.test(text)) add('county_map', 4, 'rebates stack as tiles under the map')
+  }
   for (const k of PHOTO_TEMPLATES) {
     if (!hasPhoto) add(k, -30)
     if (TWO_PHOTO_TEMPLATES.includes(k) && !hasAfter) add(k, -20)
