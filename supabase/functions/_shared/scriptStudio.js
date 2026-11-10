@@ -271,6 +271,7 @@ The rules:
 4. One idea per hook. Specific beats clever: a number, a date, a symptom, a dollar figure from real jobs, a street or a neighbourhood.
 5. Face to the lens, standing by the truck or the system, the first word with energy. We burn captions in, so the line has to read as text too: short enough to read in three seconds.
 6. Never manufacture fear or a number. A cost-of-waiting hook needs a real figure from real jobs; "licensed and insured" is as far as credentials go.
+7. SAY THE MONTHLY PAYMENT. When the company offers financing, every script that sells a replacement, an install or any big job says it out loud, in the owner's words: "low monthly payments", "nothing down" when that is true, and the real monthly figure when one is on file ("a new AC from $89 a month"). The monthly payment IS the offer on a big job, never the total: it takes the price objection away before it forms, and it is the line a homeowner repeats to their spouse. Put it in the hook or in the offer line, not buried at the end. Never invent a monthly figure; with none on file, "low monthly payments" is the line. Never promise financing a company does not offer.
 
 The patterns (one per script; a batch of three uses three different patterns, not one pattern three ways):
 - LOCAL CALL-OUT: "Austin homeowners, the first cold front lands Thursday."
@@ -283,6 +284,7 @@ The patterns (one per script; a batch of three uses three different patterns, no
 - DEADLINE: "Three weeks to Thanksgiving. That is the week the furnace quits."
 - PROOF FIRST: "Forty-one five-star reviews in Burnet, and every one of them is a repair we did not oversell."
 - OFFER FIRST (price the small stuff): "$79 gets me to your door, and it comes off the bill if we do the work."
+- THE MONTHLY NUMBER (finance the big stuff; financing on file): "A new furnace for less than your phone bill. Eighty-nine a month, nothing down, and it is in before the first freeze."
 - STORY: "Last Tuesday a lady in Plano had been told she needed a new system. She needed a $40 capacitor."
 - EDUCATE FIRST: "Three noises a furnace makes before it dies."
 
@@ -325,7 +327,7 @@ The objection they hear most: ${val(i.most_common_objection)}
 Offers and guarantees they run: ${val(i.current_offers_guarantees)}
 The offer that gets leads: ${val(i.cta_offering)}${i.offer_headline ? `\nOffer headline: ${i.offer_headline}${i.offer_fine_print ? ` (${i.offer_fine_print})` : ''}` : ''}
 Guarantee: ${val(i.guarantee)}
-Financing: ${yesNo(i.financing_available)}
+Financing: ${yesNo(i.financing_available)}${i.financing_available === true ? ' (say it: low monthly payments, nothing down when that is true, and the monthly number when one is in the offers above; on a replacement or an install the monthly payment is the offer, never the total)' : ''}
 Google reviews: ${val(i.reviews_star_rating)} stars, ${val(i.reviews_count)} reviews
 Licensed, insured, certified: ${val(i.licensed_insured_certified)}
 Phone to say on camera: ${val(i.phone_for_ads)}
@@ -351,6 +353,11 @@ ${VIDEO_HOOK_PLAYBOOK}
 - Plain words a neighbour would use. No marketing words: unlock, elevate, solutions, seamless, premier, hassle-free, top-notch.
 - Real facts only: their prices, their towns, their review numbers, their offers, from above. Nothing invented. If a fact is not on file, leave it out rather than guess. No brackets, no placeholders.
 - Never a licence, registration, policy or any other ID number. "Licensed and insured" is as far as it goes, and only if true of them.
+${
+  i.financing_available === true
+    ? '- Financing is on file: every script about a replacement, an install or a big job says low monthly payments are available, in the owner\'s words, with the real monthly number when one is in the offers above and no number otherwise. The monthly payment is the offer, never the total.'
+    : '- No financing on file: never promise financing, payments or "nothing down".'
+}
 - The first line is the hook, built on one of the patterns above. The second line is the owner's name and the company in one breath${owner ? ` ("I'm ${owner} from ${name}")` : ''}, so they are inside the first five seconds.
 - One clear call to action at the end, with their real phone number when it is on file, otherwise "the link below".
 - Match the length asked for: about ${WORDS_PER_SECOND} words a second of speaking (15 seconds is about 38 words, 30 is about 75, 60 is about 150). Count the spoken words.

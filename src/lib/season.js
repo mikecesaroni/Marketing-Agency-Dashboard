@@ -346,6 +346,11 @@ Today is ${ctx.dateLabel}. For a ${TRADE_WORDS[ctx.trade]} business${where}, tha
 Coming up: ${moments}.
 
 Use everything you know about them: the intake, their website, their offers, reviews and guarantees, what is running in the ad account and what has won or lost. Use their real offer, real proof and real town names. Do not reuse a hook from an ad already running or from a script you already wrote in this chat. Never put a licence number, registration number, insurance policy number or any other ID number in a script; "licensed and insured" is as far as it goes, and only if that is true of them.
+${
+  i.financing_available === true
+    ? 'They offer financing. Say it out loud in every script that sells a replacement, an install or a big job: low monthly payments, nothing down when that is true, and the real monthly number when one is on file. The monthly payment is the offer on a big job, never the total.'
+    : 'Promise financing, payments or "nothing down" only if their intake says they offer financing.'
+}
 
 ${angleAsk}
 

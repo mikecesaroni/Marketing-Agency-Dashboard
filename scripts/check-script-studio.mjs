@@ -83,6 +83,11 @@ const playbook = playbookText(phase, { tradeWords: 'heating and cooling', market
 const brief = buildScriptBrief(facts, { playbook, today: new Date('2026-10-16') })
 check('the brief is the owner talking in the first person', /The owner, Ethan, reads your script/.test(brief) && /first person/.test(brief), true)
 check('the facts are in: towns, reviews, phone, offer, financing', ['Manchester, Nashua', '4.9 stars, 312 reviews', '603-555-0100', '$89 furnace tune-up', 'Financing: yes'].every((s) => brief.includes(s)), true)
+// "Saying low monthly payments being offered is huge" (2026-11-10): with
+// financing on file the brief says to say it, in the hook playbook and the
+// rules; without it, never to promise it.
+check('financing on file: the brief says to say low monthly payments, as the offer on a big job', [/Financing: yes \(say it: low monthly payments/.test(brief), /Financing is on file: every script about a replacement/.test(brief), /SAY THE MONTHLY PAYMENT/.test(brief), /THE MONTHLY NUMBER \(finance the big stuff/.test(brief)], [true, true, true, true])
+check('no financing on file: never promised', /No financing on file: never promise financing/.test(buildScriptBrief({ ...facts, intake: { ...facts.intake, financing_available: false } }, { playbook })), true)
 check('what is working and the hooks to avoid are in', /Furnace tune-up” ad brought 10 leads/.test(brief) && /do not open with these\): Be ready for winter/.test(brief) && /do not repeat these\): Meet the owner/.test(brief), true)
 check('how they talk is in, with their own words', /goes by Ethan/.test(brief) && /Stay warm out there/.test(brief) && /Ethan here from Prime/.test(brief), true)
 check('the season is in', /It is October/.test(brief), true)

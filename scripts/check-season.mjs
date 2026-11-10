@@ -123,6 +123,12 @@ Film it: in the truck, window light`
   const wpbPrompt = buildRefillPrompt({ client: { name: 'Don Air Co' }, intake: { business_name: 'Don Air Co', owner_name: 'Donat', industry_trade: 'HVAC', service_area: 'West Palm Beach, FL' }, today: '2026-10-30', angle: 'season' })
   check('the prompt says the date, the season for that market and how long heating runs there', [wpbPrompt.includes('Today is Friday, October 30, 2026'), wpbPrompt.includes('that is early fall'), wpbPrompt.includes('handful of cold nights between December and February'), wpbPrompt.includes('never call a late-October script "summer"')], [true, true, true, true])
   check('the prompt carries the hook playbook', [wpbPrompt.includes('=== THE HOOK: THE FIRST THREE SECONDS ==='), wpbPrompt.includes('LOCAL CALL-OUT'), wpbPrompt.includes('What kills a hook')], [true, true, true])
+  // "Saying low monthly payments being offered is huge" (2026-11-10): the
+  // playbook carries the monthly number, and the prompt says to say it when
+  // financing is on file and never to promise it when it is not.
+  check('the playbook says to say the monthly payment', [wpbPrompt.includes('SAY THE MONTHLY PAYMENT'), wpbPrompt.includes('THE MONTHLY NUMBER (finance the big stuff')], [true, true])
+  const financed = buildRefillPrompt({ client: { name: 'Don Air Co' }, intake: { business_name: 'Don Air Co', financing_available: true }, today: '2026-10-30', angle: 'season' })
+  check('financing on file: say low monthly payments; otherwise only if the intake says so', [financed.includes('They offer financing. Say it out loud in every script that sells a replacement'), wpbPrompt.includes('only if their intake says they offer financing')], [true, true])
   check('the layout has the INTRO line with the owner\'s name, inside the first five seconds', [wpbPrompt.includes('INTRO: the owner\'s name and the company in one breath ("I\'m Donat from Don Air Co")'), wpbPrompt.includes('The owner on camera is Donat.')], [true, true])
   check('a script with an INTRO line copies it, labelled', spokenScript('SCRIPT 1: T\nHOOK (0-3s): First line.\nINTRO: I am Donat from Don Air Co.\nCTA: Tap Get Quote.', { labels: true }), 'Hook: First line.\n\nIntro: I am Donat from Don Air Co.\n\nCTA: Tap Get Quote.')
   // "Get rid of this in scripts: On screen text." The layout no longer asks

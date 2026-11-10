@@ -22,6 +22,23 @@ Added 2026-10-30, after "the hook is the most important part of all this, to gra
 
 Sources read on 2026-10-30: [Social Media Today on Meta's Reels hook guidance](https://www.socialmediatoday.com/news/meta-shares-reels-tips-for-marketers/806808/), [Social Media Today on Meta's creative diversification tips](https://socialmediatoday.com/news/meta-shares-tips-on-reels-hooks-creative-diversification-in-ads-and-threa/808182), [True Future Media on short-form hooks](https://www.truefuturemedia.com/articles/science-of-short-form-video-hooks), [Saas Hero's field-service video guide](https://saashero.net/content/video-marketing-for-field-service/), [Surefire Local on silent viewing](https://www.surefirelocal.com/?p=57661), [CapCut on hook formulas](https://www.capcut.com/create/short-form-video-hooks), [Fluxnote's video ad hooks guide](https://fluxnote.io/guides/video-ad-hooks-guide), [Segwise on 2026 hook benchmarks](https://segwise.ai/blog/dtc-ad-creative-hooks.md), [Admapix's UGC script template](https://www.admapix.com/blog/best-practices/ugc-video-ad-script-template).
 
+## The monthly number (2026-11-10)
+
+"For video script knowledge I think saying low monthly payments being
+offered is huge." Rule 7 of the hook playbook and a pattern of its own, THE
+MONTHLY NUMBER: when the company offers financing (`financing_available` on
+the intake), every script that sells a replacement, an install or a big job
+says it out loud, in the owner's words: low monthly payments, nothing down
+when that is true, and the real monthly figure when one is in their offers
+("a new AC from $89 a month"). The monthly payment is the offer on a big
+job, never the total, and it goes in the hook or the offer line rather than
+the end. Never an invented figure; with none on file, "low monthly payments"
+is the line. Without financing on file, no script promises payments. Both
+writers carry it: the Script Studio brief (the Financing line and a rule)
+and the chat's Refill prompt (`buildRefillPrompt`). The static-ad version
+has been in the Meta Ads Playbook since the start ("price the small stuff,
+finance the big stuff").
+
 ## Checks
 
 `scripts/check-season.mjs` pins the season per market (late September in SWFL is late summer, October 30 is early fall, Rhode Island in late September is early fall), the climate line, and that every Refill prompt carries the hook playbook, the INTRO line and the owner's name. `scripts/check-script-studio.mjs` pins the Script Studio brief and the recording tips.
