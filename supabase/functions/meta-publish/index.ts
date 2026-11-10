@@ -666,10 +666,16 @@ function textLists(input: {
  *
  * Don Air's hand-built ads (read off the account 2026-11-10) carry three
  * primary texts, three headlines and three descriptions, and Meta shows each
- * viewer one of each in the combination it expects to work. The shape is an
- * asset_feed_spec holding the lists with optimization_type DEGREES_OF_FREEDOM,
- * Meta's name for "mix these": the third thing an asset_feed_spec can mean,
- * after PLACEMENT (the crop rules below) and a Dynamic Creative experiment.
+ * viewer one of each in the combination it expects to work. The shape, read
+ * off one of those creatives rather than guessed: the PLAIN creative (the
+ * Page, the Instagram identity, and video_data or link_data holding the
+ * media and the call to action, with NO message, title or description in
+ * it) plus an asset_feed_spec that carries only the three lists and
+ * optimization_type DEGREES_OF_FREEDOM, Meta's name for "mix these". The
+ * first shape tried put the media, the link and the button in the feed spec
+ * the way the placement rules do, and Meta refused it with "The link field
+ * is required" (subcode 2061015) for a link ad and a form ad alike.
+ *
  * One creative carries one optimization_type, so an image ad with text
  * options goes out as its default size alone rather than a crop per
  * placement, and the result says so (text_options true, per_placement
@@ -677,31 +683,49 @@ function textLists(input: {
  */
 function textOptionsParams(input: CreativeInput, texts: TextLists, hashes: Record<string, string>): Record<string, unknown> {
   const { spec, leadFormId, linkUrl, ctaType } = input
-  const defaultSize = DEFAULT_SIZE_ORDER.find((k) => hashes[k]) || Object.keys(hashes)[0]
   const as = (list: string[]) => (list.length ? list.map((text) => ({ text })) : undefined)
+  // The words, and nothing else: no media, link or button in here.
+  const feed = {
+    bodies: as(texts.bodies),
+    titles: as(texts.titles),
+    descriptions: as(texts.descs),
+    optimization_type: 'DEGREES_OF_FREEDOM',
+  }
+  const callToAction = {
+    type: ctaType,
+    value: spec.needs_form ? { lead_gen_form_id: leadFormId } : { link: linkUrl },
+  }
+  const story = {
+    page_id: input.pageId,
+    ...(input.instagramUserId ? { instagram_user_id: input.instagramUserId } : {}),
+  }
+  if (input.video) {
+    return {
+      name: input.name,
+      object_story_spec: {
+        ...story,
+        video_data: {
+          video_id: input.video.id,
+          image_url: input.video.thumbUrl || undefined,
+          call_to_action: callToAction,
+        },
+      },
+      asset_feed_spec: feed,
+      degrees_of_freedom_spec: NO_ENHANCEMENTS,
+    }
+  }
+  const defaultSize = DEFAULT_SIZE_ORDER.find((k) => hashes[k]) || Object.keys(hashes)[0]
   return {
     name: input.name,
-    // The Page and the Instagram identity only, as in the placement shape:
-    // the words and the media live in the feed spec.
     object_story_spec: {
-      page_id: input.pageId,
-      ...(input.instagramUserId ? { instagram_user_id: input.instagramUserId } : {}),
+      ...story,
+      link_data: {
+        link: linkUrl,
+        image_hash: hashes[defaultSize],
+        call_to_action: callToAction,
+      },
     },
-    asset_feed_spec: {
-      ad_formats: [input.video ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
-      optimization_type: 'DEGREES_OF_FREEDOM',
-      ...(input.video
-        ? { videos: [{ video_id: input.video.id, ...(input.video.thumbUrl ? { thumbnail_url: input.video.thumbUrl } : {}) }] }
-        : { images: [{ hash: hashes[defaultSize] }] }),
-      bodies: as(texts.bodies),
-      titles: as(texts.titles),
-      descriptions: as(texts.descs),
-      link_urls: [{ website_url: linkUrl }],
-      // Same split as the placement shape: a link ad names the button type,
-      // a form ad hands over the whole call-to-action with the form id.
-      call_to_action_types: spec.needs_form ? undefined : [ctaType],
-      call_to_actions: spec.needs_form ? [{ type: ctaType, value: { lead_gen_form_id: leadFormId } }] : undefined,
-    },
+    asset_feed_spec: feed,
     degrees_of_freedom_spec: NO_ENHANCEMENTS,
   }
 }

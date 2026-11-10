@@ -58,10 +58,11 @@ check(
   [true, true, true, true]
 )
 check(
-  '...for a video, and for an image as one size',
-  [publish.includes("ad_formats: [input.video ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE']"), publish.includes('per_placement: Object.keys(hashes).length > 1 && !fellBack && !texts')],
-  [true, true]
+  '...as the plain creative plus the three lists (the shape read off Don Air’s), for a video and for an image as one size',
+  [publish.includes('asset_feed_spec: feed,'), publish.includes('video_id: input.video.id,\n          image_url: input.video.thumbUrl || undefined,\n          call_to_action: callToAction,'), publish.includes('per_placement: Object.keys(hashes).length > 1 && !fellBack && !texts')],
+  [true, true, true]
 )
+check('...and the single-ad call carries the lists like the batch', publish.includes('primary_texts: body.primary_texts,'), true)
 const panel = read('src/components/PublishToMetaPanel.jsx')
 check('the publish page sends the lists for a static and a video', (panel.match(/\.\.\.\(textOptionsForPublish\(c\) \|\| \{\}\)/g) || []).length, 2)
 check('...keeps a static’s extras on its saved ad and reads them back', [panel.includes('...moreFromSaved(r.more_copy)'), read('src/lib/savedAds.js').includes('more_copy: moreCopyToSave(copy)')], [true, true])
