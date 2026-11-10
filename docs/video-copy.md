@@ -80,6 +80,45 @@ field written from a transcript follows them too. A clip with no
 transcript (music only, or Deepgram not set up) is written from the note
 and the facts as before.
 
+## Three of each: Meta's text options (2026-11-10)
+
+"Look at Don Air copy with the emojis and how it has 3 variants for each
+part of ad copy. I wanna have those variants." Don Air's hand-built ads
+(Video1 to Video8 in Ads Manager) carry Meta's multiple text options: three
+primary texts, three headlines and three descriptions, and Meta shows each
+viewer one of each in whatever combination it expects to work. Each primary
+text opens with one emoji and a line in capitals naming who and where, then
+a ✅ checklist of proof points. The CRM wrote one of each.
+
+Now, under the three fields on the publish page (a video's and a static's
+alike), a Text options box holds up to four more of each. "✨ Write 3 of
+each" asks the copy assistant (`ad-copy`, mode `text_options`) for the three
+lists in that house style, from the same facts, note and transcript as the
+versions; the first of each lands in the fields and the other two in the
+box, all editable; "+ another primary text" adds a blank one and × removes
+one. The three lists are written to stand alone, because Meta pairs any
+primary text with any headline: a version is a set, a text option is a list.
+The box says what Meta gets ("3 primary texts · 3 headlines · 3
+descriptions").
+
+They are kept with the rest: a video's inside `ad_videos.copy`
+(`more_primary_texts`, `more_headlines`, `more_descriptions`), a static's on
+its saved ad (`saved_ads.more_copy`, `supabase/text-options.sql`). The pure
+half is `src/lib/textOptions.js`, tested by `scripts/check-text-options.mjs`.
+
+Publishing sends the full lists (`primary_texts`, `headlines`,
+`descriptions`) and `meta-publish` builds the creative Meta mixes from: an
+`asset_feed_spec` holding the lists with `optimization_type:
+DEGREES_OF_FREEDOM`. A video ad loses nothing. An image ad with text options
+goes out as its 4:5 size everywhere rather than a crop per placement,
+because one creative carries one optimization type; the publish result says
+so. The chat can read the words on any live ad (`meta-manage`, action
+`ad_copy`), which is how Don Air's were read in the first place.
+
+The emoji policy (docs/emojis-in-ad-copy.md) stands for everything else:
+the house style is what this button writes, and it runs against the plain
+copy on cost per lead like any other test.
+
 ## Switching it on
 
 Transcription needs one secret: `DEEPGRAM_API_KEY`, under Project Settings >

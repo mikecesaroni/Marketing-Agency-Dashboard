@@ -255,6 +255,12 @@ stacked, in each of the three paths that create things:
 - Chat (meta-manage): create campaign, create ad set, duplicate ad. The model
   picks the rest of the name; the function puts the prefix on.
 
+The chat can also read the words on a client's live ads (meta-manage, action
+`ad_copy`): every primary text, headline and description as lists, whether
+the ad was built with one of each or with Meta's text options. That is how
+Don Air's hand-built text options were read (docs/video-copy.md, "Three of
+each").
+
 Renaming an existing object through the chat is left alone on purpose. The
 rule is `src/lib/adNaming.js`; the two edge functions carry a copy, and
 `scripts/check-ad-naming.mjs` fails if any of the three drifts.

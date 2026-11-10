@@ -9,10 +9,16 @@
 // too (ad_videos.copy, ad_videos.versions; supabase/video-copy-memory.sql):
 // these helpers say what goes in and how it comes back out.
 
+import { LIST_FIELDS, MAX_TEXT_OPTIONS, cleanList, moreOf } from './textOptions.js'
+
 /** The copy fields worth keeping: the words, not the Meta ids the page stamps on. */
 export const COPY_FIELDS = ['primary_text', 'headline', 'description', 'ad_name']
 
-/** The copy record as it is saved: the four text fields, trimmed, or null when all are blank. */
+/**
+ * The copy record as it is saved: the four text fields, trimmed, plus the
+ * extra text options (src/lib/textOptions.js) where there are any, or null
+ * when all are blank.
+ */
 export function copyToSave(copy = {}) {
   const out = {}
   let any = false
@@ -20,6 +26,12 @@ export function copyToSave(copy = {}) {
     const v = String(copy?.[k] ?? '').trim()
     out[k] = v
     if (v) any = true
+  }
+  const more = moreOf(copy)
+  for (const k of LIST_FIELDS) {
+    if (!more[k].length) continue
+    out[k] = more[k]
+    any = true
   }
   return any ? out : null
 }
@@ -44,6 +56,11 @@ export function copyFromRow(row = {}, current = null) {
   for (const k of COPY_FIELDS) {
     const v = String(saved[k] ?? '').trim()
     if (v) patch[k] = v
+  }
+  // The extra text options ride along the same way.
+  for (const k of LIST_FIELDS) {
+    const list = cleanList(saved[k], MAX_TEXT_OPTIONS - 1)
+    if (list.length) patch[k] = list
   }
   return Object.keys(patch).length ? patch : null
 }

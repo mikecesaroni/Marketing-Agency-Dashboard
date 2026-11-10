@@ -44,6 +44,10 @@
 //
 // Either publish action takes dry_run:true to have Meta check the creative
 // payload and save nothing.
+//
+// An ad may carry primary_texts, headlines and descriptions (up to five each,
+// the single fields being the first of each): Meta's multiple text options,
+// which Meta mixes per viewer. See textOptionsParams.
 
 const META_API_VERSION = 'v21.0'
 const GRAPH = `https://graph.facebook.com/${META_API_VERSION}`
@@ -58,6 +62,21 @@ const MIN_DAILY_BUDGET_CENTS = 100
 // five a launch actually needs. Each ad is recorded the moment it exists, so
 // even a run that is cut short leaves an accurate trail rather than a mystery.
 const MAX_BATCH_ADS = 8
+
+// Meta's cap on text options per part (primary texts, headlines,
+// descriptions). Don Air's hand-built ads carry three of each.
+const MAX_TEXT_OPTIONS = 5
+
+// A request's list of texts: strings, trimmed, distinct, at most the cap.
+const listOf = (v: unknown): string[] => {
+  const out: string[] = []
+  for (const x of Array.isArray(v) ? v : []) {
+    const s = String(x ?? '').trim()
+    if (s && !out.includes(s)) out.push(s)
+    if (out.length >= MAX_TEXT_OPTIONS) break
+  }
+  return out
+}
 
 // "Select an Instagram account or a Facebook Page to represent your business on
 // Instagram." Raised at ad creation when a per-placement creative is used and
@@ -580,6 +599,12 @@ type CreativeInput = {
   primaryText: string
   headline?: string
   description?: string
+  // Meta's multiple text options: the full lists, the single fields above
+  // being the first of each. More than one entry somewhere and the creative
+  // is built as one Meta mixes per viewer; see textOptionsParams.
+  primaryTexts?: string[]
+  headlines?: string[]
+  descriptions?: string[]
   ctaType: string
   spec: ObjectiveSpec
   leadFormId?: string
@@ -614,11 +639,78 @@ const NO_ENHANCEMENTS = {
   },
 }
 
+type TextLists = { bodies: string[]; titles: string[]; descs: string[] }
+
+/**
+ * The text lists an input carries, or null when it is one of each (the plain
+ * shapes below). The single field leads each list so the first option is
+ * always the one the CRM shows in its own previews.
+ */
+function textLists(input: {
+  primaryText: string
+  headline?: string
+  description?: string
+  primaryTexts?: string[]
+  headlines?: string[]
+  descriptions?: string[]
+}): TextLists | null {
+  const bodies = listOf([input.primaryText, ...(input.primaryTexts || [])])
+  const titles = listOf([input.headline, ...(input.headlines || [])])
+  const descs = listOf([input.description, ...(input.descriptions || [])])
+  if (bodies.length <= 1 && titles.length <= 1 && descs.length <= 1) return null
+  return { bodies, titles, descs }
+}
+
+/**
+ * MULTIPLE TEXT OPTIONS.
+ *
+ * Don Air's hand-built ads (read off the account 2026-11-10) carry three
+ * primary texts, three headlines and three descriptions, and Meta shows each
+ * viewer one of each in the combination it expects to work. The shape is an
+ * asset_feed_spec holding the lists with optimization_type DEGREES_OF_FREEDOM,
+ * Meta's name for "mix these": the third thing an asset_feed_spec can mean,
+ * after PLACEMENT (the crop rules below) and a Dynamic Creative experiment.
+ * One creative carries one optimization_type, so an image ad with text
+ * options goes out as its default size alone rather than a crop per
+ * placement, and the result says so (text_options true, per_placement
+ * false). A video ad loses nothing.
+ */
+function textOptionsParams(input: CreativeInput, texts: TextLists, hashes: Record<string, string>): Record<string, unknown> {
+  const { spec, leadFormId, linkUrl, ctaType } = input
+  const defaultSize = DEFAULT_SIZE_ORDER.find((k) => hashes[k]) || Object.keys(hashes)[0]
+  const as = (list: string[]) => (list.length ? list.map((text) => ({ text })) : undefined)
+  return {
+    name: input.name,
+    // The Page and the Instagram identity only, as in the placement shape:
+    // the words and the media live in the feed spec.
+    object_story_spec: {
+      page_id: input.pageId,
+      ...(input.instagramUserId ? { instagram_user_id: input.instagramUserId } : {}),
+    },
+    asset_feed_spec: {
+      ad_formats: [input.video ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
+      optimization_type: 'DEGREES_OF_FREEDOM',
+      ...(input.video
+        ? { videos: [{ video_id: input.video.id, ...(input.video.thumbUrl ? { thumbnail_url: input.video.thumbUrl } : {}) }] }
+        : { images: [{ hash: hashes[defaultSize] }] }),
+      bodies: as(texts.bodies),
+      titles: as(texts.titles),
+      descriptions: as(texts.descs),
+      link_urls: [{ website_url: linkUrl }],
+      // Same split as the placement shape: a link ad names the button type,
+      // a form ad hands over the whole call-to-action with the form id.
+      call_to_action_types: spec.needs_form ? undefined : [ctaType],
+      call_to_actions: spec.needs_form ? [{ type: ctaType, value: { lead_gen_form_id: leadFormId } }] : undefined,
+    },
+    degrees_of_freedom_spec: NO_ENHANCEMENTS,
+  }
+}
+
 /**
  * Builds the POST body for one ad creative.
  *
  * Two shapes come out of here, and which one depends only on how many sizes
- * were saved:
+ * were saved (a third, the text options, is above):
  *
  *   * One image — the plain object_story_spec creative. Unchanged from before
  *     this function existed, and the fallback whenever there is nothing to
@@ -632,6 +724,10 @@ const NO_ENHANCEMENTS = {
 function creativeParams(input: CreativeInput): Record<string, unknown> {
   const { hashes, spec, leadFormId, linkUrl, primaryText, headline, description, ctaType } = input
   const sizeKeys = Object.keys(hashes)
+
+  // More than one text somewhere: the creative Meta mixes from.
+  const texts = textLists(input)
+  if (texts) return textOptionsParams(input, texts, hashes)
 
   // A VIDEO CREATIVE.
   //
@@ -809,6 +905,10 @@ type BuildAdInput = {
   primaryText: string
   headline?: string
   description?: string
+  // Meta's multiple text options (the full lists); see textOptionsParams.
+  primaryTexts?: string[]
+  headlines?: string[]
+  descriptions?: string[]
   adName?: string
   // Filled in as each object comes into existence, so a failure halfway can
   // report what is already sitting in the account.
@@ -860,6 +960,7 @@ async function buildAd(input: BuildAdInput) {
     if (input.into) input.into.video_id = input.video.id
   }
 
+  const texts = textLists(input)
   const params = creativeParams({
     name: `${input.adName || input.client.name} — creative`,
     pageId: input.client.meta_page_id,
@@ -867,6 +968,9 @@ async function buildAd(input: BuildAdInput) {
     primaryText: input.primaryText,
     headline: input.headline,
     description: input.description,
+    primaryTexts: input.primaryTexts,
+    headlines: input.headlines,
+    descriptions: input.descriptions,
     ctaType: input.ctaType,
     spec: input.spec,
     leadFormId: input.leadFormId,
@@ -929,8 +1033,10 @@ async function buildAd(input: BuildAdInput) {
     // working by itself the day an Instagram account is connected.
     const igIdentity =
       err instanceof GraphError && Number((err.detail as any)?.subcode) === IG_IDENTITY_SUBCODE
-    if (!igIdentity || Object.keys(hashes).length <= 1) throw err
+    if (!igIdentity || (Object.keys(hashes).length <= 1 && !texts)) throw err
 
+    // The plain shape: one size (or the video) and one of each text. The text
+    // options go with the crops, and the result says so.
     const only = DEFAULT_SIZE_ORDER.find((k) => hashes[k]) || Object.keys(hashes)[0]
     const fallback = creativeParams({
       name: `${input.adName || input.client.name} — creative`,
@@ -943,7 +1049,8 @@ async function buildAd(input: BuildAdInput) {
       spec: input.spec,
       leadFormId: input.leadFormId,
       instagramUserId: input.instagramUserId,
-      hashes: { [only]: hashes[only] },
+      hashes: input.video ? {} : { [only]: hashes[only] },
+      video: input.video,
     })
 
     const plain = await graphPost(
@@ -975,9 +1082,12 @@ async function buildAd(input: BuildAdInput) {
     image_hashes: hashes,
     // What the ad ACTUALLY carries, which after a fallback is one size, not
     // three. This is what gets recorded, so it has to be the truth.
-    sizes: fellBack ? [DEFAULT_SIZE_ORDER.find((k) => hashes[k]) as string] : Object.keys(hashes),
-    per_placement: Object.keys(hashes).length > 1 && !fellBack,
+    // An image ad with text options went out as its default size alone (the
+    // two shapes cannot share a creative), so that is what it carries.
+    sizes: (fellBack || texts ? [DEFAULT_SIZE_ORDER.find((k) => hashes[k]) as string] : Object.keys(hashes)).filter(Boolean),
+    per_placement: Object.keys(hashes).length > 1 && !fellBack && !texts,
     needs_instagram: fellBack,
+    text_options: Boolean(texts) && !fellBack,
     validated: undefined as Record<string, unknown> | undefined,
   }
 }
@@ -1558,6 +1668,12 @@ Deno.serve(async (req) => {
       primary_text?: string
       headline?: string
       description?: string
+      // Meta's multiple text options: every primary text, headline and
+      // description for the ad (the single fields above are the first of
+      // each). More than one somewhere publishes the mixed creative.
+      primary_texts?: string[]
+      headlines?: string[]
+      descriptions?: string[]
       cta?: string
       ad_name?: string
       link_url?: string
@@ -1664,9 +1780,12 @@ Deno.serve(async (req) => {
           : a.image_url
             ? { [String(a.size_key || sizeKey || 'feed')]: a.image_url }
             : {},
-      primary_text: a.primary_text ?? primaryText,
-      headline: a.headline ?? headline,
-      description: a.description ?? description,
+      primary_text: a.primary_text ?? primaryText ?? listOf(a.primary_texts)[0],
+      headline: a.headline ?? headline ?? listOf(a.headlines)[0],
+      description: a.description ?? description ?? listOf(a.descriptions)[0],
+      primary_texts: listOf(a.primary_texts),
+      headlines: listOf(a.headlines),
+      descriptions: listOf(a.descriptions),
       cta: String(a.cta || cta).toUpperCase(),
       ad_name: a.ad_name ?? adName,
       lead_form_id: a.lead_form_id ?? leadFormId,
@@ -1745,7 +1864,10 @@ Deno.serve(async (req) => {
     // some ad actually carries more than one size, since that is the only
     // shape that needs it.
     const wantsPlacements = ads.some((a) => Object.keys(a.images).length > 1)
-    const igUserId = wantsPlacements ? await instagramId(account, token) : ''
+    // Text options run on Instagram placements too, so they want the identity
+    // for the same reason the crop rules do.
+    const wantsTexts = ads.some((a) => a.primary_texts.length > 1 || a.headlines.length > 1 || a.descriptions.length > 1)
+    const igUserId = wantsPlacements || wantsTexts ? await instagramId(account, token) : ''
 
     // A dry run checks the creative payload against Meta and returns its
     // verdict without creating a campaign, an ad set, a creative or an ad.
@@ -1769,6 +1891,9 @@ Deno.serve(async (req) => {
             primaryText: a.primary_text,
             headline: a.headline,
             description: a.description,
+            primaryTexts: a.primary_texts,
+            headlines: a.headlines,
+            descriptions: a.descriptions,
             adName: a.ad_name,
             instagramUserId: igUserId,
             dryRun: true,
@@ -1944,6 +2069,9 @@ Deno.serve(async (req) => {
           primaryText: a.primary_text,
           headline: a.headline,
           description: a.description,
+          primaryTexts: a.primary_texts,
+          headlines: a.headlines,
+          descriptions: a.descriptions,
           adName: a.ad_name,
           instagramUserId: igUserId,
           into: progress,
@@ -1960,6 +2088,9 @@ Deno.serve(async (req) => {
           // sizes must not read as an unqualified success.
           per_placement: built.per_placement,
           needs_instagram: built.needs_instagram,
+          // Meta mixes the texts on this one (an image ad then carries its
+          // default size alone; the sizes list is the truth).
+          text_options: built.text_options,
           recorded: await record(a, built),
         })
       } catch (err) {

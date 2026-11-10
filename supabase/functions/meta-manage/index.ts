@@ -20,6 +20,8 @@
 //   create_adset    {client_id, campaign_id, name, daily_budget_cents, ...}
 //   duplicate_ad    {client_id, ad_id, adset_id, name?}
 //   ad_preview      {client_id, ad_id}         -> the creative and rendered previews
+//   ad_copy         {client_id, ad_id?}        -> the words on every ad (or one): every
+//                                                 primary text, headline and description
 //
 // What it will NOT do, and why: it cannot delete anything. Meta's own delete is
 // effectively irreversible and pausing achieves everything a person actually
@@ -288,6 +290,62 @@ Deno.serve(async (req) => {
         title: ad.creative?.title || null,
         previews,
       })
+    }
+
+    // -----------------------------------------------------------------------
+    // AD COPY — the words on the ads, as Meta holds them.
+    //
+    // An ad built in Ads Manager with "multiple text options" carries up to
+    // five primary texts, headlines and descriptions in asset_feed_spec, and
+    // Meta mixes them per viewer; an ad built the plain way carries one of
+    // each inside object_story_spec (link_data for an image, video_data for a
+    // video). Both shapes are read, so the CRM can show a live ad's words as
+    // lists rather than guessing which shape it was built in. Added
+    // 2026-11-10 to read Don Air's hand-built ads (three of each, with
+    // emojis) and give the Studio the same.
+    // -----------------------------------------------------------------------
+    if (action === 'ad_copy') {
+      const adId = String(body.ad_id || '').trim()
+      const fields =
+        'id,name,adset_id,account_id,effective_status,creative{id,name,body,title,object_story_spec,asset_feed_spec{bodies,titles,descriptions,call_to_action_types}}'
+      const found: Record<string, any>[] = adId
+        ? [await graphGet(encodeURIComponent(adId), { fields }, token)]
+        : (await graphGet(`${account}/ads`, { fields, limit: '100' }, token))?.data || []
+      // Same rule as ad_preview: an id arrives in the request and this token
+      // reads every account, so the ad has to belong to the client named.
+      const own = found.filter((ad) => actId(String(ad?.account_id || client.meta_ad_account_id)) === account)
+      if (adId && !own.length) return json({ error: `That ad does not belong to ${client.name}'s ad account.` }, 400)
+
+      const texts = (arr: unknown): string[] =>
+        Array.isArray(arr) ? arr.map((x: any) => String(x?.text ?? '').trim()).filter(Boolean) : []
+      const one = (...vals: unknown[]): string[] => {
+        const v = vals.map((x) => String(x ?? '').trim()).find(Boolean)
+        return v ? [v] : []
+      }
+      const ads = own.map((ad) => {
+        const c = ad.creative || {}
+        const feed = c.asset_feed_spec || {}
+        const story = c.object_story_spec || {}
+        const link = story.link_data || {}
+        const video = story.video_data || {}
+        const bodies = texts(feed.bodies)
+        const titles = texts(feed.titles)
+        const descs = texts(feed.descriptions)
+        return {
+          ad_id: ad.id,
+          name: ad.name,
+          adset_id: ad.adset_id || null,
+          status: ad.effective_status || null,
+          creative_id: c.id || null,
+          primary_texts: bodies.length ? bodies : one(link.message, video.message, c.body),
+          headlines: titles.length ? titles : one(link.name, video.title, c.title),
+          descriptions: descs.length ? descs : one(link.description, video.link_description),
+          call_to_action_types: Array.isArray(feed.call_to_action_types) ? feed.call_to_action_types : [],
+          // How the ad was built: text options Meta mixes, or one fixed set.
+          text_options: bodies.length > 1 || titles.length > 1 || descs.length > 1,
+        }
+      })
+      return json({ client: client.name, ad_account: client.meta_ad_account_id, ads })
     }
 
     // -----------------------------------------------------------------------

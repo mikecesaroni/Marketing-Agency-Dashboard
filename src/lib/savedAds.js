@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient'
 import { SIZES } from './adCanvas'
 import { versioned } from './adRevise'
 import { TWO_PHOTO_TEMPLATES, offersToStore } from './adTemplateMeta'
+import { moreCopyToSave } from './textOptions'
 
 // Saved artboards live under ads/<client id>/<stamp>-<size>.png in the same
 // public bucket the client's other files use. The stamp is what ties the three
@@ -106,6 +107,8 @@ export async function saveSavedAdCopy(clientId, stamp, copy = {}) {
       primary_text: String(copy.primary_text || '').trim() || null,
       headline: String(copy.headline || '').trim() || null,
       description: String(copy.description || '').trim() || null,
+      // The extra text options (src/lib/textOptions.js), null with one of each.
+      more_copy: moreCopyToSave(copy),
     })
     .eq('client_id', clientId)
     .eq('stamp', String(stamp))

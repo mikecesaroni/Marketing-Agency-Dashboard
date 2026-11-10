@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Button from './ui/Button'
 import { registerAdVideo, adVideoStatus } from '../lib/metaPublish'
-import { suggestVideoCopy, suggestVideoVariations } from '../lib/adCopy'
+import { suggestTextOptions, suggestVideoCopy, suggestVideoVariations } from '../lib/adCopy'
 import { anglesAvailable, nthPerField } from '../lib/adCopyOptions'
+import { patchFromWritten } from '../lib/textOptions'
+import TextOptionsEditor from './TextOptionsEditor'
 import {
   MAX_VIDEO_BYTES,
   isPublishable,
@@ -153,6 +155,10 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
   const [versions, setVersions] = useState({})
   const [writingVersions, setWritingVersions] = useState('')
   const [chosen, setChosen] = useState({})
+  // THREE OF EACH: Meta's text options being written for a clip, and what
+  // the assistant said about them.
+  const [writingOptions, setWritingOptions] = useState('')
+  const [optionsNote, setOptionsNote] = useState({})
   // Seconds, width and height off the preview element, keyed by path. The
   // row carries them too once saved; this is for the clip that was dropped a
   // moment ago and has no row yet.
@@ -396,6 +402,44 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     const v = versions[path]?.variations?.[index]
     if (!v) return
     applyVariation(path, (videos || []).find((x) => x.storage_path === path), v, index)
+  }
+
+  // THREE OF EACH. Meta's multiple text options, the way Don Air's hand-built
+  // ads carry them: three primary texts, three headlines, three descriptions,
+  // mixed per viewer. Written from the same facts, note and transcript as the
+  // versions; the first of each lands in the fields, the other two in the
+  // editor under them, all editable. The copy memory keeps them with the rest.
+  const writeTextOptions = async (video) => {
+    const path = video.storage_path
+    setWritingOptions(path)
+    setError('')
+    try {
+      const copy = copies[path] || {}
+      const out = await suggestTextOptions({
+        client,
+        intake,
+        medium: 'video',
+        about: about[path] ?? video.about,
+        transcript: video.transcript,
+        current: {
+          primaryText: copy.primary_text || '',
+          headline: copy.headline || '',
+          description: copy.description || '',
+        },
+      })
+      const patch = patchFromWritten(out)
+      if (!patch.primary_text) {
+        setOptionsNote((prev) => ({ ...prev, [path]: out.note || 'The copy assistant did not return the three lists. Try again.' }))
+        return
+      }
+      onCopy(path, patch)
+      setChosen((prev) => ({ ...prev, [path]: null }))
+      setOptionsNote((prev) => ({ ...prev, [path]: out.note || '' }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setWritingOptions('')
+    }
   }
 
   const send = async (video) => {
@@ -955,6 +999,15 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                         className="px-2 py-1.5 border border-slate-300 rounded text-xs"
                       />
                     </div>
+                    {/* THE TEXT OPTIONS. Up to four more of each beside the
+                        fields above; Meta mixes them per viewer. */}
+                    <TextOptionsEditor
+                      copy={copy}
+                      onCopy={(patch) => onCopy(v.storage_path, patch)}
+                      onWrite={() => writeTextOptions(v)}
+                      writing={writingOptions === v.storage_path}
+                      note={optionsNote[v.storage_path] || ''}
+                    />
                     <input
                       value={copy.ad_name || ''}
                       onChange={(e) => onCopy(v.storage_path, { ad_name: e.target.value })}

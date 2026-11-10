@@ -177,6 +177,54 @@ export async function suggestVideoVariations({ client, intake, about, transcript
   return { note: data?.note || '', variations: Array.isArray(data?.variations) ? data.variations : [] }
 }
 
+/**
+ * Meta's multiple text options for one ad: three primary texts, three
+ * headlines and three descriptions, each list independent because Meta shows
+ * a viewer one of each in any combination. Written in the house style read
+ * off Don Air's hand-built ads (one emoji up top, a ✅ checklist of proof
+ * points), from the same facts, note and transcript as the versions.
+ * `medium` is 'video' or 'image'; an image sends its painted slots in
+ * `current` so the lines match them. `emojis: false` asks for the plain style.
+ *
+ * Returns {note, primaryTexts, headlines, descriptions}; textOptions.patchFromWritten
+ * turns it into the copy record's fields.
+ */
+export async function suggestTextOptions({ client, intake, about, transcript, current, medium = 'video', emojis = true }) {
+  const i = intake || {}
+  const { data, error } = await supabase.functions.invoke('ad-copy', {
+    body: {
+      mode: 'text_options',
+      medium,
+      emojis,
+      client_id: client?.id,
+      client_name: client?.name,
+      industry: client?.industry || i.industry_trade,
+      market: client?.market,
+      service_area: i.service_area,
+      services: i.service_want_more || i.most_profitable_service || i.services_offered,
+      offer: i.offer_headline || i.current_offers_guarantees,
+      guarantee: i.guarantee,
+      price_range: i.typical_price_range,
+      why_choose: i.why_people_choose,
+      ideal_customer: i.ideal_customer,
+      cta_label: i.cta_offering,
+      words_to_avoid: i.words_to_avoid,
+      about,
+      transcript,
+      current: current || {},
+      instruction: 'Write three primary texts, three headlines and three descriptions for this ad. Meta mixes them, so each list stands on its own.',
+    },
+  })
+  if (error) {
+    const { status, detail } = await readFunctionError(error)
+    if (!status) throw new Error('Could not reach the copy assistant. It is probably not deployed yet.')
+    throw new Error(detail || 'Could not write the text options.')
+  }
+  if (data?.error) throw new Error(data.error)
+  const list = (v) => (Array.isArray(v) ? v : [])
+  return { note: data?.note || '', primaryTexts: list(data?.primaryTexts), headlines: list(data?.headlines), descriptions: list(data?.descriptions) }
+}
+
 export { FIELD_LABELS } from './adRevise'
 
 // Suggestions arrive as a flat list and are far easier to choose between when

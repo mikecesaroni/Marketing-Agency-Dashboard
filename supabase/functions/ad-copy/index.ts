@@ -26,6 +26,12 @@
 //     is actually said"): the offer and every claim are the owner's own, the
 //     transcript wins over the offer on file (the note says when they
 //     differ), and each version carries fromClip, the line it echoes.
+// v20: mode 'text_options'. Meta's multiple text options: three primary
+//     texts, three headlines and three descriptions, each list independent
+//     because Meta shows a viewer one of each in any combination. Written in
+//     the house style read off Don Air's hand-built ads (2026-11-10: one
+//     emoji up top, a line in capitals naming who and where, a ✅ checklist
+//     of proof points). `emojis: false` asks for the plain style.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
 import { z } from 'npm:zod'
@@ -100,6 +106,52 @@ const Variations = z.object({
   note: z.string(),
   variations: z.array(Variation),
 })
+
+// mode 'text_options': Meta's multiple text options. Three lists, not three
+// sets: Meta pairs any primary text with any headline and any description,
+// so each list has to stand on its own.
+const TextOptions = z.object({
+  note: z.string(),
+  primaryTexts: z.array(z.string()),
+  headlines: z.array(z.string()),
+  descriptions: z.array(z.string()),
+})
+
+const TEXT_OPTIONS_INTRO = `You write Meta's MULTIPLE TEXT OPTIONS for a single home services ad
+that someone is about to publish: THREE primary texts, THREE headlines and
+THREE descriptions. Meta shows each viewer one of each, in whatever
+combination it expects to work, so the three lists are independent: every
+headline has to read right under every primary text, and every description
+under every headline. No option may lean on another.
+
+The house style, taken from the set the agency runs for Don Air Co:
+
+- primaryText: opens with ONE emoji and then a line in CAPITALS that names
+  who the ad is for and where ("🌴 WEST PALM BEACH HOMEOWNERS, KEEP YOUR HOME
+  COMFORTABLE!"). Then one or two short sentences. Then a checklist of three
+  to five proof points, each on its own line and each starting with ✅ (or
+  one fitting emoji per line: ⭐ 🏆 🛠️ 💬 📅). Then one closing line that
+  sends them to the button under the ad. A blank line between the parts.
+  Sixty to one hundred and ten words. The three take different angles and
+  differ in their first line: 1 the offer, or the comfort promise when there
+  is no offer; 2 the problem (the heat, the breakdown, the cost of waiting);
+  3 trust (the owner, the years, the reviews, licensed and insured).
+- headline: five to eight words, each standing alone. One may end with an
+  exclamation mark; the others do not. No emoji.
+- description: one short line, six to ten words, the area or the trade. No
+  emoji.
+
+The emoji rule further down does not apply to the primary texts in this
+mode: the emojis are the style. They still never stand in for a word, never
+come two in a row, and never appear in a headline or a description. When
+asked for the plain style, the checklist lines start with a plain dash and
+there is no emoji anywhere.
+
+Every number, rating, review count, tenure, licence and guarantee comes from
+the facts you are given; a fact you were not given is left out, never
+invented. "100+ Google Reviews" is written only when the review count says
+so. When the ad is a video with a transcript, the claims are the owner's own.
+Write finished copy, not options: a person edits it, they do not assemble it.`
 
 const APPLY_SYSTEM = `You apply a business owner's change request to a single
 home services ad that has already been built and sent to them for approval.
@@ -271,6 +323,7 @@ suggest what you can honestly write instead.`
 
 const SYSTEM = `${OPTIONS_INTRO}\n\n${RULES}`
 const VARIATIONS_SYSTEM = `${VARIATIONS_INTRO}\n\n${RULES}`
+const TEXT_OPTIONS_SYSTEM = `${TEXT_OPTIONS_INTRO}\n\n${RULES}`
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -382,6 +435,40 @@ Deno.serve(async (req) => {
 
   try {
     const client = new Anthropic({ apiKey })
+
+    if (body.mode === 'text_options') {
+      const plain = body.emojis === false
+      const written = await client.messages.parse({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        thinking: { type: 'adaptive' },
+        system: [{ type: 'text', text: TEXT_OPTIONS_SYSTEM, cache_control: { type: 'ephemeral' } }],
+        output_config: { format: zodOutputFormat(TextOptions, 'ad_text_options') },
+        messages: [
+          {
+            role: 'user',
+            content:
+              `${about ? `${about}\n\n` : ''}` +
+              videoContext +
+              `${
+                isVideo
+                  ? 'THIS AD IS A VIDEO. There is no image and no artboard: the three lists go beside the clip in the feed.\n\n'
+                  : 'THIS AD IS AN IMAGE and the painted words (badge, hook, offer, subhead, proof) are final. The three lists go beside the image in the feed, and the first line of each primary text carries the offer on its own.\n\n'
+              }` +
+              `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
+              `${learnings ? `${learnings}\n\n` : ''}` +
+              `${plain ? 'Write the plain style: no emoji anywhere, the checklist lines start with a dash.\n\n' : ''}` +
+              `The ad as it stands (may be empty):\n${isVideo ? FEED_FIELDS.map((f) => `${f}: ${String(current[f] ?? '').trim() || '(empty)'}`).join('\n') : slots}\n\nWhat I want: ${instruction}`,
+          },
+        ],
+      })
+      const out = written.parsed_output
+      if (!out) {
+        return json({ error: 'Claude replied but not in a shape the publish screen could read. Try again.' }, 502)
+      }
+      const three = (list: string[]) => list.map((s) => String(s || '').trim()).filter(Boolean).slice(0, 3)
+      return json({ note: out.note, primaryTexts: three(out.primaryTexts), headlines: three(out.headlines), descriptions: three(out.descriptions) })
+    }
 
     if (body.mode === 'variations') {
       const written = await client.messages.parse({

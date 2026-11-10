@@ -13,7 +13,9 @@ import { fetchSavedAds, saveSavedAdCopy } from '../lib/savedAds'
 import { guessAdSeason, seasonMeta } from '../lib/adSeason'
 import { metaAdName, wcName } from '../lib/adNaming'
 import { ago } from '../lib/contentHub'
-import { suggestImageFeedCopy } from '../lib/adCopy'
+import { suggestImageFeedCopy, suggestTextOptions } from '../lib/adCopy'
+import { moreFromSaved, moreOf, patchFromWritten, textOptionsForPublish } from '../lib/textOptions'
+import TextOptionsEditor from './TextOptionsEditor'
 import { isPublishable } from '../lib/adVideos'
 import { looseMatch } from '../lib/helpActions'
 import { useHelpActions } from '../lib/useHelpActions'
@@ -525,6 +527,15 @@ function Published({ result, onAnother }) {
         </div>
       )}
 
+      {rows.some((r) => r.text_options) && (
+        <p className="text-[11px] text-green-900/80" data-text-options-note>
+          Text options are on: Meta shows each person one of the primary texts, headlines and
+          descriptions, mixed.
+          {rows.some((r) => r.text_options && (r.sizes || []).length > 0) &&
+            ' An image ad with text options goes out as its 4:5 size everywhere rather than a crop per placement.'}
+        </p>
+      )}
+
       {result.recorded === false && (
         <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
           The ads were created, but the CRM could not record them. Run supabase/meta-publish.sql if
@@ -659,7 +670,7 @@ function PartialWarning({ partial }) {
  * a launch are four different hooks, and making them share one primary text
  * would defeat the point of running them against each other.
  */
-function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, open, onOpen, writing = false, note = '', onWrite }) {
+function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, open, onOpen, writing = false, note = '', onWrite, onWriteOptions, writingOptions = false }) {
   // The feed crop is the one people recognise; the square is the fallback.
   const preview = set.ordered.find((o) => o.size.key === 'feed') || set.ordered[0]
   const thumb = preview?.file?.url
@@ -773,6 +784,8 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
               hint="optional"
             />
           </div>
+          {/* THE TEXT OPTIONS: up to four more of each, mixed by Meta. */}
+          <TextOptionsEditor copy={copy} onCopy={onCopy} onWrite={onWriteOptions} writing={writingOptions} />
           <Text
             label="Ad name"
             value={copy.ad_name}
@@ -998,6 +1011,8 @@ export default function PublishToMetaPanel({
           primary_text: r.primary_text || '',
           headline: r.headline || r.hook || '',
           description: r.description || '',
+          // The extra text options kept on the saved ad (saved_ads.more_copy).
+          ...moreFromSaved(r.more_copy),
           // Season | date | hook. No company name: it is their account.
           ad_name: metaAdName({ season: r.season, hook: r.hook }),
         }
@@ -1279,10 +1294,12 @@ export default function PublishToMetaPanel({
         const c = copies[stamp]
         if (!c) continue
         const r = s.recipe || {}
-        const words = { primary_text: String(c.primary_text || '').trim(), headline: String(c.headline || '').trim(), description: String(c.description || '').trim() }
+        // The three fields and the extra text options, cleaned, so a typed
+        // extra is kept too and a blank one being typed is not a change.
+        const words = { primary_text: String(c.primary_text || '').trim(), headline: String(c.headline || '').trim(), description: String(c.description || '').trim(), ...moreOf(c) }
         if (!words.primary_text) continue
         const key = JSON.stringify(words)
-        const base = savedStaticCopy.current[stamp] ?? JSON.stringify({ primary_text: String(r.primary_text || '').trim(), headline: String(r.headline || r.hook || '').trim(), description: String(r.description || '').trim() })
+        const base = savedStaticCopy.current[stamp] ?? JSON.stringify({ primary_text: String(r.primary_text || '').trim(), headline: String(r.headline || r.hook || '').trim(), description: String(r.description || '').trim(), ...moreFromSaved(r.more_copy) })
         if (key === base) continue
         savedStaticCopy.current[stamp] = key
         saveSavedAdCopy(client.id, stamp, words).catch(() => {
@@ -1322,6 +1339,34 @@ export default function PublishToMetaPanel({
       setCopyNotes((prev) => ({ ...prev, [stamp]: err.message }))
     } finally {
       setWritingCopy('')
+    }
+  }
+
+  // THREE OF EACH for a static: Meta's text options in the house style, the
+  // painted words sent along so the lines match them. The first of each
+  // lands in the fields, the rest in the editor under them. An explicit
+  // click, so it replaces what was there, like picking a version.
+  const [writingOptions, setWritingOptions] = useState('')
+  const writeTextOptions = async (stamp) => {
+    const s = sets.find((x) => String(x.stamp) === stamp)
+    if (!s) return
+    wroteCopy.current.add(stamp)
+    setWritingOptions(stamp)
+    setCopyNotes((prev) => ({ ...prev, [stamp]: '' }))
+    try {
+      const cur = copies[stamp] || {}
+      const out = await suggestTextOptions({ client, intake, medium: 'image', current: staticCurrent(s.recipe, cur) })
+      const patch = patchFromWritten(out)
+      if (!patch.primary_text) {
+        setCopyNotes((prev) => ({ ...prev, [stamp]: out.note || 'The copy assistant did not return the three lists. Try again.' }))
+        return
+      }
+      setCopies((prev) => ({ ...prev, [stamp]: { ...prev[stamp], ...patch } }))
+      setCopyNotes((prev) => ({ ...prev, [stamp]: `Three of each written; Meta mixes them. ${out.note || ''}`.trim() }))
+    } catch (err) {
+      setCopyNotes((prev) => ({ ...prev, [stamp]: err.message }))
+    } finally {
+      setWritingOptions('')
     }
   }
 
@@ -1393,6 +1438,9 @@ export default function PublishToMetaPanel({
           primary_text: c.primary_text?.trim(),
           headline: c.headline?.trim() || undefined,
           description: c.description?.trim() || undefined,
+          // The text options, when there is more than one of something:
+          // the full lists, which Meta mixes per viewer.
+          ...(textOptionsForPublish(c) || {}),
           // Always sent, always prefixed. Left blank, the function would name
           // the ad itself, without the prefix.
           ad_name: wcName(c.ad_name?.trim() || metaAdName({ season: s.recipe?.season, date: today, hook: s.recipe?.hook })),
@@ -1414,6 +1462,7 @@ export default function PublishToMetaPanel({
           primary_text: c.primary_text?.trim(),
           headline: c.headline?.trim() || undefined,
           description: c.description?.trim() || undefined,
+          ...(textOptionsForPublish(c) || {}),
           ad_name: wcName(
             c.ad_name?.trim() ||
               metaAdName({
@@ -1924,6 +1973,8 @@ export default function PublishToMetaPanel({
                   writing={writingCopy === stamp}
                   note={copyNotes[stamp] || ''}
                   onWrite={() => writeFeedCopy(stamp, { again: Boolean(copies[stamp]?.primary_text?.trim()) })}
+                  onWriteOptions={() => writeTextOptions(stamp)}
+                  writingOptions={writingOptions === stamp}
                 />
               )
             })}

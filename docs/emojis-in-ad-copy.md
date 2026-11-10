@@ -18,6 +18,19 @@ Asked 2026-11-02: "consider adding emojis to the ad copy generator for statics a
 - The Ad Studio copy assistant (`supabase/functions/ad-copy`) has the same rule in its system prompt: no emoji unless the instruction asks; when it does, primary text only, one at most at the start of a line, never two in a row, never in the headline, the description or a painted slot, never standing in for a word, and the note says to run it against the plain version and judge on cost per lead.
 - Video scripts are unchanged: spoken lines and on-screen text never carry one.
 
+## The Don Air style (2026-11-10)
+
+Don Air's hand-built ads carry three primary texts that open with one emoji
+and a line in capitals naming who and where, then a ✅ checklist of proof
+points, and the owner asked for that style in the CRM ("I wanna have those
+variants"). It is now the house style of the "Write 3 of each" button on the
+publish page (docs/video-copy.md, "Three of each"): three primary texts,
+three headlines and three descriptions as Meta's text options, emojis in the
+primary texts only, never in a headline or a description, never two in a
+row, never standing in for a word, and the plain style on request. The
+default for everything else the CRM writes is unchanged: none unless asked.
+The judge is still cost per lead against the plain version.
+
 ## How to test it
 
 Open an ad in the Studio, type "add one emoji at the start of each primary text line" in the copy assistant, publish it as its own ad next to the plain one, and read cost per lead after a week of spend. If the emoji version wins on cost per lead across two or three accounts, the default can change; a click-through lift alone is not a reason.
