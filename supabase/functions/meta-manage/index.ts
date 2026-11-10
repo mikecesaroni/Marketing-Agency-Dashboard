@@ -306,8 +306,11 @@ Deno.serve(async (req) => {
     // -----------------------------------------------------------------------
     if (action === 'ad_copy') {
       const adId = String(body.ad_id || '').trim()
+      // `raw: true` also returns the two specs as Meta holds them, which is
+      // how the shape of a hand-built text-options creative was learned.
+      const raw = body.raw === true
       const fields =
-        'id,name,adset_id,account_id,effective_status,creative{id,name,body,title,object_story_spec,asset_feed_spec{bodies,titles,descriptions,call_to_action_types}}'
+        `id,name,adset_id,account_id,effective_status,creative{id,name,body,title,object_story_spec,asset_feed_spec${raw ? '' : '{bodies,titles,descriptions,call_to_action_types}'}}`
       const found: Record<string, any>[] = adId
         ? [await graphGet(encodeURIComponent(adId), { fields }, token)]
         : (await graphGet(`${account}/ads`, { fields, limit: '100' }, token))?.data || []
@@ -343,6 +346,7 @@ Deno.serve(async (req) => {
           call_to_action_types: Array.isArray(feed.call_to_action_types) ? feed.call_to_action_types : [],
           // How the ad was built: text options Meta mixes, or one fixed set.
           text_options: bodies.length > 1 || titles.length > 1 || descs.length > 1,
+          ...(raw ? { spec: { object_story_spec: story, asset_feed_spec: feed } } : {}),
         }
       })
       return json({ client: client.name, ad_account: client.meta_ad_account_id, ads })

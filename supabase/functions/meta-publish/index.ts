@@ -1698,6 +1698,11 @@ Deno.serve(async (req) => {
             primary_text: primaryText,
             headline,
             description,
+            // The text options ride on the single-ad call too, so a dry run
+            // or a one-off publish carries them the same as a batch.
+            primary_texts: body.primary_texts,
+            headlines: body.headlines,
+            descriptions: body.descriptions,
             cta,
             ad_name: adName,
             link_url: linkUrlIn,
