@@ -82,6 +82,14 @@ export const LOW_LEADS_MIN_DAYS = 5
 // 14 days" ("we haven't even gone live with ads yet; it shouldn't be warning
 // us"): three days and ten dollars of spend is a start, not a problem.
 export const NO_LEADS_MIN_DAYS = 7
+// Ads that started inside the last two weeks are still in Meta's learning
+// phase (about a week, and around fifty leads an ad set, before the numbers
+// settle), so one or two leads is not a verdict yet. The flag stays, with
+// the phase said: "when you show clients that only have 1-2 leads but we
+// just started their ads, make sure to add that it's still in learning
+// phase" (2026-11-11). ctx.adsStart is the first day our ads spent anything
+// (the client_ad_start view, supabase/ad-start.sql).
+export const LEARNING_DAYS = 14
 
 /**
  * ctx:
@@ -89,6 +97,7 @@ export const NO_LEADS_MIN_DAYS = 7
  *   result    nextSteps() for the client
  *   drop      the videoDrops() row for the client, or null
  *   leads     leadTotals() for the client
+ *   adsStart  'YYYY-MM-DD' the first day our ads spent anything, or null
  *   alert     the adDeliveryAlerts() entry for the client, or null
  *   payments  payments rows for the client [{ payment_type, status, due_date, amount, failure_count }]
  *   today     'YYYY-MM-DD'
@@ -152,11 +161,18 @@ export function clientFlags(ctx) {
   const noLeadsUp = flags.some((f) => f.key === 'no-leads')
   if (live && !ctx.alert && !noLeadsUp && leads.spendDays7 >= LOW_LEADS_MIN_DAYS && leads.leads7 <= LOW_LEADS_MAX) {
     const n = leads.leads7
+    const started = ctx.adsStart ? daysSince(ctx.adsStart, today) : null
+    const learning = started !== null && started < LEARNING_DAYS
+    const base = n === 0 ? 'No leads this week' : `Only ${n} lead${n === 1 ? '' : 's'} this week`
     add({
       key: 'low-leads',
       severity: 'amber',
-      label: n === 0 ? 'No leads this week' : `Only ${n} lead${n === 1 ? '' : 's'} this week`,
-      detail: `${money(leads.spend7)} spent over ${leads.spendDays7} days${n ? ` for ${money(leads.spend7 / n)} a lead` : ''}. Two or fewer in a week is not delivering: look at the ads, the offer and the form.`,
+      label: learning ? `${base}, still in learning phase (ads started ${started} days ago)` : base,
+      detail: `${money(leads.spend7)} spent over ${leads.spendDays7} days${n ? ` for ${money(leads.spend7 / n)} a lead` : ''}. ${
+        learning
+          ? `Ads started ${String(ctx.adsStart).slice(0, 10)}: Meta's learning phase runs about a week and wants around 50 leads an ad set before the numbers mean much, so this is not a verdict yet. Leave the ads alone (edits reset learning) and judge on the 7 to 14 day trend.`
+          : 'Two or fewer in a week is not delivering: look at the ads, the offer and the form.'
+      }`,
       href: `/client/${c.id}#ad-performance`,
     })
   }

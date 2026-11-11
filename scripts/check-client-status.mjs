@@ -67,6 +67,17 @@ check('three leads is clean', keysOf(clientFlags({ client: live, result: running
 check('two leads on three days of spend (live since Thursday) is not a bad week', keysOf(clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 18: 1 }).slice(0, 3), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), [])
 check('no leads at all is the red flag alone, not both', keysOf(clientFlags({ client: live, result: running, leads: leadTotals(week(), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), ['no-leads'])
 check('a paused client is not flagged for low leads', keysOf(clientFlags({ client: { ...live, paused_at: '2026-10-01T00:00:00Z' }, result: running, leads: leadTotals(week({ 19: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), ['paused'])
+// Ads that started inside the last two weeks: the same flag, with the
+// learning phase said ("when you show clients that only have 1-2 leads but
+// we just started their ads, make sure to add that it's still in learning
+// phase"). adsStart is the first day our ads spent anything.
+const young = clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: '2026-10-11', counts: { kpisThisWeek: 1 }, today: TODAY })
+check('two leads on ads nine days old says still in learning, amber still', young.map((f) => [f.key, f.severity, f.label]), [['low-leads', 'amber', 'Only 2 leads this week, still in learning phase (ads started 9 days ago)']])
+check('...and the detail names the start and says it is not a verdict yet', young[0].detail.includes('$300 spent over 6 days for $150 a lead. Ads started 2026-10-11') && young[0].detail.includes('not a verdict yet'), true)
+check('no leads on six days of ads that started six days ago says the same', clientFlags({ client: live, result: running, leads: leadTotals(week().slice(0, 6), TODAY), adsStart: '2026-10-14', counts: { kpisThisWeek: 1 }, today: TODAY }).map((f) => [f.key, f.label]), [['low-leads', 'No leads this week, still in learning phase (ads started 6 days ago)']])
+check('ads a month old are past learning: the plain flag', clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: '2026-09-20', counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 2 leads this week')
+check('fourteen days in is out of learning', clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: '2026-10-06', counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 2 leads this week')
+check('no start on record (the view missing) is the plain flag', clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: null, counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 2 leads this week')
 
 const alertFlags = clientFlags({ client: live, result: running, alert: { kind: 'quiet', quietDays: 4, detail: 'Nothing has spent since 2026-10-16.' }, leads: leadTotals(days, TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })
 check('the delivery alert is a red flag, and beats the leads flag', alertFlags.map((f) => [f.key, f.severity, f.label]), [['ads-off', 'red', 'Meta ads stopped: 4 days without spend']])

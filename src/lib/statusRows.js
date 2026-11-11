@@ -16,7 +16,7 @@ import { legacySet, withoutLegacy } from './ourAds.js'
 
 /** The raw rows: the pipeline's, the delivery view, two weeks of ad days, the video board's inputs, the payments. */
 export async function fetchStatusRows(supabase, { internalColumn = true, day = today() } = {}) {
-  const [pipeline, deliveryRes, metaRows, googleRows, published, videos, files, reset, newest, payments, legacy] = await Promise.all([
+  const [pipeline, deliveryRes, metaRows, googleRows, published, videos, files, reset, newest, payments, legacy, starts] = await Promise.all([
     fetchPipelineRows(supabase, { internalColumn, day }),
     supabase.from('client_ad_delivery').select('client_id, last_spend_date, spend_7d, spend_30d'),
     fetchAllRows(() => supabase.from('ad_daily').select('id, client_id, campaign_id, date, leads, spend').gte('date', addDays(day, -13)).order('id')).catch(() => []),
@@ -30,11 +30,16 @@ export async function fetchStatusRows(supabase, { internalColumn = true, day = t
     // The client's own campaigns, spending before we connected the account
     // (src/lib/ourAds.js). A project without the view reads as none.
     supabase.from('legacy_ad_campaigns').select('client_id, channel, campaign_id').then((r) => r.data || []).catch(() => []),
+    // The first day our ads spent anything, per client (supabase/ad-start.sql),
+    // so a client two weeks in is told apart from one running a year: the
+    // low-leads flag says "still in learning phase" on the former.
+    supabase.from('client_ad_start').select('client_id, first_spend_date').then((r) => r.data || []).catch(() => []),
   ])
   return {
     day,
     pipeline,
     legacy,
+    starts,
     // A project without the view applied should not take the board down; the
     // account status alone still catches a disabled account.
     delivery: deliveryRes.error ? {} : Object.fromEntries((deliveryRes.data || []).map((r) => [r.client_id, r])),
@@ -72,6 +77,7 @@ export function statusFromRows(raw, { now = new Date() } = {}) {
     if (!payBy.has(p.client_id)) payBy.set(p.client_id, [])
     payBy.get(p.client_id).push(p)
   }
+  const starts = new Map((raw.starts || []).map((r) => [r.client_id, r.first_spend_date ? String(r.first_spend_date).slice(0, 10) : null]))
 
   return pipeline.map(({ client, intake, result }) =>
     clientStatus({
@@ -80,6 +86,7 @@ export function statusFromRows(raw, { now = new Date() } = {}) {
       result,
       drop: drops.get(client.id) || null,
       leads: leadTotals(adDays.get(client.id) || [], day),
+      adsStart: starts.get(client.id) || null,
       alert: alerts.get(client.id) || null,
       payments: payBy.get(client.id) || [],
       counts: { kpisThisWeek: result.steps.find((s) => s.key === 'weekly-kpis')?.done ? 1 : 0 },
