@@ -58,6 +58,10 @@ An incoming webhook, one channel. In Slack: api.slack.com/apps, create an app (o
 
 Messages are Block Kit: a header, one section per group (chunked under Slack's 3000-character cap), client names linking to their page and flags to the place to fix them, a footer with Client tiers, the video board and Tasks.
 
+## Reminders on a day (2026-11-11)
+
+"Can you send a reminder in the CRM updates chat on November 29 reminding us to send a new 2500 subscription payment link to Don Air Co." A reminder weeks out cannot depend on a browser being open, and the function has no "post this text" action, so a reminder is a one-shot pg_cron job (`supabase/team-reminders.sql`): `schedule_team_reminder(slug, when, text)` makes the job and a row in `team_reminders`; at that minute the job posts the line to the channel (the webhook read from the vault then, never kept in the job), logs it in `team_digests` as a `note`, marks the row sent and unschedules itself. A cron line has no year, so the job carries the day it was made for and posts only within a day of it. `cancel_team_reminder(slug)` pulls one before it posts. Both run only from SQL or with the service key; the CRM can read `team_reminders` to show what is pending.
+
 ## What is needed once
 
 - Slack: the webhook, pasted on the page.
