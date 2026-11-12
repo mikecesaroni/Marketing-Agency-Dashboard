@@ -117,8 +117,12 @@ every body labelled `body`, every title `title`, every description `desc`,
 so each rule's one label picks the whole list and Meta mixes them on every
 placement. That is the shape Ads Manager itself builds, read off Horizon
 HVAC's hand-built ads with `ad_copy raw:true`: six bodies and three titles
-each carrying the labels of every rule. The publish result says
-`per_placement` and `text_options` both true. The chat can read the words on
+each carrying the labels of every rule, and ONE description. Descriptions
+are the one list Meta will not mix per placement ("Multiple descriptions
+assets can not be applied to rule #1", subcode 1885878, from the
+validate_only dry run), so the first description goes and the other two
+stay on the saved ad. The publish result says `per_placement` and
+`text_options` both true, and the page says "one description". The chat can read the words on
 any live ad (`meta-manage`, action `ad_copy`), which is how Don Air's were
 read in the first place.
 

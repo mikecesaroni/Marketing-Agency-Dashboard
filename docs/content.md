@@ -172,11 +172,12 @@ HVAC found five ads built in Ads Manager with BOTH, and their shape is
 and title labels, and every one of the six bodies and three titles carrying
 the labels of every rule. meta-publish now builds that: an image with two or
 three sizes keeps its rules and carries the lists, each body labelled
-`body`, each title `title`, each description `desc`, so one label per rule
-picks the whole list. A video, or an image with one size, still goes the
-DEGREES_OF_FREEDOM way. Verified with Meta's `validate_only` dry run on
-Horizon's account (a link ad and an instant-form ad) before the first real
-publish. The publish page's row reads "one ad, 2 sizes: 4:5 to the feeds ·
+`body`, each title `title`, so one label per rule picks the whole list; the
+description is the one field Meta takes only one of per rule (its own
+error, subcode 1885878, and Horizon's ad has one), so the first goes. A
+video, or an image with one size, still goes the DEGREES_OF_FREEDOM way.
+Verified with Meta's `validate_only` dry run on Horizon's account (a link
+ad and an instant-form ad) before the first real publish. The publish page's row reads "one ad, 2 sizes: 4:5 to the feeds ·
 9:16 to Stories and Reels", the sizes note under the list says the same, and
 the result reads "mixed, on every size of the ad, each size on its own
 placements". See docs/video-copy.md.

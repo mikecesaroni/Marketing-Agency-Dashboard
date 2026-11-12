@@ -531,7 +531,7 @@ function Published({ result, onAnother }) {
         <p className="text-[11px] text-green-900/80" data-text-options-note>
           Text options are on: Meta shows each person one of the primary texts, headlines and
           descriptions, mixed
-          {rows.some((r) => r.text_options && r.per_placement) ? ', on every size of the ad, each size on its own placements.' : '.'}
+          {rows.some((r) => r.text_options && r.per_placement) ? ', on every size of the ad, each size on its own placements (one description: Meta takes one per placement).' : '.'}
         </p>
       )}
 

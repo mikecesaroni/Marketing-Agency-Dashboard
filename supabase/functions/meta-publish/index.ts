@@ -835,9 +835,14 @@ function creativeParams(input: CreativeInput): Record<string, unknown> {
 
   // The words: one of each, or the text options' lists. Every entry of a
   // list carries the same label, which is how one rule picks the whole list.
+  // Descriptions are the exception: Meta takes ONE per rule ("Multiple
+  // descriptions assets can not be applied to rule #1", subcode 1885878,
+  // from the validate_only dry run on 2026-11-12), which is also why
+  // Horizon's hand-built ad carries six bodies, three titles and a single
+  // description. So the first description goes and the rest stay home.
   const bodies = texts ? texts.bodies : [primaryText]
   const titles = texts ? texts.titles : headline ? [headline] : []
-  const descs = texts ? texts.descs : description ? [description] : []
+  const descs = texts ? texts.descs.slice(0, 1) : description ? [description] : []
   const labelled = (list: string[], name: string) => list.map((text) => ({ text, adlabels: [{ name }] }))
 
   const rules: Record<string, unknown>[] = []
