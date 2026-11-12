@@ -235,7 +235,9 @@ export async function fetchSavedAds(clientId) {
   for (const row of data || []) {
     const stamp = parseStamp(row.storage_path)
     if (!stamp) continue
-    const key = row.storage_path.replace(/.*-(\w+)\.png$/, '$1')
+    // The Studio saves PNG; a dropped static (src/lib/staticDrops.js) keeps
+    // the editor's format, so a .jpg or .webp under the same name is a size too.
+    const key = row.storage_path.replace(/.*-(\w+)\.(?:png|jpe?g|webp)$/i, '$1')
     const set = sets.get(stamp) || { stamp, savedAt: new Date(Number(stamp)), files: {} }
     // Versioned by upload time: a revised ad is written to the same path, and
     // the CDN would otherwise keep serving the old picture for an hour.

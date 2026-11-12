@@ -826,6 +826,9 @@ export default function PublishToMetaPanel({
   client: clientProp,
   set = null,
   initialVideo = '',
+  // Saved statics (their stamps) to start ticked: the Content page's static
+  // board sends a dropped image here with ?static=<stamp>.
+  initialStatic = [],
   // Pixels of sticky header above this panel (the page's Layout header), so
   // the launch strip sticks below it rather than under it.
   stickyTop = 0,
@@ -848,11 +851,15 @@ export default function PublishToMetaPanel({
   // going back to the gallery one at a time. The set that opened this panel is
   // the one that starts ticked.
   const [sets, setSets] = useState(set ? [set] : [])
-  const [picked, setPicked] = useState(set ? [String(set.stamp)] : [])
+  // The stamps asked for in the URL (a dropped static from the board) start
+  // ticked too; the list fills in around them once it loads.
+  const askedStatics = [].concat(initialStatic || []).map((s) => String(s || '').trim()).filter(Boolean)
+  const [picked, setPicked] = useState(set ? [String(set.stamp)] : askedStatics)
   // Videos or statics on the creative step. Starts on the kind that opened
-  // the panel (a saved static from the gallery, otherwise the clips), and
-  // moves to statics on its own when the client has no clips but has statics.
-  const [creativeKind, setCreativeKind] = useState(set ? 'image' : 'video')
+  // the panel (a saved static from the gallery or the board, otherwise the
+  // clips), and moves to statics on its own when the client has no clips
+  // but has statics.
+  const [creativeKind, setCreativeKind] = useState(set || askedStatics.length > 0 ? 'image' : 'video')
   const [videoCount, setVideoCount] = useState(null)
   // The clips as the picker loaded them, for the help chat's view of the page.
   const [videoList, setVideoList] = useState([])
@@ -862,7 +869,7 @@ export default function PublishToMetaPanel({
     setCreativeKind(k)
   }
   const [copies, setCopies] = useState({})
-  const [openCopy, setOpenCopy] = useState(set ? String(set.stamp) : '')
+  const [openCopy, setOpenCopy] = useState(set ? String(set.stamp) : askedStatics[0] || '')
   // THE WORDS, UNASKED. A ticked static with no primary text gets its feed
   // copy written from the painted words and the brief, once, one static at a
   // time. `writingCopy` is the stamp in flight; `copyNotes` is what the
@@ -1907,7 +1914,7 @@ export default function PublishToMetaPanel({
           <span className="text-[11px] text-slate-500">
             {creativeKind === 'video'
               ? 'Drop the week\'s clips. Each one goes to Meta straight away, gets transcribed, and gets three versions of its copy written. Tick a clip, pick a version, done.'
-              : 'Saved from Make Static Ads. Tick one and its words are already filled in.'}
+              : 'Saved from Make Static Ads, or dropped in finished on the Content page. Tick one and its words are already filled in.'}
           </span>
         </div>
 
@@ -1934,7 +1941,7 @@ export default function PublishToMetaPanel({
               <p className="text-sm font-medium text-slate-700">No saved statics for {client.name} yet</p>
               <p className="mt-1 text-xs text-slate-500">
                 Content, then Make Static Ads, then this client makes three from their brief. Or design one on
-                its Design tab and save it.
+                its Design tab and save it. Or drop a finished image into the static box on the Content page.
               </p>
             </div>
           )}

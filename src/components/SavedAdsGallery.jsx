@@ -509,7 +509,7 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
               >
                 {sending === set.stamp ? 'Sending…' : libraryStatus(set.recipe).sent ? '✓ In Meta library' : 'Send to Meta library'}
               </button>
-              {set.recipe ? (
+              {set.recipe && !set.recipe.dropped_by ? (
                 <button
                   onClick={() => onEdit?.(set)}
                   title="Opens it on the Design tab. Save writes over this ad; nothing is duplicated."
@@ -517,6 +517,12 @@ export default function SavedAdsGallery({ client, clientId, clientName, onEdit, 
                 >
                   Edit
                 </button>
+              ) : set.recipe?.dropped_by ? (
+                /* Dropped in finished from the Content page: a picture, not a
+                   Studio recipe, so there is nothing to reopen. */
+                <span title="Dropped in finished on the Content page. There is no Studio recipe to reopen; drop a new version to change it." className="text-[11px] text-slate-500" data-dropped-by>
+                  dropped in by {set.recipe.dropped_by}
+                </span>
               ) : (
                 <span
                   title="Saved before the Studio started keeping the text and colours, so there is nothing to reopen."

@@ -56,9 +56,10 @@ alert, in the morning brief and in the Client tiers flag. That click opens
 Publish on the client page with the clip already ticked (`?open=publish&video=`),
 so the transcript and the three versions of copy start on their own. A clip
 counts as waiting until a published ad carries its Meta video id, for 30
-days, or until somebody clicks "published manually ×" on the row, which also
+days, or until somebody clicks "Clear" on the row (it read "published
+manually ×" until 2026-11-12), which also
 counts as an ad published by hand that day for the ten-day promise, until
-the Meta sync sees the real one (so tick it only when the clip really went
+the Meta sync sees the real one (so click it only when the clip really went
 out; it is for a clip published
 by hand in Ads Manager, a duplicate, a test). Only clips uploaded into the
 CRM count; a video a client adds to their Google Drive folder is raw footage,
@@ -84,3 +85,42 @@ stops counting as new (`app_settings.video_drops_reset_at`).
 The rules are in `src/lib/videoLaunch.js` (`videoDrops`, `dropState`, `waitingClips`) and
 pinned by `scripts/check-video-launch.mjs`. See `docs/video-machine.md` for
 the publish screen itself.
+
+## Dropped statics (2026-11-12)
+
+"Make a separate box to drop in static images that our editor is making for
+clients. Make it so we can publish with a click like the video ones in
+content page." Its own box under the video board (and again at the top of
+the Publish door): **Dropped statics**, `src/components/StaticDropBoard.jsx`.
+Pick the client, type a note if there is one, drop the finished .png or .jpg
+files; the client's row appears underneath: "New static dropped in · tuneup ·
+dropped 2h ago by Kyle", with a thumbnail per size (each a download), a note
+button, Clear, and "Click to publish →", which opens the publish page with
+the static already ticked (`/publish/:id?static=<stamp>`), its words written
+on the way. The board lists only clients with a static waiting: statics carry
+no weekly promise, so nobody is "behind" here.
+
+**How it works without new publishing code.** A dropped static is stored the
+way a Studio-saved ad is: the files under `ads/<client>/<stamp>-<size>.<ext>`
+and one `saved_ads` row per stamp carrying the ad's name (the file's stem)
+and who dropped it (`dropped_by`). The publish page already lists every
+saved set, ticks the stamps in the URL and writes feed copy for a ticked set
+with none; meta-publish already uploads each size and maps it to its
+placements; the gallery and the approval link already show it (the gallery
+reads "dropped in by Kyle" where the Edit button would be, since there is
+no Studio recipe to reopen). The size comes from the pixels (nearest of 1:1,
+4:5, 9:16; a landscape export counts as square), and files dropped together
+that share a name once the size words are gone (`tuneup-square`,
+`tuneup-feed`, `tuneup-story`) land as one set, which publishes as one ad
+with each size on its placements. A second file of a size the set already
+has starts a new set. The editor's format is kept (.jpg stays .jpg), so
+`fetchSavedAds` reads any of png, jpg, webp as a size. `client_files.drop_kind
+= 'static'` is what tells a drop from the Studio's own saves. A static is
+waiting until a published ad carries its stamp, for 30 days, after the same
+"start fresh" moment the clips use, or until Clear.
+
+The rules are in `src/lib/staticDrops.js` (`planStaticDrop`, `sizeKeyFor`,
+`staticSets`, `waitingStatics`, `staticDrops`), pinned by
+`scripts/check-static-drops.mjs`; the uploads in `src/lib/staticDropStore.js`;
+the columns in `supabase/static-drops.sql`. Not yet: a Slack line or a brief
+line when a static is dropped (the clips have both).

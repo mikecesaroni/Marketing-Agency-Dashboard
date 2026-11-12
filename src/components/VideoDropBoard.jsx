@@ -149,14 +149,17 @@ function Row({ row, onDismiss, onNote }) {
               </button>
             )}
             {onDismiss && (
+              /* "Clear" (was "published manually ×" until 2026-11-12): takes
+                 the clip off the board without publishing it here. The clip
+                 stays in the CRM. */
               <button
                 type="button"
-                title="This clip went up by hand (Ads Manager or elsewhere): take it off the board without publishing it here"
+                title="Take this clip off the board without publishing it here (it went up by hand, or it is not going out). The clip stays in the CRM."
                 onClick={() => onDismiss(row)}
                 className="rounded-md px-1.5 py-0.5 text-slate-400 hover:bg-white hover:text-slate-700"
                 data-published-manually
               >
-                published manually ×
+                Clear
               </button>
             )}
             <Link to={href} className="rounded-lg bg-violet-700 px-2.5 py-1 font-semibold text-white shadow-sm transition hover:bg-violet-800">

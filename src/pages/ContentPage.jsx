@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout'
 import DriveFolderFiles from '../components/DriveFolderFiles'
 import VideoDropBoard from '../components/VideoDropBoard'
+import StaticDropBoard from '../components/StaticDropBoard'
 import LookPicker from '../components/LookPicker'
 import { Card, Input } from '../components/ui'
 import { planLabel, templatesFor } from '../lib/adBatch'
@@ -13,6 +14,7 @@ import { fetchAllLandingPages } from '../lib/landingPagesStore'
 import { LandingPagesList } from '../components/LandingPagesPanel'
 import { ago, folderUrl, hubStats, rollupClients, searchClients, sortForContent } from '../lib/contentHub'
 import { DROPS_RESET_KEY, dropStats, syncedAdRows, videoDrops } from '../lib/videoLaunch'
+import { staticDrops } from '../lib/staticDrops'
 
 /**
  * Content: the creative side of the CRM behind three doors.
@@ -394,6 +396,8 @@ export default function ContentPage() {
   const makeHref = (id) => `/client/${id}?open=studio&make=${makeN}${plan.length ? `&templates=${plan.join(',')}` : ''}`
   const [data, setData] = useState(null)
   const [drops, setDrops] = useState(null)
+  // The static board's rows: clients with a dropped image waiting.
+  const [staticRows, setStaticRows] = useState(null)
   // The raw client rows, for the drop zone: it needs the Meta account id,
   // which the rollup rows do not carry.
   const [clientRows, setClientRows] = useState([])
@@ -402,10 +406,10 @@ export default function ContentPage() {
 
   const load = async () => {
     try {
-      const [clients, saved, published, videos, files, reset, synced, pages] = await Promise.all([
+      const [clients, saved, published, videos, files, reset, synced, pages, statics] = await Promise.all([
         supabase.from('clients').select('id,name,industry,archived,is_internal,drive_folder_id,extra_drive_folder_ids,meta_ad_account_id,paused_at').order('name'),
         fetchAllRows(() => supabase.from('saved_ads').select('client_id,created_at').order('created_at').order('id')),
-        fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name').order('created_at').order('id')),
+        fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name,stamp').order('created_at').order('id')),
         supabase.from('ad_videos').select('client_id,created_at,status,meta_video_id,thumb_url,storage_path,file_name,drop_dismissed_at'),
         // Only the clips: the table also holds every photo ever uploaded.
         supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by,drop_note,drop_dismissed_at').ilike('file_type', 'video/%'),
@@ -416,11 +420,15 @@ export default function ContentPage() {
         supabase.from('client_newest_ad').select('client_id,ad_id,ad_name,first_seen,is_video'),
         // A missing table must not take the whole tab down with it.
         fetchAllLandingPages().catch(() => []),
+        // The editor's dropped statics (src/lib/staticDrops.js): only the
+        // files the static drop zone put in, never the Studio's own saves.
+        supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by,drop_note,drop_dismissed_at').eq('drop_kind', 'static'),
       ])
       if (clients.error) throw clients.error
       if (videos.error) throw videos.error
       setData(sortForContent(rollupClients(clients.data || [], saved, published, videos.data || [], pages)))
       setDrops(videoDrops(clients.data || [], [...published, ...syncedAdRows(synced?.data || [])], videos.data || [], new Date(), files.data || [], reset?.data?.value || ''))
+      setStaticRows(staticDrops(clients.data || [], published, statics?.data || [], new Date(), reset?.data?.value || ''))
       setClientRows(clients.data || [])
       setError('')
     } catch (err) {
@@ -479,6 +487,8 @@ export default function ContentPage() {
             ))}
           </div>
           <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} onReset={resetDrops} compact />
+          {/* The clip board's twin for finished images, its own box. */}
+          <StaticDropBoard rows={staticRows} clients={clientRows} onDropped={load} />
         </div>
       ) : (
         <div className="space-y-4">
@@ -505,6 +515,7 @@ export default function ContentPage() {
               their publish page with the clips and the saved statics; the
               funnel builder is the small link on the card. */}
           {tab === 'publish' && !q && <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} onReset={resetDrops} />}
+          {tab === 'publish' && !q && <StaticDropBoard rows={staticRows} clients={clientRows} onDropped={load} />}
 
           {tab === 'publish' && (
             <p className="text-xs font-medium text-slate-700">Publish: pick the client</p>
