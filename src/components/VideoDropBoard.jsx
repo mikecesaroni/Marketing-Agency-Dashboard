@@ -92,86 +92,89 @@ function Row({ row, onDismiss, onNote }) {
     ? `${row.waiting.length > 1 ? `${row.waiting.length} new clips: ` : ''}${row.waiting.map((w) => w.name).join(', ')} · dropped ${ago(clip.at)}${clip.by ? ` by ${clip.by}` : ''}`
     : `${last}${row.lastAdName ? ` · ${row.lastAdName}` : ''}${row.thisWeek > 1 ? ` · ${row.thisWeek} this week` : ''}`
   const href = publishHref(row, clip ? row.waiting : null)
-  // The row is a grid, not one big link: the download links and "published manually"
-  // sit beside the publish link rather than inside it (an anchor cannot
-  // hold another anchor), and the whole row still reads as one line.
+  // The row is not one big link: the download links and Clear sit beside
+  // the publish link rather than inside it (an anchor cannot hold another
+  // anchor). The client's name and the clip line come first, on their own
+  // line, and the buttons go underneath: with the two drop boxes side by
+  // side the board is half as wide, and when the buttons shared the line
+  // they took it all ("I can't even see which client the new dropped clip
+  // is for", 2026-11-12).
   return (
     <li
       data-drop={row.state}
-      className={`group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl px-3 py-2 transition ${
-        clip ? 'bg-violet-50/70 ring-1 ring-violet-100 hover:bg-violet-50' : 'hover:bg-slate-50'
-      }`}
+      className={`group rounded-xl px-3 py-2 transition ${clip ? 'bg-violet-50/70 ring-1 ring-violet-100 hover:bg-violet-50' : 'hover:bg-slate-50'}`}
     >
-      <StatePill state={row.state} />
-      <Link to={href} className="min-w-0">
-        <span className="block truncate text-sm font-semibold text-slate-900">
-          {row.name}
-          {row.internal && <span className="ml-1.5 text-[11px] font-normal text-slate-400">internal</span>}
-        </span>
-        <span className="block truncate text-[11px] text-slate-500" title={clip ? row.waiting.map((w) => w.name).join(', ') : row.lastAdName}>
-          {line}
-        </span>
-        {noteLine && (
-          <span className="block text-[11px] font-medium text-violet-800" title={noteLine} data-drop-note>
-            📝 {noteLine}
+      <div className="flex items-center gap-3">
+        <StatePill state={row.state} />
+        <Link to={href} className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-slate-900">
+            {row.name}
+            {row.internal && <span className="ml-1.5 text-[11px] font-normal text-slate-400">internal</span>}
           </span>
-        )}
-      </Link>
-      <span className="flex flex-wrap items-center justify-end gap-2 text-[11px]">
-        {clip ? (
-          <>
-            {/* The finished file itself, under its own name, for anyone who
-                needs it outside the CRM (a client's own posting, a second
-                cut, an archive). One link per new clip. */}
-            {row.waiting.map((w) => (
-              <span key={w.path} className="inline-flex items-center gap-1.5">
-                <a
-                  href={downloadUrl(w.path, w.name)}
-                  download={w.name}
-                  title={`Download ${w.name}`}
-                  className="rounded-md border border-violet-200 bg-white px-2 py-0.5 font-medium text-violet-800 hover:bg-violet-100"
-                  data-download-clip={w.path}
-                >
-                  ⬇ {row.waiting.length > 1 ? w.name : 'Download'}
-                </a>
-                <MetaMark clip={w} />
-              </span>
-            ))}
-            {onNote && (
-              <button
-                type="button"
-                title={noteLine ? 'Change the editor’s note on this clip' : 'Add a note for whoever publishes this clip'}
-                onClick={() => onNote(row)}
-                className="rounded-md px-1.5 py-0.5 text-violet-700 hover:bg-white hover:text-violet-900"
-                data-edit-note
-              >
-                ✎ note
-              </button>
-            )}
-            {onDismiss && (
-              /* "Clear" (was "published manually ×" until 2026-11-12): takes
-                 the clip off the board without publishing it here. The clip
-                 stays in the CRM. */
-              <button
-                type="button"
-                title="Take this clip off the board without publishing it here (it went up by hand, or it is not going out). The clip stays in the CRM."
-                onClick={() => onDismiss(row)}
-                className="rounded-md px-1.5 py-0.5 text-slate-400 hover:bg-white hover:text-slate-700"
-                data-published-manually
-              >
-                Clear
-              </button>
-            )}
-            <Link to={href} className="rounded-lg bg-violet-700 px-2.5 py-1 font-semibold text-white shadow-sm transition hover:bg-violet-800">
-              Click to publish →
-            </Link>
-          </>
-        ) : (
-          <Link to={href} className="font-medium text-blue-700 opacity-0 transition group-hover:opacity-100">
+          <span className="block truncate text-[11px] text-slate-500" title={clip ? row.waiting.map((w) => w.name).join(', ') : row.lastAdName}>
+            {line}
+          </span>
+          {noteLine && (
+            <span className="block text-[11px] font-medium text-violet-800" title={noteLine} data-drop-note>
+              📝 {noteLine}
+            </span>
+          )}
+        </Link>
+        {!clip && (
+          <Link to={href} className="whitespace-nowrap text-[11px] font-medium text-blue-700 opacity-0 transition group-hover:opacity-100">
             {row.state === 'done' ? 'Publish another →' : 'Publish a video →'}
           </Link>
         )}
-      </span>
+      </div>
+      {clip && (
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-[11px]">
+          {/* The finished file itself, under its own name, for anyone who
+              needs it outside the CRM (a client's own posting, a second
+              cut, an archive). One link per new clip. */}
+          {row.waiting.map((w) => (
+            <span key={w.path} className="inline-flex items-center gap-1.5">
+              <a
+                href={downloadUrl(w.path, w.name)}
+                download={w.name}
+                title={`Download ${w.name}`}
+                className="rounded-md border border-violet-200 bg-white px-2 py-0.5 font-medium text-violet-800 hover:bg-violet-100"
+                data-download-clip={w.path}
+              >
+                ⬇ {row.waiting.length > 1 ? w.name : 'Download'}
+              </a>
+              <MetaMark clip={w} />
+            </span>
+          ))}
+          {onNote && (
+            <button
+              type="button"
+              title={noteLine ? 'Change the editor’s note on this clip' : 'Add a note for whoever publishes this clip'}
+              onClick={() => onNote(row)}
+              className="rounded-md px-1.5 py-0.5 text-violet-700 hover:bg-white hover:text-violet-900"
+              data-edit-note
+            >
+              ✎ note
+            </button>
+          )}
+          {onDismiss && (
+            /* "Clear" (was "published manually ×" until 2026-11-12): takes
+               the clip off the board without publishing it here. The clip
+               stays in the CRM. */
+            <button
+              type="button"
+              title="Take this clip off the board without publishing it here (it went up by hand, or it is not going out). The clip stays in the CRM."
+              onClick={() => onDismiss(row)}
+              className="rounded-md px-1.5 py-0.5 text-slate-400 hover:bg-white hover:text-slate-700"
+              data-published-manually
+            >
+              Clear
+            </button>
+          )}
+          <Link to={href} className="rounded-lg bg-violet-700 px-2.5 py-1 font-semibold text-white shadow-sm transition hover:bg-violet-800">
+            Click to publish →
+          </Link>
+        </div>
+      )}
     </li>
   )
 }

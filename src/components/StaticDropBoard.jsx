@@ -49,27 +49,32 @@ function Row({ row, onDismiss, onNote }) {
   const noteLine = notes.map((w) => (row.waiting.length > 1 ? `${w.name}: ${w.note}` : w.note)).join(' · ')
   const href = publishStaticHref(row.id, row.waiting.map((w) => w.stamp))
   const line = `${row.waiting.length > 1 ? `${row.waiting.length} new statics: ` : ''}${names} · dropped ${ago(first.at)}${first.by ? ` by ${first.by}` : ''}`
+  // The client's name and the drop line first, on their own line; the
+  // pictures and the buttons underneath, so a half-width board (the two
+  // drop boxes sit side by side) still says whose static it is.
   return (
-    <li data-static-drop className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl bg-violet-50/70 px-3 py-2 ring-1 ring-violet-100 transition hover:bg-violet-50">
-      <span className="inline-flex whitespace-nowrap rounded-md bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold text-violet-800 ring-1 ring-violet-200">
-        New static dropped in
-      </span>
-      <Link to={href} className="min-w-0">
-        <span className="block truncate text-sm font-semibold text-slate-900">
-          {row.name}
-          {row.internal && <span className="ml-1.5 text-[11px] font-normal text-slate-400">internal</span>}
-          {!row.hasMeta && <span className="ml-1.5 text-[11px] font-normal text-amber-700">no Meta account yet</span>}
+    <li data-static-drop className="rounded-xl bg-violet-50/70 px-3 py-2 ring-1 ring-violet-100 transition hover:bg-violet-50">
+      <div className="flex items-center gap-3">
+        <span className="inline-flex whitespace-nowrap rounded-md bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold text-violet-800 ring-1 ring-violet-200">
+          New static dropped in
         </span>
-        <span className="block truncate text-[11px] text-slate-500" title={names}>
-          {line}
-        </span>
-        {noteLine && (
-          <span className="block text-[11px] font-medium text-violet-800" title={noteLine} data-drop-note>
-            📝 {noteLine}
+        <Link to={href} className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-slate-900">
+            {row.name}
+            {row.internal && <span className="ml-1.5 text-[11px] font-normal text-slate-400">internal</span>}
+            {!row.hasMeta && <span className="ml-1.5 text-[11px] font-normal text-amber-700">no Meta account yet</span>}
           </span>
-        )}
-      </Link>
-      <span className="flex flex-wrap items-center justify-end gap-2 text-[11px]">
+          <span className="block truncate text-[11px] text-slate-500" title={names}>
+            {line}
+          </span>
+          {noteLine && (
+            <span className="block text-[11px] font-medium text-violet-800" title={noteLine} data-drop-note>
+              📝 {noteLine}
+            </span>
+          )}
+        </Link>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-[11px]">
         {/* The pictures themselves, one per size, each a download. */}
         {row.waiting.flatMap((w) => w.files.map((f) => <Thumb key={f.path} file={f} />))}
         {onNote && (
@@ -97,7 +102,7 @@ function Row({ row, onDismiss, onNote }) {
         <Link to={href} className="rounded-lg bg-violet-700 px-2.5 py-1 font-semibold text-white shadow-sm transition hover:bg-violet-800">
           Click to publish →
         </Link>
-      </span>
+      </div>
     </li>
   )
 }
