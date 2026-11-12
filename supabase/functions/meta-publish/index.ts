@@ -676,10 +676,15 @@ function textLists(input: {
  * the way the placement rules do, and Meta refused it with "The link field
  * is required" (subcode 2061015) for a link ad and a form ad alike.
  *
- * One creative carries one optimization_type, so an image ad with text
- * options goes out as its default size alone rather than a crop per
- * placement, and the result says so (text_options true, per_placement
- * false). A video ad loses nothing.
+ * This shape is for a video, and for an image ad with ONE size. An image ad
+ * with two or three sizes and text options goes through the placement shape
+ * below instead, which carries the lists too: one creative CAN hold both, and
+ * the proof is Horizon HVAC's own hand-built ads (read off the account
+ * 2026-11-12, "allocate the correct sizes to the correct places on fb and
+ * ig"): optimization_type PLACEMENT, one rule per placement group with an
+ * image_label, body_label and title_label, and six bodies and three titles
+ * every one of which carries the labels of every rule. Until then an image
+ * ad with text options went out as its 4:5 alone.
  */
 function textOptionsParams(input: CreativeInput, texts: TextLists, hashes: Record<string, string>): Record<string, unknown> {
   const { spec, leadFormId, linkUrl, ctaType } = input
@@ -740,7 +745,11 @@ function textOptionsParams(input: CreativeInput, texts: TextLists, hashes: Recor
  *     this function existed, and the fallback whenever there is nothing to
  *     customise between placements.
  *   * Two or three — asset_feed_spec with one customisation rule per size, so
- *     a single ad serves the right crop to each placement.
+ *     a single ad serves the right crop to each placement. With text options
+ *     the lists ride in the same spec, every body labelled `body`, every
+ *     title `title`, every description `desc`, so each rule's one label picks
+ *     the whole list and Meta mixes them on every placement (the shape read
+ *     off Horizon HVAC's hand-built ads, see textOptionsParams).
  *
  * The copy is the same in both, and in the multi-image shape it is declared
  * once and referenced by label from every rule rather than repeated per rule.
@@ -749,9 +758,10 @@ function creativeParams(input: CreativeInput): Record<string, unknown> {
   const { hashes, spec, leadFormId, linkUrl, primaryText, headline, description, ctaType } = input
   const sizeKeys = Object.keys(hashes)
 
-  // More than one text somewhere: the creative Meta mixes from.
+  // More than one text somewhere, on a video or a one-size image: the
+  // creative Meta mixes from. Two or more sizes keep their placements below.
   const texts = textLists(input)
-  if (texts) return textOptionsParams(input, texts, hashes)
+  if (texts && (input.video || sizeKeys.length <= 1)) return textOptionsParams(input, texts, hashes)
 
   // A VIDEO CREATIVE.
   //
@@ -823,6 +833,13 @@ function creativeParams(input: CreativeInput): Record<string, unknown> {
     adlabels: [{ name: `img_${key}` }],
   }))
 
+  // The words: one of each, or the text options' lists. Every entry of a
+  // list carries the same label, which is how one rule picks the whole list.
+  const bodies = texts ? texts.bodies : [primaryText]
+  const titles = texts ? texts.titles : headline ? [headline] : []
+  const descs = texts ? texts.descs : description ? [description] : []
+  const labelled = (list: string[], name: string) => list.map((text) => ({ text, adlabels: [{ name }] }))
+
   const rules: Record<string, unknown>[] = []
   for (const key of sizeKeys) {
     // The default goes last, after every rule that claims specific placements,
@@ -833,8 +850,8 @@ function creativeParams(input: CreativeInput): Record<string, unknown> {
       customization_spec: PLACEMENTS[key],
       image_label: { name: `img_${key}` },
       body_label: { name: 'body' },
-      title_label: headline ? { name: 'title' } : undefined,
-      description_label: description ? { name: 'desc' } : undefined,
+      title_label: titles.length ? { name: 'title' } : undefined,
+      description_label: descs.length ? { name: 'desc' } : undefined,
       link_url_label: { name: 'link' },
     })
   }
@@ -849,8 +866,8 @@ function creativeParams(input: CreativeInput): Record<string, unknown> {
     is_default: true,
     image_label: { name: `img_${defaultSize}` },
     body_label: { name: 'body' },
-    title_label: headline ? { name: 'title' } : undefined,
-    description_label: description ? { name: 'desc' } : undefined,
+    title_label: titles.length ? { name: 'title' } : undefined,
+    description_label: descs.length ? { name: 'desc' } : undefined,
     link_url_label: { name: 'link' },
   })
 
@@ -883,9 +900,9 @@ function creativeParams(input: CreativeInput): Record<string, unknown> {
       // payloads pass with PLACEMENT and fail without it.
       optimization_type: 'PLACEMENT',
       images,
-      bodies: [{ text: primaryText, adlabels: [{ name: 'body' }] }],
-      titles: headline ? [{ text: headline, adlabels: [{ name: 'title' }] }] : undefined,
-      descriptions: description ? [{ text: description, adlabels: [{ name: 'desc' }] }] : undefined,
+      bodies: labelled(bodies, 'body'),
+      titles: titles.length ? labelled(titles, 'title') : undefined,
+      descriptions: descs.length ? labelled(descs, 'desc') : undefined,
       link_urls: [{ website_url: linkUrl, adlabels: [{ name: 'link' }] }],
       // A link ad names the call-to-action TYPE and lets Meta build the button
       // from the link assets. A form ad cannot: the button's value is the form
@@ -1105,11 +1122,11 @@ async function buildAd(input: BuildAdInput) {
     ad_id: ad.id as string,
     image_hashes: hashes,
     // What the ad ACTUALLY carries, which after a fallback is one size, not
-    // three. This is what gets recorded, so it has to be the truth.
-    // An image ad with text options went out as its default size alone (the
-    // two shapes cannot share a creative), so that is what it carries.
-    sizes: (fellBack || texts ? [DEFAULT_SIZE_ORDER.find((k) => hashes[k]) as string] : Object.keys(hashes)).filter(Boolean),
-    per_placement: Object.keys(hashes).length > 1 && !fellBack && !texts,
+    // three. This is what gets recorded, so it has to be the truth. Text
+    // options no longer cost the crops: every size goes, with the lists on
+    // each (creativeParams).
+    sizes: (fellBack ? [DEFAULT_SIZE_ORDER.find((k) => hashes[k]) as string] : Object.keys(hashes)).filter(Boolean),
+    per_placement: Object.keys(hashes).length > 1 && !fellBack,
     needs_instagram: fellBack,
     text_options: Boolean(texts) && !fellBack,
     validated: undefined as Record<string, unknown> | undefined,

@@ -1,15 +1,22 @@
 // Self-check for dropped statics. Run: node scripts/check-static-drops.mjs
 //
-// The editor drops finished images; the board has to group one ad's three
-// sizes under one stamp, tell a new drop from one already published, and
-// send "click to publish" to the right page with the right sets ticked.
+// The editor drops one ad as two files, the 1080 × 1350 in one box and the
+// 1080 × 1920 in the other; the board has to put each in the box its pixels
+// say, land both under one stamp, tell a new drop from one already
+// published, and send "click to publish" to the right page with the right
+// sets ticked.
 
 import {
+  SLOTS,
+  assignSlots,
   isStaticFile,
   parseStaticPath,
-  planStaticDrop,
   publishStaticHref,
   sizeKeyFor,
+  slotFit,
+  slotsMissing,
+  staticAdName,
+  staticAdPlan,
   staticDrops,
   staticExt,
   staticPath,
@@ -43,21 +50,34 @@ check('a landscape export is square, the nearest shape; no pixels is feed', [siz
 // --- the name from the file name ------------------------------------------------
 check('size words come off the stem', ['Tuneup-square.png', 'tuneup_story_final.png', 'Tuneup 9x16.jpg', 'fall-sale (1).png'].map(staticStem), ['Tuneup', 'tuneup', 'Tuneup', 'fall sale 1'])
 
-// --- one drop into sets ---------------------------------------------------------
-const drop = planStaticDrop(
-  [
-    { name: 'tuneup-story.png', width: 1080, height: 1920 },
-    { name: 'tuneup-square.png', width: 1080, height: 1080 },
-    { name: 'tuneup-feed.jpg', width: 1080, height: 1350 },
-    { name: 'coupon.png', width: 1080, height: 1350 },
-    { name: 'coupon-v2.png', width: 1080, height: 1350 },
-  ],
-  1700000000000
-)
-check('three sizes of one name are one set, in size order; another name is its own; a second file of a size the set has starts a new set', drop.map((s) => [s.stamp, s.name, s.items.map((i) => `${i.index}:${i.key}.${i.ext}`)]), [
-  ['1700000000000', 'tuneup', ['1:square.png', '2:feed.jpg', '0:story.png']],
-  ['1700000000001', 'coupon', ['3:feed.png']],
-  ['1700000000002', 'coupon v2', ['4:feed.png']],
+// --- the two boxes ----------------------------------------------------------------
+check('two boxes, the two sizes the editor makes, each saying where it serves', SLOTS.map((s) => [s.key, s.label, s.ratio]), [['feed', '1080 × 1350', '4:5'], ['story', '1080 × 1920', '9:16']])
+check('the right file in the right box is exact', [slotFit(1080, 1350, 'feed'), slotFit(1080, 1920, 'story')].map((f) => [f.key, f.exact, f.moved, f.warn, f.note]), [['feed', true, false, false, ''], ['story', true, false, false, '']])
+check('near enough is fine, and says so', slotFit(1000, 1250, 'feed'), { key: 'feed', exact: false, moved: false, warn: false, note: '1000 × 1250, close enough to 4:5' })
+check('a 9:16 dropped in the 4:5 box goes to the 9:16 box, and the other way round', [slotFit(1080, 1920, 'feed'), slotFit(1080, 1350, 'story')].map((f) => [f.key, f.exact, f.moved, f.note]), [
+  ['story', true, true, '1080 × 1920 is a 9:16, so it went in the 1080 × 1920 box'],
+  ['feed', true, true, '1080 × 1350 is a 4:5, so it went in the 1080 × 1350 box'],
+])
+check('a square or a landscape stays where it was dropped, with a warning that Meta will crop it', [slotFit(1080, 1080, 'feed'), slotFit(1200, 628, 'story')].map((f) => [f.key, f.warn, f.note]), [
+  ['feed', true, '1080 × 1080 is not 4:5; Meta will crop it for the feeds'],
+  ['story', true, '1200 × 628 is not 9:16; Meta will crop it for Stories and Reels'],
+])
+check('no pixels: stays in the box, flagged', slotFit(0, 0, 'story'), { key: 'story', exact: false, moved: false, warn: false, note: 'could not read the pixels' })
+
+const both = assignSlots([{ name: 'tuneup_final.png', width: 1080, height: 1920 }, { name: 'tuneup-feed.jpg', width: 1080, height: 1350 }], '')
+check('both dropped at once anywhere sort themselves, nothing "moved"', [Object.keys(both.placed).sort(), both.placed.feed.file.name, both.placed.story.file.name, both.placed.story.fit.moved, both.refused], [['feed', 'story'], 'tuneup-feed.jpg', 'tuneup_final.png', false, []])
+const onBox = assignSlots([{ name: 'a.png', width: 1080, height: 1920 }], 'feed')
+check('one dropped on the wrong box is moved, and the note says so', [Object.keys(onBox.placed), onBox.placed.story.fit.moved], [['story'], true])
+const twice = assignSlots([{ name: 'a.png', width: 1080, height: 1350 }, { name: 'b.png', width: 1080, height: 1350 }], 'feed')
+check('a second 4:5 in one drop is refused with the reason, not made into another ad', [Object.keys(twice.placed), twice.refused.map((r) => r.file.name), twice.refused[0].why.includes('one ad at a time')], [['feed'], ['b.png'], true])
+
+check('the ad is named from what was typed, else the 4:5\'s file name without the size words, else the 9:16\'s, else "static"', [staticAdName(' Fall sale ', { feed: { name: 'x.png' } }), staticAdName('', { feed: { name: 'Tuneup-4x5.png' }, story: { name: 'tuneup-9x16.png' } }), staticAdName('', { story: { name: 'coupon_story.jpg' } }), staticAdName('', {})], ['Fall sale', 'Tuneup', 'coupon', 'static'])
+check('one ad from the boxes: the files under one stamp, in size order, each in its own format', staticAdPlan({ story: { name: 'b.PNG' }, feed: { name: 'a.jpeg' } }), [{ key: 'feed', ext: 'jpg' }, { key: 'story', ext: 'png' }])
+check('what is missing: both, one, none', [slotsMissing({}), slotsMissing({ feed: { name: 'a.png' } }), slotsMissing({ story: { name: 'b.png' } }), slotsMissing({ feed: { name: 'a.png' }, story: { name: 'b.png' } })], [
+  'Drop the images first.',
+  'No 1080 × 1920 (9:16): Meta will crop the 4:5 for Stories and Reels. Add it to be sure.',
+  'No 1080 × 1350 (4:5): Meta will crop the 9:16 for the feeds. Add it to be sure.',
+  '',
 ])
 check('the path is a saved ad\'s path', staticPath('c1', '1700000000000', 'feed', 'jpg'), 'ads/c1/1700000000000-feed.jpg')
 check('...and reads back', [parseStaticPath('ads/c1/1700000000000-feed.jpg'), parseStaticPath('videos/c1/clip.mp4')], [{ stamp: '1700000000000', key: 'feed' }, null])

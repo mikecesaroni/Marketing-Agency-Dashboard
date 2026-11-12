@@ -1,38 +1,44 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ago } from '../lib/contentHub'
 import { personName } from '../lib/videoLaunch'
-import { isStaticFile, publishStaticHref, validateStatic } from '../lib/staticDrops'
-import { dismissStatics, uploadStatics } from '../lib/staticDropStore'
+import { SLOTS, assignSlots, isStaticFile, publishStaticHref, slotFit, slotsMissing, staticAdName, validateStatic } from '../lib/staticDrops'
+import { dismissStatics, measureImage, uploadStaticAd } from '../lib/staticDropStore'
 import { downloadUrl, setDropNote } from '../lib/adVideoStore'
 import { publicUrl } from '../lib/savedAds'
 import { readMe, saveMe } from '../lib/tasksData'
 
 /**
- * Dropped statics: the box the editor drops finished images into, and the
- * list of what is waiting to publish.
+ * Dropped statics: the two boxes the editor drops a finished ad into, one
+ * per size, and the list of what is waiting to publish.
  *
  * The clip board's twin ("make a separate box to drop in static images that
  * our editor is making for clients, make it so we can publish with a click
- * like the video ones"). Pick the client, drop the .png or .jpg files, and
- * the client's row appears below: "New static dropped in · tuneup · 2h ago
- * by Kyle · Click to publish". That click opens Publish with the static
- * already ticked and its words on the way. Files of one ad in three sizes
- * (tuneup-square, tuneup-feed, tuneup-story) land as one set, which
- * publishes as one ad with each size on its placements.
+ * like the video ones"), then two boxes ("our editor is making these two
+ * sizes for each static ad, 1080x1350 and 1080x1920 ... have 2 boxes labeled
+ * with the size ... when I click publish it allocates the correct sizes to
+ * the correct places on fb and ig"). Pick the client, put the 1080 × 1350
+ * in the left box and the 1080 × 1920 in the right, Drop in: the two files
+ * land as ONE ad, and the client's row appears below: "New static dropped in
+ * · tuneup · 2h ago by Kyle · Click to publish". That click opens Publish
+ * with the static already ticked and its words on the way, and the ad goes
+ * out with the 4:5 on the feeds and the 9:16 on Stories and Reels
+ * (meta-publish's placement rules, text options riding on both).
  *
  * Rows come from src/lib/staticDrops.js: only clients with a static
  * waiting; there is no weekly promise on statics, so nobody is "behind".
  */
 
 const SIZE_LABEL = { square: '1:1', feed: '4:5', story: '9:16' }
+const SIZE_WHERE = { square: '1:1, right column, Marketplace and search', feed: '4:5, the feeds', story: '9:16, Stories and Reels' }
+const ACCEPT = 'image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp'
 
 function Thumb({ file }) {
   return (
     <a
       href={downloadUrl(file.path, file.name)}
       download={file.name}
-      title={`Download ${file.name}`}
+      title={`${SIZE_WHERE[file.key] || file.key} · download ${file.name}`}
       className="group/thumb relative block h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border border-violet-200 bg-white"
       data-download-static={file.path}
     >
@@ -107,23 +113,131 @@ function Row({ row, onDismiss, onNote }) {
   )
 }
 
-/** Where the editor drops finished images. Pick the client, drop the files. */
+/**
+ * One box: the size on it, where that size serves, and the image in it with
+ * its pixels checked. Dropping on the box aims the file at this size; the
+ * pixels can still send it to the other box (src/lib/staticDrops.js slotFit).
+ */
+function SlotBox({ slot, item, busy, onFiles, onClear }) {
+  const input = useRef(null)
+  const [over, setOver] = useState(false)
+  const fit = item?.fit
+  const sure = fit && !fit.warn && item.width > 0
+  return (
+    <div
+      data-static-slot={slot.key}
+      className={`relative flex min-h-[9.5rem] flex-col rounded-xl border-2 border-dashed p-2.5 transition ${
+        over ? 'border-orange-400 bg-orange-50' : item ? 'border-violet-300 bg-white' : 'border-slate-300 bg-white/70'
+      }`}
+      onDragOver={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (!over) setOver(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setOver(false)
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setOver(false)
+        onFiles(e.dataTransfer?.files, slot.key)
+      }}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-sm font-bold text-slate-900">
+          {slot.label} <span className="font-medium text-slate-500">({slot.ratio})</span>
+        </p>
+        {item && (
+          <button type="button" onClick={onClear} className="text-xs text-slate-400 hover:text-slate-700" title="Take this image out of the box" data-slot-clear>
+            ×
+          </button>
+        )}
+      </div>
+      <p className="text-[11px] text-slate-500">→ {slot.where}</p>
+      <input
+        ref={input}
+        type="file"
+        accept={ACCEPT}
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = [...(e.target.files || [])]
+          e.target.value = ''
+          if (files.length > 0) onFiles(files, slot.key)
+        }}
+      />
+      {item ? (
+        <div className="mt-2 flex items-center gap-2.5">
+          <img
+            src={item.url}
+            alt=""
+            className={`${slot.key === 'story' ? 'h-20 w-[2.8rem]' : 'h-20 w-16'} flex-shrink-0 rounded-md border border-slate-200 bg-slate-900 object-cover`}
+          />
+          <div className="min-w-0 text-[11px]">
+            <p className="truncate font-medium text-slate-800" title={item.file.name}>
+              {item.file.name}
+            </p>
+            <p className={sure ? 'text-emerald-700' : 'text-amber-700'} data-slot-fit>
+              {sure ? '✓ ' : '⚠ '}
+              {fit.note || `${item.width} × ${item.height}`}
+            </p>
+            <button type="button" disabled={busy} onClick={() => input.current?.click()} className="text-violet-700 hover:underline disabled:opacity-50">
+              Swap
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => input.current?.click()}
+          className="mt-2 flex flex-1 items-center justify-center rounded-lg bg-slate-50 px-2 py-4 text-xs font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-50"
+          data-slot-choose
+        >
+          Drop the {slot.ratio} here, or choose it
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Where the editor drops one finished ad: the client, the two boxes, Drop in. */
 function DropIn({ clients, onDropped }) {
   const [clientId, setClientId] = useState('')
   const [note, setNote] = useState('')
+  const [name, setName] = useState('')
+  const nameTouched = useRef(false)
   const [me, setMe] = useState(() => {
     const raw = readMe()
     const fixed = personName(raw)
     if (fixed && fixed !== raw) saveMe(fixed)
     return fixed || raw
   })
+  // key -> { file, url, width, height, fit }. The ref is the truth between
+  // renders, so two quick drops do not read a stale box.
+  const [slots, setSlots] = useState({})
+  const slotsRef = useRef({})
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
   const [done, setDone] = useState(null)
   const [dragging, setDragging] = useState(false)
-  const input = useRef(null)
   const choices = (clients || []).filter((c) => !c.archived)
   const chosen = choices.find((c) => c.id === clientId)
+  const slotFiles = Object.fromEntries(Object.entries(slots).map(([k, v]) => [k, v.file]))
+  const filled = SLOTS.filter((s) => slots[s.key])
+  const missing = filled.length > 0 ? slotsMissing(slotFiles) : ''
+
+  // The previews are object URLs; let them go when the board unmounts.
+  useEffect(() => () => {
+    for (const v of Object.values(slotsRef.current)) URL.revokeObjectURL(v.url)
+  }, [])
+
+  const setBoxes = (next) => {
+    slotsRef.current = next
+    setSlots(next)
+  }
 
   // The same "You" name the clip box and the Tasks page keep, asked once.
   const askMe = () => {
@@ -137,16 +251,16 @@ function DropIn({ clients, onDropped }) {
     return name || current
   }
 
-  const ingest = async (incoming) => {
-    const files = [...(incoming || [])].filter((f) => isStaticFile(f.name))
+  // Files into the boxes: aimed at one box, or at the area around them.
+  const place = async (incoming, target = '') => {
+    const files = [...(incoming || [])]
     setError('')
+    setInfo('')
     setDone(null)
-    if (!chosen) {
-      setError('Pick the client first, then drop the images.')
-      return
-    }
-    if (files.length === 0) {
-      setError('That was not an image. Drop .png or .jpg files.')
+    if (files.length === 0) return
+    const notImage = files.find((f) => !isStaticFile(f.name))
+    if (notImage) {
+      setError(`${notImage.name} is not an image. Drop .png or .jpg files.`)
       return
     }
     const bad = files.map(validateStatic).find(Boolean)
@@ -154,14 +268,59 @@ function DropIn({ clients, onDropped }) {
       setError(bad)
       return
     }
+    const measured = await Promise.all(files.map(async (file) => ({ file, name: file.name, ...(await measureImage(file)) })))
+    const { placed, refused } = assignSlots(measured, target)
+    const notes = []
+    const next = { ...slotsRef.current }
+    for (const [key, { file: m, fit }] of Object.entries(placed)) {
+      if (next[key]) URL.revokeObjectURL(next[key].url)
+      if (fit.moved) notes.push(fit.note)
+      // The fit as seen from the box it ended up in, so the line under the
+      // picture reads "✓ 1080 × 1920" and not "moved".
+      next[key] = { file: m.file, url: URL.createObjectURL(m.file), width: m.width, height: m.height, fit: slotFit(m.width, m.height, key) }
+    }
+    setBoxes(next)
+    if (!nameTouched.current) setName(staticAdName('', Object.fromEntries(Object.entries(next).map(([k, v]) => [k, v.file]))))
+    if (refused.length) setError(refused.map((r) => r.why).join(' '))
+    if (notes.length) setInfo(notes.join(' '))
+  }
+
+  const clearSlot = (key) => {
+    const next = { ...slotsRef.current }
+    if (next[key]) URL.revokeObjectURL(next[key].url)
+    delete next[key]
+    setBoxes(next)
+    setError('')
+    setInfo('')
+  }
+
+  const reset = () => {
+    for (const v of Object.values(slotsRef.current)) URL.revokeObjectURL(v.url)
+    setBoxes({})
+    setName('')
+    nameTouched.current = false
+  }
+
+  const dropIn = async () => {
+    setError('')
+    setInfo('')
+    if (!chosen) {
+      setError('Pick the client first.')
+      return
+    }
+    if (filled.length === 0) {
+      setError('Put the 1080 × 1350 and the 1080 × 1920 in their boxes first.')
+      return
+    }
     let who = readMe() || me
     if (who && who !== me) setMe(who)
     if (!personName(who)) who = askMe()
     try {
-      setBusy(files.length > 1 ? `Uploading ${files.length} images…` : `Uploading ${files[0].name}…`)
-      const sets = await uploadStatics({ clientId: chosen.id, files, uploadedBy: personName(who) || who, note })
-      setDone({ client: chosen, sets, note: note.trim() })
+      setBusy(filled.length === 1 ? 'Dropping in one size…' : 'Dropping in both sizes…')
+      const set = await uploadStaticAd({ clientId: chosen.id, name, files: slotFiles, uploadedBy: personName(who) || who, note })
+      setDone({ client: chosen, set, note: note.trim(), sizes: filled.map((s) => s.ratio) })
       setNote('')
+      reset()
       onDropped?.()
     } catch (err) {
       setError(err.message)
@@ -185,17 +344,17 @@ function DropIn({ clients, onDropped }) {
       onDrop={(e) => {
         e.preventDefault()
         setDragging(false)
-        ingest(e.dataTransfer?.files)
+        place(e.dataTransfer?.files, '')
       }}
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-lg" aria-hidden>
           🖼️
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-slate-900">Drop a finished static</p>
           <p className="text-[11px] text-slate-500">
-            For editors: pick the client, drop the .png or .jpg. It lands with the client’s saved ads and shows up below, ready to publish with one click. Drop the 1:1, 4:5 and 9:16 of one ad together (same name, the size in the file name) and they go out as one ad.{' '}
+            For editors: pick the client, put the 1080 × 1350 in the left box and the 1080 × 1920 in the right (or drop both at once anywhere here and they sort themselves), then Drop in. They go out as one ad: the 4:5 on the feeds, the 9:16 on Stories and Reels.{' '}
             <span data-drop-as>
               {!me ? (
                 'It will ask your name once.'
@@ -212,64 +371,89 @@ function DropIn({ clients, onDropped }) {
             </span>
           </p>
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <select
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
-            title="Which client this static is for"
-          >
-            <option value="">Which client?</option>
-            {choices.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-                {c.meta_ad_account_id ? '' : ' (no Meta account)'}
-              </option>
-            ))}
-          </select>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <select
+          value={clientId}
+          onChange={(e) => setClientId(e.target.value)}
+          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
+          title="Which client this static is for"
+          data-static-client
+        >
+          <option value="">Which client?</option>
+          {choices.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+              {c.meta_ad_account_id ? '' : ' (no Meta account)'}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={300}
+          placeholder="Note for whoever publishes (optional)"
+          title="Goes with the static to the board and the publish screen"
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
+          data-drop-note-input
+        />
+      </div>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        {SLOTS.map((slot) => (
+          <SlotBox key={slot.key} slot={slot} item={slots[slot.key]} busy={Boolean(busy)} onFiles={place} onClear={() => clearSlot(slot.key)} />
+        ))}
+      </div>
+      {filled.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="text-[11px] font-medium text-slate-600" htmlFor="static-ad-name">
+            Ad name
+          </label>
           <input
+            id="static-ad-name"
             type="text"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            maxLength={300}
-            placeholder="Note for whoever publishes (optional)"
-            title="Goes with the static to the board and the publish screen"
-            className="w-56 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
-            data-drop-note-input
-          />
-          <input
-            ref={input}
-            type="file"
-            accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-            multiple
-            className="hidden"
+            value={name}
             onChange={(e) => {
-              const files = [...(e.target.files || [])]
-              e.target.value = ''
-              if (files.length > 0) ingest(files)
+              nameTouched.current = true
+              setName(e.target.value)
             }}
+            maxLength={80}
+            placeholder="tuneup"
+            title="How the ad is listed on the board, the publish page and the gallery"
+            className="w-44 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
+            data-static-name
           />
+          {missing && (
+            <span className="text-[11px] text-amber-700" data-slot-missing>
+              {missing}
+            </span>
+          )}
           <button
             type="button"
-            disabled={Boolean(busy)}
-            onClick={() => input.current?.click()}
-            className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-50"
+            disabled={Boolean(busy) || !chosen}
+            onClick={dropIn}
+            title={chosen ? `Put this ad with ${chosen.name}'s saved ads, ready to publish` : 'Pick the client first'}
+            className="ml-auto rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-50"
+            data-static-drop-in
           >
-            {busy || 'Choose images'}
+            {busy || (chosen ? `Drop in for ${chosen.name} →` : 'Pick the client first')}
           </button>
         </div>
-      </div>
+      )}
+      {info && (
+        <p className="mt-2 text-xs text-violet-800" data-slot-info>
+          {info}
+        </p>
+      )}
       {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
       {done && (
-        <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-violet-900">
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-violet-900" data-static-done>
           <span>
-            ✓ {done.sets.length === 1 ? done.sets[0].name : `${done.sets.length} statics`} dropped in for {done.client.name}
-            {personName(me) ? ` by ${me}` : ''}
-            {done.sets.some((s) => s.files.length > 1) ? ` (${done.sets.map((s) => `${s.files.length} size${s.files.length === 1 ? '' : 's'}`).join(', ')})` : ''}.
-            {done.note ? ` Note: “${done.note}”.` : ''}
+            ✓ {done.set.name} dropped in for {done.client.name}
+            {personName(me) ? ` by ${me}` : ''}, {done.sizes.join(' and ')}.{done.note ? ` Note: “${done.note}”.` : ''}
           </span>
           {done.client.meta_ad_account_id ? (
-            <Link to={publishStaticHref(done.client.id, done.sets.map((s) => s.stamp))} className="font-semibold text-violet-800 underline hover:text-violet-950">
+            <Link to={publishStaticHref(done.client.id, [done.set.stamp])} className="font-semibold text-violet-800 underline hover:text-violet-950">
               Publish it now →
             </Link>
           ) : (
@@ -315,7 +499,7 @@ export default function StaticDropBoard({ rows, clients, onDropped, className = 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-900">Dropped statics</h2>
-          <p className="text-xs text-slate-500">Finished images from the editor, waiting to go out. Click a client to publish.</p>
+          <p className="text-xs text-slate-500">Finished images from the editor, one box per size, waiting to go out. Click a client to publish.</p>
         </div>
         <div className="flex gap-2 text-xs">
           <span className={`rounded-lg px-2.5 py-1 font-semibold ${waiting ? 'bg-violet-100 text-violet-800' : 'bg-slate-100 text-slate-500'}`} data-static-waiting>
@@ -329,7 +513,7 @@ export default function StaticDropBoard({ rows, clients, onDropped, className = 
       </div>
 
       {rows === null ? null : rows.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">Nothing waiting. Drop a finished image above and it shows here.</p>
+        <p className="mt-3 text-sm text-slate-500">Nothing waiting. Drop a finished ad above and it shows here.</p>
       ) : (
         <ul className="mt-3 space-y-1.5">
           {rows.map((r) => (

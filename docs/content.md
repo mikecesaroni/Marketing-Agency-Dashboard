@@ -110,12 +110,11 @@ saved set, ticks the stamps in the URL and writes feed copy for a ticked set
 with none; meta-publish already uploads each size and maps it to its
 placements; the gallery and the approval link already show it (the gallery
 reads "dropped in by Kyle" where the Edit button would be, since there is
-no Studio recipe to reopen). The size comes from the pixels (nearest of 1:1,
-4:5, 9:16; a landscape export counts as square), and files dropped together
-that share a name once the size words are gone (`tuneup-square`,
-`tuneup-feed`, `tuneup-story`) land as one set, which publishes as one ad
-with each size on its placements. A second file of a size the set already
-has starts a new set. The editor's format is kept (.jpg stays .jpg), so
+no Studio recipe to reopen). Which file is which size is decided by the two
+boxes (see "Two boxes, two sizes" below; the first version read it from the
+file name and the pixels, and grouped by name), and the files of one ad
+land as one set, which publishes as one ad with each size on its
+placements. The editor's format is kept (.jpg stays .jpg), so
 `fetchSavedAds` reads any of png, jpg, webp as a size. `client_files.drop_kind
 = 'static'` is what tells a drop from the Studio's own saves. A static is
 waiting until a published ad carries its stamp, for 30 days, after the same
@@ -132,3 +131,52 @@ per drop (keyed by stamp in `team_alerts`), and the morning brief lists it
 under To publish beside the clips until it is published or cleared
 (`statusRows.js` reads the dropped files and `waitingStatics` per client;
 `teamBrief.js` `staticLabel`, `alertKeys`).
+
+### Two boxes, two sizes (2026-11-12, later the same day)
+
+"Our editor is making these two sizes for each static ad, 1080x1350 and
+1080x1920. Can we make a thing somehow where he can drop both sizes in the
+static box. Maybe have 2 boxes labeled with the size. And then configure it
+so when I click publish it allocates the correct sizes to the correct
+places on fb and ig like how ads studio was doing."
+
+The drop box is now two boxes side by side, each labelled with its size and
+where that size serves: **1080 × 1350 (4:5) → Facebook and Instagram
+feeds, and anywhere else** and **1080 × 1920 (9:16) → Stories and Reels on
+Facebook and Instagram**. Pick the client, drop (or choose) the file in each
+box, name the ad if the file name is not it, Drop in. The two files land
+under ONE stamp as one saved-ad set (feed and story), so they are one ad on
+the publish page and one ad in Meta, whatever the files were called; the
+file name no longer decides anything. Drop both at once anywhere in the box
+and they sort themselves by their pixels. The pixels are read for every
+file: the right size in the right box reads "✓ 1080 × 1350"; a near miss
+reads "close enough to 4:5"; a 9:16 dropped in the 4:5 box is moved to the
+9:16 box and the line says so; a 1:1 or a landscape stays where it was
+dropped with "⚠ not 4:5; Meta will crop it for the feeds". A second 4:5 in
+the same drop is refused (one ad at a time). One box filled and the other
+empty still drops in, with "No 1080 × 1920 (9:16): Meta will crop the 4:5
+for Stories and Reels. Add it to be sure." Rules: `SLOTS`, `slotFit`,
+`assignSlots`, `staticAdName`, `staticAdPlan`, `slotsMissing` in
+`src/lib/staticDrops.js`; upload: `uploadStaticAd` in `staticDropStore.js`.
+
+**The publish side, and what it fixed.** meta-publish's placement rules
+already sent the 9:16 to Stories and Reels and the 4:5 everywhere else as
+one ad. But the three-of-each text options (written for every static on
+their own since the morning) put the creative through Meta's other shape,
+`optimization_type: DEGREES_OF_FREEDOM`, which carries one image, so a
+static with text options was going out as its 4:5 everywhere and the 9:16
+was thrown away. Meta's own developer pages are unreachable from the build
+sandbox, so the answer came from the account: `ad_copy raw:true` on Horizon
+HVAC found five ads built in Ads Manager with BOTH, and their shape is
+`optimization_type: PLACEMENT`, a rule per placement group with image, body
+and title labels, and every one of the six bodies and three titles carrying
+the labels of every rule. meta-publish now builds that: an image with two or
+three sizes keeps its rules and carries the lists, each body labelled
+`body`, each title `title`, each description `desc`, so one label per rule
+picks the whole list. A video, or an image with one size, still goes the
+DEGREES_OF_FREEDOM way. Verified with Meta's `validate_only` dry run on
+Horizon's account (a link ad and an instant-form ad) before the first real
+publish. The publish page's row reads "one ad, 2 sizes: 4:5 to the feeds ·
+9:16 to Stories and Reels", the sizes note under the list says the same, and
+the result reads "mixed, on every size of the ad, each size on its own
+placements". See docs/video-copy.md.

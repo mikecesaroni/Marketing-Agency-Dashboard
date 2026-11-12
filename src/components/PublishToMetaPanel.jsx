@@ -530,9 +530,8 @@ function Published({ result, onAnother }) {
       {rows.some((r) => r.text_options) && (
         <p className="text-[11px] text-green-900/80" data-text-options-note>
           Text options are on: Meta shows each person one of the primary texts, headlines and
-          descriptions, mixed.
-          {rows.some((r) => r.text_options && (r.sizes || []).length > 0) &&
-            ' An image ad with text options goes out as its 4:5 size everywhere rather than a crop per placement.'}
+          descriptions, mixed
+          {rows.some((r) => r.text_options && r.per_placement) ? ', on every size of the ad, each size on its own placements.' : '.'}
         </p>
       )}
 
@@ -670,6 +669,16 @@ function PartialWarning({ partial }) {
  * a launch are four different hooks, and making them share one primary text
  * would defeat the point of running them against each other.
  */
+// Where each size of a static goes, in the words the publish row uses. The
+// 4:5 is the default rule in meta-publish, so with no 1:1 it covers those
+// placements too.
+const SIZE_PLACE = {
+  feed: '4:5 to the feeds',
+  story: '9:16 to Stories and Reels',
+  square: '1:1 to right column, Marketplace and search',
+}
+const SIZE_RATIO = { feed: '4:5', story: '9:16', square: '1:1' }
+
 function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, open, onOpen, writing = false, note = '', onWrite, onWriteOptions, writingOptions = false }) {
   // The feed crop is the one people recognise; the square is the fallback.
   const preview = set.ordered.find((o) => o.size.key === 'feed') || set.ordered[0]
@@ -704,9 +713,10 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
               <span className="ml-1.5 rounded-full border border-slate-300 bg-slate-50 px-1.5 text-[10px] font-medium text-slate-700">{seasonMeta(set.recipe.season).label}</span>
             )}
           </p>
-          <p className="text-[11px] text-slate-500">
-            {sizes.length} size{sizes.length === 1 ? '' : 's'}, {sizes.join(', ')}
-            {sizes.length > 1 && ', one ad split by placement'}
+          <p className="text-[11px] text-slate-500" data-static-sizes>
+            {sizes.length === 1
+              ? `one size (${SIZE_RATIO[sizes[0]] || sizes[0]}), served everywhere`
+              : `one ad, ${sizes.length} sizes: ${sizes.map((k) => SIZE_PLACE[k] || k).join(' · ')}`}
           </p>
           {publishedBefore > 0 && (
             <p className="text-[11px] text-amber-700">
@@ -2009,10 +2019,11 @@ export default function PublishToMetaPanel({
             </p>
           )}
           {maxSizes > 1 && (
-            <p className="text-[11px] text-slate-500">
-              Each creative publishes as <strong>one ad</strong> holding all {maxSizes} of its sizes:
-              the 9:16 goes to Stories and Reels, the 1:1 to right column, Marketplace and search, and
-              the 4:5 everywhere else.
+            <p className="text-[11px] text-slate-500" data-sizes-note>
+              Each creative publishes as <strong>one ad</strong> holding all {maxSizes} of its sizes, each on its
+              own placements on Facebook and Instagram: the 1080 × 1920 (9:16) to Stories and Reels, the
+              1080 × 1350 (4:5) to both feeds and everywhere else, and a 1:1, when there is one, to right
+              column, Marketplace and search. The text options ride on every size.
             </p>
           )}
         </div>

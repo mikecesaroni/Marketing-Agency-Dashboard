@@ -109,11 +109,18 @@ half is `src/lib/textOptions.js`, tested by `scripts/check-text-options.mjs`.
 Publishing sends the full lists (`primary_texts`, `headlines`,
 `descriptions`) and `meta-publish` builds the creative Meta mixes from: an
 `asset_feed_spec` holding the lists with `optimization_type:
-DEGREES_OF_FREEDOM`. A video ad loses nothing. An image ad with text options
-goes out as its 4:5 size everywhere rather than a crop per placement,
-because one creative carries one optimization type; the publish result says
-so. The chat can read the words on any live ad (`meta-manage`, action
-`ad_copy`), which is how Don Air's were read in the first place.
+DEGREES_OF_FREEDOM` for a video and for an image with one size. An image
+with two or three sizes keeps its crop per placement AND the text options
+(since 2026-11-12; before that it went out as its 4:5 alone): the placement
+shape (`optimization_type: PLACEMENT`, one rule per size) carries the lists,
+every body labelled `body`, every title `title`, every description `desc`,
+so each rule's one label picks the whole list and Meta mixes them on every
+placement. That is the shape Ads Manager itself builds, read off Horizon
+HVAC's hand-built ads with `ad_copy raw:true`: six bodies and three titles
+each carrying the labels of every rule. The publish result says
+`per_placement` and `text_options` both true. The chat can read the words on
+any live ad (`meta-manage`, action `ad_copy`), which is how Don Air's were
+read in the first place.
 
 The emoji policy (docs/emojis-in-ad-copy.md) stands for everything else:
 the house style is what this button writes, and it runs against the plain

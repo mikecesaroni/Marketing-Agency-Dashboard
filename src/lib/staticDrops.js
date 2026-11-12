@@ -10,10 +10,21 @@
 // stamp (src/lib/savedAds.js groups the files by stamp into a set, one image
 // per size). That is what makes "publish with a click" free: the publish
 // page already lists every saved set, ticks the ones named in the URL and
-// writes the words for a ticked set that has none; meta-publish already
-// uploads each size and maps it to its placements. The drop zone's only job
-// is to put the files where a saved ad's files go, with the size worked out
-// from the pixels and the files of one ad grouped under one stamp.
+// writes the words for a ticked set that has none; meta-publish uploads
+// each size and maps it to its placements, text options and all. The drop
+// zone's only job is to put the files where a saved ad's files go, under
+// one stamp per ad.
+//
+// THE TWO BOXES (later the same day: "our editor is making these two sizes
+// for each static ad, 1080x1350 and 1080x1920 ... have 2 boxes labeled with
+// the size ... when I click publish it allocates the correct sizes to the
+// correct places on fb and ig"). One box per size, and the box says where
+// the file goes: whatever is in the 1080 × 1350 box is the ad's 4:5 and
+// serves on the feeds, whatever is in the 1080 × 1920 box is its 9:16 and
+// serves on Stories and Reels. The two files land under ONE stamp, so they
+// are one ad on the publish page and one ad in Meta, whatever they were
+// called. The pixels are still read: a 9:16 dropped in the 4:5 box is moved
+// to the right box rather than published to the wrong placements.
 //
 // Pure, so scripts/check-static-drops.mjs can pin it; the uploads are in
 // staticDropStore.js.
@@ -96,32 +107,104 @@ export function staticExt(fileName) {
 }
 
 /**
- * How one drop becomes saved-ad sets.
- *
- * files: [{ name, width, height }] in the order dropped. Files that share a
- * name once the size words are gone are one ad in several sizes and go
- * under one stamp, one file per size; a second file of a size the set
- * already has starts a new set (two different square ads named the same).
- * Stamps count up from the one given, so a drop of three ads gets three
- * stamps a millisecond apart, the way three Studio saves would.
- *
- * Returns [{ stamp, name, items: [{ index, key, ext }] }].
+ * The two boxes: the two sizes the editor makes, and where each one serves.
+ * The 4:5 is meta-publish's default rule, so with no 1:1 it covers right
+ * column, Marketplace, search and Explore as well as both feeds.
  */
-export function planStaticDrop(files = [], stamp = Date.now()) {
-  const sets = []
-  let next = Number(stamp) || Date.now()
-  for (const [index, f] of [...files].entries()) {
-    const key = sizeKeyFor(f?.width, f?.height)
-    const name = staticStem(f?.name)
-    const group = name.toLowerCase()
-    let set = sets.find((s) => s.group === group && !s.items.some((i) => i.key === key))
-    if (!set) {
-      set = { stamp: String(next++), name: name || 'static', group, items: [] }
-      sets.push(set)
-    }
-    set.items.push({ index, key, ext: staticExt(f?.name) })
+export const SLOTS = [
+  { key: 'feed', w: 1080, h: 1350, ratio: '4:5', label: '1080 × 1350', where: 'Facebook and Instagram feeds, and anywhere else', short: 'the feeds' },
+  { key: 'story', w: 1080, h: 1920, ratio: '9:16', label: '1080 × 1920', where: 'Stories and Reels on Facebook and Instagram', short: 'Stories and Reels' },
+]
+export const slotFor = (key) => SLOTS.find((s) => s.key === key) || null
+
+/**
+ * How a file fits the box it was dropped in, from its pixels.
+ *
+ *   key    the box it belongs in: the one asked for, or the other one when
+ *          the pixels say so (a 9:16 dropped in the 4:5 box is moved, not
+ *          refused and not published to the feeds)
+ *   exact  the pixels are the box's own
+ *   moved  it went to the other box
+ *   warn   the pixels are neither shape (a 1:1, a landscape): it stays where
+ *          it was dropped and the note says Meta will crop it there
+ */
+export function slotFit(width, height, key = 'feed') {
+  const asked = slotFor(key) || SLOTS[0]
+  const w = Number(width) || 0
+  const h = Number(height) || 0
+  if (!w || !h) return { key: asked.key, exact: false, moved: false, warn: false, note: 'could not read the pixels' }
+  const px = `${w} × ${h}`
+  const nearest = sizeKeyFor(w, h)
+  if (nearest === asked.key) {
+    const exact = w === asked.w && h === asked.h
+    return { key: asked.key, exact, moved: false, warn: false, note: exact ? '' : `${px}, close enough to ${asked.ratio}` }
   }
-  return sets.map(({ group: _group, ...s }) => ({ ...s, items: s.items.sort((a, b) => SIZE_ORDER[a.key] - SIZE_ORDER[b.key]) }))
+  const other = slotFor(nearest)
+  if (other) {
+    return { key: other.key, exact: w === other.w && h === other.h, moved: true, warn: false, note: `${px} is a ${other.ratio}, so it went in the ${other.label} box` }
+  }
+  return { key: asked.key, exact: false, moved: false, warn: true, note: `${px} is not ${asked.ratio}; Meta will crop it for ${asked.short}` }
+}
+
+/**
+ * Files dropped at once, into the boxes they fit. `target` is the box they
+ * were dropped on, '' for the area around the boxes (then each file goes by
+ * its pixels, and nothing is "moved"). One file per box: a second 4:5 in the
+ * same drop is refused with the reason, rather than quietly becoming another
+ * ad.
+ *
+ * files: [{ name, width, height, ...anything }]
+ * Returns { placed: { feed?: { file, fit }, story?: { file, fit } }, refused: [{ file, why }] }
+ */
+export function assignSlots(files = [], target = '') {
+  const placed = {}
+  const refused = []
+  for (const file of files || []) {
+    const fit = slotFit(file?.width, file?.height, target || 'feed')
+    if (!target && fit.moved) {
+      fit.moved = false
+      fit.note = fit.exact ? '' : `${file.width} × ${file.height}, close enough to ${slotFor(fit.key).ratio}`
+    }
+    if (placed[fit.key]) {
+      refused.push({ file, why: `${file?.name || 'That file'} is a second ${slotFor(fit.key).ratio}. The boxes take one ad at a time; drop the next ad once this one is in.` })
+      continue
+    }
+    placed[fit.key] = { file, fit }
+  }
+  return { placed, refused }
+}
+
+/** The ad's name for its saved row: what was typed, else the 4:5's file name without the size words, else the 9:16's. */
+export function staticAdName(typed, files = {}) {
+  const t = String(typed || '').trim()
+  if (t) return t
+  for (const s of SLOTS) {
+    const n = staticStem(files?.[s.key]?.name)
+    if (n) return n
+  }
+  return 'static'
+}
+
+/**
+ * One ad from the boxes: which files go under the one stamp, in size order.
+ * files: { feed?: { name }, story?: { name }, square?: { name } }
+ * Returns [{ key, ext }]; empty when no box has a file.
+ */
+export function staticAdPlan(files = {}) {
+  return Object.keys(SIZE_ORDER)
+    .filter((k) => files?.[k])
+    .sort((a, b) => SIZE_ORDER[a] - SIZE_ORDER[b])
+    .map((key) => ({ key, ext: staticExt(files[key].name) }))
+}
+
+/** What is still missing before the ad goes out whole: '' when both boxes are full. */
+export function slotsMissing(files = {}) {
+  const missing = SLOTS.filter((s) => !files?.[s.key])
+  if (missing.length === SLOTS.length) return 'Drop the images first.'
+  if (missing.length === 0) return ''
+  const have = SLOTS.find((s) => files[s.key])
+  const m = missing[0]
+  return `No ${m.label} (${m.ratio}): Meta will crop the ${have.ratio} for ${m.short}. Add it to be sure.`
 }
 
 /** Where a dropped file goes: the same place a saved ad's artboard goes. */

@@ -67,8 +67,13 @@ check(
 )
 check(
   '...as the plain creative plus the three lists (the shape read off Don Air’s), for a video and for an image as one size',
-  [publish.includes('asset_feed_spec: feed,'), publish.includes('video_id: input.video.id,\n          image_url: input.video.thumbUrl || undefined,\n          call_to_action: callToAction,'), publish.includes('per_placement: Object.keys(hashes).length > 1 && !fellBack && !texts')],
+  [publish.includes('asset_feed_spec: feed,'), publish.includes('video_id: input.video.id,\n          image_url: input.video.thumbUrl || undefined,\n          call_to_action: callToAction,'), publish.includes('if (texts && (input.video || sizeKeys.length <= 1)) return textOptionsParams(input, texts, hashes)')],
   [true, true, true]
+)
+check(
+  '...and an image with two or three sizes keeps its placements, the lists labelled so every rule picks the whole list (the shape read off Horizon HVAC’s)',
+  [publish.includes("bodies: labelled(bodies, 'body'),"), publish.includes("titles: titles.length ? labelled(titles, 'title') : undefined,"), publish.includes("title_label: titles.length ? { name: 'title' } : undefined,"), publish.includes('per_placement: Object.keys(hashes).length > 1 && !fellBack,')],
+  [true, true, true, true]
 )
 check('...and the single-ad call carries the lists like the batch', publish.includes('primary_texts: body.primary_texts,'), true)
 const panel = read('src/components/PublishToMetaPanel.jsx')
