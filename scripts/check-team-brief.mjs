@@ -71,11 +71,19 @@ check('Google still to publish on the Whole Chain and up keeps them in setup', b
 check('blue flags are not attention', brief.attention.some((a) => a.key === 'kpis'), false)
 check("every waiting clip, newest first, naming the editor, where it is with Meta and the editor's note", brief.clips.map((c) => c.label), ['clip2.mp4 from Kyle · in Meta, ready to publish', 'clip1.mp4 · not in Meta yet · “post a day after clip2”'])
 check("a clip alert carries the editor's note too", alertKeys(rows).find((k) => k.key === 'd:clip:d/clip1.mp4')?.label, 'New edit dropped in: clip1.mp4 · not in Meta yet · “post a day after clip2”')
+// A dropped static (2026-11-12, "send CRM message when new statics are
+// dropped"): under To publish in the brief, and posted once, by its stamp.
+const staticRow = mk('s', 'Static Co', { statics: [{ stamp: '100', name: 'tuneup', files: [{ path: 'ads/s/100-feed.png', name: 'tuneup-feed.png', key: 'feed' }, { path: 'ads/s/100-story.png', name: 'tuneup-story.png', key: 'story' }], at: '2026-10-20T08:00:00Z', by: 'Kyle', note: 'run it Friday', dismissed: false }] })
+const staticBrief = buildBrief({ statusRows: [staticRow], day: TODAY })
+check('a dropped static sits under To publish with its sizes, who dropped it and the note', [staticBrief.clips.map((c) => [c.key, c.label]), staticBrief.counts.clips, staticBrief.counts.statics], [[['static', 'tuneup (2 sizes) from Kyle · ready to publish · “run it Friday”']], 1, 1])
+check('...the subject counts it without calling it a clip, and the line carries the picture', [briefSubject(staticBrief).includes('1 to publish'), briefText(staticBrief).includes('🖼️ Static Co: tuneup (2 sizes) from Kyle')], [true, true])
+check('a dropped static posts once, by its stamp, at once', alertKeys([staticRow]).map((k) => [k.key, k.kind, k.label]), [['s:static:100', 'static', 'New static dropped in: tuneup (2 sizes) from Kyle · ready to publish · “run it Friday”']])
+check('...and says so when there is no Meta account to send it to', alertKeys([mk('s', 'Static Co', { drop: { hasMeta: false, state: 'no-meta', waiting: [] }, statics: [{ stamp: '101', name: 'coupon', files: [{ path: 'ads/s/101-feed.png', name: 'coupon.png', key: 'feed' }], at: '2026-10-20T08:00:00Z', by: '', note: '', dismissed: false }] })]).map((k) => k.label), ['New static dropped in: coupon · no Meta account to send it to'])
 check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
 // Ads that started this week read as new, not as a zero.
 check('a client whose ads started this week is running clean as "new"', briefSections(buildBrief({ statusRows: [mk('n', 'New Co', { leads: { leads7: 0, leads14: 0, spend7: 10, spend14: 10, spendDays14: 3 } })], day: TODAY })).find((s) => s.key === 'green').lines[0].text, 'New Co 0 (new this week)')
 check('onboarding names what we are waiting on and how long they have had it', brief.onboarding.map((o) => [o.label, o.theirs]), [['Meta ad account and Page connected, 9 days', true]])
-check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, green: 2, greenLeads: 11, onboarding: 1, onboardingOurs: 0, onboardingTheirs: 1, paused: 0 })
+check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, statics: 0, green: 2, greenLeads: 11, onboarding: 1, onboardingOurs: 0, onboardingTheirs: 1, paused: 0 })
 
 // --- where each onboarding client is: one plain-words move -----------------------------
 // ("We want to know what we need to do, and if everything is connected then

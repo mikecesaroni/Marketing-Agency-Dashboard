@@ -276,7 +276,7 @@ function DropIn({ clients, onDropped }) {
   )
 }
 
-export default function StaticDropBoard({ rows, clients, onDropped }) {
+export default function StaticDropBoard({ rows, clients, onDropped, className = '' }) {
   const [error, setError] = useState('')
   const dismiss = async (row) => {
     setError('')
@@ -306,7 +306,7 @@ export default function StaticDropBoard({ rows, clients, onDropped }) {
   const waiting = (rows || []).reduce((n, r) => n + r.waiting.length, 0)
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5" data-static-board>
+    <section className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 ${className}`} data-static-board>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-900">Dropped statics</h2>

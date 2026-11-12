@@ -486,9 +486,14 @@ export default function ContentPage() {
               <Door key={d.key} door={d} stats={stats} onOpen={() => openTab(d.key)} />
             ))}
           </div>
-          <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} onReset={resetDrops} compact />
-          {/* The clip board's twin for finished images, its own box. */}
-          <StaticDropBoard rows={staticRows} clients={clientRows} onDropped={load} />
+          {/* The two drop boxes side by side, the clips on the left and the
+              finished images on the right, each as deep as the other ("make
+              the videos and statics box drops be side by side where the
+              video one is now; they can be larger deeper boxes"). */}
+          <div className="grid gap-4 xl:grid-cols-2 xl:items-stretch" data-drop-boxes>
+            <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} onReset={resetDrops} compact className="h-full min-h-[28rem]" />
+            <StaticDropBoard rows={staticRows} clients={clientRows} onDropped={load} className="h-full min-h-[28rem]" />
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -514,8 +519,12 @@ export default function ContentPage() {
           {/* THE WEEK'S BOARD, then every client. One click on a client is
               their publish page with the clips and the saved statics; the
               funnel builder is the small link on the card. */}
-          {tab === 'publish' && !q && <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} onReset={resetDrops} />}
-          {tab === 'publish' && !q && <StaticDropBoard rows={staticRows} clients={clientRows} onDropped={load} />}
+          {tab === 'publish' && !q && (
+            <div className="grid gap-4 xl:grid-cols-2 xl:items-stretch" data-drop-boxes>
+              <VideoDropBoard rows={drops} clients={clientRows} onDropped={load} onReset={resetDrops} className="h-full" />
+              <StaticDropBoard rows={staticRows} clients={clientRows} onDropped={load} className="h-full" />
+            </div>
+          )}
 
           {tab === 'publish' && (
             <p className="text-xs font-medium text-slate-700">Publish: pick the client</p>

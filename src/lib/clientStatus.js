@@ -318,6 +318,9 @@ export function clientStatus(ctx) {
     result: ctx.result,
     drop: ctx.drop || null,
     leads: ctx.leads || leadTotals([], ctx.today),
+    // The editor's dropped statics waiting to publish (src/lib/staticDrops.js
+    // waitingStatics), for the channel and the brief.
+    statics: Array.isArray(ctx.statics) ? ctx.statics : [],
     tier,
     guessed,
     flags,

@@ -12,16 +12,17 @@ import { fetchPipelineRows, pipelineFromRows } from './pipelineRows.js'
 import { DROPS_RESET_KEY, syncedAdRows, videoDrops } from './videoLaunch.js'
 import { adDeliveryAlerts } from './adHealth.js'
 import { channelDays, clientStatus, leadTotals } from './clientStatus.js'
+import { waitingStatics } from './staticDrops.js'
 import { legacySet, withoutLegacy } from './ourAds.js'
 
 /** The raw rows: the pipeline's, the delivery view, two weeks of ad days, the video board's inputs, the payments. */
 export async function fetchStatusRows(supabase, { internalColumn = true, day = today() } = {}) {
-  const [pipeline, deliveryRes, metaRows, googleRows, published, videos, files, reset, newest, payments, legacy, starts] = await Promise.all([
+  const [pipeline, deliveryRes, metaRows, googleRows, published, videos, files, reset, newest, payments, legacy, starts, statics] = await Promise.all([
     fetchPipelineRows(supabase, { internalColumn, day }),
     supabase.from('client_ad_delivery').select('client_id, last_spend_date, spend_7d, spend_30d'),
     fetchAllRows(() => supabase.from('ad_daily').select('id, client_id, campaign_id, date, leads, spend').gte('date', addDays(day, -13)).order('id')).catch(() => []),
     fetchAllRows(() => supabase.from('google_campaign_daily').select('id, client_id, campaign_id, date, conversions, cost').gte('date', addDays(day, -13)).order('id')).catch(() => []),
-    fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name').order('created_at').order('id')).catch(() => []),
+    fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name,stamp').order('created_at').order('id')).catch(() => []),
     supabase.from('ad_videos').select('client_id,created_at,status,meta_video_id,thumb_url,storage_path,file_name,drop_dismissed_at').then((r) => r.data || []),
     supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by,drop_note,drop_dismissed_at').ilike('file_type', 'video/%').then((r) => r.data || []),
     supabase.from('app_settings').select('value').eq('key', DROPS_RESET_KEY).maybeSingle().then((r) => r.data?.value || ''),
@@ -34,12 +35,16 @@ export async function fetchStatusRows(supabase, { internalColumn = true, day = t
     // so a client two weeks in is told apart from one running a year: the
     // low-leads flag says "still in learning phase" on the former.
     supabase.from('client_ad_start').select('client_id, first_spend_date, first_meta_spend_date, first_google_spend_date').then((r) => r.data || []).catch(() => []),
+    // The editor's dropped statics (src/lib/staticDrops.js), so the channel
+    // and the brief can say one is waiting, the way they do for a clip.
+    supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by,drop_note,drop_dismissed_at').eq('drop_kind', 'static').then((r) => r.data || []).catch(() => []),
   ])
   return {
     day,
     pipeline,
     legacy,
     starts,
+    statics,
     // A project without the view applied should not take the board down; the
     // account status alone still catches a disabled account.
     delivery: deliveryRes.error ? {} : Object.fromEntries((deliveryRes.data || []).map((r) => [r.client_id, r])),
@@ -80,11 +85,26 @@ export function statusFromRows(raw, { now = new Date() } = {}) {
     payBy.get(p.client_id).push(p)
   }
   const starts = new Map((raw.starts || []).map((r) => [r.client_id, { first: r.first_spend_date ? String(r.first_spend_date).slice(0, 10) : null, meta: Boolean(r.first_meta_spend_date), google: Boolean(r.first_google_spend_date) }]))
+  // The dropped statics waiting per client (src/lib/staticDrops.js): the
+  // same window and "start fresh" moment as the clips.
+  const staticFiles = new Map()
+  for (const f of raw.statics || []) {
+    if (!f?.client_id) continue
+    if (!staticFiles.has(f.client_id)) staticFiles.set(f.client_id, [])
+    staticFiles.get(f.client_id).push(f)
+  }
+  const publishedBy = new Map()
+  for (const p of raw.published || []) {
+    if (!p?.client_id) continue
+    if (!publishedBy.has(p.client_id)) publishedBy.set(p.client_id, [])
+    publishedBy.get(p.client_id).push(p)
+  }
 
   return pipeline.map(({ client, intake, result }) => {
     const rows = adDays.get(client.id) || []
     const start = starts.get(client.id) || {}
     return clientStatus({
+      statics: staticFiles.has(client.id) ? waitingStatics({ files: staticFiles.get(client.id), ads: publishedBy.get(client.id) || [], now, resetAt: raw.reset || '' }) : [],
       client,
       intake,
       result,

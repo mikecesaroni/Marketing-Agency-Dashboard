@@ -42,6 +42,17 @@ function clipLabel(w, hasMeta = true) {
 }
 
 /**
+ * A dropped static's line (2026-11-12, "send CRM message when new statics
+ * are dropped"): the ad's name, how many sizes, who dropped it, whether
+ * there is an account to publish into, the editor's note. Nothing to wait
+ * for: an image needs no transcode, so it is ready the moment it lands.
+ */
+function staticLabel(s, hasMeta = true) {
+  const n = Array.isArray(s.files) ? s.files.length : 0
+  return `${s.name}${n > 1 ? ` (${n} sizes)` : ''}${s.by ? ` from ${s.by}` : ''} · ${hasMeta ? 'ready to publish' : 'no Meta account to send it to'}${s.note ? ` · “${s.note}”` : ''}`
+}
+
+/**
  * How long a dropped clip is given to reach Meta before the channel hears
  * of it. The sweep sends it and marks it ready inside this, so the one
  * line posted (an alert is never repeated) can say "ready to publish"
@@ -82,6 +93,7 @@ const EMOJI = {
   waiting: '⏳',
   'google-sync': '🟠',
   clip: '🎬',
+  static: '🖼️',
   green: '🟢',
   onboarding: '⚪',
   paused: '⏸️',
@@ -288,6 +300,11 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
     for (const w of r.drop?.waiting || []) {
       clips.push({ client, key: 'clip', label: clipLabel(w, r.drop?.hasMeta !== false), href: '/content', at: w.at })
     }
+    // The editor's dropped statics sit in the same list: finished work
+    // waiting to go out, whichever shape it is.
+    for (const s of r.statics || []) {
+      clips.push({ client, key: 'static', label: staticLabel(s, r.drop?.hasMeta !== false), href: '/content', at: s.at })
+    }
     // Live on any channel: Meta, Google Search or Local Services.
     const live = Boolean(r.result?.launched ?? r.client.meta_ads_active) && !r.client.paused_at
     if (live && !flags.some((f) => AD_FLAGS.has(f.key))) {
@@ -348,6 +365,9 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
       amber: attention.length - red,
       toCall: new Set(attention.map((a) => a.client.id)).size,
       clips: clips.length,
+      // How many of those are dropped statics, so the subject can count
+      // them without calling them clips.
+      statics: clips.filter((c) => c.key === 'static').length,
       green: green.length,
       greenLeads: green.reduce((n, g) => n + g.leads7, 0),
       onboarding: onboarding.length,
@@ -365,7 +385,8 @@ export function briefSubject(model) {
   const c = model.counts
   const bits = []
   if (c.toCall) bits.push(`${c.toCall} to call`)
-  if (c.clips) bits.push(`${c.clips} clip${c.clips === 1 ? '' : 's'} to publish`)
+  // "clips" while the list is clips alone; with a static in it, just the count.
+  if (c.clips) bits.push(c.statics ? `${c.clips} to publish` : `${c.clips} clip${c.clips === 1 ? '' : 's'} to publish`)
   bits.push(`${c.green} running clean`)
   return `${model.weekly ? 'Monday brief and weekly status' : 'Morning brief'} · ${model.label} · ${bits.join(', ')}`
 }
@@ -397,7 +418,7 @@ export function briefSections(model) {
     })
   }
   if (model.clips.length) {
-    out.push({ key: 'clips', title: `To publish (${model.clips.length})`, lines: model.clips.map((c) => ({ emoji: EMOJI.clip, client: c.client, text: c.label, href: c.href })) })
+    out.push({ key: 'clips', title: `To publish (${model.clips.length})`, lines: model.clips.map((c) => ({ emoji: EMOJI[c.key] || EMOJI.clip, client: c.client, text: c.label, href: c.href })) })
   }
   if (model.green.length) {
     const names = model.green.map((g) => `${g.client.name} ${g.leads7}${g.leads7 > g.before ? '↑' : g.leads7 < g.before ? '↓' : ''}${g.isNew ? ' (new this week)' : ''}`).join(', ')
@@ -558,6 +579,11 @@ export function alertKeys(statusRows = [], { now = new Date() } = {}) {
       // The editor's note rides along: it is the one thing the publisher
       // needs that the file name cannot say ("post these a day apart").
       out.push({ key: `${client.id}:clip:${w.path}`, client, kind: 'clip', label: `New edit dropped in: ${clipLabel(w, hasMeta)}`, detail: '', href: '/content' })
+    }
+    // Each dropped static by its stamp: a second drop is a second post, and
+    // a published or cleared one goes quiet. No hold: nothing to wait for.
+    for (const s of r.statics || []) {
+      out.push({ key: `${client.id}:static:${s.stamp}`, client, kind: 'static', label: `New static dropped in: ${staticLabel(s, hasMeta)}`, detail: '', href: '/content' })
     }
   }
   return out

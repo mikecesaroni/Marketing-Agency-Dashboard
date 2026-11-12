@@ -90,8 +90,10 @@ the publish screen itself.
 
 "Make a separate box to drop in static images that our editor is making for
 clients. Make it so we can publish with a click like the video ones in
-content page." Its own box under the video board (and again at the top of
-the Publish door): **Dropped statics**, `src/components/StaticDropBoard.jsx`.
+content page." Its own box beside the video board, the two side by side and
+as deep as each other on a wide screen (stacked on a narrow one), on the hub
+and again at the top of the Publish door: **Dropped statics**,
+`src/components/StaticDropBoard.jsx`.
 Pick the client, type a note if there is one, drop the finished .png or .jpg
 files; the client's row appears underneath: "New static dropped in · tuneup ·
 dropped 2h ago by Kyle", with a thumbnail per size (each a download), a note
@@ -122,5 +124,11 @@ waiting until a published ad carries its stamp, for 30 days, after the same
 The rules are in `src/lib/staticDrops.js` (`planStaticDrop`, `sizeKeyFor`,
 `staticSets`, `waitingStatics`, `staticDrops`), pinned by
 `scripts/check-static-drops.mjs`; the uploads in `src/lib/staticDropStore.js`;
-the columns in `supabase/static-drops.sql`. Not yet: a Slack line or a brief
-line when a static is dropped (the clips have both).
+the columns in `supabase/static-drops.sql`. A dropped static reaches the
+channel the way a clip does ("send CRM message when new statics are
+dropped"): the alerts run posts "New static dropped in: tuneup (2 sizes)
+from Kyle · ready to publish · “run it Friday”" within the quarter hour, once
+per drop (keyed by stamp in `team_alerts`), and the morning brief lists it
+under To publish beside the clips until it is published or cleared
+(`statusRows.js` reads the dropped files and `waitingStatics` per client;
+`teamBrief.js` `staticLabel`, `alertKeys`).

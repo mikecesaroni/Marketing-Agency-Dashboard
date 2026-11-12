@@ -385,7 +385,7 @@ function DropIn({ clients, onDropped }) {
   )
 }
 
-export default function VideoDropBoard({ rows, clients, onDropped, onReset, compact = false }) {
+export default function VideoDropBoard({ rows, clients, onDropped, onReset, compact = false, className = '' }) {
   const [showAll, setShowAll] = useState(false)
   const [dismissError, setDismissError] = useState('')
   // Every waiting clip on the row, not just the one shown: "published manually" means
@@ -426,7 +426,7 @@ export default function VideoDropBoard({ rows, clients, onDropped, onReset, comp
   const hidden = withMeta.length - shown.length
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+    <section className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 ${className}`} data-video-board>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-900">This week&rsquo;s video drops</h2>
