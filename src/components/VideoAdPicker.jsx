@@ -3,7 +3,7 @@ import Button from './ui/Button'
 import { registerAdVideo, adVideoStatus } from '../lib/metaPublish'
 import { suggestTextOptions, suggestVideoCopy, suggestVideoVariations } from '../lib/adCopy'
 import { anglesAvailable, nthPerField } from '../lib/adCopyOptions'
-import { patchFromWritten } from '../lib/textOptions'
+import { hasTextOptions, patchAddingOptions, patchFromWritten } from '../lib/textOptions'
 import TextOptionsEditor from './TextOptionsEditor'
 import {
   MAX_VIDEO_BYTES,
@@ -332,33 +332,39 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     }
   }
 
-  // THE THREE VERSIONS, UNASKED. A ticked clip whose copy is still blank gets
-  // its three versions written without a click, once, as soon as the
-  // transcript has landed (or transcription has given up: no speech, no key),
-  // so every clip at least gets the business's facts and the note. Version A
-  // is applied so the clip can publish without another click; the other two
-  // wait on the cards for anyone who prefers them.
+  // THREE OF EACH, UNASKED. A ticked clip gets Meta's text options (three
+  // primary texts, three headlines, three descriptions) written without a
+  // click, once, as soon as the transcript has landed (or transcription has
+  // given up: no speech, no key). Until 2026-11-12 this wrote the three
+  // VERSIONS and applied version A; now it writes the three of each ("make
+  // so it auto makes the 3 ad copy variations instead of me having to
+  // click, for statics and videos"), the first of each into the fields so
+  // the clip can publish as it is. A clip that already has words keeps them
+  // as option one and gets two more of each; the versions stay a button.
   useEffect(() => {
-    if (writingVersions) return
+    if (writingVersions || writingOptions) return
     for (const v of videos || []) {
       const path = v.storage_path
       if (!picked.includes(path) || transcribing[path]) continue
       const heard = v.transcript || v.transcript_error || transcriptNote[path]
       if (!heard) continue
-      if (copies[path]?.primary_text?.trim() || versions[path]) continue
+      const c = copies[path] || {}
+      if (hasTextOptions(c)) continue
       // What the last visit kept, read off the row itself. The seed above
       // lands a render later than the list does, and on a reload this ran
-      // first, saw an empty page, and paid for versions the row already
+      // first, saw an empty page, and paid for words the row already
       // carried ("when I refresh the publish page it remade all the ad
-      // copies it already made before").
-      if (versionsFromRow(v) || copyFromRow(v, null)) continue
+      // copies it already made before"). Options kept on the row are done;
+      // words kept on the row are waited for, then topped up.
+      const kept = copyFromRow(v, null)
+      if (kept && (hasTextOptions(kept) || (kept.primary_text && !String(c.primary_text || '').trim()))) continue
       if (autoWrote.current.has(path)) continue
       autoWrote.current.add(path)
-      writeVersions(v, { auto: true })
+      writeTextOptions(v, { auto: true })
       return
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videos, picked, copies, versions, writingVersions, transcribing, transcriptNote])
+  }, [videos, picked, copies, writingVersions, writingOptions, transcribing, transcriptNote])
 
   // A clip ticked from outside (the board's "click to publish") was picked
   // before this list existed, so its copy record has no Meta ids and no
@@ -409,7 +415,10 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
   // mixed per viewer. Written from the same facts, note and transcript as the
   // versions; the first of each lands in the fields, the other two in the
   // editor under them, all editable. The copy memory keeps them with the rest.
-  const writeTextOptions = async (video) => {
+  // `auto`: written without a click, so words already in the fields stay as
+  // option one and the written lines become the extras (patchAddingOptions);
+  // a click replaces what was there, like picking a version.
+  const writeTextOptions = async (video, { auto = false } = {}) => {
     const path = video.storage_path
     setWritingOptions(path)
     setError('')
@@ -427,14 +436,15 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
           description: copy.description || '',
         },
       })
-      const patch = patchFromWritten(out)
-      if (!patch.primary_text) {
+      const adding = auto && Boolean(String(copy.primary_text || '').trim())
+      const patch = adding ? patchAddingOptions(copy, out) : patchFromWritten(out)
+      if (!Object.keys(patch).length || (!adding && !patch.primary_text)) {
         setOptionsNote((prev) => ({ ...prev, [path]: out.note || 'The copy assistant did not return the three lists. Try again.' }))
         return
       }
       onCopy(path, patch)
-      setChosen((prev) => ({ ...prev, [path]: null }))
-      setOptionsNote((prev) => ({ ...prev, [path]: out.note || '' }))
+      if (!adding) setChosen((prev) => ({ ...prev, [path]: null }))
+      setOptionsNote((prev) => ({ ...prev, [path]: `${auto ? 'Three of each written on their own; Meta mixes them. ' : ''}${out.note || ''}`.trim() }))
     } catch (err) {
       setError(err.message)
     } finally {

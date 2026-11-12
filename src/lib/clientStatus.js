@@ -34,6 +34,7 @@ function daysSince(when, today) {
 }
 
 const money = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`
+const capital = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '')
 
 /**
  * Leads and spend from the ad days: { leads7, leads14, spend7, spend14, lastLeadDate }.
@@ -92,6 +93,28 @@ export const NO_LEADS_MIN_DAYS = 7
 export const LEARNING_DAYS = 14
 
 /**
+ * Why the leads may be low, from the channels: which are live and which the
+ * package still owes. "Only Google live, Meta not yet" is the usual answer
+ * ("this looks bad; make sure it states that only Google is live and not
+ * Meta yet; we want to know why the leads are so low, and typically it is
+ * because it is new, or not fully live on both platforms, or still
+ * learning", 2026-11-12). Read off nextSteps(): `live` says what runs,
+ * and an open go-live (Meta) or google-publish (Google) step says the plan
+ * owes that channel. Empty when every owed channel is live, or when the
+ * plan is not known (the Node checks pass a bare result).
+ */
+export function channelWords(result) {
+  const live = result?.live
+  if (!live) return ''
+  const steps = Array.isArray(result?.steps) ? result.steps : []
+  const open = (key) => steps.some((s) => s?.key === key && !s.done)
+  const on = [live.meta && 'Meta', live.google && 'Google', live.lsa && 'Local Services'].filter(Boolean)
+  const owed = [!live.meta && open('go-live') && 'Meta', !live.google && open('google-publish') && 'Google'].filter(Boolean)
+  if (!on.length || !owed.length) return ''
+  return `only ${on.join(' and ')} live, ${owed.join(' and ')} not yet`
+}
+
+/**
  * ctx:
  *   client    the clients row
  *   result    nextSteps() for the client
@@ -142,14 +165,18 @@ export function clientFlags(ctx) {
   // Spending with nothing to show for it. Seven quiet days on a running
   // account is a call, not a wait. Only once the ads have run a week: a
   // campaign a few days old has not had its chance yet.
+  // The channels, for the why on either leads flag: "only Google live, Meta
+  // not yet" says at once that this is one channel's leads.
+  const channels = channelWords(result)
   if (live && !ctx.alert && leads.spend14 > 0 && leads.spendDays14 >= NO_LEADS_MIN_DAYS) {
     const since = leads.lastLeadDate ? daysSince(leads.lastLeadDate, today) : null
     if (leads.leads14 === 0 || (since !== null && since >= 7)) {
+      const base = since === null ? (leads.spendDays14 >= 14 ? 'No leads in 14 days' : `No leads in ${leads.spendDays14} days of ads`) : `No leads for ${since} days`
       add({
         key: 'no-leads',
         severity: 'red',
-        label: since === null ? (leads.spendDays14 >= 14 ? 'No leads in 14 days' : `No leads in ${leads.spendDays14} days of ads`) : `No leads for ${since} days`,
-        detail: `${money(leads.spend14)} spent over ${leads.spendDays14} days for ${leads.leads14} lead${leads.leads14 === 1 ? '' : 's'}. Look at the ads, the offer and the form before they ask.`,
+        label: channels ? `${base}: ${channels}` : base,
+        detail: `${money(leads.spend14)} spent over ${leads.spendDays14} days for ${leads.leads14} lead${leads.leads14 === 1 ? '' : 's'}.${channels ? ` ${capital(channels)}, so this is one channel's leads.` : ''} Look at the ads, the offer and the form before they ask.`,
         href: `/client/${c.id}#ad-performance`,
       })
     }
@@ -164,11 +191,14 @@ export function clientFlags(ctx) {
     const started = ctx.adsStart ? daysSince(ctx.adsStart, today) : null
     const learning = started !== null && started < LEARNING_DAYS
     const base = n === 0 ? 'No leads this week' : `Only ${n} lead${n === 1 ? '' : 's'} this week`
+    // The why, in the label itself, because the brief shows only the label:
+    // the channels first (one platform's leads), then the learning phase.
+    const why = [channels, learning ? `still in learning phase (ads started ${started} days ago)` : ''].filter(Boolean)
     add({
       key: 'low-leads',
       severity: 'amber',
-      label: learning ? `${base}, still in learning phase (ads started ${started} days ago)` : base,
-      detail: `${money(leads.spend7)} spent over ${leads.spendDays7} days${n ? ` for ${money(leads.spend7 / n)} a lead` : ''}. ${
+      label: why.length ? `${base}: ${why.join('; ')}` : base,
+      detail: `${money(leads.spend7)} spent over ${leads.spendDays7} days${n ? ` for ${money(leads.spend7 / n)} a lead` : ''}.${channels ? ` ${capital(channels)}, so this is one channel's leads.` : ''} ${
         learning
           ? `Ads started ${String(ctx.adsStart).slice(0, 10)}: Meta's learning phase runs about a week and wants around 50 leads an ad set before the numbers mean much, so this is not a verdict yet. Leave the ads alone (edits reset learning) and judge on the 7 to 14 day trend.`
           : 'Two or fewer in a week is not delivering: look at the ads, the offer and the form.'

@@ -105,6 +105,32 @@ export function patchFromWritten(written = {}) {
   return patch
 }
 
+/**
+ * The copy patch that ADDS the assistant's lists to words already there,
+ * for the write nobody clicked for (2026-11-12: "make so it auto makes the
+ * 3 ad copy variations instead of me having to click, for statics and
+ * videos"). A part with a value keeps it as option one and takes the
+ * written lines that differ as its extras; a blank part takes the written
+ * first and the rest. Three of each in all, so an ad that had one of each
+ * ends with two more and nothing anyone wrote is replaced.
+ */
+export function patchAddingOptions(current = {}, written = {}, total = 3) {
+  const patch = {}
+  const lists = { primary_text: written?.primaryTexts, headline: written?.headlines, description: written?.descriptions }
+  for (const [main, more] of Object.entries(MORE_FIELDS)) {
+    const l = cleanList(lists[main])
+    if (!l.length) continue
+    const have = clean(current?.[main])
+    if (have) {
+      patch[more] = cleanList([...(Array.isArray(current?.[more]) ? current[more] : []), ...l.filter((s) => s !== have)], Math.max(0, total - 1))
+    } else {
+      patch[main] = l[0]
+      patch[more] = l.slice(1, total)
+    }
+  }
+  return patch
+}
+
 /** The extras as they are saved on a static (saved_ads.more_copy), or null with none. */
 export function moreCopyToSave(copy = {}) {
   const more = moreOf(copy)

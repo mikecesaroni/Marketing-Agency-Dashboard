@@ -14,6 +14,7 @@ import {
   moreFromSaved,
   moreOf,
   optionLists,
+  patchAddingOptions,
   patchFromWritten,
   textOptionsForPublish,
   textOptionsLabel,
@@ -31,6 +32,13 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
 check('Meta takes five of each', MAX_TEXT_OPTIONS, 5)
 check('a list is trimmed, distinct, non-blank and capped', cleanList([' a ', 'a', '', 'b', 'c', 'd', 'e', 'f'], 5), ['a', 'b', 'c', 'd', 'e'])
+
+// The write nobody clicked for (2026-11-12): words already there stay as
+// option one and the written lines become the extras, three of each in all.
+check('adding options to words keeps them first and takes two more of each', patchAddingOptions({ primary_text: 'Keep me', headline: '', description: 'Old desc' }, { primaryTexts: ['Keep me', 'Two', 'Three', 'Four'], headlines: ['H1', 'H2', 'H3'], descriptions: ['D1', 'Old desc', 'D3'] }), { more_primary_texts: ['Two', 'Three'], headline: 'H1', more_headlines: ['H2', 'H3'], more_descriptions: ['D1', 'D3'] })
+check('...an extra already typed is kept ahead of the written ones', patchAddingOptions({ primary_text: 'A', more_primary_texts: ['B'] }, { primaryTexts: ['C', 'D'] }), { more_primary_texts: ['B', 'C'] })
+check('...and a part the assistant left empty is left alone', patchAddingOptions({ primary_text: 'A' }, { headlines: ['H'] }), { headline: 'H', more_headlines: [] })
+check('the publish page and the clip picker write the three of each on their own, adding to words already there', [read('src/components/PublishToMetaPanel.jsx').includes('writeTextOptions(stamp, { auto: true })'), read('src/components/VideoAdPicker.jsx').includes('writeTextOptions(v, { auto: true })'), read('src/components/VideoAdPicker.jsx').includes('patchAddingOptions(copy, out)'), read('src/components/PublishToMetaPanel.jsx').includes('patchAddingOptions(cur, out)')], [true, true, true, true])
 
 const copy = { primary_text: 'Main', headline: 'H1', description: '', more_primary_texts: ['Second', ' Main ', '', 'Third'], more_headlines: ['H2'], more_descriptions: [] }
 check('the extras never repeat the main field and drop blanks', moreOf(copy), { more_primary_texts: ['Second', 'Third'], more_headlines: ['H2'], more_descriptions: [] })

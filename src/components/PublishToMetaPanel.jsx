@@ -14,12 +14,12 @@ import { guessAdSeason, seasonMeta } from '../lib/adSeason'
 import { metaAdName, wcName } from '../lib/adNaming'
 import { ago } from '../lib/contentHub'
 import { suggestImageFeedCopy, suggestTextOptions } from '../lib/adCopy'
-import { moreFromSaved, moreOf, patchFromWritten, textOptionsForPublish } from '../lib/textOptions'
+import { hasTextOptions, moreFromSaved, moreOf, patchAddingOptions, patchFromWritten, textOptionsForPublish } from '../lib/textOptions'
 import TextOptionsEditor from './TextOptionsEditor'
 import { isPublishable } from '../lib/adVideos'
 import { looseMatch } from '../lib/helpActions'
 import { useHelpActions } from '../lib/useHelpActions'
-import { feedCopyFromOptions, feedCopyInstruction, mergeWritten, needsFeedCopy, nextToWrite, staticCurrent } from '../lib/publishCopy'
+import { feedCopyFromOptions, feedCopyInstruction, mergeWritten, needsFeedCopy, staticCurrent } from '../lib/publishCopy'
 import { creativeNeeds, describeAdsetDestination, formFromChecks, linkFromChecks } from '../lib/publishDestination'
 import {
   describeLaunch,
@@ -1353,8 +1353,10 @@ export default function PublishToMetaPanel({
   // painted words sent along so the lines match them. The first of each
   // lands in the fields, the rest in the editor under them. An explicit
   // click, so it replaces what was there, like picking a version.
+  // `auto` (the write nobody clicked for, below) keeps words already in the
+  // fields as option one and adds the written lines as the extras.
   const [writingOptions, setWritingOptions] = useState('')
-  const writeTextOptions = async (stamp) => {
+  const writeTextOptions = async (stamp, { auto = false } = {}) => {
     const s = sets.find((x) => String(x.stamp) === stamp)
     if (!s) return
     wroteCopy.current.add(stamp)
@@ -1363,13 +1365,14 @@ export default function PublishToMetaPanel({
     try {
       const cur = copies[stamp] || {}
       const out = await suggestTextOptions({ client, intake, medium: 'image', current: staticCurrent(s.recipe, cur) })
-      const patch = patchFromWritten(out)
-      if (!patch.primary_text) {
+      const adding = auto && Boolean(String(cur.primary_text || '').trim())
+      const patch = adding ? patchAddingOptions(cur, out) : patchFromWritten(out)
+      if (!Object.keys(patch).length || (!adding && !patch.primary_text)) {
         setCopyNotes((prev) => ({ ...prev, [stamp]: out.note || 'The copy assistant did not return the three lists. Try again.' }))
         return
       }
       setCopies((prev) => ({ ...prev, [stamp]: { ...prev[stamp], ...patch } }))
-      setCopyNotes((prev) => ({ ...prev, [stamp]: `Three of each written; Meta mixes them. ${out.note || ''}`.trim() }))
+      setCopyNotes((prev) => ({ ...prev, [stamp]: `Three of each written${auto ? ' on their own' : ''}; Meta mixes them. ${out.note || ''}`.trim() }))
     } catch (err) {
       setCopyNotes((prev) => ({ ...prev, [stamp]: err.message }))
     } finally {
@@ -1377,15 +1380,27 @@ export default function PublishToMetaPanel({
     }
   }
 
+  // THREE OF EACH, UNASKED (2026-11-12: "make so it auto makes the 3 ad copy
+  // variations instead of me having to click, for statics and videos").
+  // The next ticked static with one of each or nothing gets its text
+  // options written, once, in the order ticked, one at a time so "tick the
+  // newest 3" does not burst. A copy record that is not there yet means the
+  // saved ads have not been read into the page: on a reload the ticks come
+  // back before the words do, and asking then paid for words the saved ad
+  // already carried. Options the saved ad carries arrive with the seed and
+  // read as done.
   useEffect(() => {
-    if (writingCopy) return
-    const stamp = nextToWrite({ picked, copies, done: wroteCopy.current })
-    // The saved ad itself is the last word: words it already carries are
-    // never written again, whatever the page's copy record says this render.
-    const s = stamp ? sets.find((x) => String(x.stamp) === stamp) : null
-    if (s && !String(s.recipe?.primary_text || '').trim()) writeFeedCopy(stamp)
+    if (writingCopy || writingOptions) return
+    for (const stamp of picked) {
+      if (wroteCopy.current.has(stamp)) continue
+      if (copies[stamp] === undefined) continue
+      if (hasTextOptions(copies[stamp])) continue
+      if (!sets.some((x) => String(x.stamp) === stamp)) continue
+      writeTextOptions(stamp, { auto: true })
+      return
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [picked, copies, sets, writingCopy])
+  }, [picked, copies, sets, writingCopy, writingOptions])
 
   const blockers = []
   if (missing.length > 0) blockers.push('missing client details')

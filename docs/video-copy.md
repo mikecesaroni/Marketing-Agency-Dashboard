@@ -135,3 +135,22 @@ streams the file itself, so the 250MB phone .mov files in the bucket and in
 Drive work; Whisper's upload cap does not fit them. The file URL it fetches
 is the same one Meta downloads from: the public bucket for uploads, a
 short-lived grant on the drive-video function for Drive clips.
+
+## Three of each, unasked (2026-11-12)
+
+"Make so it auto makes the 3 ad copy variations instead of me having to
+click, for statics and videos." The publish page no longer waits for the
+"✨ Write 3 of each" button. A ticked static or clip with one of each (or
+nothing) gets Meta's text options written on its own, once: three primary
+texts, three headlines, three descriptions. With no words yet, the first of
+each lands in the fields and the rest in the editor under them; with words
+already there (a Studio-made static's feed copy, a clip's picked version,
+anything typed), those stay as option one and two more of each are added
+(`patchAddingOptions` in `src/lib/textOptions.js`), so nothing anyone wrote
+is replaced. For clips this is the write that used to make the three
+VERSIONS and apply version A; the versions are still a button on the card.
+The copy memory keeps the options with the rest (`ad_videos.copy`,
+`saved_ads.more_copy`), so a reload reads them back instead of paying
+again, and a creative that already carries options is never written for
+twice. The button remains for a rewrite, which replaces what is there.
+`scripts/check-text-options.mjs` pins the merge and the two call sites.
