@@ -185,3 +185,22 @@ the form (`call_to_actions`); without it Meta's answer was a blank
 9:16 to Stories and Reels", the sizes note under the list says the same, and
 the result reads "mixed, on every size of the ad, each size on its own
 placements". See docs/video-copy.md.
+
+**One size missing** ("send a CRM message when the drop is missing a
+size"). A set with the 4:5 and no 9:16 (or the other way round) is flagged
+everywhere it shows: its board row carries an amber chip, "⚠ tuneup: 4:5
+only, no 9:16 · add the 1080 × 1920", and the file picked there goes under
+the same ad (`addStaticSize`, the pixels checked so the 4:5 cannot be added
+as the 9:16); the publish row says "No 1080 × 1920 (9:16): Meta will crop
+the 4:5 for Stories and Reels"; the Slack channel gets a warning in place
+of the plain line, "⚠️ Static dropped in with one size: tuneup has the 4:5
+only, missing the 1080 × 1920 (9:16) for Stories and Reels, from Kyle. Add
+it on the Content page, or Meta will crop the 4:5 there."; and the morning
+brief reads "tuneup (4:5 only, missing the 1080 × 1920 (9:16) for Stories
+and Reels)" under To publish. `staticSizeGap`, `staticGapLine` in
+`src/lib/staticDrops.js`; `staticAlertLabel` in `teamBrief.js`.
+
+**The words, written ahead.** A dropped static (or clip) gets its three
+text options written within seconds of landing, by `copy-ahead`, so the
+publish page opens with the fields full: docs/video-copy.md, "Written
+ahead".

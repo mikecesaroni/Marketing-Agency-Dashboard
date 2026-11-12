@@ -19,7 +19,9 @@ import {
   staticAdPlan,
   staticDrops,
   staticExt,
+  staticGapLine,
   staticPath,
+  staticSizeGap,
   staticSets,
   staticStem,
   validateStatic,
@@ -73,6 +75,14 @@ check('a second 4:5 in one drop is refused with the reason, not made into anothe
 
 check('the ad is named from what was typed, else the 4:5\'s file name without the size words, else the 9:16\'s, else "static"', [staticAdName(' Fall sale ', { feed: { name: 'x.png' } }), staticAdName('', { feed: { name: 'Tuneup-4x5.png' }, story: { name: 'tuneup-9x16.png' } }), staticAdName('', { story: { name: 'coupon_story.jpg' } }), staticAdName('', {})], ['Fall sale', 'Tuneup', 'coupon', 'static'])
 check('one ad from the boxes: the files under one stamp, in size order, each in its own format', staticAdPlan({ story: { name: 'b.PNG' }, feed: { name: 'a.jpeg' } }), [{ key: 'feed', ext: 'jpg' }, { key: 'story', ext: 'png' }])
+check('a set with one of the two sizes says which it has and which it lacks; both or neither is no gap', [staticSizeGap(['feed']), staticSizeGap(['story']), staticSizeGap(['feed', 'story']), staticSizeGap(['square']), staticGapLine(['feed']), staticGapLine(['square', 'story'])], [
+  { have: '4:5', haveKey: 'feed', missingKey: 'story', label: '1080 × 1920', ratio: '9:16', where: 'Stories and Reels' },
+  { have: '9:16', haveKey: 'story', missingKey: 'feed', label: '1080 × 1350', ratio: '4:5', where: 'the feeds' },
+  null,
+  null,
+  '4:5 only, missing the 1080 × 1920 (9:16) for Stories and Reels',
+  '9:16 only, missing the 1080 × 1350 (4:5) for the feeds',
+])
 check('what is missing: both, one, none', [slotsMissing({}), slotsMissing({ feed: { name: 'a.png' } }), slotsMissing({ story: { name: 'b.png' } }), slotsMissing({ feed: { name: 'a.png' }, story: { name: 'b.png' } })], [
   'Drop the images first.',
   'No 1080 × 1920 (9:16): Meta will crop the 4:5 for Stories and Reels. Add it to be sure.',

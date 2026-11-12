@@ -20,6 +20,7 @@ import { isPublishable } from '../lib/adVideos'
 import { looseMatch } from '../lib/helpActions'
 import { useHelpActions } from '../lib/useHelpActions'
 import { feedCopyFromOptions, feedCopyInstruction, mergeWritten, needsFeedCopy, staticCurrent } from '../lib/publishCopy'
+import { staticSizeGap } from '../lib/staticDrops'
 import { creativeNeeds, describeAdsetDestination, formFromChecks, linkFromChecks } from '../lib/publishDestination'
 import {
   describeLaunch,
@@ -684,6 +685,8 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
   const preview = set.ordered.find((o) => o.size.key === 'feed') || set.ordered[0]
   const thumb = preview?.file?.url
   const sizes = set.ordered.map((o) => o.size.key)
+  // A dropped static with one of its two sizes missing.
+  const gap = staticSizeGap(sizes)
 
   return (
     <li className={`border rounded-lg transition ${checked ? 'border-orange-400 bg-orange-50/40' : 'border-slate-200'}`} data-static-row>
@@ -718,6 +721,11 @@ function CreativeRow({ set, checked, onToggle, copy, onCopy, publishedBefore, op
               ? `one size (${SIZE_RATIO[sizes[0]] || sizes[0]}), served everywhere`
               : `one ad, ${sizes.length} sizes: ${sizes.map((k) => SIZE_PLACE[k] || k).join(' · ')}`}
           </p>
+          {gap && (
+            <p className="text-[11px] text-amber-700" data-static-gap>
+              No {gap.label} ({gap.ratio}): Meta will crop the {gap.have} for {gap.where}. Add it on the Content page to be sure.
+            </p>
+          )}
           {publishedBefore > 0 && (
             <p className="text-[11px] text-amber-700">
               Already published {publishedBefore === 1 ? 'once' : `${publishedBefore} times`}

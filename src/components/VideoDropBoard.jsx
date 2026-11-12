@@ -5,6 +5,7 @@ import { DROP_STATES, clipMetaWords, dropStats, personName } from '../lib/videoL
 import { isVideoFile, validateVideo } from '../lib/adVideos'
 import { dismissClips, downloadUrl, setDropNote, uploadVideo } from '../lib/adVideoStore'
 import { registerAdVideo } from '../lib/metaPublish'
+import { writeCopyAhead } from '../lib/copyAhead'
 import { readMe, saveMe } from '../lib/tasksData'
 
 /**
@@ -265,9 +266,15 @@ function DropIn({ clients, onDropped }) {
       setDone({ client: chosen, clips: dropped, note: note.trim() })
       setNote('')
       onDropped?.()
+      // The words, started now: transcript, then three of each, written by
+      // copy-ahead while the clip is still transcoding (src/lib/copyAhead.js).
+      writeCopyAhead(chosen.id)
     } catch (err) {
       setError(err.message)
-      if (dropped.length > 0) onDropped?.()
+      if (dropped.length > 0) {
+        onDropped?.()
+        writeCopyAhead(chosen.id)
+      }
     } finally {
       setBusy('')
     }

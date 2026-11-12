@@ -197,6 +197,27 @@ export function staticAdPlan(files = {}) {
     .map((key) => ({ key, ext: staticExt(files[key].name) }))
 }
 
+/**
+ * A dropped set with one of the two sizes: which it has and which it lacks,
+ * for the board, the publish row, the Slack alert and the brief ("send a
+ * CRM message when the drop is missing a size"). Null when it has both, or
+ * neither (a square-only drop is its own thing, and Meta crops it everywhere).
+ * keys: the size keys the set has, e.g. ['feed'].
+ */
+export function staticSizeGap(keys = []) {
+  const has = new Set((keys || []).map(String))
+  const have = SLOTS.find((s) => has.has(s.key))
+  const missing = SLOTS.find((s) => !has.has(s.key))
+  if (!have || !missing) return null
+  return { have: have.ratio, haveKey: have.key, missingKey: missing.key, label: missing.label, ratio: missing.ratio, where: missing.short }
+}
+
+/** "4:5 only, missing the 1080 × 1920 (9:16) for Stories and Reels", or ''. */
+export function staticGapLine(keys = []) {
+  const gap = staticSizeGap(keys)
+  return gap ? `${gap.have} only, missing the ${gap.label} (${gap.ratio}) for ${gap.where}` : ''
+}
+
 /** What is still missing before the ad goes out whole: '' when both boxes are full. */
 export function slotsMissing(files = {}) {
   const missing = SLOTS.filter((s) => !files?.[s.key])

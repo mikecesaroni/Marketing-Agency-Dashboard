@@ -130,6 +130,37 @@ The emoji policy (docs/emojis-in-ad-copy.md) stands for everything else:
 the house style is what this button writes, and it runs against the plain
 copy on cost per lead like any other test.
 
+## Written ahead (2026-11-12, later)
+
+"When statics or videos are dropped, the CRM already starts making the ad
+copies, so when I go to click publish I don't have to wait for all the ad
+copies to be written. Also make it so it does this for what's already
+dropped in the CRM and hasn't been published yet."
+
+The three of each are now written by `supabase/functions/copy-ahead`, on a
+schedule (every two minutes on the odd minute, `supabase/copy-ahead.sql`;
+video-sweep has the even one) and the moment a drop lands (the two drop
+boxes call it with the client, `src/lib/copyAhead.js`, fire and forget).
+Every run looks at every dropped static (`saved_ads.dropped_by` set, last
+30 days) and every dropped clip (a CRM upload with its `ad_videos` row in
+the client's current account) that has no text options yet, is not
+published and is not cleared, so the backlog already in the CRM clears on
+its own. A static's words come from its name (the hook) and the client's
+facts, exactly the publish page's ask; a clip is sent for its transcript
+first (`transcribe-video`) and written on the next run from what is said
+in it, or from the note and the facts when transcription gave up. The words
+land where the publish page keeps them (`saved_ads.primary_text`,
+`headline`, `description`, `more_copy`; `ad_videos.copy`), words already
+typed staying as option one, so the page opens with the fields full and
+writes nothing; it still writes for whatever the sweep has not reached.
+
+A row is claimed (`copy_requested_at`, `transcribe_requested_at`) before
+anything is asked for, so the schedule and a nudge running at once never
+pay for the same words twice; a claim with nothing written after twenty
+minutes is tried again, a failure (`copy_error`) after six hours. Three
+writes and two transcriptions per run, in parallel. `{ action: 'preview' }`
+lists what a run would do. Pinned by `scripts/check-copy-ahead.mjs`.
+
 ## Switching it on
 
 Transcription needs one secret: `DEEPGRAM_API_KEY`, under Project Settings >

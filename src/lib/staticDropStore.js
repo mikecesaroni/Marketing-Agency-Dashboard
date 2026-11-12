@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import { staticAdName, staticAdPlan, staticPath, validateStatic } from './staticDrops'
+import { staticAdName, staticAdPlan, staticExt, staticPath, validateStatic } from './staticDrops'
 import { dropNote } from './videoLaunch'
 
 /**
@@ -83,6 +83,36 @@ export async function uploadStaticAd({ clientId, name = '', files = {}, uploaded
   // in the gallery and the words are written again on the next visit.
   await supabase.from('saved_ads').insert({ client_id: clientId, stamp, hook: adName || null, dropped_by: who }).then(() => {}, () => {})
   return { stamp, name: adName, files: uploaded }
+}
+
+/**
+ * The size a drop was missing, added to the same set later: the file goes
+ * under the set's stamp as that size, with its own client_files row (the
+ * set's note on it too, so the board keeps reading the note whichever file
+ * comes first). The saved_ads row already exists.
+ */
+export async function addStaticSize({ clientId, stamp, key, file, uploadedBy = '', note = '' }) {
+  const problem = validateStatic(file)
+  if (problem) throw new Error(problem)
+  const path = staticPath(clientId, String(stamp), key, staticExt(file.name))
+  const { error: upErr } = await supabase.storage.from('client-files').upload(path, file, { contentType: file.type || 'image/png', upsert: true })
+  if (upErr) throw upErr
+  const { error } = await supabase.from('client_files').insert({
+    client_id: clientId,
+    file_name: file.name,
+    file_type: file.type || 'image/png',
+    file_size: file.size,
+    storage_path: path,
+    description: 'Dropped static',
+    uploaded_by: String(uploadedBy || '').trim() || null,
+    drop_note: dropNote(note) || null,
+    drop_kind: 'static',
+  })
+  if (error) {
+    await supabase.storage.from('client-files').remove([path])
+    throw error
+  }
+  return { path, name: file.name, key }
 }
 
 /** "Clear": takes dropped statics off the board without publishing them here. */

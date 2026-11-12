@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ago } from '../lib/contentHub'
 import { personName } from '../lib/videoLaunch'
-import { SLOTS, assignSlots, isStaticFile, publishStaticHref, slotFit, slotsMissing, staticAdName, validateStatic } from '../lib/staticDrops'
-import { dismissStatics, measureImage, uploadStaticAd } from '../lib/staticDropStore'
+import { SLOTS, assignSlots, isStaticFile, publishStaticHref, slotFit, slotsMissing, staticAdName, staticSizeGap, validateStatic } from '../lib/staticDrops'
+import { addStaticSize, dismissStatics, measureImage, uploadStaticAd } from '../lib/staticDropStore'
+import { writeCopyAhead } from '../lib/copyAhead'
 import { downloadUrl, setDropNote } from '../lib/adVideoStore'
 import { publicUrl } from '../lib/savedAds'
 import { readMe, saveMe } from '../lib/tasksData'
@@ -48,7 +49,54 @@ function Thumb({ file }) {
   )
 }
 
-function Row({ row, onDismiss, onNote }) {
+/**
+ * The size a drop is missing, and the way to add it: a chip naming the
+ * size, with a file picker that puts the file under the same stamp. The
+ * pixels are checked, so the 4:5 cannot be added as the 9:16.
+ */
+function MissingSize({ clientId, set, onAdded, onError }) {
+  const input = useRef(null)
+  const [busy, setBusy] = useState(false)
+  const gap = staticSizeGap(set.files.map((f) => f.key))
+  if (!gap) return null
+  const add = async (file) => {
+    if (!file) return
+    setBusy(true)
+    onError('')
+    try {
+      const px = await measureImage(file)
+      const fit = slotFit(px.width, px.height, gap.missingKey)
+      if (fit.key !== gap.missingKey) throw new Error(`${file.name} is ${px.width} × ${px.height}, a ${fit.key === 'feed' ? '4:5' : '9:16'}. ${set.name} needs the ${gap.label} (${gap.ratio}).`)
+      await addStaticSize({ clientId, stamp: set.stamp, key: gap.missingKey, file, uploadedBy: readMe(), note: set.note })
+      onAdded()
+    } catch (err) {
+      onError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200" data-missing-size={gap.missingKey}>
+      ⚠ {set.name}: {gap.have} only, no {gap.ratio}
+      <input
+        ref={input}
+        type="file"
+        accept={ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          e.target.value = ''
+          add(file)
+        }}
+      />
+      <button type="button" disabled={busy} onClick={() => input.current?.click()} className="underline hover:text-amber-950 disabled:opacity-50" title={`Add the ${gap.label} to this ad; it goes out on ${gap.where}`}>
+        {busy ? 'adding…' : `add the ${gap.label}`}
+      </button>
+    </span>
+  )
+}
+
+function Row({ row, onDismiss, onNote, onAdded, onError }) {
   const first = row.waiting[0]
   const names = row.waiting.map((w) => w.name).join(', ')
   const notes = row.waiting.filter((w) => w.note)
@@ -81,8 +129,12 @@ function Row({ row, onDismiss, onNote }) {
         </Link>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-[11px]">
-        {/* The pictures themselves, one per size, each a download. */}
+        {/* The pictures themselves, one per size, each a download; a set
+            with one of its two sizes missing says so, with the way to add it. */}
         {row.waiting.flatMap((w) => w.files.map((f) => <Thumb key={f.path} file={f} />))}
+        {row.waiting.map((w) => (
+          <MissingSize key={`gap-${w.stamp}`} clientId={row.id} set={w} onAdded={onAdded} onError={onError} />
+        ))}
         {onNote && (
           <button
             type="button"
@@ -322,6 +374,9 @@ function DropIn({ clients, onDropped }) {
       setNote('')
       reset()
       onDropped?.()
+      // The words, started now: three of each written by copy-ahead before
+      // anyone opens the publish page (src/lib/copyAhead.js).
+      writeCopyAhead(chosen.id)
     } catch (err) {
       setError(err.message)
       onDropped?.()
@@ -517,7 +572,7 @@ export default function StaticDropBoard({ rows, clients, onDropped, className = 
       ) : (
         <ul className="mt-3 space-y-1.5">
           {rows.map((r) => (
-            <Row key={r.id} row={r} onDismiss={dismiss} onNote={editNote} />
+            <Row key={r.id} row={r} onDismiss={dismiss} onNote={editNote} onAdded={() => onDropped?.()} onError={setError} />
           ))}
         </ul>
       )}

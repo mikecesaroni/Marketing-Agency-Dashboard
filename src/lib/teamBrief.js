@@ -27,6 +27,7 @@
 import { TIER_BY_NUMBER } from './clientTiers.js'
 import { daysBetween, longDay, shortDay } from './dates.js'
 import { dashedId } from './googleAdsId.js'
+import { staticGapLine, staticSizeGap } from './staticDrops.js'
 import { clipMetaWords } from './videoLaunch.js'
 import { money, weeklyLine } from './weeklyStatus.js'
 
@@ -49,7 +50,21 @@ function clipLabel(w, hasMeta = true) {
  */
 function staticLabel(s, hasMeta = true) {
   const n = Array.isArray(s.files) ? s.files.length : 0
-  return `${s.name}${n > 1 ? ` (${n} sizes)` : ''}${s.by ? ` from ${s.by}` : ''} · ${hasMeta ? 'ready to publish' : 'no Meta account to send it to'}${s.note ? ` · “${s.note}”` : ''}`
+  // One of the two sizes missing (later on 2026-11-12, "send a CRM message
+  // when the drop is missing a size"): say which, in place of the count.
+  const gap = staticGapLine((s.files || []).map((f) => f.key))
+  return `${s.name}${gap ? ` (${gap})` : n > 1 ? ` (${n} sizes)` : ''}${s.by ? ` from ${s.by}` : ''} · ${hasMeta ? 'ready to publish' : 'no Meta account to send it to'}${s.note ? ` · “${s.note}”` : ''}`
+}
+
+/**
+ * The Slack line for a dropped static: the plain "New static dropped in"
+ * line, or, with one of the two sizes missing, a warning that names the
+ * size, where it serves and what happens without it.
+ */
+function staticAlertLabel(s, hasMeta = true) {
+  const gap = staticSizeGap((s.files || []).map((f) => f.key))
+  if (!gap) return `New static dropped in: ${staticLabel(s, hasMeta)}`
+  return `⚠️ Static dropped in with one size: ${s.name} has the ${gap.have} only, missing the ${gap.label} (${gap.ratio}) for ${gap.where}${s.by ? `, from ${s.by}` : ''}. Add it on the Content page, or Meta will crop the ${gap.have} there.${s.note ? ` “${s.note}”` : ''}`
 }
 
 /**
@@ -583,7 +598,7 @@ export function alertKeys(statusRows = [], { now = new Date() } = {}) {
     // Each dropped static by its stamp: a second drop is a second post, and
     // a published or cleared one goes quiet. No hold: nothing to wait for.
     for (const s of r.statics || []) {
-      out.push({ key: `${client.id}:static:${s.stamp}`, client, kind: 'static', label: `New static dropped in: ${staticLabel(s, hasMeta)}`, detail: '', href: '/content' })
+      out.push({ key: `${client.id}:static:${s.stamp}`, client, kind: 'static', label: staticAlertLabel(s, hasMeta), detail: '', href: '/content' })
     }
   }
   return out
