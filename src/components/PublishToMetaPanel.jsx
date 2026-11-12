@@ -1425,13 +1425,14 @@ export default function PublishToMetaPanel({
   // twenty of them is almost always a misclick on a select-all.
   if (reuseAdset && adTotal * adsetIds.length > MAX_BATCH_ADS * 4)
     blockers.push(`that is ${adTotal * adsetIds.length} ads — too many at once`)
-  if (chosenCampaign?.campaign_budget && !reuseAdset)
-    blockers.push('that campaign sets its own budget')
-  // Budget and targeting belong to the ad set. When one is being reused they
-  // are already set on it and are not asked for here.
+  // The budget sits on the campaign (since 2026-11-12): a new campaign is
+  // created holding it, and a campaign that already holds one takes a new
+  // ad set without any, so no budget is asked for then. Targeting belongs to
+  // the ad set. When an ad set is being reused both are already set on it.
+  const campaignHoldsBudget = Boolean(reuseCampaign && chosenCampaign?.campaign_budget)
   if (!reuseAdset) {
     if (locations.length === 0) blockers.push('no locations')
-    if (budgetCents < 100) blockers.push('budget under $1.00')
+    if (!campaignHoldsBudget && budgetCents < 100) blockers.push('budget under $1.00')
   }
 
   const submit = async () => {
@@ -1694,7 +1695,7 @@ export default function PublishToMetaPanel({
             ad_set: { type: 'string', enum: ['new', 'reuse'] },
             campaign_name: { type: 'string' },
             ad_set_name: { type: 'string' },
-            daily_budget: { type: 'number', description: 'US dollars per day, for a new ad set' },
+            daily_budget: { type: 'number', description: 'US dollars per day: held by a new campaign (shared by its ad sets), or by a new ad set under a campaign built with ad set budgets' },
             age_min: { type: 'integer' },
             age_max: { type: 'integer' },
           },
@@ -2271,9 +2272,10 @@ export default function PublishToMetaPanel({
                 ))}
               </select>
               {chosenCampaign?.campaign_budget && !reuseAdset && (
-                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                  This campaign sets the budget itself, so Meta will reject a new ad set that brings
-                  its own. Pick one of its existing ad sets below, or choose a different campaign.
+                <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-2 py-1" data-campaign-budget-note>
+                  This campaign holds the budget
+                  {Number(chosenCampaign.daily_budget) ? ` ($${(Number(chosenCampaign.daily_budget) / 100).toFixed(2)}/day)` : ''}, shared by its ad sets, so
+                  the new ad set brings none.
                 </p>
               )}
               {chosenCampaign && !reuseAdset && chosenCampaign.objective !== objective && (
@@ -2409,18 +2411,28 @@ export default function PublishToMetaPanel({
               />
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Daily budget <span className="font-normal text-slate-400">US dollars</span>
+                  Daily budget{' '}
+                  <span className="font-normal text-slate-400">
+                    {campaignHoldsBudget ? 'held by the campaign' : reuseCampaign ? 'US dollars, on this ad set' : 'US dollars, on the campaign'}
+                  </span>
                 </label>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-slate-500">$</span>
-                  <input
-                    value={dailyBudget}
-                    onChange={(e) => setDailyBudget(e.target.value)}
-                    inputMode="decimal"
-                    className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
-                  />
-                  <span className="text-xs text-slate-400 whitespace-nowrap">/ day</span>
-                </div>
+                {campaignHoldsBudget ? (
+                  /* Nothing to type: the campaign's budget is the budget. */
+                  <p className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600" data-budget-held>
+                    {Number(chosenCampaign?.daily_budget) ? `$${(Number(chosenCampaign.daily_budget) / 100).toFixed(2)} / day` : 'Set on the campaign'}, shared by its ad sets.
+                  </p>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-slate-500">$</span>
+                    <input
+                      value={dailyBudget}
+                      onChange={(e) => setDailyBudget(e.target.value)}
+                      inputMode="decimal"
+                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
+                    />
+                    <span className="text-xs text-slate-400 whitespace-nowrap">/ day</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2522,6 +2534,8 @@ export default function PublishToMetaPanel({
             locations,
             campaignName,
             reuseCampaign,
+            campaignHoldsBudget,
+            campaignBudget: Number(chosenCampaign?.daily_budget) ? (Number(chosenCampaign.daily_budget) / 100).toFixed(2) : '',
             formName: leadForm?.name,
             adCount: adTotal,
             sizeCount: maxSizes,

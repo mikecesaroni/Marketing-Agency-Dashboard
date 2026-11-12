@@ -1780,6 +1780,28 @@ Deno.serve(async (req) => {
       }
     }
 
+    // THE BUDGET SITS ON THE CAMPAIGN (2026-11-12: "when we are publishing
+    // new campaigns and ad sets for new clients, can we make it so the spend
+    // is at the campaign level instead of the ad set level"). A new campaign
+    // is created holding the daily budget (Meta's Advantage campaign budget),
+    // as the funnel builder's campaigns and every live campaign in the
+    // accounts already do, and its ad sets bring none. Publishing a new ad
+    // set into an existing campaign reads that campaign first: one holding a
+    // budget takes an ad set without one (Meta refuses the pair), one built
+    // the old way, with the budget on its ad sets, gets the ad set budget as
+    // before. An existing ad set settles it by itself.
+    let campaignHoldsBudget = false
+    let campaignBudgetCents: number | null = null
+    const campaignIdIn = String(existingCampaignId || '').trim()
+    if (!existingAdset && campaignIdIn) {
+      const c = await graphGet(campaignIdIn, { fields: 'id,account_id,daily_budget,lifetime_budget' }, token)
+      if (actId(String(c?.account_id || '')) !== account) {
+        return json({ error: `That campaign does not belong to ${client.name}'s ad account. Pick one from the list rather than pasting an ID.` }, 400)
+      }
+      campaignHoldsBudget = Boolean(Number(c?.daily_budget) || Number(c?.lifetime_budget))
+      campaignBudgetCents = Number(c?.daily_budget) || null
+    }
+
     const objectiveKey = existingAdset
       ? adsetObjective(existingAdset)
       : ((OBJECTIVE_ALIASES[objective] || objective) as Objective)
@@ -1880,7 +1902,8 @@ Deno.serve(async (req) => {
           400
         )
       }
-      if (Math.round(Number(dailyBudgetCents) || 0) < MIN_DAILY_BUDGET_CENTS) {
+      // No budget is asked for under a campaign that holds its own.
+      if (!campaignHoldsBudget && Math.round(Number(dailyBudgetCents) || 0) < MIN_DAILY_BUDGET_CENTS) {
         return json({ error: `Daily budget must be at least $${(MIN_DAILY_BUDGET_CENTS / 100).toFixed(2)}.` }, 400)
       }
       if (!Array.isArray(locations) || locations.length === 0) {
@@ -1964,22 +1987,22 @@ Deno.serve(async (req) => {
           // declaring the wrong thing is a policy violation rather than an
           // error, so it is asked rather than assumed.
           special_ad_categories: specialAdCategories,
-          // Meta now refuses to create a campaign that carries no campaign
-          // budget unless this is stated outright, either way.
-          //
-          // False, and not really a choice: true asks the ad sets to lend each
-          // other a fifth of their budgets, which Meta will only accept
-          // alongside a campaign-level bid strategy this does not set, so it
-          // fails with "cannot enable ad set budget sharing without bid
-          // strategy". False also happens to be the honest answer here — the
-          // budget typed into the publish form is the budget that ad set gets.
-          is_adset_budget_sharing_enabled: false,
+          // The budget, on the campaign: the daily figure from the form is
+          // the campaign's (Advantage campaign budget), shared by its ad
+          // sets, and the bid strategy goes with it (an ad set under a
+          // campaign budget may not carry its own). Until 2026-11-12 the
+          // campaign was created with is_adset_budget_sharing_enabled false
+          // and the budget went on the ad set.
+          daily_budget: budget,
+          bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
         },
         token,
         'create campaign'
       )
       campaignId = campaign.id
       created.campaign_id = campaign.id
+      campaignHoldsBudget = true
+      campaignBudgetCents = budget
     }
 
     // 2. Ad set — budget, schedule and, the point of the exercise, targeting.
@@ -1995,12 +2018,14 @@ Deno.serve(async (req) => {
         {
           name: adsetName || `${client.name} — ${new Date().toISOString().slice(0, 10)}`,
           campaign_id: campaignId,
-          daily_budget: budget,
+          // The budget and the bid strategy only when the campaign does not
+          // hold them (a campaign built the old way, with the budget on its
+          // ad sets); under a campaign budget Meta refuses both. No bid cap
+          // either way: a cap on a brand new ad set with no delivery history
+          // mostly just stops it delivering at all.
+          ...(campaignHoldsBudget ? {} : { daily_budget: budget, bid_strategy: 'LOWEST_COST_WITHOUT_CAP' }),
           billing_event: spec.billing_event,
           optimization_goal: spec.optimization_goal,
-          // No bid cap. A cap on a brand new ad set with no delivery history
-          // mostly just stops it delivering at all.
-          bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
           targeting: buildTargeting(locations, ageMin, ageMax),
           // A website lead is promoted against the pixel that reports it; a
           // form lead is promoted against the Page that hosts the form.
@@ -2054,7 +2079,9 @@ Deno.serve(async (req) => {
             ad_id: built.ad_id,
             ad_name: a.ad_name || null,
             objective: objectiveKey,
-            daily_budget_cents: existingAdset ? Number(existingAdset.daily_budget) || null : budget,
+            // The daily figure that applies: the reused ad set's, else the
+            // campaign's when it holds the budget, else the ad set's.
+            daily_budget_cents: existingAdset ? Number(existingAdset.daily_budget) || null : campaignHoldsBudget ? campaignBudgetCents : budget,
             // Targeting belongs to the reused ad set and was not sent, so there
             // is nothing honest to record here. Null, not an empty list, which
             // would read as "targeted nowhere".

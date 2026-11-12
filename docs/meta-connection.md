@@ -202,6 +202,22 @@ the ad set (budget, age, locations). Then one button creates, in order:
 
     campaign  ->  ad set  ->  creative  ->  ad          all PAUSED
 
+**The budget sits on the campaign** (2026-11-12: "when we are publishing new
+campaigns and ad sets for new clients, can we make it so the spend is at the
+campaign level instead of the ad set level"). A new campaign is created
+holding the daily budget (Meta's Advantage campaign budget) with the bid
+strategy, as the funnel builder's campaigns and every live campaign in the
+accounts already do, and its ad set brings none. Publishing a new ad set
+into an existing campaign reads the campaign first: one that holds a budget
+takes the ad set without one (the form shows the campaign's figure and asks
+for none; Meta refuses the pair), and one built the old way, with the
+budget on its ad sets, gets the ad set budget as before. An existing ad set
+settles it by itself. `published_ads.daily_budget_cents` records whichever
+figure applies. Until then the campaign was created with
+`is_adset_budget_sharing_enabled: false` and the budget went on the ad set,
+and a campaign holding its own budget could not take a new ad set from the
+form at all.
+
 Locations are searched against Meta's own geo endpoint rather than typed —
 Meta only targets keys it issued itself, so "Rochester" means nothing to the API
 and the key it returns for Rochester does. Cities carry a radius; states and

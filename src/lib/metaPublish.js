@@ -637,6 +637,10 @@ export function summarisePlan({
   // copy of every creative -- stating the per-ad-set figure as the total is
   // how somebody green-lights twenty ads believing they made five.
   adsetCount = 1,
+  // An existing campaign that holds the budget itself (and what it is, in
+  // dollars, when known): the new ad set shares it rather than bringing one.
+  campaignHoldsBudget = false,
+  campaignBudget = '',
 }) {
   const obj = OBJECTIVES.find((o) => o.value === objective)
   const form = obj?.needsForm && formName ? ` Leads go to the "${formName}" form.` : ''
@@ -657,7 +661,11 @@ export function summarisePlan({
   const where = locations.length === 1 ? locations[0].label : `${locations.length} locations`
   const campaign = reuseCampaign ? 'an existing campaign' : `a new campaign, "${campaignName}"`
   const sharing = adCount > 1 ? ' sharing one ad set' : ''
-  return `${count}${sizes}${sharing} in ${campaign}, $${dailyBudget}/day, targeting ${where}. ${
+  // Since 2026-11-12 a new campaign holds the budget (shared by its ad sets);
+  // an existing campaign that holds one keeps it, and an ad set under a
+  // campaign built the old way gets the figure itself.
+  const money = reuseCampaign && campaignHoldsBudget ? `${campaignBudget ? `$${campaignBudget}/day` : 'the budget'} held by the campaign` : reuseCampaign ? `$${dailyBudget}/day on the ad set` : `$${dailyBudget}/day on the campaign`
+  return `${count}${sizes}${sharing} in ${campaign}, ${money}, targeting ${where}. ${
     obj?.label || objective
   }. Created paused.${form}`
 }
