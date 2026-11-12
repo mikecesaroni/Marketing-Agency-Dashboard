@@ -921,7 +921,14 @@ function creativeParams(input: CreativeInput): Record<string, unknown> {
       // call_to_action_label to the rules flips them into targeting rules and
       // it then demands a geolocation on every non-default one. Verified
       // against the live API.
-      call_to_action_types: spec.needs_form ? undefined : [ctaType],
+      //
+      // The TYPE goes on a form ad as well (2026-11-12). With one of each
+      // text a form ad validated without it; with the text options' lists it
+      // failed with Meta's blank "Something went wrong", and the one thing
+      // Horizon HVAC's hand-built form ad (lists, rules, GET_QUOTE form) has
+      // that the refused payload lacked is call_to_action_types beside
+      // call_to_actions. Both go, on every image ad.
+      call_to_action_types: [ctaType],
       call_to_actions: spec.needs_form
         ? [{ type: ctaType, value: { lead_gen_form_id: leadFormId } }]
         : undefined,
