@@ -15,10 +15,12 @@
  * googleRows: google_campaign_daily rows, the same embed
  * windowStart: the first day of the range (rows before it are ignored)
  */
+import { isLsaCampaign } from './lsaReport.js'
+
 export function ourBusinessRows({ clients = [], metaRows = [], googleRows = [], windowStart = '' } = {}) {
   const by = new Map()
   const row = (id, name) => {
-    if (!by.has(id)) by.set(id, { id, name: name || 'Unknown', metaSpend: 0, metaLeads: 0, googleSpend: 0, googleLeads: 0, googleId: '', googleError: '', client: null })
+    if (!by.has(id)) by.set(id, { id, name: name || 'Unknown', metaSpend: 0, metaLeads: 0, googleSpend: 0, googleLeads: 0, lsaSpend: 0, lsaLeads: 0, googleId: '', googleError: '', client: null })
     return by.get(id)
   }
   for (const c of clients || []) {
@@ -35,17 +37,27 @@ export function ourBusinessRows({ clients = [], metaRows = [], googleRows = [], 
     x.metaSpend += Number(r.spend) || 0
     x.metaLeads += Number(r.leads) || 0
   }
+  // The Local Services campaigns in the same table are LSA, not Google
+  // Search (2026-11-12, "why is Google LSA blank on the KPIs page": the only
+  // Local Services account connected was Horizon HVAC's, and it showed
+  // nowhere because the business is ours and the page is clients only).
   for (const r of googleRows || []) {
     if (!r?.client_id || !r.clients?.is_internal || r.clients?.archived || !inWindow(r)) continue
     const x = row(r.client_id, r.clients?.name)
-    x.googleSpend += Number(r.cost) || 0
-    x.googleLeads += Number(r.conversions) || 0
+    if (isLsaCampaign(r.campaign_type, r.campaign_name)) {
+      x.lsaSpend += Number(r.cost) || 0
+      x.lsaLeads += Number(r.conversions) || 0
+    } else {
+      x.googleSpend += Number(r.cost) || 0
+      x.googleLeads += Number(r.conversions) || 0
+    }
   }
   return [...by.values()]
     .map((r) => ({
       ...r,
       metaCpl: r.metaLeads > 0 ? r.metaSpend / r.metaLeads : 0,
       googleCpl: r.googleLeads > 0 ? r.googleSpend / r.googleLeads : 0,
+      lsaCpl: r.lsaLeads > 0 ? r.lsaSpend / r.lsaLeads : 0,
       googleConnected: Boolean(r.googleId),
     }))
     .sort((a, b) => b.metaSpend + b.googleSpend - (a.metaSpend + a.googleSpend) || a.name.localeCompare(b.name))

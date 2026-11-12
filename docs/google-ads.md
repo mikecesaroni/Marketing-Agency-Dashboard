@@ -407,6 +407,18 @@ HVAC's, and the "Pay-per-lead-PMax" shape Google moved it into on
   and now counts the synced Local Services campaigns plus the hand-logged
   weeks of clients not connected; the Google card no longer counts the Local
   Services campaigns, so nothing is counted twice.
+- **Ours, not a client's.** "Why is Google LSA blank on the KPIs page"
+  (2026-11-12): the only Local Services account connected was Horizon
+  HVAC's, and Horizon is one of our own businesses (`is_internal`), which
+  the Performance page keeps out of every client total; four clients were
+  marked LSA live with no account connected and no weeks logged by hand, so
+  the client card was honestly zero. Now the card says so when it is empty
+  ("No client's Local Services account connected yet, nothing logged by
+  hand · ours is under My businesses"), the My businesses rows carry LSA
+  spend and leads beside Meta and Google (`ourBusinessRows` splits the
+  Local Services campaigns out of the Google numbers), and the Local
+  Services report lists our own businesses in a My businesses table under
+  the clients, outside the tiles and the counts.
 - **Stopped.** A client who spent on Local Services in the range but is not
   running now: the newest synced row of every one of their Local Services
   campaigns says paused or removed (the sync rewrites the whole window each

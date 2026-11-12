@@ -277,7 +277,13 @@ export default function ReportsPage() {
       spark: lsaNowRows.length ? lsaDaily.map((d) => d.spend) : null,
       to: '/reports/lsa',
       cta: 'Open full report →',
-      note: 'Synced nightly from Google · weekly hand logs where not connected',
+      // Why it is empty, when it is: no client's Local Services account is
+      // connected yet and no weeks were logged by hand; our own businesses'
+      // Local Services sit under My businesses, like their Meta and Google.
+      note:
+        lsaNowRows.length || clientLsa.length
+          ? 'Synced nightly from Google · weekly hand logs where not connected'
+          : `No client's Local Services account connected yet, nothing logged by hand${internalRows.some((r) => r.lsaSpend > 0) ? ' · ours is under My businesses' : ''} · open to see who is connected`,
     },
   ]
 
@@ -458,7 +464,7 @@ export default function ReportsPage() {
 
           {internalRows.length > 0 && (
             <section data-our-businesses>
-              <SectionTitle title="My businesses" sub="Not clients · Meta and Google · left out of every total above · connect a Google Ads account on the row" />
+              <SectionTitle title="My businesses" sub="Not clients · Meta, Google and Local Services · left out of every total above · connect a Google Ads account on the row" />
               <DTable>
                 <thead>
                   <tr>
@@ -469,6 +475,8 @@ export default function ReportsPage() {
                     <DTh numeric>Google spend</DTh>
                     <DTh numeric>Leads</DTh>
                     <DTh numeric>Cost/lead</DTh>
+                    <DTh numeric><span className="inline-flex items-center gap-1.5"><ChannelDot channel="lsa" />LSA spend</span></DTh>
+                    <DTh numeric>Leads</DTh>
                     <DTh>Google Ads</DTh>
                   </tr>
                 </thead>
@@ -482,6 +490,10 @@ export default function ReportsPage() {
                       <DTd numeric>{r.googleConnected ? money(r.googleSpend) : <span className="text-slate-600">not connected</span>}</DTd>
                       <DTd numeric>{r.googleConnected ? r.googleLeads : ''}</DTd>
                       <DTd numeric>{r.googleConnected ? cplText(r.googleCpl) : ''}</DTd>
+                      {/* Local Services, from the same account: the Local
+                          Services campaigns the nightly sync reads. */}
+                      <DTd numeric muted={!r.lsaSpend}>{r.lsaSpend ? money(r.lsaSpend) : '—'}</DTd>
+                      <DTd numeric muted={!r.lsaLeads}>{r.lsaSpend ? r.lsaLeads : ''}</DTd>
                       <DTd>
                         {/* The same box the Google Search report puts beside a
                             client still to connect: paste the customer ID,
