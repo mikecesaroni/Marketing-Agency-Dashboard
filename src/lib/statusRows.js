@@ -11,7 +11,7 @@ import { addDays, today } from './dates.js'
 import { fetchPipelineRows, pipelineFromRows } from './pipelineRows.js'
 import { DROPS_RESET_KEY, syncedAdRows, videoDrops } from './videoLaunch.js'
 import { adDeliveryAlerts } from './adHealth.js'
-import { clientStatus, leadTotals } from './clientStatus.js'
+import { channelDays, clientStatus, leadTotals } from './clientStatus.js'
 import { legacySet, withoutLegacy } from './ourAds.js'
 
 /** The raw rows: the pipeline's, the delivery view, two weeks of ad days, the video board's inputs, the payments. */
@@ -33,7 +33,7 @@ export async function fetchStatusRows(supabase, { internalColumn = true, day = t
     // The first day our ads spent anything, per client (supabase/ad-start.sql),
     // so a client two weeks in is told apart from one running a year: the
     // low-leads flag says "still in learning phase" on the former.
-    supabase.from('client_ad_start').select('client_id, first_spend_date').then((r) => r.data || []).catch(() => []),
+    supabase.from('client_ad_start').select('client_id, first_spend_date, first_meta_spend_date, first_google_spend_date').then((r) => r.data || []).catch(() => []),
   ])
   return {
     day,
@@ -70,27 +70,34 @@ export function statusFromRows(raw, { now = new Date() } = {}) {
   // Our ads only: a campaign the client was already running before the
   // account was connected is theirs, and says nothing about ours.
   const legacy = legacySet(raw.legacy)
-  for (const r of withoutLegacy(raw.metaRows, legacy, 'meta')) push(r.client_id, { date: r.date, leads: r.leads, spend: r.spend })
-  for (const r of withoutLegacy(raw.googleRows, legacy, 'google')) push(r.client_id, { date: r.date, leads: r.conversions, spend: r.cost })
+  // Tagged by channel, so the leads flags can say which one the leads came
+  // from ("only Google live, Meta not yet"); leadTotals ignores the tag.
+  for (const r of withoutLegacy(raw.metaRows, legacy, 'meta')) push(r.client_id, { date: r.date, leads: r.leads, spend: r.spend, channel: 'meta' })
+  for (const r of withoutLegacy(raw.googleRows, legacy, 'google')) push(r.client_id, { date: r.date, leads: r.conversions, spend: r.cost, channel: 'google' })
   const payBy = new Map()
   for (const p of raw.payments || []) {
     if (!payBy.has(p.client_id)) payBy.set(p.client_id, [])
     payBy.get(p.client_id).push(p)
   }
-  const starts = new Map((raw.starts || []).map((r) => [r.client_id, r.first_spend_date ? String(r.first_spend_date).slice(0, 10) : null]))
+  const starts = new Map((raw.starts || []).map((r) => [r.client_id, { first: r.first_spend_date ? String(r.first_spend_date).slice(0, 10) : null, meta: Boolean(r.first_meta_spend_date), google: Boolean(r.first_google_spend_date) }]))
 
-  return pipeline.map(({ client, intake, result }) =>
-    clientStatus({
+  return pipeline.map(({ client, intake, result }) => {
+    const rows = adDays.get(client.id) || []
+    const start = starts.get(client.id) || {}
+    return clientStatus({
       client,
       intake,
       result,
       drop: drops.get(client.id) || null,
-      leads: leadTotals(adDays.get(client.id) || [], day),
-      adsStart: starts.get(client.id) || null,
+      leads: leadTotals(rows, day),
+      adsStart: start.first || null,
+      // Days each channel spent this week, and whether it ever has, for the
+      // why on the leads flags.
+      channels: { ...channelDays(rows, day), metaEver: Boolean(start.meta), googleEver: Boolean(start.google) },
       alert: alerts.get(client.id) || null,
       payments: payBy.get(client.id) || [],
       counts: { kpisThisWeek: result.steps.find((s) => s.key === 'weekly-kpis')?.done ? 1 : 0 },
       today: day,
     })
-  )
+  })
 }

@@ -7,7 +7,7 @@
 // A client needs a call when anything red or amber is on them.
 
 import { TIERS, tierBadgeLabel, tierFromFee, tierLabel, tierOf } from '../src/lib/clientTiers.js'
-import { bucketRows, channelWords, clientFlags, clientStatus, leadTotals, statusOrder } from '../src/lib/clientStatus.js'
+import { bucketRows, channelDays, channelWords, clientFlags, clientStatus, leadTotals, statusOrder } from '../src/lib/clientStatus.js'
 
 let failures = 0
 const check = (name, got, want) => {
@@ -81,15 +81,30 @@ check('no start on record (the view missing) is the plain flag', clientFlags({ c
 // The channels in the why ("this looks bad; make sure it states that only
 // Google is live and not Meta yet"): the plan's live channels, and the
 // channels it still owes (an open go-live or google-publish step).
+// Live is spend this week on our ads, per channel; owed is the package
+// (Whole Chain and up) or an open live step.
 const googleFirst = { steps: [{ key: 'weekly-kpis', done: true }, { key: 'go-live', done: false }, { key: 'google-publish', done: true }], ours: [], theirs: [], launched: true, live: { meta: false, google: true, lsa: false } }
-const oneLead = (result, adsStart) => clientFlags({ client: live, result, leads: leadTotals(week({ 19: 1 }), TODAY), adsStart, counts: { kpisThisWeek: 1 }, today: TODAY })[0]
+const googleOnlyWeek = { meta: 0, google: 6, metaEver: false, googleEver: true }
+const oneLead = (result, adsStart, channels = googleOnlyWeek, client = live) => clientFlags({ client, result, leads: leadTotals(week({ 19: 1 }), TODAY), adsStart, channels, counts: { kpisThisWeek: 1 }, today: TODAY })[0]
 check('one channel live and the other owed says so, then the learning phase', oneLead(googleFirst, '2026-10-07').label, 'Only 1 lead this week: only Google live, Meta not yet; still in learning phase (ads started 13 days ago)')
 check('...and past learning, the channels alone', oneLead(googleFirst, '2026-09-01').label, 'Only 1 lead this week: only Google live, Meta not yet')
 check("...and the detail says it is one channel's leads", oneLead(googleFirst, '2026-09-01').detail.includes("Only Google live, Meta not yet, so this is one channel's leads."), true)
-check('no leads on one channel says so too', clientFlags({ client: live, result: googleFirst, leads: leadTotals(sevenDays, TODAY), counts: { kpisThisWeek: 1 }, today: TODAY }).map((f) => [f.key, f.label]), [['no-leads', 'No leads in 7 days of ads: only Google live, Meta not yet']])
+check('no leads on one channel says so too', clientFlags({ client: live, result: googleFirst, leads: leadTotals(sevenDays, TODAY), channels: googleOnlyWeek, counts: { kpisThisWeek: 1 }, today: TODAY }).map((f) => [f.key, f.label]), [['no-leads', 'No leads in 7 days of ads: only Google live, Meta not yet']])
 check('a Maintenance client whose one channel is Google owes no Meta: plain', oneLead({ ...googleFirst, steps: [{ key: 'weekly-kpis', done: true }, { key: 'google-publish', done: true }] }, '2026-09-01').label, 'Only 1 lead this week')
-check('both live: plain', oneLead({ ...googleFirst, live: { meta: true, google: true, lsa: false }, steps: [{ key: 'weekly-kpis', done: true }, { key: 'go-live', done: true }, { key: 'google-publish', done: true }] }, '2026-09-01').label, 'Only 1 lead this week')
-check('the words, each way round, and nothing without a plan', [channelWords(googleFirst), channelWords({ live: { meta: true, google: false, lsa: false }, steps: [{ key: 'google-publish', done: false }] }), channelWords(running)], ['only Google live, Meta not yet', 'only Meta live, Google not yet', ''])
+// Active air quality: Whole Chain, two ads published, Meta never switched
+// on, Google live. The plan read "left Meta"; the words still say Meta is
+// not live yet, because Meta never spent.
+check('the package owes both: Meta not yet even when the plan reads "left Meta", since Meta never spent', oneLead({ steps: [{ key: 'weekly-kpis', done: true }], ours: [], theirs: [], launched: true, live: { meta: false, google: true, lsa: false }, leftMeta: true }, '2026-09-01', googleOnlyWeek, { ...live, tier: 2 }).label, 'Only 1 lead this week: only Google live, Meta not yet')
+check('a client who ran Meta and left it for Google is not told Meta not yet', oneLead({ steps: [{ key: 'weekly-kpis', done: true }], ours: [], theirs: [], launched: true, live: { meta: false, google: true, lsa: false }, leftMeta: true }, '2026-09-01', { ...googleOnlyWeek, metaEver: true }, { ...live, tier: 2 }).label, 'Only 1 lead this week')
+check('both spending this week: plain', oneLead(googleFirst, '2026-09-01', { meta: 6, google: 6, metaEver: true, googleEver: true }).label, 'Only 1 lead this week')
+check('the words each way round, "not running" for a channel that spent before, and nothing with nothing on', [
+  channelWords({ result: googleFirst, channels: googleOnlyWeek, tier: 1 }),
+  channelWords({ result: { steps: [{ key: 'google-publish', done: false }] }, channels: { meta: 5, google: 0, metaEver: true, googleEver: false }, tier: 1 }),
+  channelWords({ result: { steps: [] }, channels: { meta: 5, google: 0, metaEver: true, googleEver: true }, tier: 2 }),
+  channelWords({ result: running, channels: { meta: 0, google: 0 }, tier: 2 }),
+  channelWords({ result: running, channels: googleOnlyWeek, tier: 1 }),
+], ['only Google live, Meta not yet', 'only Meta live, Google not yet', 'only Meta live, Google not running', '', ''])
+check('the days each channel spent this week, off the tagged ad days', channelDays([{ date: '2026-10-20', spend: 5, channel: 'meta' }, { date: '2026-10-19', spend: 0, channel: 'meta' }, { date: '2026-10-18', spend: 3, channel: 'google' }, { date: '2026-10-01', spend: 3, channel: 'google' }, { date: '2026-10-17', spend: 3 }], TODAY), { meta: 1, google: 1 })
 
 const alertFlags = clientFlags({ client: live, result: running, alert: { kind: 'quiet', quietDays: 4, detail: 'Nothing has spent since 2026-10-16.' }, leads: leadTotals(days, TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })
 check('the delivery alert is a red flag, and beats the leads flag', alertFlags.map((f) => [f.key, f.severity, f.label]), [['ads-off', 'red', 'Meta ads stopped: 4 days without spend']])

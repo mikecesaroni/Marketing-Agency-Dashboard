@@ -93,25 +93,55 @@ export const NO_LEADS_MIN_DAYS = 7
 export const LEARNING_DAYS = 14
 
 /**
- * Why the leads may be low, from the channels: which are live and which the
- * package still owes. "Only Google live, Meta not yet" is the usual answer
- * ("this looks bad; make sure it states that only Google is live and not
- * Meta yet; we want to know why the leads are so low, and typically it is
- * because it is new, or not fully live on both platforms, or still
- * learning", 2026-11-12). Read off nextSteps(): `live` says what runs,
- * and an open go-live (Meta) or google-publish (Google) step says the plan
- * owes that channel. Empty when every owed channel is live, or when the
- * plan is not known (the Node checks pass a bare result).
+ * Days each channel spent in the last seven: { meta, google }. rows are the
+ * ad days tagged by channel (statusRows.js); an untagged row counts for
+ * neither.
  */
-export function channelWords(result) {
-  const live = result?.live
-  if (!live) return ''
+export function channelDays(rows = [], today) {
+  const meta = new Set()
+  const google = new Set()
+  for (const r of rows) {
+    const age = daysSince(r.date, today)
+    if (age === null || age > 6 || !(Number(r.spend) > 0)) continue
+    if (r.channel === 'meta') meta.add(String(r.date).slice(0, 10))
+    if (r.channel === 'google') google.add(String(r.date).slice(0, 10))
+  }
+  return { meta: meta.size, google: google.size }
+}
+
+/**
+ * Why the leads may be low, from the channels: which one spent this week
+ * and which the package still owes. "Only Google live, Meta not yet" is the
+ * usual answer ("this looks bad; make sure it states that only Google is
+ * live and not Meta yet; we want to know why the leads are so low, and
+ * typically it is because it is new, or not fully live on both platforms,
+ * or still learning", 2026-11-12).
+ *
+ * Live is spend in the last seven days on OUR ads (channelDays), not the
+ * switch: Active air quality had two ads published and Meta off, which the
+ * plan read as "left Meta" (nextSteps), when they had simply not gone live
+ * on Meta yet. Owed is the package (Whole Chain and up is Meta and Google)
+ * or an open go-live / google-publish step. A channel that spent before and
+ * is quiet now reads "not running"; one that never spent, "not yet"; a
+ * client who ran Meta and switched it off while running elsewhere has left
+ * it, and nothing is said of Meta. Empty when nothing is owed or nothing
+ * runs (then the other flags speak).
+ *
+ * channels: { meta, google } days with spend this week, plus metaEver and
+ * googleEver (the client_ad_start view).
+ */
+export function channelWords({ result, channels, tier = 0 } = {}) {
+  const ch = channels || {}
+  const on = [ch.meta > 0 && 'Meta', ch.google > 0 && 'Google'].filter(Boolean)
+  if (!on.length) return ''
   const steps = Array.isArray(result?.steps) ? result.steps : []
   const open = (key) => steps.some((s) => s?.key === key && !s.done)
-  const on = [live.meta && 'Meta', live.google && 'Google', live.lsa && 'Local Services'].filter(Boolean)
-  const owed = [!live.meta && open('go-live') && 'Meta', !live.google && open('google-publish') && 'Google'].filter(Boolean)
-  if (!on.length || !owed.length) return ''
-  return `only ${on.join(' and ')} live, ${owed.join(' and ')} not yet`
+  const both = Number(tier) >= 2
+  const off = []
+  if (!(ch.meta > 0) && (both || open('go-live')) && !(result?.leftMeta && ch.metaEver)) off.push(ch.metaEver ? 'Meta not running' : 'Meta not yet')
+  if (!(ch.google > 0) && (both || open('google-publish'))) off.push(ch.googleEver ? 'Google not running' : 'Google not yet')
+  if (!off.length) return ''
+  return `only ${on.join(' and ')} live, ${off.join(', ')}`
 }
 
 /**
@@ -121,6 +151,7 @@ export function channelWords(result) {
  *   drop      the videoDrops() row for the client, or null
  *   leads     leadTotals() for the client
  *   adsStart  'YYYY-MM-DD' the first day our ads spent anything, or null
+ *   channels  { meta, google, metaEver, googleEver } days each channel spent this week, and whether it ever has
  *   alert     the adDeliveryAlerts() entry for the client, or null
  *   payments  payments rows for the client [{ payment_type, status, due_date, amount, failure_count }]
  *   today     'YYYY-MM-DD'
@@ -167,7 +198,7 @@ export function clientFlags(ctx) {
   // campaign a few days old has not had its chance yet.
   // The channels, for the why on either leads flag: "only Google live, Meta
   // not yet" says at once that this is one channel's leads.
-  const channels = channelWords(result)
+  const channels = channelWords({ result, channels: ctx.channels, tier })
   if (live && !ctx.alert && leads.spend14 > 0 && leads.spendDays14 >= NO_LEADS_MIN_DAYS) {
     const since = leads.lastLeadDate ? daysSince(leads.lastLeadDate, today) : null
     if (leads.leads14 === 0 || (since !== null && since >= 7)) {
