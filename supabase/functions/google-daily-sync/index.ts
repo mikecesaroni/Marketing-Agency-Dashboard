@@ -438,7 +438,7 @@ async function discover(
   opts: { dryRun?: boolean } = {}
 ) {
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id&archived=eq.false&order=name`,
+    `${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id,lsa_customer_id&archived=eq.false&order=name`,
     { headers: db }
   )
   const clients = await res.json()
@@ -471,12 +471,48 @@ async function discover(
       else failed.push({ client: m.client, error: await up.text() })
     }
   }
+
+  // A SECOND ACCOUNT FOR LOCAL SERVICES (2026-11-12). A client whose Search
+  // account is attached may keep their Local Services in an account of its
+  // own under the same name. Among what is still unclaimed, the sure name
+  // matches to clients that already have a Search id are asked for a Local
+  // Services campaign; the ones that carry one are saved as the client's
+  // lsa_customer_id, and the nightly sync reads them from then on.
+  const savedLsa: Match[] = []
+  const lsaMatches: Match[] = []
+  const withSearch = clients.filter((c: any) => bareId(c.google_ads_customer_id) && !bareId(c.lsa_customer_id))
+  const taken = new Set([...saved.map((s) => s.customer_id), ...clients.map((c: any) => bareId(c.lsa_customer_id)).filter(Boolean)])
+  const lsaPass = matchAccounts(
+    withSearch.map((c: any) => ({ id: c.id, name: c.name, google_ads_customer_id: null })),
+    unclaimed.filter((a) => !a.manager && !taken.has(a.id))
+  )
+  for (const m of lsaPass.matches) {
+    let hasLsa = false
+    try {
+      hasLsa = (await gaqlEither(m.customer_id, HAS_LSA_QUERY, token)).length > 0
+    } catch {
+      hasLsa = false
+    }
+    if (!hasLsa) continue
+    lsaMatches.push(m)
+    if (opts.dryRun) continue
+    const up = await fetch(`${supabaseUrl}/rest/v1/clients?id=eq.${encodeURIComponent(m.client_id)}`, {
+      method: 'PATCH',
+      headers: { ...db, Prefer: 'return=minimal' },
+      body: JSON.stringify({ lsa_customer_id: m.customer_id }),
+    })
+    if (up.ok) savedLsa.push(m)
+    else failed.push({ client: m.client, error: await up.text() })
+  }
+
   return {
     linked: all,
     pending,
     ...(pendingError ? { pending_error: pendingError } : {}),
     matches,
     saved,
+    lsa_matches: lsaMatches,
+    saved_lsa: savedLsa,
     ...(failed.length ? { failed } : {}),
     candidates,
     unclaimed,
@@ -518,6 +554,39 @@ const CAMPAIGN_QUERY = (since: string, until: string) => `
   FROM campaign
   WHERE segments.date BETWEEN '${since}' AND '${until}'
 `
+
+// LOCAL SERVICES (2026-11-12). The leads themselves, from the Google Ads
+// API's local_services_lead resource: one row per call, message or booking,
+// with whether Google charged for it and whether it was credited back. No
+// WHERE and no ORDER: the resource takes few filters, an account has a few
+// hundred leads a month at most, and the window is applied here. No contact
+// details are asked for: the CRM keeps the count, the kind, the charge and
+// the status, not the caller's name and number. Only asked of an account
+// whose campaign rows show a Local Services campaign (a Search-only account
+// refuses the resource).
+const LEADS_QUERY = `
+  SELECT local_services_lead.id, local_services_lead.lead_type,
+         local_services_lead.category_id, local_services_lead.service_id,
+         local_services_lead.lead_status, local_services_lead.creation_date_time,
+         local_services_lead.lead_charged, local_services_lead.credit_details.credit_state,
+         local_services_lead.credit_details.credit_state_last_update_date_time,
+         local_services_lead.locale
+  FROM local_services_lead
+`
+// Does this account carry a Local Services campaign at all (for discovery).
+const HAS_LSA_QUERY = "SELECT campaign.id FROM campaign WHERE campaign.advertising_channel_type = 'LOCAL_SERVICES' LIMIT 1"
+
+/**
+ * Which campaign rows are Local Services: the standalone LOCAL_SERVICES type,
+ * and the pay-per-lead Performance Max shape Google is moving LSA into
+ * (Horizon HVAC's "Pay-per-lead-PMax-..." from 2026-11-03). The same test as
+ * public.is_lsa_campaign() in the database and src/lib/lsaReport.js.
+ */
+export function isLsaCampaign(type: unknown, name: unknown): boolean {
+  const t = String(type || '').toUpperCase()
+  if (t === 'LOCAL_SERVICES') return true
+  return t === 'PERFORMANCE_MAX' && /pay.?per.?lead|local services|\blsa\b/i.test(String(name || ''))
+}
 
 async function serve(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return json({}, 200)
@@ -639,6 +708,7 @@ async function serve(req: Request): Promise<Response> {
           discovered = {
             linked: found.linked.length,
             saved: found.saved,
+            saved_lsa: found.saved_lsa,
             pending: found.pending,
             without_id: found.without_id.map((c) => c.client),
             ...(found.failed ? { failed: found.failed } : {}),
@@ -651,7 +721,7 @@ async function serve(req: Request): Promise<Response> {
 
     const filter = body.client_id ? `&id=eq.${encodeURIComponent(String(body.client_id))}` : ''
     const clientsRes = await fetch(
-      `${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id` +
+      `${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id,lsa_customer_id,lsa_active` +
         `&google_ads_customer_id=not.is.null&archived=eq.false${filter}`,
       { headers: db }
     )
@@ -670,21 +740,27 @@ async function serve(req: Request): Promise<Response> {
 
     const token = await accessToken()
     const results: Record<string, unknown>[] = []
+    // The last seven days of the window, for "Local Services is spending".
+    const sevenAgo = new Date()
+    sevenAgo.setDate(sevenAgo.getDate() - 6)
+    const sevenAgoStr = toDateString(sevenAgo)
 
     // How the last sync went, on the client row, so a page can tell "no
     // spend" from "Google refused us" without running the sync itself. A
     // failure to write it never fails the sync.
-    const stamp = async (clientId: string, error: string | null) => {
+    const patchClient = async (clientId: string, patch: Record<string, unknown>) => {
       try {
         await fetch(`${supabaseUrl}/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}`, {
           method: 'PATCH',
           headers: { ...db, Prefer: 'return=minimal' },
-          body: JSON.stringify({ google_ads_synced_at: new Date().toISOString(), google_ads_sync_error: error ? error.slice(0, 1000) : null }),
+          body: JSON.stringify(patch),
         })
       } catch {
         // The result line still carries it.
       }
     }
+    const stamp = (clientId: string, error: string | null) =>
+      patchClient(clientId, { google_ads_synced_at: new Date().toISOString(), google_ads_sync_error: error ? error.slice(0, 1000) : null })
 
     for (const client of clients) {
       const customerId = bareId(client.google_ads_customer_id)
@@ -788,28 +864,96 @@ async function serve(req: Request): Promise<Response> {
         // Campaign grain, daily, every metric. This is the table the Google
         // Search report reads for its totals: it counts every campaign type,
         // where the keyword table only holds what Search keywords did.
+        const campaignRow = (r: any, account: string) => ({
+          client_id: client.id,
+          date: r.segments?.date,
+          customer_id: account,
+          campaign_id: String(r.campaign?.id ?? ''),
+          campaign_name: r.campaign?.name ?? null,
+          campaign_type: r.campaign?.advertisingChannelType ?? null,
+          campaign_status: r.campaign?.status ?? null,
+          impressions: num(r.metrics?.impressions),
+          clicks: num(r.metrics?.clicks),
+          cost: fromMicros(r.metrics?.costMicros),
+          conversions: num(r.metrics?.conversions),
+          conversion_value: num(r.metrics?.conversionsValue),
+        })
         const campaignRows = dedupe(
-          campaigns.map((r: any) => ({
-            client_id: client.id,
-            date: r.segments?.date,
-            customer_id: customerId,
-            campaign_id: String(r.campaign?.id ?? ''),
-            campaign_name: r.campaign?.name ?? null,
-            campaign_type: r.campaign?.advertisingChannelType ?? null,
-            campaign_status: r.campaign?.status ?? null,
-            impressions: num(r.metrics?.impressions),
-            clicks: num(r.metrics?.clicks),
-            cost: fromMicros(r.metrics?.costMicros),
-            conversions: num(r.metrics?.conversions),
-            conversion_value: num(r.metrics?.conversionsValue),
-          })),
+          campaigns.map((r: any) => campaignRow(r, customerId)),
           (r) => `${r.date}|${r.campaign_id}`
         )
         await write('google_campaign_daily', campaignRows, 'client_id,date,campaign_id')
 
+        // LOCAL SERVICES. The account's own Local Services campaigns are in
+        // campaignRows already (every type is read). A client whose Local
+        // Services account is separate from their Search account carries
+        // its id in lsa_customer_id: that account is read for campaigns too,
+        // into the same table under its own customer id. Then the leads,
+        // from every account that showed a Local Services campaign.
+        let allCampaigns = campaigns
+        let lsaRows = campaignRows.filter((r) => isLsaCampaign(r.campaign_type, r.campaign_name))
+        const lsaAccounts = new Set<string>()
+        if (lsaRows.length) lsaAccounts.add(customerId)
+        const lsaAccount = bareId(client.lsa_customer_id)
+        let lsaError = ''
+        if (lsaAccount && lsaAccount !== customerId) {
+          try {
+            const more = await gaqlEither(lsaAccount, CAMPAIGN_QUERY(sinceStr, untilStr), token)
+            const moreRows = dedupe(more.map((r: any) => campaignRow(r, lsaAccount)), (r) => `${r.date}|${r.campaign_id}`)
+            await write('google_campaign_daily', moreRows, 'client_id,date,campaign_id')
+            allCampaigns = [...campaigns, ...more]
+            const moreLsa = moreRows.filter((r) => isLsaCampaign(r.campaign_type, r.campaign_name))
+            lsaRows = [...lsaRows, ...moreLsa]
+            if (moreLsa.length) lsaAccounts.add(lsaAccount)
+          } catch (err) {
+            lsaError = `Local Services account ${lsaAccount}: ${String(err instanceof Error ? err.message : err)}`
+          }
+        }
+        const leadRows: Record<string, unknown>[] = []
+        for (const acct of lsaAccounts) {
+          try {
+            const found = await gaqlEither(acct, LEADS_QUERY, token)
+            for (const r of found) {
+              const l = r.localServicesLead
+              if (!l?.id) continue
+              const created = String(l.creationDateTime || '')
+              const date = created.slice(0, 10)
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < sinceStr) continue
+              leadRows.push({
+                client_id: client.id,
+                customer_id: acct,
+                lead_id: String(l.id),
+                lead_type: l.leadType ?? null,
+                category_id: l.categoryId ?? null,
+                service_id: l.serviceId ?? null,
+                lead_status: l.leadStatus ?? null,
+                lead_charged: Boolean(l.leadCharged),
+                credit_state: l.creditDetails?.creditState ?? null,
+                credit_updated_at: l.creditDetails?.creditStateLastUpdateDateTime ? String(l.creditDetails.creditStateLastUpdateDateTime) : null,
+                created_at_google: created,
+                created_date: date,
+                locale: l.locale ?? null,
+              })
+            }
+          } catch (err) {
+            lsaError = `${lsaError ? `${lsaError} · ` : ''}leads from ${acct}: ${String(err instanceof Error ? err.message : err)}`
+          }
+        }
+        if (leadRows.length) await write('lsa_leads', leadRows, 'client_id,lead_id')
+        const lsaSpend7 = lsaRows.filter((r) => String(r.date) >= sevenAgoStr).reduce((s, r) => s + r.cost, 0)
+        if (lsaAccounts.size || lsaError) {
+          // The switch goes ON by itself when Local Services is spending
+          // (the Client tiers board and the brief read it); never off.
+          await patchClient(client.id, {
+            lsa_synced_at: new Date().toISOString(),
+            lsa_sync_error: lsaError ? lsaError.slice(0, 1000) : null,
+            ...(lsaSpend7 > 0 && !client.lsa_active ? { lsa_active: true } : {}),
+          })
+        }
+
         // THE ROLL-UP, from campaign grain so every campaign type is counted.
         const weeks = new Map<string, { spend: number; leads: number }>()
-        for (const r of campaigns) {
+        for (const r of allCampaigns) {
           const date = r.segments?.date
           if (!date) continue
           const [y, m, d] = String(date).split('-').map(Number)
@@ -853,6 +997,19 @@ async function serve(req: Request): Promise<Response> {
           weeks: kpiRows.length,
           spend: Number(kpiRows.reduce((s, r) => s + r.ad_spend, 0).toFixed(2)),
           leads: kpiRows.reduce((s, r) => s + r.leads, 0),
+          ...(lsaAccounts.size || lsaAccount || lsaError
+            ? {
+                lsa: {
+                  accounts: [...lsaAccounts],
+                  campaign_days: lsaRows.length,
+                  spend: Number(lsaRows.reduce((s, r) => s + r.cost, 0).toFixed(2)),
+                  leads: leadRows.length,
+                  charged: leadRows.filter((l) => l.lead_charged).length,
+                  ...(lsaSpend7 > 0 && !client.lsa_active ? { marked_live: true } : {}),
+                  ...(lsaError ? { error: lsaError } : {}),
+                },
+              }
+            : {}),
         })
         await stamp(client.id, null)
       } catch (err) {

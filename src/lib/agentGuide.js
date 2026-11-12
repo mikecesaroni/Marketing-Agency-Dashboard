@@ -290,6 +290,22 @@ export const ROUTES = [
     ],
   },
   {
+    path: '/reports/lsa',
+    name: 'Local Services report',
+    purpose: 'Google Local Services Ads across every client: spend, the leads themselves, charged leads and cost per charged lead, and who is connected. Added 2026-11-12.',
+    contains: [
+      'Five tiles for the range against the previous range: spend, leads, charged leads, cost per charged lead (the number LSA is judged on, since Google bills per lead and credits back the junk) and booked, with how many were credited back.',
+      'A daily chart of spend or leads for the synced Local Services campaigns.',
+      'Every client with a status: Live (Local Services spent in the range), Connected and quiet, Logged by hand (weekly LSA numbers typed on the client page, no account connected), Marked live with nothing connected (the LSA switch is on but the sync sees no Local Services account), Not connected, Paused. The account column shows the Local Services account id, or "with Search" when the campaign lives inside the client\'s Search account (Horizon HVAC). Spend, leads, charged, booked, cost per charged lead and the last lead per client; hand-logged weeks shown as such.',
+      'Latest leads: each call, message or booking Google reported, newest first, with its status and whether Google charged for it or credited it back. No caller details are kept in the CRM.',
+      'How a client gets connected: their Local Services lives in their Search account (already synced) or in an account of its own, which the client adds marketing@workingclassgroup.com to as a user (or we link under the manager); the next nightly run finds it by name, saves it as the client\'s lsa_customer_id and reads it from then on. The LSA setup message to copy is on the page.',
+    ],
+    actions: [
+      '"Sync Google" runs the nightly Google sync now: every connected account, every campaign type, the Local Services leads, and discovery of accounts linked since last time (a separate Local Services account included). The sync switches a client\'s LSA live flag on by itself when Local Services spends in the last seven days.',
+      'Numbers come from google_campaign_daily (the Local Services campaigns: the LOCAL_SERVICES type and the pay-per-lead Performance Max shape Google is moving LSA into), lsa_leads (the leads, from the Google Ads API local_services_lead resource) and weekly_kpis LSA rows for the hand logs. Rules in src/lib/lsaReport.js.',
+    ],
+  },
+  {
     path: '/reports/google-search',
     name: 'Google Ads report',
     purpose: 'Google Ads across every client on one page: the totals Google has that Meta does not, and what to switch off.',

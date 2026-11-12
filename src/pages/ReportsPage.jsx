@@ -14,6 +14,7 @@ import ChannelDailyChart from '../components/reports/ChannelDailyChart'
 import { ChannelDot, DTable, DTd, DTh, DTr, DarkButton, Delta, Eyebrow, MixBar, Panel, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
 import { CHANNELS, channelMix, compactMoney, mergeDaily, rangeLabel } from '../lib/channels'
 import { dailyRows as googleDailyRows, inRange, kpis as googleKpis } from '../lib/googleSearchReport'
+import { isLsaCampaign } from '../lib/lsaReport'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
 import { supabase } from '../lib/supabaseClient'
 
@@ -26,9 +27,12 @@ import { supabase } from '../lib/supabaseClient'
  * are the door.
  *
  * Meta comes from ad_daily (per ad, so Live ads can be filtered on status),
- * Google from google_campaign_daily (every campaign type), LSA from the
- * weekly numbers logged by hand. Our own businesses are kept out of every
- * total and shown on their own at the bottom.
+ * Google from google_campaign_daily (every campaign type but Local
+ * Services), LSA from the Local Services campaigns in that same table plus
+ * the weekly numbers logged by hand for clients not connected (since
+ * 2026-11-12; before that LSA was the hand logs alone and the Local
+ * Services campaigns counted as Google). Our own businesses are kept out of
+ * every total and shown on their own at the bottom.
  */
 const SCOPES = [
   { value: 'live', label: 'Live ads' },
@@ -78,7 +82,7 @@ export default function ReportsPage() {
       fetchAdRowsForRange(since),
       supabase
         .from('google_campaign_daily')
-        .select('client_id, date, cost, conversions, clicks, impressions, conversion_value, clients(name, is_internal, archived)')
+        .select('client_id, date, cost, conversions, clicks, impressions, conversion_value, campaign_type, campaign_name, clients(name, is_internal, archived)')
         .gte('date', since)
         .then(({ data }) => data || [], () => []),
       supabase
@@ -141,22 +145,31 @@ export default function ReportsPage() {
   const metaBefore = useMemo(() => sumSeries(metaPrevDaily), [metaPrevDaily])
 
   // ---- Google -------------------------------------------------------------
-  const clientGoogle = useMemo(() => googleRows.filter((r) => !r.clients?.is_internal && !r.clients?.archived), [googleRows])
+  // The Local Services campaigns in the same table are LSA, not Google
+  // Search: they go to the LSA card (since 2026-11-12), the rest stays here.
+  const clientGoogleAll = useMemo(() => googleRows.filter((r) => !r.clients?.is_internal && !r.clients?.archived), [googleRows])
+  const clientGoogle = useMemo(() => clientGoogleAll.filter((r) => !isLsaCampaign(r.campaign_type, r.campaign_name)), [clientGoogleAll])
+  const clientLsaSynced = useMemo(() => clientGoogleAll.filter((r) => isLsaCampaign(r.campaign_type, r.campaign_name)), [clientGoogleAll])
   const googleNowRows = useMemo(() => inRange(clientGoogle, windowStart), [clientGoogle, windowStart])
   const googlePrevRows = useMemo(() => inRange(clientGoogle, prevStart, prevEnd), [clientGoogle, prevStart, prevEnd])
   const googleDaily = useMemo(() => buildDailySeries(googleDailyRows(googleNowRows), windowStart, daysAgo(0)), [googleNowRows, windowStart])
   const google = useMemo(() => googleKpis(googleNowRows), [googleNowRows])
   const googleBefore = useMemo(() => googleKpis(googlePrevRows), [googlePrevRows])
 
-  // ---- LSA, weekly, by hand -----------------------------------------------
+  // ---- LSA: synced campaigns, plus the weeks logged by hand for clients ----
+  // whose Local Services account is not connected (never both for one client).
   const windowMonday = formatDate(getMonday(new Date(`${windowStart}T00:00:00`)))
-  const clientLsa = useMemo(() => lsaRows.filter((r) => !r.clients?.is_internal && !r.clients?.archived), [lsaRows])
-  const lsaSum = (rows) => ({
-    spend: rows.reduce((s, r) => s + Number(r.ad_spend || 0), 0),
-    leads: rows.reduce((s, r) => s + Number(r.leads || 0), 0),
+  const syncedLsaClients = useMemo(() => new Set(clientLsaSynced.map((r) => r.client_id)), [clientLsaSynced])
+  const clientLsa = useMemo(() => lsaRows.filter((r) => !r.clients?.is_internal && !r.clients?.archived && !syncedLsaClients.has(r.client_id)), [lsaRows, syncedLsaClients])
+  const lsaNowRows = useMemo(() => inRange(clientLsaSynced, windowStart), [clientLsaSynced, windowStart])
+  const lsaPrevRows = useMemo(() => inRange(clientLsaSynced, prevStart, prevEnd), [clientLsaSynced, prevStart, prevEnd])
+  const lsaDaily = useMemo(() => buildDailySeries(googleDailyRows(lsaNowRows), windowStart, daysAgo(0)), [lsaNowRows, windowStart])
+  const lsaSum = (weekRows, dayRows) => ({
+    spend: weekRows.reduce((s, r) => s + Number(r.ad_spend || 0), 0) + dayRows.reduce((s, r) => s + Number(r.cost || 0), 0),
+    leads: weekRows.reduce((s, r) => s + Number(r.leads || 0), 0) + dayRows.reduce((s, r) => s + Number(r.conversions || 0), 0),
   })
-  const lsa = useMemo(() => lsaSum(clientLsa.filter((r) => r.week_of >= windowMonday)), [clientLsa, windowMonday])
-  const lsaBefore = useMemo(() => lsaSum(clientLsa.filter((r) => r.week_of < windowMonday)), [clientLsa, windowMonday])
+  const lsa = useMemo(() => lsaSum(clientLsa.filter((r) => r.week_of >= windowMonday), lsaNowRows), [clientLsa, windowMonday, lsaNowRows])
+  const lsaBefore = useMemo(() => lsaSum(clientLsa.filter((r) => r.week_of < windowMonday), lsaPrevRows), [clientLsa, windowMonday, lsaPrevRows])
 
   // ---- All channels -------------------------------------------------------
   const all = {
@@ -200,6 +213,11 @@ export default function ReportsPage() {
       x.google += Number(r.cost) || 0
       x.leads += Number(r.conversions) || 0
     }
+    for (const r of lsaNowRows) {
+      const x = row(r.client_id, r.clients?.name || 'Unknown')
+      x.lsa += Number(r.cost) || 0
+      x.leads += Number(r.conversions) || 0
+    }
     for (const r of clientLsa.filter((k) => k.week_of >= windowMonday)) {
       const x = row(r.client_id, r.clients?.name || 'Unknown')
       x.lsa += Number(r.ad_spend) || 0
@@ -212,7 +230,7 @@ export default function ReportsPage() {
       })
       .filter((r) => r.spend > 0 || r.leads > 0)
       .sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name))
-  }, [metaNowRows, googleNowRows, clientLsa, windowMonday])
+  }, [metaNowRows, googleNowRows, lsaNowRows, clientLsa, windowMonday])
   const topSpend = Math.max(...clientTable.map((r) => r.spend), 1)
 
   // Our own businesses: Meta and Google, never in a total, with the Google
@@ -256,8 +274,10 @@ export default function ReportsPage() {
       leads: lsa.leads,
       cpl: lsa.leads > 0 ? lsa.spend / lsa.leads : 0,
       delta: pctChange(lsa.spend, lsaBefore.spend),
-      spark: null,
-      note: 'Logged weekly on each client page',
+      spark: lsaNowRows.length ? lsaDaily.map((d) => d.spend) : null,
+      to: '/reports/lsa',
+      cta: 'Open full report →',
+      note: 'Synced nightly from Google · weekly hand logs where not connected',
     },
   ]
 

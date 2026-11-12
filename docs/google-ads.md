@@ -368,3 +368,48 @@ The two lists it produces:
 Nothing here writes to Google. Pausing a keyword and adding a negative are each
 one click in the Google Ads UI, and doing them through the API would mean
 holding write access to every client account to save that click.
+
+## Local Services (2026-11-12)
+
+"Go ahead and build the LSA KPI pull and do whatever you see as best for
+seeing LSA data and who's connected, who's not, etc, KPIs." Local Services
+Ads come through the same connection as Search: the Google Ads API, one
+login, the manager account. What was already true: the nightly sync reads
+EVERY campaign type in a connected account into `google_campaign_daily`, so
+a Local Services campaign that lives in a client's Search account (Horizon
+HVAC's, and the "Pay-per-lead-PMax" shape Google moved it into on
+2026-11-03) was being synced all along and counted as Google. What is new:
+
+- **The leads themselves.** For every account whose campaign rows show a
+  Local Services campaign (`isLsaCampaign`: the `LOCAL_SERVICES` type, or a
+  Performance Max campaign named pay-per-lead / local services / LSA; the
+  same test as `public.is_lsa_campaign()`), the sync reads the Google Ads
+  API's `local_services_lead` resource into `lsa_leads`: one row per call,
+  message or booking, with its status (new, active, booked, declined), whether
+  Google charged for it and whether it was credited back. No contact details
+  are kept. Charged leads and cost per charged lead are what LSA is judged on.
+- **A Local Services account of its own.** A client whose LSA is a separate
+  Google customer id carries it in `clients.lsa_customer_id`. Discovery finds
+  it: among the accounts our login can see that no client has claimed, a sure
+  name match to a client who already has a Search id is asked whether it has a
+  Local Services campaign, and if so it is saved. That account's campaigns are
+  read into the same table under its own customer id, and its leads too. The
+  client's part is slide 7 of the LSA deck: allow our domain, then add
+  marketing@workingclassgroup.com as a user.
+- **The switch flips itself.** `clients.lsa_active` goes on when Local
+  Services spent in the last seven days (never off). `lsa_synced_at` and
+  `lsa_sync_error` say how the last lead read went.
+- **The page.** `/reports/lsa` (`src/pages/LsaReportPage.jsx`, rules in
+  `src/lib/lsaReport.js`, pinned by `scripts/check-lsa-report.mjs`): tiles,
+  a daily chart, every client with a status (Live, Connected and quiet,
+  Logged by hand, Marked live with nothing connected, Not connected, Paused),
+  the latest leads, and how to connect. The Reports hub's LSA card opens it
+  and now counts the synced Local Services campaigns plus the hand-logged
+  weeks of clients not connected; the Google card no longer counts the Local
+  Services campaigns, so nothing is counted twice.
+
+Not changed: the weekly `Google Search` roll-up in `weekly_kpis` still
+includes the Local Services campaigns, as it always did, and the client
+dashboards and weekly client reports still show them under Google. The
+sync does not write `LSA` rows to `weekly_kpis`; the hand log stays the way
+to record LSA for a client whose account is not connected.

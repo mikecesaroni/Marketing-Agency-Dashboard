@@ -36,6 +36,7 @@ const FunnelPage = lazy(() => import('./pages/FunnelPage'))
 const PaymentsPage = lazy(() => import('./pages/PaymentsPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 const GoogleSearchReportPage = lazy(() => import('./pages/GoogleSearchReportPage'))
+const LsaReportPage = lazy(() => import('./pages/LsaReportPage'))
 const ClientAdsPage = lazy(() => import('./pages/ClientAdsPage'))
 const ChannelRedirect = lazy(() => import('./pages/ClientAdsPage').then((m) => ({ default: m.ChannelRedirect })))
 const KeywordPlanPage = lazy(() => import('./pages/KeywordPlanPage'))
@@ -172,6 +173,7 @@ export default function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/reports/google-search" element={<GoogleSearchReportPage />} />
         <Route path="/reports/google-search/:clientId" element={<ChannelRedirect channel="google" />} />
+        <Route path="/reports/lsa" element={<LsaReportPage />} />
         <Route path="/reports/meta" element={<MetaReportPage />} />
         <Route path="/reports/meta/:clientId" element={<ChannelRedirect channel="meta" />} />
         <Route path="/reports/client/:clientId" element={<ClientAdsPage />} />
