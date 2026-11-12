@@ -76,6 +76,11 @@ function actId(raw: unknown): string {
   return bare ? `act_${bare}` : ''
 }
 
+// The public URL of a file in the client-files bucket, segment by segment.
+function bucketUrl(supabaseUrl: string, storagePath: string): string {
+  return `${supabaseUrl}/storage/v1/object/public/client-files/${String(storagePath).split('/').map(encodeURIComponent).join('/')}`
+}
+
 const clean = (v: unknown) => String(v ?? '').trim()
 const three = (list: unknown) => (Array.isArray(list) ? list.map(clean).filter(Boolean).slice(0, 3) : [])
 
@@ -84,7 +89,7 @@ type Intake = Record<string, unknown>
 type StaticRow = {
   id: string; client_id: string; stamp: string; hook: string | null; badge: string | null; offer_amount: string | null; offer_detail: string | null
   subhead: string | null; proof: string | null; primary_text: string | null; headline: string | null; description: string | null
-  more_copy: Record<string, unknown> | null; created_at: string; copy_requested_at: string | null; copy_written_at: string | null; copy_error: string | null; dropped_by: string | null
+  more_copy: Record<string, unknown> | null; about: string | null; created_at: string; copy_requested_at: string | null; copy_written_at: string | null; copy_error: string | null; dropped_by: string | null
 }
 type VideoRow = {
   id: string; client_id: string; storage_path: string; file_name: string | null; meta_account_id: string; meta_video_id: string | null; status: string
@@ -194,7 +199,7 @@ Deno.serve(async (req) => {
     const [staticsRes, videosRes, filesRes, publishedRes] = await Promise.all([
       supabase
         .from('saved_ads')
-        .select('id, client_id, stamp, hook, badge, offer_amount, offer_detail, subhead, proof, primary_text, headline, description, more_copy, created_at, copy_requested_at, copy_written_at, copy_error, dropped_by')
+        .select('id, client_id, stamp, hook, badge, offer_amount, offer_detail, subhead, proof, primary_text, headline, description, more_copy, about, created_at, copy_requested_at, copy_written_at, copy_error, dropped_by')
         .in('client_id', ids)
         .not('dropped_by', 'is', null)
         .gte('created_at', since)
@@ -205,7 +210,7 @@ Deno.serve(async (req) => {
         .in('client_id', ids)
         .gte('created_at', since)
         .order('created_at', { ascending: false }),
-      supabase.from('client_files').select('client_id, storage_path, file_name, file_type, date_uploaded, drop_dismissed_at').in('client_id', ids).gte('date_uploaded', since),
+      supabase.from('client_files').select('client_id, storage_path, file_name, file_type, date_uploaded, drop_dismissed_at, drop_note').in('client_id', ids).gte('date_uploaded', since),
       supabase.from('published_ads').select('client_id, stamp, video_id').in('client_id', ids),
     ])
     for (const [name, r] of [['saved_ads', staticsRes], ['ad_videos', videosRes], ['client_files', filesRes], ['published_ads', publishedRes]] as const) {
@@ -214,13 +219,23 @@ Deno.serve(async (req) => {
     const files = (filesRes.data || []) as FileRow[]
     const publishedStamps = new Set((publishedRes.data || []).map((p: any) => `${p.client_id}:${p.stamp}`).filter((k: string) => !k.endsWith(':null')))
     const publishedVideos = new Set((publishedRes.data || []).map((p: any) => String(p.video_id || '')).filter(Boolean))
-    // Cleared statics, by stamp; cleared clips, by path.
+    // Cleared statics, by stamp; cleared clips, by path. And, per static,
+    // the picture the copy assistant is shown (the 4:5 first) and the note
+    // the editor typed on the drop.
     const clearedStamps = new Set<string>()
     const clearedPaths = new Set<string>()
     const droppedPaths = new Map<string, FileRow>()
+    const staticFiles = new Map<string, { path: string; key: string }[]>()
+    const staticNotes = new Map<string, string>()
     for (const f of files) {
       const m = String(f.storage_path || '').match(STAMP_RE)
       if (m && f.drop_dismissed_at) clearedStamps.add(`${f.client_id}:${m[1]}`)
+      if (m) {
+        const k = `${f.client_id}:${m[1]}`
+        if (!staticFiles.has(k)) staticFiles.set(k, [])
+        staticFiles.get(k)!.push({ path: f.storage_path, key: m[2].toLowerCase() })
+        if (clean((f as any).drop_note) && !staticNotes.has(k)) staticNotes.set(k, clean((f as any).drop_note))
+      }
       if (String(f.file_type || '').startsWith('video/') && !String(f.storage_path || '').startsWith('drive:')) {
         if (f.drop_dismissed_at) clearedPaths.add(f.storage_path)
         else droppedPaths.set(f.storage_path, f)
@@ -293,11 +308,17 @@ Deno.serve(async (req) => {
       const label = s.hook || `static ${s.stamp}`
       if (!(await claim('saved_ads', s.id, 'copy_requested_at'))) return
       try {
+        // The picture itself, the 4:5 first, so the words match what is
+        // painted on it; and what the ad is for, typed on the drop.
+        const sizes = staticFiles.get(`${s.client_id}:${s.stamp}`) || []
+        const picture = ['feed', 'square', 'story'].map((k) => sizes.find((f) => f.key === k)).find(Boolean)
         const out = await callFn('ad-copy', {
           mode: 'text_options',
           medium: 'image',
           emojis: true,
           ...facts(client, intakes.get(s.client_id) || null),
+          image_url: picture ? bucketUrl(supabaseUrl, picture.path) : undefined,
+          about: clean(s.about) || staticNotes.get(`${s.client_id}:${s.stamp}`) || '',
           current: {
             badge: s.badge || '',
             hook: s.hook || '',

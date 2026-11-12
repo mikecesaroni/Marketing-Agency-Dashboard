@@ -161,6 +161,24 @@ minutes is tried again, a failure (`copy_error`) after six hours. Three
 writes and two transcriptions per run, in parallel. `{ action: 'preview' }`
 lists what a run would do. Pinned by `scripts/check-copy-ahead.mjs`.
 
+**It reads the ad itself** (the same afternoon: "how is the CRM writing ad
+copy for statics, does it know what the ad is for?"). It did not: a dropped
+static has no painted slots, so the copy assistant had the client's facts
+and the file name ("Supreme_W1-dark-offer-1500-off-system" became the ad's
+name, and that name was the hook it was shown), and nothing of what was
+painted on the picture. Now the picture goes with the ask: `ad-copy` v21
+takes `image_url` (a file from the CRM's own public bucket, nothing else)
+and attaches it as an image block beside the text in the text_options and
+options modes, with the rule that the picture outranks the name and the
+slots and nothing it does not say is added; if Anthropic refuses the
+picture (too big, a format it will not read) the ask is sent again without
+it. copy-ahead sends the 4:5 (else whichever size there is) and the publish
+page's own writes send it too (`staticPicture` in PublishToMetaPanel,
+`imageUrl` on `suggestTextOptions` and `suggestImageFeedCopy`). `about` on
+an image is "what this ad is for": the drop box has a line for it
+(`saved_ads.about`), and the editor's note on the drop stands in when that
+line is empty.
+
 ## Switching it on
 
 Transcription needs one secret: `DEEPGRAM_API_KEY`, under Project Settings >

@@ -13,7 +13,10 @@
 alter table public.saved_ads
   add column if not exists copy_requested_at timestamptz,
   add column if not exists copy_written_at timestamptz,
-  add column if not exists copy_error text;
+  add column if not exists copy_error text,
+  -- What the ad is for, typed in the drop box: the line the copy assistant
+  -- reads beside the picture itself.
+  add column if not exists about text;
 
 alter table public.ad_videos
   add column if not exists transcribe_requested_at timestamptz,

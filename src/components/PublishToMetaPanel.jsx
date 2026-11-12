@@ -9,7 +9,7 @@ import { announceAdsPublished } from '../lib/teamBriefClient'
 import { readMe } from '../lib/tasksData'
 import FunnelBuilder from './FunnelBuilder'
 import VideoAdPicker from './VideoAdPicker'
-import { fetchSavedAds, saveSavedAdCopy } from '../lib/savedAds'
+import { fetchSavedAds, publicUrl, saveSavedAdCopy } from '../lib/savedAds'
 import { guessAdSeason, seasonMeta } from '../lib/adSeason'
 import { metaAdName, wcName } from '../lib/adNaming'
 import { ago } from '../lib/contentHub'
@@ -670,6 +670,15 @@ function PartialWarning({ partial }) {
  * a launch are four different hooks, and making them share one primary text
  * would defeat the point of running them against each other.
  */
+// The picture the copy assistant is shown for a static: the 4:5, else
+// whichever size there is. The bucket's own public URL, unversioned, which
+// is the only kind the assistant fetches.
+function staticPicture(set) {
+  const pick = set?.ordered?.find((o) => o.size.key === 'feed') || set?.ordered?.[0]
+  const path = pick?.file?.storage_path
+  return path ? publicUrl(path) : ''
+}
+
 // Where each size of a static goes, in the words the publish row uses. The
 // 4:5 is the default rule in meta-publish, so with no 1:1 it covers those
 // placements too.
@@ -1348,6 +1357,8 @@ export default function PublishToMetaPanel({
       const { note, options } = await suggestImageFeedCopy({
         client,
         intake,
+        imageUrl: staticPicture(s),
+        about: s.recipe?.about || '',
         current: staticCurrent(s.recipe, again ? { ...cur, primary_text: '', headline: '', description: '' } : cur),
         instruction: again
           ? `${feedCopyInstruction()} Take a different angle from this: "${String(cur.primary_text || '').slice(0, 300)}".`
@@ -1382,7 +1393,7 @@ export default function PublishToMetaPanel({
     setCopyNotes((prev) => ({ ...prev, [stamp]: '' }))
     try {
       const cur = copies[stamp] || {}
-      const out = await suggestTextOptions({ client, intake, medium: 'image', current: staticCurrent(s.recipe, cur) })
+      const out = await suggestTextOptions({ client, intake, medium: 'image', imageUrl: staticPicture(s), about: s.recipe?.about || '', current: staticCurrent(s.recipe, cur) })
       const adding = auto && Boolean(String(cur.primary_text || '').trim())
       const patch = adding ? patchAddingOptions(cur, out) : patchFromWritten(out)
       if (!Object.keys(patch).length || (!adding && !patch.primary_text)) {

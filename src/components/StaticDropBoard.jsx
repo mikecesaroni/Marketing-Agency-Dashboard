@@ -258,6 +258,7 @@ function SlotBox({ slot, item, busy, onFiles, onClear }) {
 function DropIn({ clients, onDropped }) {
   const [clientId, setClientId] = useState('')
   const [note, setNote] = useState('')
+  const [about, setAbout] = useState('')
   const [name, setName] = useState('')
   const nameTouched = useRef(false)
   const [me, setMe] = useState(() => {
@@ -369,9 +370,10 @@ function DropIn({ clients, onDropped }) {
     if (!personName(who)) who = askMe()
     try {
       setBusy(filled.length === 1 ? 'Dropping in one size…' : 'Dropping in both sizes…')
-      const set = await uploadStaticAd({ clientId: chosen.id, name, files: slotFiles, uploadedBy: personName(who) || who, note })
+      const set = await uploadStaticAd({ clientId: chosen.id, name, files: slotFiles, uploadedBy: personName(who) || who, note, about })
       setDone({ client: chosen, set, note: note.trim(), sizes: filled.map((s) => s.ratio) })
       setNote('')
+      setAbout('')
       reset()
       onDropped?.()
       // The words, started now: three of each written by copy-ahead before
@@ -477,6 +479,18 @@ function DropIn({ clients, onDropped }) {
             title="How the ad is listed on the board, the publish page and the gallery"
             className="w-44 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
             data-static-name
+          />
+          {/* What the ad is for, for the copy assistant, which also reads the
+              picture itself. The note above is for whoever publishes. */}
+          <input
+            type="text"
+            value={about}
+            onChange={(e) => setAbout(e.target.value)}
+            maxLength={600}
+            placeholder="What the ad is for, for the copy (optional): the offer, who it is aimed at, when it ends"
+            title="The copy assistant reads this beside the picture when it writes the three text options"
+            className="min-w-[16rem] flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
+            data-static-about
           />
           {missing && (
             <span className="text-[11px] text-amber-700" data-slot-missing>

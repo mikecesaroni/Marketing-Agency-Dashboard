@@ -44,7 +44,7 @@ export async function measureImage(file) {
  *
  * Returns { stamp, name, files: [{ path, name, key }] }.
  */
-export async function uploadStaticAd({ clientId, name = '', files = {}, uploadedBy = '', note = '' }) {
+export async function uploadStaticAd({ clientId, name = '', files = {}, uploadedBy = '', note = '', about = '' }) {
   const plan = staticAdPlan(files)
   if (plan.length === 0) throw new Error('Drop the images first.')
   for (const { key } of plan) {
@@ -78,10 +78,14 @@ export async function uploadStaticAd({ clientId, name = '', files = {}, uploaded
     }
     uploaded.push({ path, name: file.name, key })
   }
-  // The recipe row: the name the lists show and who dropped it. Best
+  // The recipe row: the name the lists show, who dropped it, and what the
+  // ad is for (the line the copy assistant reads beside the picture). Best
   // effort: a set without one still publishes, it just reads "image only"
   // in the gallery and the words are written again on the next visit.
-  await supabase.from('saved_ads').insert({ client_id: clientId, stamp, hook: adName || null, dropped_by: who }).then(() => {}, () => {})
+  await supabase
+    .from('saved_ads')
+    .insert({ client_id: clientId, stamp, hook: adName || null, dropped_by: who, about: String(about || '').trim().slice(0, 600) || null })
+    .then(() => {}, () => {})
   return { stamp, name: adName, files: uploaded }
 }
 

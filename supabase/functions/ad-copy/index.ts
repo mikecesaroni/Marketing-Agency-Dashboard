@@ -32,6 +32,10 @@
 //     the house style read off Don Air's hand-built ads (2026-11-10: one
 //     emoji up top, a line in capitals naming who and where, a ✅ checklist
 //     of proof points). `emojis: false` asks for the plain style.
+// v21: `image_url`. The ad itself, from the CRM's own public bucket, shown
+//     to the model beside the text in the text_options and options modes,
+//     so a dropped static's copy matches what is painted on it. `about` on
+//     an image is "what this ad is for", typed by whoever dropped it in.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
 import { z } from 'npm:zod'
@@ -403,6 +407,21 @@ Deno.serve(async (req) => {
   const avoid = String(body.words_to_avoid || '').trim()
   const isVideo = body.medium === 'video'
 
+  // THE AD ITSELF (2026-11-12: "how is the CRM writing ad copy for statics,
+  // does it know what the ad is for?"). A static the editor dropped in
+  // carries no painted slots, only its name, so until now the copy was
+  // written from the client's facts and a file name. Now the picture comes
+  // too, as an image block beside the text: the model reads the offer, the
+  // headline, the price, the dates and the proof painted on it and writes
+  // to match. Only a file from the CRM's own public bucket is fetched.
+  const imageUrl = String(body.image_url || '').trim()
+  const ownBucket = `${Deno.env.get('SUPABASE_URL') || ''}/storage/v1/object/public/`
+  const adImage = !isVideo && imageUrl && ownBucket.length > 40 && imageUrl.startsWith(ownBucket) ? imageUrl : ''
+  const withImage = (text: string): any => (adImage ? [{ type: 'image', source: { type: 'url', url: adImage } }, { type: 'text', text }] : text)
+  const imageRule = adImage
+    ? 'THE AD ITSELF IS ATTACHED ABOVE. Read the offer, the headline, any price, date, rating, guarantee or town painted on it and write to match it exactly: the picture outranks the ad\'s name and the slots listed below, and nothing the picture does not say and the facts do not give is added.\n\n'
+    : ''
+
   // What the agency's own ad data said last night. Refreshed by
   // refresh_ad_learnings() after the Meta sync; the table is small and the
   // rows are already sentences. Read with the service key so this works
@@ -429,16 +448,34 @@ Deno.serve(async (req) => {
     // The options still make sense without it.
   }
 
+  // The note on the ad: what the clip shows, or, on a dropped static, what
+  // the ad is for, typed by whoever dropped it in.
+  const aboutLabel = isVideo ? 'WHAT THIS VIDEO SHOWS, from the person building the ad' : 'WHAT THIS AD IS FOR, from the person who dropped it in'
   const videoContext =
-    `${videoAbout ? `WHAT THIS VIDEO SHOWS, from the person building the ad:\n"""\n${videoAbout}\n"""\n\n` : ''}` +
+    `${videoAbout ? `${aboutLabel}:\n"""\n${videoAbout}\n"""\n\n` : ''}` +
     `${transcript ? `WHAT IS SAID IN THE VIDEO (machine transcript of the audio):\n"""\n${transcript}\n"""\n\n` : ''}`
 
   try {
     const client = new Anthropic({ apiKey })
 
+    // With the picture attached, and again without it if the picture is
+    // what Anthropic refuses (too big, a format it will not read): the
+    // words still get written, from the name and the facts, as before.
+    const parse = async (params: any) => {
+      try {
+        return await client.messages.parse(params)
+      } catch (err) {
+        if (adImage && err instanceof Anthropic.APIError && /image/i.test(String(err.message))) {
+          const messages = params.messages.map((m: any) => ({ ...m, content: Array.isArray(m.content) ? m.content.filter((b: any) => b.type !== 'image') : m.content }))
+          return await client.messages.parse({ ...params, messages })
+        }
+        throw err
+      }
+    }
+
     if (body.mode === 'text_options') {
       const plain = body.emojis === false
-      const written = await client.messages.parse({
+      const written = await parse({
         model: MODEL,
         max_tokens: MAX_TOKENS,
         thinking: { type: 'adaptive' },
@@ -447,18 +484,20 @@ Deno.serve(async (req) => {
         messages: [
           {
             role: 'user',
-            content:
+            content: withImage(
               `${about ? `${about}\n\n` : ''}` +
-              videoContext +
-              `${
-                isVideo
-                  ? 'THIS AD IS A VIDEO. There is no image and no artboard: the three lists go beside the clip in the feed.\n\n'
-                  : 'THIS AD IS AN IMAGE and the painted words (badge, hook, offer, subhead, proof) are final. The three lists go beside the image in the feed, and the first line of each primary text carries the offer on its own.\n\n'
-              }` +
-              `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
-              `${learnings ? `${learnings}\n\n` : ''}` +
-              `${plain ? 'Write the plain style: no emoji anywhere, the checklist lines start with a dash.\n\n' : ''}` +
-              `The ad as it stands (may be empty):\n${isVideo ? FEED_FIELDS.map((f) => `${f}: ${String(current[f] ?? '').trim() || '(empty)'}`).join('\n') : slots}\n\nWhat I want: ${instruction}`,
+                videoContext +
+                `${
+                  isVideo
+                    ? 'THIS AD IS A VIDEO. There is no image and no artboard: the three lists go beside the clip in the feed.\n\n'
+                    : 'THIS AD IS AN IMAGE and the painted words (badge, hook, offer, subhead, proof) are final. The three lists go beside the image in the feed, and the first line of each primary text carries the offer on its own.\n\n'
+                }` +
+                imageRule +
+                `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
+                `${learnings ? `${learnings}\n\n` : ''}` +
+                `${plain ? 'Write the plain style: no emoji anywhere, the checklist lines start with a dash.\n\n' : ''}` +
+                `The ad as it stands (may be empty):\n${isVideo ? FEED_FIELDS.map((f) => `${f}: ${String(current[f] ?? '').trim() || '(empty)'}`).join('\n') : slots}\n\nWhat I want: ${instruction}`
+            ),
           },
         ],
       })
@@ -523,7 +562,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const response = await client.messages.parse({
+    const response = await parse({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       thinking: { type: 'adaptive' },
@@ -534,13 +573,15 @@ Deno.serve(async (req) => {
       messages: [
         {
           role: 'user',
-          content:
+          content: withImage(
             `${about ? `${about}\n\n` : ''}` +
-            videoContext +
-            `${isVideo ? 'THIS AD IS A VIDEO. There is no image and no artboard: write only primaryText, headline and description.\n\n' : ''}` +
-            `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
-            `${learnings ? `${learnings}\n\n` : ''}` +
-            `The ad as it stands:\n${slots}\n\nWhat I want: ${instruction}`,
+              videoContext +
+              `${isVideo ? 'THIS AD IS A VIDEO. There is no image and no artboard: write only primaryText, headline and description.\n\n' : ''}` +
+              imageRule +
+              `${avoid ? `Never use these words or phrases: ${avoid.slice(0, 300)}\n\n` : ''}` +
+              `${learnings ? `${learnings}\n\n` : ''}` +
+              `The ad as it stands:\n${slots}\n\nWhat I want: ${instruction}`
+          ),
         },
       ],
     })

@@ -114,9 +114,13 @@ export async function suggestVideoCopy({ client, intake, current, instruction, a
  * Returns {note, options}; publishCopy.feedCopyFromOptions reads the first
  * option per feed field.
  */
-export async function suggestImageFeedCopy({ client, intake, current, instruction }) {
+export async function suggestImageFeedCopy({ client, intake, current, instruction, imageUrl, about }) {
   const i = intake || {}
   return callAdCopy({
+    // The picture itself (a dropped static has no painted slots to describe
+    // it) and what it is for, typed on the drop: src/lib/staticDrops.js.
+    image_url: imageUrl || undefined,
+    about: about || undefined,
     client_id: client?.id,
     client_name: client?.name,
     industry: client?.industry || i.industry_trade,
@@ -189,13 +193,15 @@ export async function suggestVideoVariations({ client, intake, about, transcript
  * Returns {note, primaryTexts, headlines, descriptions}; textOptions.patchFromWritten
  * turns it into the copy record's fields.
  */
-export async function suggestTextOptions({ client, intake, about, transcript, current, medium = 'video', emojis = true }) {
+export async function suggestTextOptions({ client, intake, about, transcript, current, medium = 'video', emojis = true, imageUrl }) {
   const i = intake || {}
   const { data, error } = await supabase.functions.invoke('ad-copy', {
     body: {
       mode: 'text_options',
       medium,
       emojis,
+      // An image ad's own picture, so the lists match what is painted on it.
+      image_url: imageUrl || undefined,
       client_id: client?.id,
       client_name: client?.name,
       industry: client?.industry || i.industry_trade,
