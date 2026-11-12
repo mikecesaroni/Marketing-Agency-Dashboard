@@ -8,8 +8,9 @@ import { registerAdVideo } from '../lib/metaPublish'
 import { readMe, saveMe } from '../lib/tasksData'
 
 /**
- * This week's video drops: one row per client, most behind first, and the
- * drop zone the editor puts finished clips into.
+ * Dropped videos (titled "This week's video drops" until 2026-11-12): one
+ * row per client, most behind first, and the drop zone the editor puts
+ * finished clips into.
  *
  * The agency's promise is a fresh video ad per client per week, and the
  * only way to keep a promise like that across fifteen clients is a board
@@ -432,7 +433,7 @@ export default function VideoDropBoard({ rows, clients, onDropped, onReset, comp
     <section className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 ${className}`} data-video-board>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold tracking-tight text-slate-900">This week&rsquo;s video drops</h2>
+          <h2 className="text-lg font-bold tracking-tight text-slate-900">Dropped videos</h2>
           <p className="text-xs text-slate-500">
             A client with no new ad for 10 days or more is flagged. Most behind at the top; click a client to publish.
           </p>

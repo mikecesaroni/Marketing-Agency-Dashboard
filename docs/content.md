@@ -30,7 +30,7 @@ Manager to add it.
 `src/lib/contentHub.js` decides who shows, the order and the numbers;
 `scripts/check-content-hub.mjs` pins it.
 
-## This week's video drops
+## Dropped videos (titled "This week's video drops" until 2026-11-12)
 
 Under the three doors, and again at the top of the Publish door: one row per
 client with a Meta ad account, most behind first. A client with no new ad of
