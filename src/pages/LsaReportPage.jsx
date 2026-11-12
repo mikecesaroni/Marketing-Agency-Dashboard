@@ -149,7 +149,7 @@ export default function LsaReportPage() {
   const metric = METRICS.find((m) => m.key === metricKey)
   const spark = (k) => daily.map((d) => d[k])
 
-  const rows = useMemo(() => lsaClientReport({ clients, campaignRows, leads, handRows, since: windowStart }), [clients, campaignRows, leads, handRows, windowStart])
+  const rows = useMemo(() => lsaClientReport({ clients, campaignRows, leads, handRows, since: windowStart, today: daysAgo(0) }), [clients, campaignRows, leads, handRows, windowStart])
   const link = useMemo(() => lsaConnection(rows), [rows])
   const latest = useMemo(() => recentLeads(nowLeads, clients, 30), [nowLeads, clients])
   const todo = rows.filter((r) => r.state === 'marked' || r.state === 'not-connected' || r.state === 'by-hand')
@@ -167,7 +167,7 @@ export default function LsaReportPage() {
     <Layout
       tone="dark"
       title="Local Services"
-      subtitle={`Last ${days} days · ${link.live} ${link.live === 1 ? 'client' : 'clients'} live · ${money(now.spend)} spend · ${now.leads} leads · ${now.charged} charged`}
+      subtitle={`Last ${days} days · ${link.live} ${link.live === 1 ? 'client' : 'clients'} live${link.stopped ? ` · ${link.stopped} stopped` : ''} · ${money(now.spend)} spend · ${now.leads} leads · ${now.charged} charged`}
       actions={actions}
     >
       <Link to="/reports" className="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white">
@@ -208,7 +208,7 @@ export default function LsaReportPage() {
             <section>
               <SectionTitle
                 title="Every client"
-                sub={`${link.live} live · ${link.connected} connected and quiet · ${link.byHand} logged by hand · ${link.marked} marked live with nothing connected · ${link.notConnected} not connected`}
+                sub={`${link.live} live · ${link.stopped} stopped · ${link.connected} connected and quiet · ${link.byHand} logged by hand · ${link.marked} marked live with nothing connected · ${link.notConnected} not connected`}
               />
               <DTable>
                 <thead>
@@ -234,6 +234,11 @@ export default function LsaReportPage() {
                         </DTd>
                         <DTd>
                           <Pill tone={s.tone} title={r.syncError || undefined}>{s.label}</Pill>
+                          {r.state === 'stopped' && (
+                            <span className="ml-2 text-[11px] text-amber-300/90">
+                              {r.stoppedWhy === 'paused' ? `paused in Google, last spend ${r.lastDate}` : `no spend for ${r.quietDays} days`}
+                            </span>
+                          )}
                           {r.syncError && <span className="ml-2 text-[11px] text-amber-300/90">lead read failed</span>}
                         </DTd>
                         <DTd className="whitespace-nowrap text-xs text-slate-400">

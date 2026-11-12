@@ -401,12 +401,22 @@ HVAC's, and the "Pay-per-lead-PMax" shape Google moved it into on
   `lsa_sync_error` say how the last lead read went.
 - **The page.** `/reports/lsa` (`src/pages/LsaReportPage.jsx`, rules in
   `src/lib/lsaReport.js`, pinned by `scripts/check-lsa-report.mjs`): tiles,
-  a daily chart, every client with a status (Live, Connected and quiet,
-  Logged by hand, Marked live with nothing connected, Not connected, Paused),
-  the latest leads, and how to connect. The Reports hub's LSA card opens it
+  a daily chart, every client with a status (Live, Stopped, Connected and
+  quiet, Logged by hand, Marked live with nothing connected, Not connected,
+  Paused), the latest leads, and how to connect. The Reports hub's LSA card opens it
   and now counts the synced Local Services campaigns plus the hand-logged
   weeks of clients not connected; the Google card no longer counts the Local
   Services campaigns, so nothing is counted twice.
+- **Stopped.** A client who spent on Local Services in the range but is not
+  running now: the newest synced row of every one of their Local Services
+  campaigns says paused or removed (the sync rewrites the whole window each
+  run, so that status is current), or the last day they spent is seven or
+  more days ago (`STOPPED_DAYS`). The row says which: "paused in Google,
+  last spend <date>" or "no spend for N days". Found the day the page
+  shipped: Horizon HVAC's first sync read 42 leads for the month, and the
+  page said Live, while both of its Local Services campaigns had been paused
+  since 2026-11-04. The nightly `lsa_active` switch never turned on for the
+  same reason (nothing in the last seven days), which was right.
 
 Not changed: the weekly `Google Search` roll-up in `weekly_kpis` still
 includes the Local Services campaigns, as it always did, and the client

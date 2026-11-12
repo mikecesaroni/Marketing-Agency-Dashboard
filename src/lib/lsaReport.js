@@ -146,11 +146,40 @@ export function lsaDailyRows(rows, leads) {
 
 export const STATES = {
   live: { label: 'Live', tone: 'success', rank: 0 },
-  connected: { label: 'Connected, quiet', tone: 'info', rank: 1 },
-  'by-hand': { label: 'Logged by hand', tone: 'warning', rank: 2 },
-  marked: { label: 'Marked live, not connected', tone: 'warning', rank: 3 },
-  'not-connected': { label: 'Not connected', tone: 'neutral', rank: 4 },
-  paused: { label: 'Paused', tone: 'neutral', rank: 5 },
+  // Spent in the range, then went quiet: paused in Google, or no spend for a
+  // week. Horizon HVAC on 2026-11-12: both Local Services campaigns paused
+  // since the 4th, which "Live" would have hidden behind the month's numbers.
+  stopped: { label: 'Stopped', tone: 'warning', rank: 1 },
+  connected: { label: 'Connected, quiet', tone: 'info', rank: 2 },
+  'by-hand': { label: 'Logged by hand', tone: 'warning', rank: 3 },
+  marked: { label: 'Marked live, not connected', tone: 'warning', rank: 4 },
+  'not-connected': { label: 'Not connected', tone: 'neutral', rank: 5 },
+  paused: { label: 'Paused', tone: 'neutral', rank: 6 },
+}
+
+/** No spend for this many days, with spend earlier in the range, reads as stopped. */
+export const STOPPED_DAYS = 7
+
+const dayDiff = (a, b) => Math.round((new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / 86400000)
+
+/**
+ * Why a client that spent in the range is not live now: 'paused' when the
+ * newest synced row of every one of its Local Services campaigns says the
+ * campaign is paused or removed (the sync rewrites the whole window each
+ * run, so the status on the rows is the current one), 'quiet' when the last
+ * day it spent is STOPPED_DAYS or more before today, else '' (still live).
+ */
+export function stoppedWhy(rows, lastDate, today) {
+  const newest = new Map()
+  for (const r of rows || []) {
+    const id = String(r.campaign_id || r.campaign_name || '')
+    const seen = newest.get(id)
+    if (!seen || String(r.date) > String(seen.date)) newest.set(id, r)
+  }
+  const statuses = [...newest.values()].map((r) => String(r.campaign_status || '').toUpperCase())
+  if (statuses.length && statuses.every((s) => s === 'PAUSED' || s === 'REMOVED')) return 'paused'
+  if (lastDate && today && dayDiff(lastDate, today) >= STOPPED_DAYS) return 'quiet'
+  return ''
 }
 
 /** The Monday on or before a 'YYYY-MM-DD'. */
@@ -173,8 +202,10 @@ function mondayOf(day) {
  *   leads         lsa_leads rows, the loaded range
  *   handRows      weekly_kpis rows with channel 'LSA' (client_id, week_of, ad_spend, leads)
  *   since, until  the window
+ *   today         'YYYY-MM-DD', for the stopped rule; until when not given
  */
-export function lsaClientReport({ clients, campaignRows, leads, handRows, since, until }) {
+export function lsaClientReport({ clients, campaignRows, leads, handRows, since, until, today }) {
+  const now = today || until || ''
   const all = lsaRows(campaignRows)
   const allBy = new Map()
   for (const r of all) {
@@ -217,10 +248,13 @@ export function lsaClientReport({ clients, campaignRows, leads, handRows, since,
     for (const r of rows) if (Number(r.cost || 0) > 0 && String(r.date) > lastDate) lastDate = String(r.date)
     let lastLead = ''
     for (const l of myLeads) if (String(l.created_at_google || l.created_date) > lastLead) lastLead = String(l.created_at_google || l.created_date)
+    const why = k.spend > 0 ? stoppedWhy(rows, lastDate, now) : ''
     const state = c.paused_at
       ? 'paused'
       : k.spend > 0
-        ? 'live'
+        ? why
+          ? 'stopped'
+          : 'live'
         : connected
           ? 'connected'
           : hand
@@ -232,6 +266,9 @@ export function lsaClientReport({ clients, campaignRows, leads, handRows, since,
       id: c.id,
       name: c.name,
       state,
+      // For a stopped client: 'paused' (in Google) or 'quiet' (no spend for a week).
+      stoppedWhy: state === 'stopped' ? why : '',
+      quietDays: lastDate && now ? Math.max(0, dayDiff(lastDate, now)) : 0,
       tier: Number(c.tier) || 0,
       marked: Boolean(c.lsa_active),
       connected,
@@ -253,7 +290,7 @@ export function lsaClientReport({ clients, campaignRows, leads, handRows, since,
 /** The counts for the connection line: how many in each state. */
 export function lsaConnection(rows) {
   const n = (s) => (rows || []).filter((r) => r.state === s).length
-  return { live: n('live'), connected: n('connected'), byHand: n('by-hand'), marked: n('marked'), notConnected: n('not-connected'), paused: n('paused'), total: (rows || []).length }
+  return { live: n('live'), stopped: n('stopped'), connected: n('connected'), byHand: n('by-hand'), marked: n('marked'), notConnected: n('not-connected'), paused: n('paused'), total: (rows || []).length }
 }
 
 /** The newest leads across every client, each naming its client. */
