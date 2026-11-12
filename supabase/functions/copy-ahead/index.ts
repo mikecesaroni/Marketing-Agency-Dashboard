@@ -306,7 +306,6 @@ Deno.serve(async (req) => {
     const writeStatic = async (s: StaticRow) => {
       const client = clients.get(s.client_id)!
       const label = s.hook || `static ${s.stamp}`
-      if (!(await claim('saved_ads', s.id, 'copy_requested_at'))) return
       try {
         // The picture itself, the 4:5 first, so the words match what is
         // painted on it; and what the ad is for, typed on the drop.
@@ -360,7 +359,6 @@ Deno.serve(async (req) => {
     const writeVideo = async (v: VideoRow) => {
       const client = clients.get(v.client_id)!
       const label = v.file_name || v.storage_path.split('/').pop() || v.storage_path
-      if (!(await claim('ad_videos', v.id, 'copy_requested_at'))) return
       try {
         const copy = v.copy || {}
         const out = await callFn('ad-copy', {
@@ -398,7 +396,6 @@ Deno.serve(async (req) => {
     const transcribe = async (v: VideoRow) => {
       const client = clients.get(v.client_id)!
       const label = v.file_name || v.storage_path.split('/').pop() || v.storage_path
-      if (!(await claim('ad_videos', v.id, 'transcribe_requested_at'))) return
       try {
         const out = await callFn('transcribe-video', { client_id: v.client_id, storage_path: v.storage_path })
         transcribed.push({ client: client.name, name: label, ok: true, note: out?.empty ? 'no speech found' : undefined })
@@ -412,11 +409,26 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Newest first across both kinds, a few per run, all at once.
-    const writes = [...staticsTodo.map((s) => ({ at: s.created_at, run: () => writeStatic(s) })), ...videosTodo.map((v) => ({ at: v.created_at, run: () => writeVideo(v) }))]
-      .sort((a, b) => String(b.at).localeCompare(String(a.at)))
-      .slice(0, MAX_WRITES)
-    await Promise.allSettled([...writes.map((w) => w.run()), ...transcribeTodo.slice(0, MAX_TRANSCRIBES).map((v) => transcribe(v))])
+    // Newest first across both kinds, and each one CLAIMED in turn until the
+    // run has its few. Runs at once (the schedule, a drop box's nudge, a
+    // sweep fired by hand to clear a backlog) then take different rows: the
+    // first version picked its three before claiming, so every run reached
+    // for the same three newest and all but one came away empty.
+    const candidates = [
+      ...staticsTodo.map((s) => ({ at: s.created_at, table: 'saved_ads', id: s.id, run: () => writeStatic(s) })),
+      ...videosTodo.map((v) => ({ at: v.created_at, table: 'ad_videos', id: v.id, run: () => writeVideo(v) })),
+    ].sort((a, b) => String(b.at).localeCompare(String(a.at)))
+    const writes: (() => Promise<void>)[] = []
+    for (const c of candidates) {
+      if (writes.length >= MAX_WRITES) break
+      if (await claim(c.table, c.id, 'copy_requested_at')) writes.push(c.run)
+    }
+    const transcribes: (() => Promise<void>)[] = []
+    for (const v of transcribeTodo) {
+      if (transcribes.length >= MAX_TRANSCRIBES) break
+      if (await claim('ad_videos', v.id, 'transcribe_requested_at')) transcribes.push(() => transcribe(v))
+    }
+    await Promise.allSettled([...writes.map((w) => w()), ...transcribes.map((t) => t())])
 
     return json({
       day: nowIso.slice(0, 10),
