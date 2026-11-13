@@ -657,7 +657,7 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
     // Re-stamped on every tick because a re-poll can have filled in a
     // thumbnail since the list was first loaded. The name is filled in here
     // too, so a clip published without a version picked is still named
-    // WC_client · day · file rather than whatever the function invents.
+    // WC_Video | day | season | file rather than whatever the function invents.
     const patch = { meta_video_id: video.meta_video_id, thumb_url: video.thumb_url }
     if (!copies[video.storage_path]?.ad_name?.trim()) patch.ad_name = nameFor(video)
     onCopy(video.storage_path, patch)
@@ -1022,7 +1022,7 @@ export default function VideoAdPicker({ client, intake, picked, onPicked, copies
                       value={copy.ad_name || ''}
                       onChange={(e) => onCopy(v.storage_path, { ad_name: e.target.value })}
                       placeholder="Ad name — what you will see in Ads Manager"
-                      title="Filled in as WC_client · day · angle; type over it if you like"
+                      title="Filled in as WC_Video | day | season | angle; type over it if you like, it still goes out starting WC_Video"
                       className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
                     />
                     <div className="flex flex-wrap items-center gap-2">

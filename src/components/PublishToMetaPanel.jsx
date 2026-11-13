@@ -11,7 +11,7 @@ import FunnelBuilder from './FunnelBuilder'
 import VideoAdPicker from './VideoAdPicker'
 import { fetchSavedAds, publicUrl, saveSavedAdCopy } from '../lib/savedAds'
 import { guessAdSeason, seasonMeta } from '../lib/adSeason'
-import { metaAdName, wcName } from '../lib/adNaming'
+import { AD_KINDS, adKindName, metaAdName, wcName } from '../lib/adNaming'
 import { ago } from '../lib/contentHub'
 import { suggestImageFeedCopy, suggestTextOptions } from '../lib/adCopy'
 import { hasTextOptions, moreFromSaved, moreOf, patchAddingOptions, patchFromWritten, textOptionsForPublish } from '../lib/textOptions'
@@ -1047,7 +1047,7 @@ export default function PublishToMetaPanel({
           description: r.description || '',
           // The extra text options kept on the saved ad (saved_ads.more_copy).
           ...moreFromSaved(r.more_copy),
-          // Season | date | hook. No company name: it is their account.
+          // WC_Static | date | season | hook. No company name: it is their account.
           ad_name: metaAdName({ season: r.season, hook: r.hook }),
         }
       }
@@ -1493,9 +1493,9 @@ export default function PublishToMetaPanel({
           // The text options, when there is more than one of something:
           // the full lists, which Meta mixes per viewer.
           ...(textOptionsForPublish(c) || {}),
-          // Always sent, always prefixed. Left blank, the function would name
-          // the ad itself, without the prefix.
-          ad_name: wcName(c.ad_name?.trim() || metaAdName({ season: s.recipe?.season, date: today, hook: s.recipe?.hook })),
+          // Always sent, always WC_Static first (2026-11-13), whatever was
+          // typed. Left blank, the function would name the ad itself.
+          ad_name: adKindName(c.ad_name?.trim() || metaAdName({ season: s.recipe?.season, date: today, hook: s.recipe?.hook }), AD_KINDS.static),
           cta,
           link_url: linkUrl.trim() || undefined,
           lead_form_id: leadForm?.id,
@@ -1515,14 +1515,17 @@ export default function PublishToMetaPanel({
           headline: c.headline?.trim() || undefined,
           description: c.description?.trim() || undefined,
           ...(textOptionsForPublish(c) || {}),
-          ad_name: wcName(
+          // Always WC_Video first, whatever was typed or kept from a visit
+          // before the kind led the name.
+          ad_name: adKindName(
             c.ad_name?.trim() ||
               metaAdName({
                 season: guessAdSeason({ content: { hook: c.headline, primaryText: c.primary_text } }).season,
                 date: today,
-                kind: 'Video',
+                kind: AD_KINDS.video,
                 hook: c.headline,
-              })
+              }),
+            AD_KINDS.video
           ),
           cta,
           link_url: linkUrl.trim() || undefined,

@@ -8,7 +8,7 @@
 // and checks they carry the same rule, because they cannot import it.
 
 import { readFileSync } from 'node:fs'
-import { WC_PREFIX, isWcName, metaAdName, wcName } from '../src/lib/adNaming.js'
+import { WC_PREFIX, adKindName, isWcName, metaAdName, wcName } from '../src/lib/adNaming.js'
 
 let failures = 0
 function check(name, actual, expected) {
@@ -32,12 +32,21 @@ check('isWcName rejects a name without it', isWcName('Horizon HVAC — 2026'), f
 check('isWcName rejects a prefix in the middle', isWcName('Old WC_ campaign'), false)
 
 // ------------------------------------------------- how an ad is named in Meta
-check('ad name: season | date | hook, WC_ in front, no company name', metaAdName({ season: 'summer', date: '2026-10-08', hook: 'AC died? Same-day cooling repair' }), 'WC_Summer | 2026-10-08 | AC died? Same-day cooling repair')
-check('ad name: a video says so', metaAdName({ season: 'winter', date: '2026-10-08', kind: 'Video', hook: 'The offer' }), 'WC_Winter | 2026-10-08 | Video | The offer')
-check('ad name: no season is year-round', metaAdName({ date: '2026-10-08', hook: 'Call the owner' }), 'WC_Year-round | 2026-10-08 | Call the owner')
-check('ad name: no hook still names the ad', metaAdName({ season: 'all', date: '2026-10-08' }), 'WC_Year-round | 2026-10-08 | ad')
-check('ad name: the hook is what gets cut at 100', [metaAdName({ season: 'summer', date: '2026-10-08', hook: 'x'.repeat(200) }).length, metaAdName({ season: 'summer', date: '2026-10-08', hook: 'x'.repeat(200) }).startsWith('WC_Summer | 2026-10-08 | ')], [100, true])
-check('ad name: a date object works', metaAdName({ season: 'fall', date: new Date('2026-10-08T15:00:00Z'), hook: 'h' }), 'WC_Fall | 2026-10-08 | h')
+check('ad name: WC_Static | date | season | hook, no company name (the kind first since 2026-11-13)', metaAdName({ season: 'summer', date: '2026-10-08', hook: 'AC died? Same-day cooling repair' }), 'WC_Static | 2026-10-08 | Summer | AC died? Same-day cooling repair')
+check('ad name: a video says so, first', metaAdName({ season: 'winter', date: '2026-10-08', kind: 'Video', hook: 'The offer' }), 'WC_Video | 2026-10-08 | Winter | The offer')
+check('ad name: no season is year-round', metaAdName({ date: '2026-10-08', hook: 'Call the owner' }), 'WC_Static | 2026-10-08 | Year-round | Call the owner')
+check('ad name: no hook still names the ad', metaAdName({ season: 'all', date: '2026-10-08' }), 'WC_Static | 2026-10-08 | Year-round | ad')
+check('ad name: the hook is what gets cut at 100', [metaAdName({ season: 'summer', date: '2026-10-08', hook: 'x'.repeat(200) }).length, metaAdName({ season: 'summer', date: '2026-10-08', hook: 'x'.repeat(200) }).startsWith('WC_Static | 2026-10-08 | Summer | ')], [100, true])
+check('ad name: a date object works', metaAdName({ season: 'fall', date: new Date('2026-10-08T15:00:00Z'), hook: 'h' }), 'WC_Static | 2026-10-08 | Fall | h')
+
+// ------------------------------------- the kind in front of whatever was typed
+check('a typed name without the kind gets it in front', [adKindName('Fall tune-up', 'Static'), adKindName('Fall tune-up', 'Video')], ['WC_Static | Fall tune-up', 'WC_Video | Fall tune-up'])
+check('a typed name with the prefix but no kind, the same', adKindName('WC_Belk fall push', 'Static'), 'WC_Static | Belk fall push')
+check('a default from before the kind led is reshaped, not doubled', adKindName('WC_Fall | 2026-11-10 | Video | The offer', 'Video'), 'WC_Video | Fall | 2026-11-10 | The offer')
+check('a name already right is left exactly as typed', [adKindName('WC_Static | 2026-11-13 | Fall | Tune-up', 'Static'), adKindName('wc_video | 2026-11-13 | Fall | The offer', 'Video')], ['WC_Static | 2026-11-13 | Fall | Tune-up', 'wc_video | 2026-11-13 | Fall | The offer'])
+check('the wrong kind is corrected, a static named as a video becomes a static', adKindName('WC_Video | 2026-11-13 | Fall | Tune-up', 'Static'), 'WC_Static | 2026-11-13 | Fall | Tune-up')
+check('empty stays empty', [adKindName('', 'Static'), adKindName(null, 'Video')], ['', ''])
+check('the kind alone, when that is all there is', adKindName('WC_', 'Static'), 'WC_Static')
 
 // ------------------------------------------- the edge functions carry it too
 //
@@ -56,7 +65,8 @@ for (const fn of ['meta-funnel', 'meta-manage']) {
   check('the publish panel imports the rule', /from '\.\.\/lib\/adNaming'/.test(src), true)
   check('the publish panel names the campaign through it', /campaign_name: .*wcName\(/.test(src), true)
   check('the publish panel names the ad set through it', /adset_name: .*wcName\(/.test(src), true)
-  check('the publish panel names every ad through it', (src.match(/ad_name: wcName\(/g) || []).length >= 2, true)
+  check('the publish panel names every ad with its kind in front', (src.match(/ad_name: adKindName\(/g) || []).length >= 2, true)
+  check('...a static as Static, a video as Video', /AD_KINDS\.static\),\n\s+cta,/.test(src) && /AD_KINDS\.video\n\s+\),/.test(src), true)
 }
 
 if (failures) {

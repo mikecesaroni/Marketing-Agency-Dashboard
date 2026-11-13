@@ -34,28 +34,60 @@ export function wcName(name) {
 }
 
 /**
- * How an ad is named in Meta: the season, the date, the kind when it is a
- * video, and the hook, with " | " between. No company name: the ad lives
- * inside the client's own account, so the name only ever has to tell the
- * client's ads apart from each other. Same shape as the Meta library
- * filenames, so a set and its ad match up by eye.
+ * How an ad is named in Meta: the kind (Static or Video) right after the
+ * prefix, then the date, the season and the hook, with " | " between. No
+ * company name: the ad lives inside the client's own account, so the name
+ * only ever has to tell the client's ads apart from each other. Same shape
+ * as the Meta library filenames, so a set and its ad match up by eye.
  *
- *   WC_Summer | 2026-10-08 | AC died? Same-day cooling repair
- *   WC_Winter | 2026-10-08 | Video | The offer
+ *   WC_Static | 2026-10-08 | Summer | AC died? Same-day cooling repair
+ *   WC_Video | 2026-10-08 | Winter | The offer
+ *
+ * The kind came first on 2026-11-13 ("when we publish statics name it
+ * WC_Static..., videos WC_Video..."); until then it was the season first
+ * and "Video" fourth, with nothing at all saying an image was a static.
+ * Sorted by name in Ads Manager, the statics now sit together and the
+ * videos together, each in date order.
  *
  * Meta caps ad names at 100 characters, so the hook is what gets cut.
  */
 const SEASON_WORDS = { all: 'Year-round', spring: 'Spring', summer: 'Summer', fall: 'Fall', winter: 'Winter', holiday: 'Holiday' }
-export function metaAdName({ season, date = new Date(), hook, kind } = {}) {
+export const AD_KINDS = { static: 'Static', video: 'Video' }
+export function metaAdName({ season, date = new Date(), hook, kind = AD_KINDS.static } = {}) {
   const day = typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 10)
   const seasonWord = SEASON_WORDS[String(season || '').toLowerCase()] || SEASON_WORDS.all
   const words = String(hook || '').replace(/\s+/g, ' ').trim() || 'ad'
-  const head = [seasonWord, day, kind ? String(kind).trim() : ''].filter(Boolean).join(' | ')
+  const head = [String(kind || AD_KINDS.static).trim(), day, seasonWord].join(' | ')
   const full = wcName(`${head} | ${words}`)
   if (full.length <= 100) return full
   // Cut the hook, never the parts that sort and filter.
   const room = 100 - (full.length - words.length)
   return wcName(`${head} | ${words.slice(0, Math.max(1, room)).trimEnd()}`)
+}
+
+/**
+ * A name that starts WC_Static or WC_Video, whatever was typed or kept.
+ *
+ * Applied where an ad is sent to Meta, after the person's own name: a name
+ * typed without the kind gets it in front ("Fall tune-up" becomes
+ * "WC_Static | Fall tune-up"), a default kept from before 2026-11-13
+ * ("WC_Fall | 2026-11-10 | Video | The offer") is reshaped rather than
+ * doubled, and one already right is left exactly as it is. Empty stays
+ * empty, so a required-name check still fires.
+ */
+export function adKindName(name, kind = AD_KINDS.static) {
+  const want = String(kind || AD_KINDS.static).trim()
+  const clean = String(name ?? '').trim()
+  if (!clean) return clean
+  // The prefix off the first part, then every part that is only a kind word
+  // comes out, and the kind asked for goes in front of what is left.
+  const stripped = clean.split('|').map((p) => p.trim())
+  stripped[0] = stripped[0].replace(/^wc_/i, '').trim()
+  const parts = stripped.filter(Boolean)
+  const rest = parts.filter((p) => !Object.values(AD_KINDS).some((k) => k.toLowerCase() === p.toLowerCase()))
+  const same = parts[0]?.toLowerCase() === want.toLowerCase() && rest.length === parts.length - 1
+  if (same && clean.toUpperCase().startsWith(WC_PREFIX)) return clean
+  return wcName([want, ...rest].join(' | '))
 }
 
 /** True when a Meta object's name follows the rule. Used to tell ours apart. */
