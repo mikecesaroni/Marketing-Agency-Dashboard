@@ -147,12 +147,17 @@ the client's current account) that has no text options yet, is not
 published and is not cleared, so the backlog already in the CRM clears on
 its own. A static's words come from its name (the hook) and the client's
 facts, exactly the publish page's ask; a clip is sent for its transcript
-first (`transcribe-video`) and written on the next run from what is said
-in it, or from the note and the facts when transcription gave up. The words
-land where the publish page keeps them (`saved_ads.primary_text`,
-`headline`, `description`, `more_copy`; `ad_videos.copy`), words already
-typed staying as option one, so the page opens with the fields full and
-writes nothing; it still writes for whatever the sweep has not reached.
+first (`transcribe-video`) and, in the same run, written from what is said
+in it, or from the note and the facts when transcription gave up: the
+three of each for the fields AND the three versions for the cards (since
+2026-11-16, "use the same set up for videos as for statics, where it makes
+the text and 3 versions right when it's uploaded"). The words land where
+the publish page keeps them (`saved_ads.primary_text`, `headline`,
+`description`, `more_copy`; `ad_videos.copy` and `ad_videos.versions`),
+words already typed staying as option one, so the page opens with the
+fields full and the version cards up, and writes nothing; it still writes
+for whatever the sweep has not reached. A clip dropped on the Content page
+has all of it a minute or two after it lands.
 
 A row is claimed (`copy_requested_at`, `transcribe_requested_at`) before
 anything is asked for, so the schedule and a nudge running at once never

@@ -25,10 +25,12 @@
 //            (the video-sweep makes one within two minutes of a drop), not
 //            published. A clip with no transcript yet is sent for one first
 //            (transcribe-video, the same call the publish page makes), and
-//            the copy is written on the next run from what is said in it;
-//            a clip transcription gave up on gets its words from the
-//            client's facts and the note alone, as the page would. The
-//            words land on ad_videos.copy, where the page reads them.
+//            in the same run the copy is written from what is said in it:
+//            three of each for the fields AND the three versions for the
+//            cards (2026-11-16); a clip transcription gave up on gets its
+//            words from the client's facts and the note alone, as the page
+//            would. They land on ad_videos.copy and ad_videos.versions,
+//            where the page reads them.
 //
 // Every row is CLAIMED before anything is asked for (copy_requested_at,
 // transcribe_requested_at), so two runs at once (the two-minute schedule
@@ -57,8 +59,10 @@ const ERROR_RETRY_HOURS = 6
 // to forty seconds; a transcription about the same.
 const MAX_WRITES = 3
 const MAX_TRANSCRIBES = 2
-// The same ask the publish page makes (src/lib/adCopy.js suggestTextOptions).
+// The same asks the publish page makes (src/lib/adCopy.js suggestTextOptions
+// and suggestVideoVariations).
 const INSTRUCTION = 'Write three primary texts, three headlines and three descriptions for this ad. Meta mixes them, so each list stands on its own.'
+const VERSIONS_INSTRUCTION = 'Write three complete versions of the primary text, headline and description for this video ad, each from a different angle.'
 // A saved ad's file: ads/<client>/<stamp>-<size>.<ext> (src/lib/staticDrops.js).
 const STAMP_RE = /\/(\d+)-(\w+)\.(?:png|jpe?g|webp)$/i
 
@@ -93,7 +97,7 @@ type StaticRow = {
 }
 type VideoRow = {
   id: string; client_id: string; storage_path: string; file_name: string | null; meta_account_id: string; meta_video_id: string | null; status: string
-  about: string | null; transcript: string | null; transcript_error: string | null; copy: Record<string, unknown> | null; created_at: string
+  about: string | null; transcript: string | null; transcript_error: string | null; copy: Record<string, unknown> | null; versions: Record<string, unknown> | null; created_at: string
   transcribe_requested_at: string | null; copy_requested_at: string | null; copy_written_at: string | null; copy_error: string | null
 }
 type FileRow = { client_id: string; storage_path: string; file_name: string | null; file_type: string | null; date_uploaded: string | null; drop_dismissed_at: string | null }
@@ -206,7 +210,7 @@ Deno.serve(async (req) => {
         .order('created_at', { ascending: false }),
       supabase
         .from('ad_videos')
-        .select('id, client_id, storage_path, file_name, meta_account_id, meta_video_id, status, about, transcript, transcript_error, copy, created_at, transcribe_requested_at, copy_requested_at, copy_written_at, copy_error')
+        .select('id, client_id, storage_path, file_name, meta_account_id, meta_video_id, status, about, transcript, transcript_error, copy, versions, created_at, transcribe_requested_at, copy_requested_at, copy_written_at, copy_error')
         .in('client_id', ids)
         .gte('created_at', since)
         .order('created_at', { ascending: false }),
@@ -361,25 +365,36 @@ Deno.serve(async (req) => {
       const label = v.file_name || v.storage_path.split('/').pop() || v.storage_path
       try {
         const copy = v.copy || {}
-        const out = await callFn('ad-copy', {
-          mode: 'text_options',
-          medium: 'video',
-          emojis: true,
+        const ask = {
           ...facts(client, intakes.get(v.client_id) || null),
           about: v.about || '',
           transcript: v.transcript || '',
           current: { primaryText: copy.primary_text || '', headline: copy.headline || '', description: copy.description || '' },
-          instruction: INSTRUCTION,
-        })
+        }
+        // Three of each (the fields) and the three versions (the cards a
+        // person picks from), asked for at once (2026-11-16: "use the same
+        // set up for videos as for statics, where it makes the text and 3
+        // versions right when it's uploaded so I don't have to wait"). The
+        // versions are best effort: without them the clip still publishes.
+        const [out, written] = await Promise.all([
+          callFn('ad-copy', { mode: 'text_options', medium: 'video', emojis: true, ...ask, instruction: INSTRUCTION }),
+          v.versions ? Promise.resolve(null) : callFn('ad-copy', { mode: 'variations', medium: 'video', ...ask, instruction: VERSIONS_INSTRUCTION }).catch(() => null),
+        ])
         const lists = { primaryTexts: three(out.primaryTexts), headlines: three(out.headlines), descriptions: three(out.descriptions) }
         if (!lists.primaryTexts.length) throw new Error(clean(out.note) || 'The copy assistant did not return a primary text.')
         const p = merge(copy.primary_text, lists.primaryTexts)
         const h = merge(copy.headline, lists.headlines)
         const d = merge(copy.description, lists.descriptions)
+        // The versions as the publish page keeps them (src/lib/videoCopyMemory.js versionsToSave).
+        const variations = Array.isArray(written?.variations) ? written.variations.slice(0, 3) : []
+        const versions = variations.length
+          ? { note: clean(written?.note), variations: variations.map((x: any) => ({ angle: clean(x?.angle), primaryText: clean(x?.primaryText), headline: clean(x?.headline), description: clean(x?.description), fromClip: clean(x?.fromClip) })) }
+          : null
         const { error } = await supabase
           .from('ad_videos')
           .update({
             copy: { ...copy, primary_text: p.main, headline: h.main, description: d.main, more_primary_texts: p.more, more_headlines: h.more, more_descriptions: d.more },
+            ...(versions ? { versions, versions_at: new Date().toISOString() } : {}),
             copy_written_at: new Date().toISOString(),
             copy_error: null,
           })
@@ -398,15 +413,22 @@ Deno.serve(async (req) => {
       const label = v.file_name || v.storage_path.split('/').pop() || v.storage_path
       try {
         const out = await callFn('transcribe-video', { client_id: v.client_id, storage_path: v.storage_path })
+        v.transcript = clean(out?.transcript) || null
+        if (!v.transcript) v.transcript_error = 'No speech was found in the audio.'
         transcribed.push({ client: client.name, name: label, ok: true, note: out?.empty ? 'no speech found' : undefined })
       } catch (err) {
         // Recorded on the row the way the function records its own failures,
-        // so the next run writes the words from the note and the facts, as
-        // the publish page does when transcription has given up.
+        // and the words are written from the note and the facts, as the
+        // publish page does when transcription has given up.
         const message = err instanceof Error ? err.message : String(err)
+        v.transcript_error = message
         transcribed.push({ client: client.name, name: label, ok: false, note: message })
         await supabase.from('ad_videos').update({ transcript_error: message.slice(0, 500) }).eq('id', v.id).is('transcript', null)
       }
+      // The words in the SAME run, straight after the transcript, so a drop
+      // has its fields and its versions a minute or two after it lands
+      // rather than on the run after next.
+      if (!videoHasOptions(v) && !v.copy_written_at && (await claim('ad_videos', v.id, 'copy_requested_at'))) await writeVideo(v)
     }
 
     // Newest first across both kinds, and each one CLAIMED in turn until the
