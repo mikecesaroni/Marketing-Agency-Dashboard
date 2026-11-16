@@ -328,6 +328,15 @@ export default function ReportsPage() {
       {error && <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">Error: {error}</div>}
       {syncResult && <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">{syncResult}</div>}
 
+      {/* THREE DOORS (2026-11-16): "3 clear distinct big buttons where we can
+          click Meta, Google Search ads, or Google pay per lead and it takes us
+          to that KPI page. Make it so we can click the entire button." */}
+      <nav aria-label="Open a channel's KPI page" className="mb-6 grid gap-3 sm:grid-cols-3" data-channel-doors>
+        <ChannelDoor channel="meta" name="Meta Ads" to="/reports/meta" stats={loading ? null : meta} />
+        <ChannelDoor channel="google" name="Google Search Ads" to="/reports/google-search" stats={loading ? null : google} />
+        <ChannelDoor channel="lsa" name="Google Pay Per Lead" to="/reports/lsa" stats={loading ? null : lsa} />
+      </nav>
+
       {loading ? (
         <div className="grid gap-4 md:grid-cols-3">
           {[0, 1, 2].map((i) => <div key={i} className="h-40 animate-pulse rounded-2xl bg-white/[0.04]" />)}
@@ -604,6 +613,41 @@ function MiniStat({ label, value }) {
  * lead half says who is set up, who is paused and who is still to connect,
  * never a row of zeros on its own.
  */
+/**
+ * A big button into one channel's KPI page. The whole button is the link,
+ * in the channel's colour, with the range's spend and leads on it.
+ */
+function ChannelDoor({ channel, name, to, stats }) {
+  const c = CHANNELS[channel]
+  const leads = stats ? Math.round(stats.leads) : null
+  return (
+    <Link
+      to={to}
+      data-channel-door={channel}
+      aria-label={`${name}: open its KPI page`}
+      className="group flex min-h-[96px] items-center justify-between gap-4 rounded-2xl border-2 px-5 py-4 transition hover:-translate-y-0.5 hover:brightness-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070b14]"
+      style={{ borderColor: c.color, background: c.soft, '--tw-ring-color': c.color }}
+    >
+      <span className="min-w-0">
+        <span className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-white md:text-xl">
+          <ChannelDot channel={channel} size="md" />
+          <span className="truncate">{name}</span>
+        </span>
+        <span className="mt-1.5 block text-sm tabular-nums text-slate-300">
+          {stats ? `${money(stats.spend)} spend · ${leads} ${leads === 1 ? 'lead' : 'leads'}` : 'Loading…'}
+        </span>
+      </span>
+      <span
+        aria-hidden="true"
+        className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-xl font-semibold text-white transition group-hover:translate-x-1"
+        style={{ background: c.color }}
+      >
+        →
+      </span>
+    </Link>
+  )
+}
+
 function GoogleCard({ card }) {
   const { total, delta, spark, search, ppl, who, oursHasPpl } = card
   const pplEmpty = !(ppl.spend > 0) && !(ppl.leads > 0)

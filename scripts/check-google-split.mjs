@@ -68,6 +68,29 @@ const sync = read('supabase/functions/google-daily-sync/index.ts')
 check('the sync reads every campaign that is not removed, marks pay per lead, keeps them on the client and reads leads even with no spend', [sync.includes("FROM campaign WHERE campaign.status != 'REMOVED'"), sync.includes("'PAY_PER_LEAD'"), sync.includes('lsaPatch.lsa_campaigns'), sync.includes('if (lsaRows.length || pplIds.size) lsaAccounts.add(customerId)')], [true, true, true, true])
 check('...and a client keeps no rows from an account that is not theirs', [sync.includes('customer_id=not.in.('), sync.includes("notes=eq.${encodeURIComponent('Synced from Google Ads')}")], [true, true])
 
+// --- three big buttons into each channel's KPI page ------------------------------------------
+// 2026-11-16: "make 3 clear distinct big buttons where we can click Meta, Google
+// Search ads, or Google pay per lead ... make it so we can click the entire button."
+const doors = [...page.matchAll(/<ChannelDoor channel="(\w+)" name="([^"]+)" to="([^"]+)"/g)].map((m) => [m[1], m[2], m[3]])
+check('three doors, in order, each to its own KPI page', doors, [['meta', 'Meta Ads', '/reports/meta'], ['google', 'Google Search Ads', '/reports/google-search'], ['lsa', 'Google Pay Per Lead', '/reports/lsa']])
+const door = page.slice(page.indexOf('function ChannelDoor'), page.indexOf('function GoogleCard'))
+check('...and the whole button is the link: one <Link> wraps it all, nothing clickable inside', [door.trim().length > 0, (door.match(/<Link/g) || []).length, /<(a|button)[\s>]/.test(door), page.indexOf('data-channel-doors') < page.indexOf('ALL CHANNELS: leads first')], [true, 1, false, true])
+
+// --- the setup message: they verify, then add us --------------------------------------------
+// 2026-11-16: "I want the client to do the verification themselves and then add
+// us as users when that's complete. I do not want us to set it up for them."
+const { buildLsaSetupMessage } = await import('../src/lib/lsaSetupMessage.js')
+const { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } = await import('../src/lib/agencyEmail.js')
+const msg = buildLsaSetupMessage()
+check('the LSA message: they sign up and verify at Google first, then add us as Admin, in that order', [msg.includes('https://g.co/localservices'), msg.includes('STEP 1: Sign up and get verified'), msg.includes("STEP 2: Once you're verified, add us as an Admin"), msg.indexOf('STEP 1') < msg.indexOf('STEP 2'), msg.includes(AGENCY_EMAIL), msg.includes(AGENCY_EMAIL_DOMAIN)], [true, true, true, true, true, true])
+check('...covers both sides of the move: Google Ads and the old dashboard', [msg.includes('https://ads.google.com\n'), msg.includes('Access and security'), msg.includes('https://ads.google.com/localservices/')], [true, true, true])
+check('...never asks them to send us their documents, and no em or en dashes', [/send us|email us|send (it|them) to us/i.test(msg), /[–—]/.test(msg)], [false, false])
+
+// --- why a pay-per-lead campaign is not spending ---------------------------------------------
+const { pplServingRow } = await import('../supabase/functions/google-daily-sync/index.ts')
+check('Google\'s serving status for a pay-per-lead campaign: status, reasons, budget in dollars', pplServingRow({ campaign: { id: '22', primaryStatus: 'NOT_ELIGIBLE', primaryStatusReasons: ['BUDGET_MISCONFIGURED'], servingStatus: 'SERVING' }, campaignBudget: { amountMicros: '150000000' } }), ['22', { primary_status: 'NOT_ELIGIBLE', reasons: ['BUDGET_MISCONFIGURED'], serving_status: 'SERVING', budget: 150 }])
+check('...and no budget field is null, not zero', pplServingRow({ campaign: { id: '23', primaryStatus: 'ELIGIBLE' } })[1].budget, null)
+
 if (failures) {
   console.log(`\n${failures} FAILED`)
   process.exit(1)

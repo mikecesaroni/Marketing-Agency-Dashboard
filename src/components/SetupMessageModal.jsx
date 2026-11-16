@@ -32,7 +32,7 @@ const CHANNELS = {
   lsa: {
     title: 'Google LSA access request',
     build: () => buildLsaSetupMessage(),
-    blurb: 'Send this to the owner. They verify their Local Services account and add us as an Admin.',
+    blurb: 'Send this to the owner. They sign up and get verified with Google themselves, then add us as an Admin. We take over from there.',
   },
   // No key: the GBP message names our own email, which is a constant in the
   // code rather than a row anyone has to keep current.

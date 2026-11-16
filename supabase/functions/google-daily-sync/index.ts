@@ -617,6 +617,49 @@ export type CampaignInfo = {
   local_services: boolean | null
   // Local Services / pay per lead, by the flag, the type or the name.
   ppl: boolean
+  // Pay per lead only: whether Google will serve it and what is in the way.
+  serving?: PplServing
+  serving_error?: string
+}
+
+export type PplServing = {
+  primary_status: string
+  reasons: string[]
+  serving_status: string
+  budget: number | null
+}
+
+// WHY A PAY-PER-LEAD CAMPAIGN IS NOT SPENDING (2026-11-16, "how do I get
+// Luccia back to live spending"). ENABLED only says nobody paused it: Luccia,
+// MCL and Supreme all read ENABLED with nothing ever spent. primary_status
+// says whether Google can serve it (ELIGIBLE, LIMITED, NOT_ELIGIBLE, PENDING,
+// MISCONFIGURED ...) and primary_status_reasons say what is in the way. The
+// budget is asked for too, and dropped if the API will not join it.
+const PPL_STATUS_FIELDS = 'campaign.id, campaign.primary_status, campaign.primary_status_reasons, campaign.serving_status'
+
+export function pplServingRow(r: any): [string, PplServing] {
+  const c = r?.campaign || {}
+  const micros = r?.campaignBudget?.amountMicros
+  return [
+    String(c.id ?? ''),
+    {
+      primary_status: String(c.primaryStatus || ''),
+      reasons: Array.isArray(c.primaryStatusReasons) ? c.primaryStatusReasons.map(String) : [],
+      serving_status: String(c.servingStatus || ''),
+      budget: micros == null ? null : Math.round(Number(micros) / 10000) / 100,
+    },
+  ]
+}
+
+async function pplServing(customerId: string, ids: string[], token: string): Promise<Map<string, PplServing>> {
+  const where = `campaign.id IN (${ids.map((id) => id.replace(/\D/g, '')).join(', ')})`
+  let rows: any[]
+  try {
+    rows = await gaqlEither(customerId, `SELECT ${PPL_STATUS_FIELDS}, campaign_budget.amount_micros FROM campaign WHERE ${where}`, token)
+  } catch {
+    rows = await gaqlEither(customerId, `SELECT ${PPL_STATUS_FIELDS} FROM campaign WHERE ${where}`, token)
+  }
+  return new Map(rows.map(pplServingRow))
 }
 
 /** A campaign from the inventory read, and whether it is pay per lead. */
@@ -649,12 +692,32 @@ async function inventory(customerId: string, token: string): Promise<{ campaigns
     rows = await gaqlEither(customerId, INVENTORY_QUERY(false), token)
     flagRead = false
   }
-  return { campaigns: rows.map(campaignInfo).filter((c) => c.id), flagRead }
+  const campaigns = rows.map(campaignInfo).filter((c) => c.id)
+  const ppl = campaigns.filter((c) => c.ppl)
+  if (ppl.length) {
+    // Never fails the inventory: a refused status read is noted on each.
+    try {
+      const serving = await pplServing(customerId, ppl.map((c) => c.id), token)
+      for (const c of ppl) if (serving.has(c.id)) c.serving = serving.get(c.id)
+    } catch (err) {
+      for (const c of ppl) c.serving_error = String(err instanceof Error ? err.message : err).slice(0, 300)
+    }
+  }
+  return { campaigns, flagRead }
 }
 
 /** The pay-per-lead campaigns as kept on the client row (clients.lsa_campaigns). */
 function pplSummary(list: CampaignInfo[], account: string) {
-  return list.filter((c) => c.ppl).map((c) => ({ id: c.id, name: c.name, status: c.status, type: c.type, account }))
+  return list
+    .filter((c) => c.ppl)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      status: c.status,
+      type: c.type,
+      account,
+      ...(c.serving ? { primary_status: c.serving.primary_status, reasons: c.serving.reasons, budget: c.serving.budget } : {}),
+    }))
 }
 
 async function serve(req: Request): Promise<Response> {
@@ -811,7 +874,7 @@ async function serve(req: Request): Promise<Response> {
               name: t.name,
               clients: owner(t.id),
               campaigns: inv.campaigns.map((c) => ({ name: c.name, status: c.status, type: c.type, ppl: c.ppl, local_services: c.local_services })),
-              pay_per_lead: ppl.map((c) => ({ id: c.id, name: c.name, status: c.status, type: c.type })),
+              pay_per_lead: ppl.map((c) => ({ id: c.id, name: c.name, status: c.status, type: c.type, serving: c.serving || null, ...(c.serving_error ? { serving_error: c.serving_error } : {}) })),
               leads,
               last_lead: lastLead || null,
               ...(leadsError ? { leads_error: leadsError } : {}),
