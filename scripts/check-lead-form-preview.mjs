@@ -60,6 +60,10 @@ check('a cover that is not a picture is refused before Meta sees it', fn.include
 const studio = read('src/components/LeadFormStudio.jsx')
 check('the Studio draws the live preview and offers the cover picker', [studio.includes('<InstantFormPreview'), studio.includes('<AdImagePicker'), studio.includes('coverDataUrl(')], [true, true, true])
 check('the recommender writes the intro card too', [read('supabase/functions/form-questions/index.ts').includes('intro_lines: z.array(z.string())'), read('src/lib/metaPublish.js').includes('introLines:')], [true, true])
+// 2026-11-16: Active Air Quality's create came back "(#200) Permissions error"
+// with the Page shared to the business but not assigned to the system user.
+check('the function knows when it has no Page token, says so on list, and a refused create names the fix', [fn.includes('page_access: hasPageToken,'), fn.includes('if (permission && !hasPageToken)'), fn.includes('System users'), fn.includes('Assign assets'), /[—–]/.test(fn.slice(fn.indexOf('export function notAssignedHelp'), fn.indexOf('Deno.serve(')))], [true, true, true, true, false])
+check('...and when the Page has not accepted the Lead Ads terms, the list says so and a refused create links the terms page', [fn.includes('lead_terms_accepted: await leadTermsAccepted('), fn.includes("(await leadTermsAccepted(client.meta_page_id, pToken)) === false"), fn.includes('https://www.facebook.com/ads/leadgen/tos?page_id=')], [true, true, true])
 check('no em dashes in the preview words', /[—–]/.test(read('src/components/InstantFormPreview.jsx') + read('src/lib/leadFormPreview.js')), false)
 
 console.log(failures === 0 ? '\nAll lead form preview checks pass' : `\n${failures} FAILED`)

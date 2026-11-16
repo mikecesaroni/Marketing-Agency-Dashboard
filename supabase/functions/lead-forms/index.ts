@@ -161,15 +161,23 @@ function parseCover(dataUrl: unknown): { bytes: Uint8Array; mime: string } | nul
 /**
  * The Page's own access token. A form lives on the Page, and the System User
  * token is not always accepted for Page-owned edges.
+ *
+ * `page` says whether a real Page token was found. It is not when the system
+ * user has not been assigned the Page in Business Settings (2026-11-16:
+ * Active Air Quality's Page was shared with the business, full access, but
+ * not assigned to the system user, and creating a form came back "(#200)
+ * Permissions error" with nothing to say why). Reading forms can still work
+ * with the System User token, so the list reports it and a refused create
+ * names the fix.
  */
-async function pageToken(pageId: string, token: string): Promise<string> {
+async function pageToken(pageId: string, token: string): Promise<{ token: string; page: boolean; tasks?: string[] }> {
   try {
     const res = await fetch(
-      `${GRAPH}/me/accounts?fields=id,access_token&limit=100&access_token=${encodeURIComponent(token)}`
+      `${GRAPH}/me/accounts?fields=id,access_token,tasks&limit=100&access_token=${encodeURIComponent(token)}`
     )
     const body = await res.json()
     const match = (body?.data || []).find((p: any) => String(p.id) === String(pageId))
-    if (match?.access_token) return match.access_token
+    if (match?.access_token) return { token: match.access_token, page: true, tasks: Array.isArray(match.tasks) ? match.tasks.map(String) : undefined }
   } catch {
     // Not fatal: the direct read below may still work.
   }
@@ -178,13 +186,46 @@ async function pageToken(pageId: string, token: string): Promise<string> {
       `${GRAPH}/${pageId}?fields=access_token&access_token=${encodeURIComponent(token)}`
     )
     const body = await res.json()
-    return body?.access_token || token
+    return body?.access_token ? { token: body.access_token, page: true } : { token, page: false }
   } catch {
     // Handing back the System User token makes the caller fail with a Meta
     // error that names the Page, rather than refusing pre-emptively -- some
     // setups do accept it.
-    return token
+    return { token, page: false }
   }
+}
+
+/**
+ * Whether the Page has accepted Meta's Lead Ads terms. A Page's first instant
+ * form needs them, and a create without them comes back as a bare "(#200)
+ * Permissions error" (2026-11-16, Active Air Quality: Page token fine, no
+ * forms ever). null when Meta will not say.
+ */
+async function leadTermsAccepted(pageId: string, pToken: string): Promise<boolean | null> {
+  try {
+    const res = await fetch(`${GRAPH}/${pageId}?fields=leadgen_tos_accepted&access_token=${encodeURIComponent(pToken)}`)
+    const body = await res.json()
+    return typeof body?.leadgen_tos_accepted === 'boolean' ? body.leadgen_tos_accepted : null
+  } catch {
+    return null
+  }
+}
+
+/** What to do when the Page has not accepted the Lead Ads terms. */
+export function leadTermsHelp(clientName: string, pageId: string): string {
+  return (
+    `${clientName}'s Facebook Page has not accepted Meta's Lead Ads terms yet, and a Page needs them before its first instant form. ` +
+    `Someone with full control of the Page opens https://www.facebook.com/ads/leadgen/tos?page_id=${pageId}, accepts, then try again.`
+  )
+}
+
+/** What to do when the system user is not assigned the Page. */
+export function notAssignedHelp(clientName: string): string {
+  return (
+    `the CRM's Meta login (our system user) is not assigned to ${clientName}'s Facebook Page. ` +
+    `In Meta Business Settings go to Users, then System users, pick ours, click Assign assets, ` +
+    `choose Pages, tick ${clientName}'s Page, turn on full control (Manage Page) and save. Then try again.`
+  )
 }
 
 Deno.serve(async (req) => {
@@ -229,7 +270,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    const pToken = await pageToken(client.meta_page_id, token)
+    const { token: pToken, page: hasPageToken, tasks: pageTasks } = await pageToken(client.meta_page_id, token)
 
     if (action === 'list') {
       const res = await fetch(
@@ -247,7 +288,12 @@ Deno.serve(async (req) => {
       // leads_count is the reason to reuse a form rather than make a new one
       // per ad: a form owns its leads, so five near-identical forms means five
       // places to go looking for them.
-      return json({ forms: found.data || [] })
+      return json({
+        forms: found.data || [],
+        page_access: hasPageToken,
+        page_tasks: pageTasks ?? null,
+        lead_terms_accepted: await leadTermsAccepted(client.meta_page_id, pToken),
+      })
     }
 
     if (action !== 'create') return json({ error: `Unknown action "${action}".` }, 400)
@@ -349,6 +395,15 @@ Deno.serve(async (req) => {
     if (!res.ok || !made?.id) {
       const detail =
         made?.error?.error_user_msg || made?.error?.message || `Meta returned ${res.status}`
+      // No Page token and a permissions refusal: the Page is not assigned
+      // to the system user. Say that, not "(#200) Permissions error".
+      const permission = Number(made?.error?.code) === 200 || /permission/i.test(String(detail))
+      if (permission && !hasPageToken) {
+        return json({ error: `Could not create the form: ${notAssignedHelp(client.name)}`, page_access: false, cover_refused: false }, 502)
+      }
+      if (permission && (await leadTermsAccepted(client.meta_page_id, pToken)) === false) {
+        return json({ error: `Could not create the form: ${leadTermsHelp(client.name, client.meta_page_id)}`, lead_terms_accepted: false, cover_refused: false }, 502)
+      }
       // With a cover on the call, a refusal is most likely the cover (the
       // token lacking pages_manage_posts, the picture's shape or size), so
       // the Studio can offer the same form without it.
