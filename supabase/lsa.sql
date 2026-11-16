@@ -22,14 +22,22 @@
 alter table public.clients add column if not exists lsa_customer_id text;
 alter table public.clients add column if not exists lsa_synced_at timestamptz;
 alter table public.clients add column if not exists lsa_sync_error text;
+-- clients.lsa_campaigns (2026-11-17)
+--   The pay-per-lead campaigns the client's Google Ads accounts hold right
+--   now, spending or not: [{id, name, status, type, account}], or null. The
+--   nightly sync reads every campaign that is not removed, so a paused one is
+--   "set up, paused in Google", not "not connected".
+alter table public.clients add column if not exists lsa_campaigns jsonb;
 
 -- Which campaign rows are Local Services: the standalone LOCAL_SERVICES type,
--- and the pay-per-lead Performance Max shape Google is moving LSA into
--- (Horizon HVAC's "Pay-per-lead-PMax-..." from 2026-11-03). The same test as
--- isLsaCampaign() in the sync and in src/lib/lsaReport.js.
+-- PAY_PER_LEAD (the CRM's own type for a Performance Max campaign Google
+-- marks as Local Services, since the move into Google Ads), and the
+-- pay-per-lead Performance Max shape by name (Horizon HVAC's
+-- "Pay-per-lead-PMax-..." from 2026-11-03). The same test as isLsaCampaign()
+-- in the sync and in src/lib/lsaReport.js.
 create or replace function public.is_lsa_campaign(campaign_type text, campaign_name text) returns boolean
 language sql immutable as $$
-  select upper(coalesce(campaign_type, '')) = 'LOCAL_SERVICES'
+  select upper(coalesce(campaign_type, '')) in ('LOCAL_SERVICES', 'PAY_PER_LEAD')
       or (upper(coalesce(campaign_type, '')) = 'PERFORMANCE_MAX' and coalesce(campaign_name, '') ~* '(pay.?per.?lead|local services|\mlsa\M)')
 $$;
 

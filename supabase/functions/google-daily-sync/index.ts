@@ -487,9 +487,11 @@ async function discover(
     unclaimed.filter((a) => !a.manager && !taken.has(a.id))
   )
   for (const m of lsaPass.matches) {
+    // Pay per lead counts as Local Services here: since the move into
+    // Google Ads it is a Performance Max campaign, not the LOCAL_SERVICES type.
     let hasLsa = false
     try {
-      hasLsa = (await gaqlEither(m.customer_id, HAS_LSA_QUERY, token)).length > 0
+      hasLsa = (await inventory(m.customer_id, token)).campaigns.some((c) => c.ppl)
     } catch {
       hasLsa = false
     }
@@ -573,19 +575,86 @@ const LEADS_QUERY = `
          local_services_lead.locale
   FROM local_services_lead
 `
-// Does this account carry a Local Services campaign at all (for discovery).
-const HAS_LSA_QUERY = "SELECT campaign.id FROM campaign WHERE campaign.advertising_channel_type = 'LOCAL_SERVICES' LIMIT 1"
-
 /**
  * Which campaign rows are Local Services: the standalone LOCAL_SERVICES type,
- * and the pay-per-lead Performance Max shape Google is moving LSA into
- * (Horizon HVAC's "Pay-per-lead-PMax-..." from 2026-11-03). The same test as
- * public.is_lsa_campaign() in the database and src/lib/lsaReport.js.
+ * the pay-per-lead Performance Max shape Google is moving LSA into
+ * (Horizon HVAC's "Pay-per-lead-PMax-..." from 2026-11-03), and PAY_PER_LEAD,
+ * the CRM's own type for a Performance Max campaign Google marks as Local
+ * Services (see inventory below). The same test as public.is_lsa_campaign()
+ * in the database and src/lib/lsaReport.js.
  */
 export function isLsaCampaign(type: unknown, name: unknown): boolean {
   const t = String(type || '').toUpperCase()
-  if (t === 'LOCAL_SERVICES') return true
+  if (t === 'LOCAL_SERVICES' || t === 'PAY_PER_LEAD') return true
   return t === 'PERFORMANCE_MAX' && /pay.?per.?lead|local services|\blsa\b/i.test(String(name || ''))
+}
+
+// PAY PER LEAD, WHEREVER IT IS (2026-11-17: "we need to account for the pay
+// per lead being merged over to Google Ads"). Google moved Local Services into
+// Google Ads as a Performance Max campaign with pay-per-lead goals, and the
+// standalone LSA dashboard goes away. CAMPAIGN_QUERY only returns days with
+// metrics, so a pay-per-lead campaign that is paused, or has not spent in the
+// window, never showed up and the account read as "no LSA". This reads every
+// campaign on an account that is not removed, with no date at all.
+//
+// campaign.pmax_campaign_settings.local_services_enabled is how Google marks
+// a Performance Max campaign that IS Local Services (Google Ads API, "Local
+// Services campaigns"). An API version that does not know the field refuses
+// the whole query, so the basic one follows and the name decides, as before.
+const INVENTORY_FIELDS =
+  'campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.advertising_channel_sub_type, campaign.bidding_strategy_type'
+const INVENTORY_QUERY = (withPpl: boolean) =>
+  `SELECT ${INVENTORY_FIELDS}${withPpl ? ', campaign.pmax_campaign_settings.local_services_enabled' : ''} FROM campaign WHERE campaign.status != 'REMOVED'`
+
+export type CampaignInfo = {
+  id: string
+  name: string
+  status: string
+  type: string
+  sub_type: string
+  bidding: string
+  // Google's own flag; null when the API version could not be asked.
+  local_services: boolean | null
+  // Local Services / pay per lead, by the flag, the type or the name.
+  ppl: boolean
+}
+
+/** A campaign from the inventory read, and whether it is pay per lead. */
+export function campaignInfo(r: any): CampaignInfo {
+  const c = r?.campaign || {}
+  const type = String(c.advertisingChannelType || '')
+  const flag = c.pmaxCampaignSettings?.localServicesEnabled
+  const localServices = typeof flag === 'boolean' ? flag : null
+  return {
+    id: String(c.id ?? ''),
+    name: String(c.name || ''),
+    status: String(c.status || ''),
+    type,
+    sub_type: String(c.advertisingChannelSubType || ''),
+    bidding: String(c.biddingStrategyType || ''),
+    local_services: localServices,
+    ppl: isLsaCampaign(type, c.name) || (type.toUpperCase() === 'PERFORMANCE_MAX' && localServices === true),
+  }
+}
+
+/** Every campaign on an account that is not removed, pay per lead marked. */
+async function inventory(customerId: string, token: string): Promise<{ campaigns: CampaignInfo[]; flagRead: boolean }> {
+  let rows: any[]
+  let flagRead = true
+  try {
+    rows = await gaqlEither(customerId, INVENTORY_QUERY(true), token)
+  } catch {
+    // The field is refused by an older version, or the account refused us:
+    // the basic read tells which, and throws the real error if it is access.
+    rows = await gaqlEither(customerId, INVENTORY_QUERY(false), token)
+    flagRead = false
+  }
+  return { campaigns: rows.map(campaignInfo).filter((c) => c.id), flagRead }
+}
+
+/** The pay-per-lead campaigns as kept on the client row (clients.lsa_campaigns). */
+function pplSummary(list: CampaignInfo[], account: string) {
+  return list.filter((c) => c.ppl).map((c) => ({ id: c.id, name: c.name, status: c.status, type: c.type, account }))
 }
 
 async function serve(req: Request): Promise<Response> {
@@ -687,6 +756,77 @@ async function serve(req: Request): Promise<Response> {
     }
   }
 
+  // INVENTORY: {inventory: true, customer_id? | client_id? | (neither: every
+  // account the login can see)}. Read only. Every campaign on the account
+  // that is not removed, spending or not, which ones are pay per lead, and
+  // how many Local Services leads the account holds. The answer to "they had
+  // LSA and it disappeared": it is either here, paused, or in an account we
+  // cannot see yet.
+  if (body.inventory) {
+    try {
+      const manager = bareId(Deno.env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID'))
+      const token = await accessToken()
+      const clientsRes = await fetch(`${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id,lsa_customer_id,archived`, { headers: db })
+      const clientRows = clientsRes.ok ? await clientsRes.json() : []
+      const owner = (id: string) =>
+        clientRows
+          .filter((c: any) => bareId(c.google_ads_customer_id) === id || bareId(c.lsa_customer_id) === id)
+          .map((c: any) => `${c.name}${c.archived ? ' (archived)' : ''}`)
+      let targets: { id: string; name: string }[] = []
+      if (body.customer_id) targets = [{ id: bareId(body.customer_id), name: '' }]
+      else if (body.client_id) {
+        const c = clientRows.find((x: any) => x.id === String(body.client_id))
+        if (!c) return json({ ok: false, error: 'No such client.' }, 404)
+        targets = [bareId(c.google_ads_customer_id), bareId(c.lsa_customer_id)].filter(Boolean).map((id) => ({ id, name: c.name }))
+        if (!targets.length) return json({ ok: false, error: `${c.name} has no Google Ads account saved.` }, 400)
+      } else {
+        const linked = manager ? await linkedAccounts(token, manager).catch(() => []) : []
+        const direct = await directAccounts(token, manager, new Set(linked.map((a) => a.id)))
+        targets = [...linked, ...direct].filter((a) => !a.manager).map((a) => ({ id: a.id, name: a.name }))
+      }
+      let flagRead = true
+      const accounts = await Promise.all(
+        targets.map(async (t) => {
+          try {
+            const inv = await inventory(t.id, token)
+            if (!inv.flagRead) flagRead = false
+            const ppl = inv.campaigns.filter((c) => c.ppl)
+            let leads: number | null = null
+            let lastLead = ''
+            let leadsError = ''
+            if (ppl.length) {
+              try {
+                const found = await gaqlEither(t.id, LEADS_QUERY, token)
+                leads = found.length
+                for (const r of found) {
+                  const at = String(r.localServicesLead?.creationDateTime || '')
+                  if (at > lastLead) lastLead = at
+                }
+              } catch (err) {
+                leadsError = String(err instanceof Error ? err.message : err)
+              }
+            }
+            return {
+              id: t.id,
+              name: t.name,
+              clients: owner(t.id),
+              campaigns: inv.campaigns.map((c) => ({ name: c.name, status: c.status, type: c.type, ppl: c.ppl, local_services: c.local_services })),
+              pay_per_lead: ppl.map((c) => ({ id: c.id, name: c.name, status: c.status, type: c.type })),
+              leads,
+              last_lead: lastLead || null,
+              ...(leadsError ? { leads_error: leadsError } : {}),
+            }
+          } catch (err) {
+            return { id: t.id, name: t.name, clients: owner(t.id), error: String(err instanceof Error ? err.message : err) }
+          }
+        })
+      )
+      return json({ ok: true, local_services_flag_read: flagRead, accounts })
+    } catch (err) {
+      return json({ ok: false, error: String(err instanceof Error ? err.message : err) }, 502)
+    }
+  }
+
   const days = Math.max(1, Math.min(90, num(body.days) || LOOKBACK_DAYS))
   const until = new Date()
   const since = new Date()
@@ -771,11 +911,20 @@ async function serve(req: Request): Promise<Response> {
 
       // One client's revoked link must not stop the rest of the run.
       try {
-        const [keywords, terms, campaigns] = await Promise.all([
+        const [keywords, terms, campaigns, inv] = await Promise.all([
           gaqlEither(customerId, KEYWORD_QUERY(sinceStr, untilStr), token),
           gaqlEither(customerId, SEARCH_TERM_QUERY(sinceStr, untilStr), token),
           gaqlEither(customerId, CAMPAIGN_QUERY(sinceStr, untilStr), token),
+          // Every campaign, spending or not, so a paused pay-per-lead one is
+          // found. Never allowed to fail the client's sync.
+          inventory(customerId, token).then(
+            (v) => ({ ...v, error: '' }),
+            (err) => ({ campaigns: [] as CampaignInfo[], flagRead: false, error: String(err instanceof Error ? err.message : err) })
+          ),
         ])
+        // The campaigns Google runs as Local Services, by id, so their rows
+        // are labelled pay per lead whatever they are called.
+        const pplIds = new Set(inv.campaigns.filter((c) => c.ppl).map((c) => c.id))
 
         const keywordRows = keywords.map((r: any) => ({
           client_id: client.id,
@@ -864,13 +1013,20 @@ async function serve(req: Request): Promise<Response> {
         // Campaign grain, daily, every metric. This is the table the Google
         // Search report reads for its totals: it counts every campaign type,
         // where the keyword table only holds what Search keywords did.
+        // A Performance Max campaign Google marks as Local Services is stored
+        // as PAY_PER_LEAD, so every report can tell it from an ordinary
+        // Performance Max campaign without trusting its name.
+        const typeOf = (r: any) => {
+          const t = r.campaign?.advertisingChannelType ?? null
+          return t === 'PERFORMANCE_MAX' && pplIds.has(String(r.campaign?.id ?? '')) ? 'PAY_PER_LEAD' : t
+        }
         const campaignRow = (r: any, account: string) => ({
           client_id: client.id,
           date: r.segments?.date,
           customer_id: account,
           campaign_id: String(r.campaign?.id ?? ''),
           campaign_name: r.campaign?.name ?? null,
-          campaign_type: r.campaign?.advertisingChannelType ?? null,
+          campaign_type: typeOf(r),
           campaign_status: r.campaign?.status ?? null,
           impressions: num(r.metrics?.impressions),
           clicks: num(r.metrics?.clicks),
@@ -893,18 +1049,25 @@ async function serve(req: Request): Promise<Response> {
         let allCampaigns = campaigns
         let lsaRows = campaignRows.filter((r) => isLsaCampaign(r.campaign_type, r.campaign_name))
         const lsaAccounts = new Set<string>()
-        if (lsaRows.length) lsaAccounts.add(customerId)
+        // An account with a pay-per-lead campaign gets its leads read even
+        // when nothing spent in the window: the campaign is paused, or new.
+        if (lsaRows.length || pplIds.size) lsaAccounts.add(customerId)
+        let pplList = pplSummary(inv.campaigns, customerId)
+        const inventoryError = inv.error ? `campaign list of ${customerId}: ${inv.error}` : ''
         const lsaAccount = bareId(client.lsa_customer_id)
         let lsaError = ''
         if (lsaAccount && lsaAccount !== customerId) {
           try {
+            const moreInv = await inventory(lsaAccount, token).catch(() => ({ campaigns: [] as CampaignInfo[], flagRead: false }))
+            for (const c of moreInv.campaigns) if (c.ppl) pplIds.add(c.id)
+            pplList = [...pplList, ...pplSummary(moreInv.campaigns, lsaAccount)]
             const more = await gaqlEither(lsaAccount, CAMPAIGN_QUERY(sinceStr, untilStr), token)
             const moreRows = dedupe(more.map((r: any) => campaignRow(r, lsaAccount)), (r) => `${r.date}|${r.campaign_id}`)
             await write('google_campaign_daily', moreRows, 'client_id,date,campaign_id')
             allCampaigns = [...campaigns, ...more]
             const moreLsa = moreRows.filter((r) => isLsaCampaign(r.campaign_type, r.campaign_name))
             lsaRows = [...lsaRows, ...moreLsa]
-            if (moreLsa.length) lsaAccounts.add(lsaAccount)
+            if (moreLsa.length || moreInv.campaigns.some((c) => c.ppl)) lsaAccounts.add(lsaAccount)
           } catch (err) {
             lsaError = `Local Services account ${lsaAccount}: ${String(err instanceof Error ? err.message : err)}`
           }
@@ -941,15 +1104,19 @@ async function serve(req: Request): Promise<Response> {
         }
         if (leadRows.length) await write('lsa_leads', leadRows, 'client_id,lead_id')
         const lsaSpend7 = lsaRows.filter((r) => String(r.date) >= sevenAgoStr).reduce((s, r) => s + r.cost, 0)
+        const lsaPatch: Record<string, unknown> = {}
+        // Which pay-per-lead campaigns the account holds right now, spending
+        // or not, so the reports can say "set up, paused in Google" instead
+        // of "not connected". Only written when the list was read.
+        if (!inventoryError) lsaPatch.lsa_campaigns = pplList.length ? pplList : null
         if (lsaAccounts.size || lsaError) {
           // The switch goes ON by itself when Local Services is spending
           // (the Client tiers board and the brief read it); never off.
-          await patchClient(client.id, {
-            lsa_synced_at: new Date().toISOString(),
-            lsa_sync_error: lsaError ? lsaError.slice(0, 1000) : null,
-            ...(lsaSpend7 > 0 && !client.lsa_active ? { lsa_active: true } : {}),
-          })
+          lsaPatch.lsa_synced_at = new Date().toISOString()
+          lsaPatch.lsa_sync_error = lsaError ? lsaError.slice(0, 1000) : null
+          if (lsaSpend7 > 0 && !client.lsa_active) lsaPatch.lsa_active = true
         }
+        if (Object.keys(lsaPatch).length) await patchClient(client.id, lsaPatch)
 
         // THE ROLL-UP, from campaign grain so every campaign type is counted.
         const weeks = new Map<string, { spend: number; leads: number }>()
@@ -1001,6 +1168,8 @@ async function serve(req: Request): Promise<Response> {
             ? {
                 lsa: {
                   accounts: [...lsaAccounts],
+                  // Every pay-per-lead campaign held, with its status.
+                  campaigns: pplList.map((c) => `${c.name} (${c.status})`),
                   campaign_days: lsaRows.length,
                   spend: Number(lsaRows.reduce((s, r) => s + r.cost, 0).toFixed(2)),
                   leads: leadRows.length,
@@ -1010,6 +1179,7 @@ async function serve(req: Request): Promise<Response> {
                 },
               }
             : {}),
+          ...(inventoryError ? { inventory_error: inventoryError } : {}),
         })
         await stamp(client.id, null)
       } catch (err) {
