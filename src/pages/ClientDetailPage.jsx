@@ -152,7 +152,7 @@ export default function ClientDetailPage() {
       .then(setNextUp)
       .catch(() => setNextUp(null))
 
-  // /client/:id?open=studio|publish|kpis, from the Deliverables board and the
+  // /client/:id?open=studio|publish|form|kpis, from the Deliverables board and the
   // dashboard: land with the right thing already open, once, after the client
   // has loaded. The param is then dropped so a refresh does not reopen it.
   const pageLocation = useLocation()
@@ -167,6 +167,8 @@ export default function ClientDetailPage() {
       openStudio('design', '', Number(sp.get('make')) || 0, String(sp.get('templates') || '').split(',').map((s) => s.trim()).filter(Boolean))
     }
     else if (want === 'publish') openStudio('publish', new URLSearchParams(pageLocation.search).get('video') || '')
+    // The Content tab's "Create lead form" door (2026-11-16): the Studio on its form tab.
+    else if (want === 'form') openStudio('form')
     else if (want === 'kpis') setShowKPIsModal(true)
     else if (want === 'chat') {
       setChatSeed(null)

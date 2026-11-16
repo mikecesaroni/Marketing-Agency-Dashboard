@@ -75,6 +75,17 @@ check('ago: weeks', ago('2026-09-05T08:00:00Z', NOW), '2 wk ago')
 check('ago: months', ago('2026-06-05T08:00:00Z', NOW), '3 mo ago')
 check('ago: nothing', ago(null, NOW), '')
 
+// 2026-11-16: "add in create lead form as option". A door on the Content hub
+// that opens each client's instant form builder.
+{
+  const { readFileSync } = await import('node:fs')
+  const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const page = read('src/pages/ContentPage.jsx')
+  const detail = read('src/pages/ClientDetailPage.jsx')
+  check('Create lead form: a door on the hub, its client list opens the form builder on the client page', [page.includes("key: 'forms',"), page.includes("title: 'Create lead form',"), page.includes("tab === 'forms' ? `/client/${r.id}?open=form`"), detail.includes("else if (want === 'form') openStudio('form')")], [true, true, true, true])
+  check('...and says when a client has no Facebook Page to put a form on', [page.includes('No Facebook Page ID yet'), rollupClients([{ id: 'a', name: 'A', meta_page_id: '123' }, { id: 'b', name: 'B' }], [], [], []).map((r) => r.metaPage)], [true, [true, false]])
+}
+
 if (failures) {
   console.log(`\n${failures} check${failures === 1 ? '' : 's'} failed`)
   process.exit(1)

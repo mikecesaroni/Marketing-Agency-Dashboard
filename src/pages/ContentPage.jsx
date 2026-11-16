@@ -80,6 +80,23 @@ const DOORS = [
     stat: (s) => [`${s.pages} pages`, `${s.withPages} of ${s.clients} clients have one`],
   },
   {
+    // 2026-11-16: "add in create lead form as option". Opens the client's
+    // instant form builder (the Studio's form tab) on their client page.
+    key: 'forms',
+    title: 'Create lead form',
+    blurb: 'Build a Meta instant form for a client: the questions, the intro, a cover photo and the thank-you page, with a live phone preview.',
+    cta: 'Pick the client',
+    tone: 'from-rose-600 to-pink-400',
+    ring: 'group-hover:ring-rose-300',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
+        <rect x="5" y="3" width="14" height="18" rx="2.5" />
+        <path d="M8.5 8h7M8.5 12h7M8.5 16h4" />
+      </svg>
+    ),
+    stat: (s) => [`${s.clients} clients`, 'Meta instant forms'],
+  },
+  {
     key: 'publish',
     title: 'Publish',
     blurb: 'Videos and saved statics out the door. Pick the client, tick the creative, pick the words, send it into the funnel.',
@@ -377,6 +394,10 @@ const SECTION_META = {
     title: 'Landing pages',
     hint: 'Every client’s pages in one list. Copy a link, open it, or add the new one so the team can find it. Clients with none are at the top.',
   },
+  forms: {
+    title: 'Create lead form',
+    hint: 'Pick the client. Their instant form builder opens on their page: pick the questions, write the intro and the thank-you page, add a cover photo, and see it on a phone as you go. The form is made on their Facebook Page.',
+  },
   publish: {
     title: 'Publish',
     hint: 'Pick the client. Their publish page has the videos and the saved statics side by side, newest first, then the words, where it goes and the button. Everything is created paused. "Build a funnel" on a card opens the funnel builder instead.',
@@ -407,7 +428,7 @@ export default function ContentPage() {
   const load = async () => {
     try {
       const [clients, saved, published, videos, files, reset, synced, pages, statics] = await Promise.all([
-        supabase.from('clients').select('id,name,industry,archived,is_internal,drive_folder_id,extra_drive_folder_ids,meta_ad_account_id,paused_at').order('name'),
+        supabase.from('clients').select('id,name,industry,archived,is_internal,drive_folder_id,extra_drive_folder_ids,meta_ad_account_id,meta_page_id,paused_at').order('name'),
         fetchAllRows(() => supabase.from('saved_ads').select('client_id,created_at').order('created_at').order('id')),
         fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name,stamp').order('created_at').order('id')),
         supabase.from('ad_videos').select('client_id,created_at,status,meta_video_id,thumb_url,storage_path,file_name,drop_dismissed_at'),
@@ -462,7 +483,7 @@ export default function ContentPage() {
   return (
     <Layout
       title={meta ? meta.title : 'Content'}
-      subtitle={meta ? meta.hint : 'Design it, find it, ship it. Three doors, every client behind each.'}
+      subtitle={meta ? meta.hint : 'Design it, find it, ship it. Every client behind each door.'}
       actions={
         meta ? (
           <button type="button" onClick={() => openTab('')} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
@@ -481,7 +502,7 @@ export default function ContentPage() {
         /* THE HUB: three doors, and under them the week's video board,
            because the week's job is the video board. */
         <div className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
             {DOORS.map((d) => (
               <Door key={d.key} door={d} stats={stats} onOpen={() => openTab(d.key)} />
             ))}
@@ -591,15 +612,19 @@ export default function ContentPage() {
                 <ClientCard
                   key={r.id}
                   row={r}
-                  href={tab === 'studio' ? makeHref(r.id) : `/publish/${r.id}`}
-                  primary={tab === 'studio' ? `${planLabel(picked, count)} →` : 'Publish videos and statics →'}
+                  href={tab === 'studio' ? makeHref(r.id) : tab === 'forms' ? `/client/${r.id}?open=form` : `/publish/${r.id}`}
+                  primary={tab === 'studio' ? `${planLabel(picked, count)} →` : tab === 'forms' ? 'Create a lead form →' : 'Publish videos and statics →'}
                   secondary={
                     tab === 'studio'
                       ? { href: `/client/${r.id}?open=studio`, label: 'Open empty' }
-                      : { href: `/funnel/${r.id}`, label: 'Build a funnel' }
+                      : tab === 'forms'
+                        ? null
+                        : { href: `/funnel/${r.id}`, label: 'Build a funnel' }
                   }
                   lines={
-                    tab === 'studio' ? (
+                    tab === 'forms' ? (
+                      <Pill tone={r.metaPage ? 'blue' : 'amber'}>{r.metaPage ? 'Facebook Page set' : 'No Facebook Page ID yet'}</Pill>
+                    ) : tab === 'studio' ? (
                       <>
                         <Pill tone={r.saved ? 'blue' : 'slate'}>{r.saved} saved ad{r.saved === 1 ? '' : 's'}</Pill>
                         <Pill tone={r.folders.length ? 'blue' : 'amber'}>{r.folders.length ? 'Drive linked' : 'No Drive folder'}</Pill>

@@ -51,6 +51,8 @@ export function rollupClients(clients = [], savedAds = [], publishedAds = [], vi
         industry: c.industry || '',
         internal: Boolean(c.is_internal),
         folders: driveFolders(c),
+        // Whether the Page is set, for the Create lead form door (forms live on it).
+        metaPage: Boolean(String(c.meta_page_id || '').trim()),
         pages: pages.get(c.id) || [],
         saved: s.length,
         published: p.length,

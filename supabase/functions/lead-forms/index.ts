@@ -397,17 +397,30 @@ Deno.serve(async (req) => {
         made?.error?.error_user_msg || made?.error?.message || `Meta returned ${res.status}`
       // No Page token and a permissions refusal: the Page is not assigned
       // to the system user. Say that, not "(#200) Permissions error".
+      // Meta's whole answer, for when its message is too short to act on
+      // ("(#200) Permissions error" says nothing about which permission).
+      const metaError = made?.error
+        ? {
+            code: made.error.code ?? null,
+            subcode: made.error.error_subcode ?? null,
+            type: made.error.type ?? null,
+            title: made.error.error_user_title ?? null,
+            user_msg: made.error.error_user_msg ?? null,
+            fbtrace_id: made.error.fbtrace_id ?? null,
+          }
+        : null
+      console.error('lead-forms create refused', client.name, JSON.stringify(metaError), 'cover:', Boolean(cover))
       const permission = Number(made?.error?.code) === 200 || /permission/i.test(String(detail))
       if (permission && !hasPageToken) {
-        return json({ error: `Could not create the form: ${notAssignedHelp(client.name)}`, page_access: false, cover_refused: false }, 502)
+        return json({ error: `Could not create the form: ${notAssignedHelp(client.name)}`, page_access: false, cover_refused: false, meta_error: metaError }, 502)
       }
       if (permission && (await leadTermsAccepted(client.meta_page_id, pToken)) === false) {
-        return json({ error: `Could not create the form: ${leadTermsHelp(client.name, client.meta_page_id)}`, lead_terms_accepted: false, cover_refused: false }, 502)
+        return json({ error: `Could not create the form: ${leadTermsHelp(client.name, client.meta_page_id)}`, lead_terms_accepted: false, cover_refused: false, meta_error: metaError }, 502)
       }
       // With a cover on the call, a refusal is most likely the cover (the
       // token lacking pages_manage_posts, the picture's shape or size), so
       // the Studio can offer the same form without it.
-      return json({ error: `Could not create the form: ${detail}`, cover_refused: Boolean(cover) }, 502)
+      return json({ error: `Could not create the form: ${detail}`, cover_refused: Boolean(cover), meta_error: metaError }, 502)
     }
 
     return json({ ok: true, form_id: made.id, name: payload.name, with_cover: Boolean(cover) })
