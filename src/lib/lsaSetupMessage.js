@@ -19,16 +19,24 @@
 // So for a client who owns their own Google Ads account, that link still has
 // to be asked for. Nothing in the CRM surfaces the need, so it is a deliberate
 // ask, not something that will come up on its own.
+//
+// 2026-11-17: Google moved Local Services into Google Ads, as a Performance
+// Max campaign with pay-per-lead goals, and is retiring the standalone
+// dashboard. Sign-up and verification still start at Google's Local Services
+// page (a pay-per-lead campaign cannot be made from scratch inside Google
+// Ads yet), but access is given on the Google Ads account once it has moved
+// there. The message covers both, so it is right whichever side of the move
+// the client is on.
 
 import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from './agencyEmail.js'
 
 export function buildLsaSetupMessage() {
   return `Quick setup on your end to get your Google ads started:
 
-Before we can get your Google Local Services Ads up and running, there are two things we need you to handle on your end. Google requires the business owner to do these directly, so we can't do them for you. Once these are done, we take over everything else.
+Before we can get your Google pay per lead ads (Local Services Ads) up and running, there are two things we need you to handle on your end. Google requires the business owner to do these directly, so we can't do them for you. Once these are done, we take over everything else.
 
 STEP 1: Set up and verify your Google Local Services account
-Using your own Google account, start your Local Services Ads profile and complete Google's verification. This is the part that takes the most time, so starting now is the best thing you can do to speed up your launch.
+Using your own Google account, start your Local Services Ads profile at https://g.co/localservices and complete Google's verification. This is the part that takes the most time, so starting now is the best thing you can do to speed up your launch.
 
 Google will ask you to verify:
 - Your identity (owner background/identity check)
@@ -41,6 +49,17 @@ Have your license and insurance info handy before you start, that's what slows m
 STEP 2: Add us as an admin
 Once your account is created (verified is even better), invite us as an Admin so we can build everything out for you.
 
+Google is moving Local Services into Google Ads, so it depends where yours lives now:
+
+If you can see it in Google Ads (ads.google.com, a campaign named "Pay-per-lead" or "LocalServicesCampaign"):
+1. Sign in to Google Ads: https://ads.google.com
+2. Click Admin, then Access and security
+3. Click the blue + button
+4. Enter our email: ${AGENCY_EMAIL}
+5. Select Admin access
+6. Send the invitation
+
+If it is still in the Local Services dashboard:
 1. Sign in to your Google Local Services dashboard: https://ads.google.com/localservices/
 2. Go to Account Access in the menu
 3. Click the blue + button
@@ -48,7 +67,7 @@ Once your account is created (verified is even better), invite us as an Admin so
 5. Select Admin access
 6. Send the invitation
 
-If you get an error when adding us, Google is blocking outside email domains. Fix it like this, then try the invite again:
+If you get an error when adding us in the Local Services dashboard, Google is blocking outside email domains. Fix it like this, then try the invite again:
 
 1. In your Local Services Ads dashboard, click the Settings icon (gear) and choose Security from the dropdown
 2. Click the Security tab

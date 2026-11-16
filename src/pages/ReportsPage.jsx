@@ -12,9 +12,10 @@ import { fetchAdRowsForRange, formatDate, getMonday, isLive, money } from '../li
 import { buildDailySeries, daysAgo, pctChange, totals as sumSeries } from '../lib/dailySeries'
 import ChannelDailyChart from '../components/reports/ChannelDailyChart'
 import { ChannelDot, DTable, DTd, DTh, DTr, DarkButton, Delta, Eyebrow, MixBar, Panel, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
-import { CHANNELS, channelMix, compactMoney, mergeDaily, rangeLabel } from '../lib/channels'
+import { CHANNELS, GOOGLE_PARTS, channelMix, compactMoney, mergeDaily, rangeLabel } from '../lib/channels'
 import { dailyRows as googleDailyRows, inRange, kpis as googleKpis } from '../lib/googleSearchReport'
-import { isLsaCampaign } from '../lib/lsaReport'
+import { isLsaCampaign, leadsInRange, lsaDailyRows, lsaKpis } from '../lib/lsaReport'
+import { pplByClient, pplWho } from '../lib/googleSplit'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
 import { supabase } from '../lib/supabaseClient'
 
@@ -27,12 +28,15 @@ import { supabase } from '../lib/supabaseClient'
  * are the door.
  *
  * Meta comes from ad_daily (per ad, so Live ads can be filtered on status),
- * Google from google_campaign_daily (every campaign type but Local
- * Services), LSA from the Local Services campaigns in that same table plus
- * the weekly numbers logged by hand for clients not connected (since
- * 2026-11-12; before that LSA was the hand logs alone and the Local
- * Services campaigns counted as Google). Our own businesses are kept out of
- * every total and shown on their own at the bottom.
+ * Google from google_campaign_daily. Google is ONE card with two parts
+ * (2026-11-17: "make it so Google is all one and we can see search ad data
+ * and pay per lead data"): Search, every campaign but Local Services, and
+ * pay per lead, the Local Services campaigns in that same table (Google
+ * moved LSA into Google Ads as Performance Max with pay-per-lead goals) with
+ * the leads themselves from lsa_leads, counted the way the pay-per-lead
+ * report counts them, plus weeks logged by hand for clients not connected.
+ * Our own businesses are kept out of every total and shown on their own at
+ * the bottom.
  */
 const SCOPES = [
   { value: 'live', label: 'Live ads' },
@@ -60,6 +64,9 @@ export default function ReportsPage() {
   const [adRows, setAdRows] = useState([])
   const [googleRows, setGoogleRows] = useState([])
   const [lsaRows, setLsaRows] = useState([])
+  // The pay-per-lead leads themselves, and who is set up for pay per lead.
+  const [pplLeads, setPplLeads] = useState([])
+  const [lsaClients, setLsaClients] = useState([])
   // Our own businesses (is_internal), for the My businesses rows.
   const [ourClients, setOurClients] = useState([])
   const [scope, setScope] = useState('live')
@@ -78,7 +85,7 @@ export default function ReportsPage() {
   // with. Google and LSA fail soft: a missing table must not blank Meta.
   const load = async () => {
     const since = daysAgo(days * 2 - 1)
-    const [meta, google, lsa, ours] = await Promise.all([
+    const [meta, google, lsa, ours, leadRows, setUp] = await Promise.all([
       fetchAdRowsForRange(since),
       supabase
         .from('google_campaign_daily')
@@ -101,11 +108,29 @@ export default function ReportsPage() {
         .eq('archived', false)
         .order('name')
         .then(({ data }) => data || [], () => []),
+      // Each pay-per-lead lead Google reported (a call, a message, a
+      // booking), so the card counts leads the way the pay-per-lead report
+      // does, charged ones included.
+      supabase
+        .from('lsa_leads')
+        .select('client_id, created_date, lead_charged, credit_state, lead_status, lead_type, clients(name, is_internal, archived)')
+        .gte('created_date', since)
+        .then(({ data }) => data || [], () => []),
+      // Who is set up for pay per lead, spending or not: the campaigns the
+      // sync found (lsa_campaigns) and the clients marked LSA live.
+      supabase
+        .from('clients')
+        .select('id, name, is_internal, archived, paused_at, lsa_active, lsa_campaigns')
+        .eq('archived', false)
+        .or('lsa_active.eq.true,lsa_campaigns.not.is.null')
+        .then(({ data }) => data || [], () => []),
     ])
     setAdRows(meta)
     setGoogleRows(google)
     setLsaRows(lsa)
     setOurClients(ours)
+    setPplLeads(leadRows)
+    setLsaClients(setUp)
   }
 
   useEffect(() => {
@@ -156,20 +181,40 @@ export default function ReportsPage() {
   const google = useMemo(() => googleKpis(googleNowRows), [googleNowRows])
   const googleBefore = useMemo(() => googleKpis(googlePrevRows), [googlePrevRows])
 
-  // ---- LSA: synced campaigns, plus the weeks logged by hand for clients ----
-  // whose Local Services account is not connected (never both for one client).
+  // ---- Google pay per lead: synced campaigns and their leads, plus the -----
+  // weeks logged by hand for clients whose pay per lead is not connected
+  // (never both for one client).
   const windowMonday = formatDate(getMonday(new Date(`${windowStart}T00:00:00`)))
   const syncedLsaClients = useMemo(() => new Set(clientLsaSynced.map((r) => r.client_id)), [clientLsaSynced])
   const clientLsa = useMemo(() => lsaRows.filter((r) => !r.clients?.is_internal && !r.clients?.archived && !syncedLsaClients.has(r.client_id)), [lsaRows, syncedLsaClients])
   const lsaNowRows = useMemo(() => inRange(clientLsaSynced, windowStart), [clientLsaSynced, windowStart])
   const lsaPrevRows = useMemo(() => inRange(clientLsaSynced, prevStart, prevEnd), [clientLsaSynced, prevStart, prevEnd])
-  const lsaDaily = useMemo(() => buildDailySeries(googleDailyRows(lsaNowRows), windowStart, daysAgo(0)), [lsaNowRows, windowStart])
-  const lsaSum = (weekRows, dayRows) => ({
-    spend: weekRows.reduce((s, r) => s + Number(r.ad_spend || 0), 0) + dayRows.reduce((s, r) => s + Number(r.cost || 0), 0),
-    leads: weekRows.reduce((s, r) => s + Number(r.leads || 0), 0) + dayRows.reduce((s, r) => s + Number(r.conversions || 0), 0),
-  })
-  const lsa = useMemo(() => lsaSum(clientLsa.filter((r) => r.week_of >= windowMonday), lsaNowRows), [clientLsa, windowMonday, lsaNowRows])
-  const lsaBefore = useMemo(() => lsaSum(clientLsa.filter((r) => r.week_of < windowMonday), lsaPrevRows), [clientLsa, windowMonday, lsaPrevRows])
+  const clientLeads = useMemo(() => pplLeads.filter((l) => !l.clients?.is_internal && !l.clients?.archived), [pplLeads])
+  const leadsNow = useMemo(() => leadsInRange(clientLeads, windowStart), [clientLeads, windowStart])
+  const leadsPrev = useMemo(() => leadsInRange(clientLeads, prevStart, prevEnd), [clientLeads, prevStart, prevEnd])
+  // Spend from the campaigns, leads from the lead rows: the pay-per-lead
+  // report's own daily rows, so the two pages agree day for day.
+  const lsaDaily = useMemo(() => buildDailySeries(lsaDailyRows(lsaNowRows, leadsNow), windowStart, daysAgo(0)), [lsaNowRows, leadsNow, windowStart])
+  // The pay-per-lead report's KPIs (leads, charged, cost per charged lead)
+  // plus the hand-logged weeks.
+  const lsaSum = (dayRows, leadRows, weekRows) => {
+    const k = lsaKpis(dayRows, leadRows)
+    const spend = k.spend + weekRows.reduce((s, r) => s + Number(r.ad_spend || 0), 0)
+    const leads = k.leads + weekRows.reduce((s, r) => s + Number(r.leads || 0), 0)
+    return { spend, leads, charged: k.charged, cpcl: k.cpcl, fromLeadRows: k.fromLeadRows, cpl: leads > 0 ? spend / leads : 0 }
+  }
+  const lsa = useMemo(() => lsaSum(lsaNowRows, leadsNow, clientLsa.filter((r) => r.week_of >= windowMonday)), [lsaNowRows, leadsNow, clientLsa, windowMonday])
+  const lsaBefore = useMemo(() => lsaSum(lsaPrevRows, leadsPrev, clientLsa.filter((r) => r.week_of < windowMonday)), [lsaPrevRows, leadsPrev, clientLsa, windowMonday])
+  // Google as one: Search and pay per lead together.
+  const googleAll = { spend: google.spend + lsa.spend, leads: google.leads + lsa.leads }
+  googleAll.cpl = googleAll.leads > 0 ? googleAll.spend / googleAll.leads : 0
+  const googleAllBefore = { spend: googleBefore.spend + lsaBefore.spend, leads: googleBefore.leads + lsaBefore.leads }
+  googleAllBefore.cpl = googleAllBefore.leads > 0 ? googleAllBefore.spend / googleAllBefore.leads : 0
+  // Who runs pay per lead, who is set up and quiet, who is still to connect.
+  const who = useMemo(
+    () => pplWho({ clients: lsaClients, campaignRows: lsaNowRows, handRows: clientLsa.filter((r) => r.week_of >= windowMonday) }),
+    [lsaClients, lsaNowRows, clientLsa, windowMonday]
+  )
 
   // ---- All channels -------------------------------------------------------
   const all = {
@@ -190,13 +235,14 @@ export default function ReportsPage() {
     { key: 'lsa', cpl: lsa.leads > 0 ? lsa.spend / lsa.leads : 0 },
   ].filter((c) => c.cpl > 0)
   const cplMax = Math.max(...cplBy.map((c) => c.cpl), 1)
-  const stacked = useMemo(() => mergeDaily(metaDaily, googleDaily, stackKey), [metaDaily, googleDaily, stackKey])
+  // Meta, Google Search and Google pay per lead, stacked by day.
+  const stacked = useMemo(() => mergeDaily(metaDaily, googleDaily, stackKey, lsaDaily), [metaDaily, googleDaily, stackKey, lsaDaily])
   const stackMetric = STACK_METRICS.find((m) => m.value === stackKey)
 
   // ---- Every client, every channel ----------------------------------------
   // A client's row opens their ad page on the channel that carried the most
   // spend in this range, with the same range; the switch there flips it.
-  const adsLink = (r) => `/reports/client/${r.id}?channel=${r.google > r.meta ? 'google' : 'meta'}&days=${days}`
+  const adsLink = (r) => `/reports/client/${r.id}?channel=${r.google + r.lsa > r.meta ? 'google' : 'meta'}&days=${days}`
   const clientTable = useMemo(() => {
     const by = new Map()
     const row = (id, name) => {
@@ -213,10 +259,12 @@ export default function ReportsPage() {
       x.google += Number(r.cost) || 0
       x.leads += Number(r.conversions) || 0
     }
-    for (const r of lsaNowRows) {
-      const x = row(r.client_id, r.clients?.name || 'Unknown')
-      x.lsa += Number(r.cost) || 0
-      x.leads += Number(r.conversions) || 0
+    // Pay per lead: spend from the campaigns, leads from the lead rows where
+    // the client has any, as the pay-per-lead report counts them.
+    for (const [id, p] of pplByClient({ campaignRows: lsaNowRows, leadRows: leadsNow })) {
+      const x = row(id, p.name)
+      x.lsa += p.spend
+      x.leads += p.leads
     }
     for (const r of clientLsa.filter((k) => k.week_of >= windowMonday)) {
       const x = row(r.client_id, r.clients?.name || 'Unknown')
@@ -230,7 +278,7 @@ export default function ReportsPage() {
       })
       .filter((r) => r.spend > 0 || r.leads > 0)
       .sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name))
-  }, [metaNowRows, googleNowRows, lsaNowRows, clientLsa, windowMonday])
+  }, [metaNowRows, googleNowRows, lsaNowRows, leadsNow, clientLsa, windowMonday])
   const topSpend = Math.max(...clientTable.map((r) => r.spend), 1)
 
   // Our own businesses: Meta and Google, never in a total, with the Google
@@ -257,35 +305,18 @@ export default function ReportsPage() {
       cta: 'Open full report →',
       note: scope === 'live' ? 'Live ads only · every client, ad, placement' : 'All ads · every client, ad, placement',
     },
-    {
-      key: 'google',
-      spend: google.spend,
-      leads: google.leads,
-      cpl: google.cpl,
-      delta: pctChange(google.spend, googleBefore.spend),
-      spark: googleDaily.map((d) => d.spend),
-      to: '/reports/google-search',
-      cta: 'Open full report →',
-      note: 'Every client, campaign, keyword',
-    },
-    {
-      key: 'lsa',
-      spend: lsa.spend,
-      leads: lsa.leads,
-      cpl: lsa.leads > 0 ? lsa.spend / lsa.leads : 0,
-      delta: pctChange(lsa.spend, lsaBefore.spend),
-      spark: lsaNowRows.length ? lsaDaily.map((d) => d.spend) : null,
-      to: '/reports/lsa',
-      cta: 'Open full report →',
-      // Why it is empty, when it is: no client's Local Services account is
-      // connected yet and no weeks were logged by hand; our own businesses'
-      // Local Services sit under My businesses, like their Meta and Google.
-      note:
-        lsaNowRows.length || clientLsa.length
-          ? 'Synced nightly from Google · weekly hand logs where not connected'
-          : `No client's Local Services account connected yet, nothing logged by hand${internalRows.some((r) => r.lsaSpend > 0) ? ' · ours is under My businesses' : ''} · open to see who is connected`,
-    },
   ]
+  // Google, one card: the total, then Search and pay per lead side by side.
+  const googleCard = {
+    total: googleAll,
+    delta: pctChange(googleAll.spend, googleAllBefore.spend),
+    spark: googleDaily.map((d, i) => d.spend + (lsaDaily[i]?.spend || 0)),
+    search: { ...google, delta: pctChange(google.spend, googleBefore.spend) },
+    ppl: { ...lsa, delta: pctChange(lsa.spend, lsaBefore.spend) },
+    who,
+    // Our own businesses' pay per lead is never in a client total; say where it is.
+    oursHasPpl: internalRows.some((r) => r.lsaSpend > 0),
+  }
 
   return (
     <Layout
@@ -331,14 +362,14 @@ export default function ReportsPage() {
               </div>
               <div className="mt-6">
                 <Eyebrow className="mb-2">Leads by channel</Eyebrow>
-                <MixBar mix={leadMix} format={(v) => String(Math.round(v))} />
+                <MixBar mix={leadMix} format={(v) => String(Math.round(v))} names={GOOGLE_PARTS} />
               </div>
             </Panel>
 
             <Panel className="p-5">
               <Eyebrow>Spend by channel</Eyebrow>
               <div className="mt-3">
-                <MixBar mix={spendMix} format={money} />
+                <MixBar mix={spendMix} format={money} names={GOOGLE_PARTS} />
               </div>
               <Eyebrow className="mb-2 mt-6">Cost per lead · lower is better</Eyebrow>
               {cplBy.length === 0 ? (
@@ -348,7 +379,7 @@ export default function ReportsPage() {
                   {cplBy.map((c) => (
                     <li key={c.key}>
                       <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1.5 text-slate-300"><ChannelDot channel={c.key} />{CHANNELS[c.key].long}</span>
+                        <span className="flex items-center gap-1.5 text-slate-300"><ChannelDot channel={c.key} />{GOOGLE_PARTS[c.key] || CHANNELS[c.key].long}</span>
                         <span className="tabular-nums text-white">{cplText(c.cpl)}</span>
                       </div>
                       <div className="h-1.5 rounded-full bg-white/5">
@@ -361,7 +392,8 @@ export default function ReportsPage() {
             </Panel>
           </div>
 
-          {/* ONE CARD PER CHANNEL, each in its own colour. */}
+          {/* ONE CARD PER CHANNEL: Meta, and Google as one card with Search
+              and pay per lead side by side (2026-11-17). */}
           <div className="grid gap-4 md:grid-cols-3">
             {channelCards.map((c) => {
               const body = (
@@ -403,16 +435,17 @@ export default function ReportsPage() {
               }
               return <Panel key={c.key} channel={c.key} className="p-5">{body}</Panel>
             })}
+            <GoogleCard card={googleCard} />
           </div>
 
           {/* THE DAILY SPLIT. */}
           <Panel className="p-5">
             <SectionTitle
               title={`${stackMetric.label} by day, by channel`}
-              sub="Meta and Google stacked · clients only · LSA is weekly, so it is on the cards above"
+              sub="Meta, Google Search and Google pay per lead stacked · clients only"
               right={<Segmented size="sm" options={STACK_METRICS} value={stackKey} onChange={setStackKey} />}
             />
-            <ChannelDailyChart series={stacked} format={stackMetric.format} axis={stackMetric.axis} />
+            <ChannelDailyChart series={stacked} format={stackMetric.format} axis={stackMetric.axis} keys={['meta', 'google', 'lsa']} names={GOOGLE_PARTS} />
           </Panel>
 
           {/* EVERY CLIENT, EVERY CHANNEL. */}
@@ -427,8 +460,8 @@ export default function ReportsPage() {
                     <DTh>Client</DTh>
                     <DTh className="w-[28%]">Channel split</DTh>
                     <DTh numeric><span className="inline-flex items-center gap-1.5"><ChannelDot channel="meta" />Meta</span></DTh>
-                    <DTh numeric><span className="inline-flex items-center gap-1.5"><ChannelDot channel="google" />Google</span></DTh>
-                    <DTh numeric><span className="inline-flex items-center gap-1.5"><ChannelDot channel="lsa" />LSA</span></DTh>
+                    <DTh numeric><span className="inline-flex items-center gap-1.5"><ChannelDot channel="google" />Google Search</span></DTh>
+                    <DTh numeric><span className="inline-flex items-center gap-1.5"><ChannelDot channel="lsa" />Pay per lead</span></DTh>
                     <DTh numeric>Total</DTh>
                     <DTh numeric>Leads</DTh>
                     <DTh numeric>Cost/lead</DTh>
@@ -443,7 +476,7 @@ export default function ReportsPage() {
                       <DTd>
                         {/* Bar length is the client's total against the
                             biggest client; the segments are its channels. */}
-                        <div className="flex h-2 gap-[2px] overflow-hidden rounded-full bg-white/5" style={{ width: `${Math.max(6, (r.spend / topSpend) * 100)}%` }} title={`Meta ${money(r.meta)} · Google ${money(r.google)} · LSA ${money(r.lsa)}`}>
+                        <div className="flex h-2 gap-[2px] overflow-hidden rounded-full bg-white/5" style={{ width: `${Math.max(6, (r.spend / topSpend) * 100)}%` }} title={`Meta ${money(r.meta)} · Google Search ${money(r.google)} · Google pay per lead ${money(r.lsa)}`}>
                           {['meta', 'google', 'lsa'].map((k) => r[k] > 0 && (
                             <span key={k} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${(r[k] / r.spend) * 100}%`, background: CHANNELS[k].color }} />
                           ))}
@@ -549,6 +582,117 @@ function Stat({ label, value }) {
       <p className="text-lg font-semibold text-white">{value}</p>
       <p className="text-[11px] text-slate-500">{label}</p>
     </div>
+  )
+}
+
+/** A smaller number for the two halves of the Google card. */
+function MiniStat({ label, value }) {
+  return (
+    <div>
+      <p className="text-base font-semibold tabular-nums text-white">{value}</p>
+      <p className="text-[10px] text-slate-500">{label}</p>
+    </div>
+  )
+}
+
+/**
+ * Google as one channel (2026-11-17: "make it so Google is all one and we can
+ * see search ad data and pay per lead data"). The total on top, then the two
+ * parts side by side, each with its own report: Search (every campaign but
+ * Local Services) and pay per lead (Local Services, which Google moved into
+ * Google Ads as Performance Max with pay-per-lead goals). An empty pay-per-
+ * lead half says who is set up, who is paused and who is still to connect,
+ * never a row of zeros on its own.
+ */
+function GoogleCard({ card }) {
+  const { total, delta, spark, search, ppl, who, oursHasPpl } = card
+  const pplEmpty = !(ppl.spend > 0) && !(ppl.leads > 0)
+  const half = (channel) => ({ borderColor: CHANNELS[channel].ring, background: CHANNELS[channel].soft })
+  return (
+    <Panel channel="google" className="h-full p-5 md:col-span-2" data-google-card>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-2 text-sm font-semibold text-white">
+          <ChannelDot channel="google" size="md" />
+          Google Ads
+          <span className="text-xs font-normal text-slate-500">Search and pay per lead</span>
+        </span>
+        <Link to="/reports/google-search" className="text-xs font-medium hover:underline" style={{ color: CHANNELS.google.color }}>
+          Open Google Ads report →
+        </Link>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <Stat label="Spend" value={money(total.spend)} />
+        <Stat label="Leads" value={Math.round(total.leads)} />
+        <Stat label="Cost/lead" value={cplText(total.cpl)} />
+      </div>
+      <div className="mt-3">
+        <Sparkline values={spark} channel="google" height={36} />
+      </div>
+      <div className="mt-1 flex justify-end text-[11px]">
+        <Delta value={delta} compact />
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border p-3" style={half('google')} data-google-part="search">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-white">
+              <ChannelDot channel="google" />
+              Search ads
+            </span>
+            <Delta value={search.delta} compact />
+          </div>
+          <p className="mt-0.5 text-[10px] text-slate-500">Search, Performance Max and the rest, by keyword</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <MiniStat label="Spend" value={money(search.spend)} />
+            <MiniStat label="Leads" value={Math.round(search.leads)} />
+            <MiniStat label="Cost/lead" value={cplText(search.cpl)} />
+          </div>
+          <Link to="/reports/google-search" className="mt-2 inline-block text-[11px] font-medium hover:underline" style={{ color: CHANNELS.google.color }}>
+            Keywords and search terms →
+          </Link>
+        </div>
+
+        <div className="rounded-xl border p-3" style={half('lsa')} data-google-part="pay-per-lead">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-white">
+              <ChannelDot channel="lsa" />
+              Pay per lead
+            </span>
+            {!pplEmpty && <Delta value={ppl.delta} compact />}
+          </div>
+          <p className="mt-0.5 text-[10px] text-slate-500">Local Services, now inside Google Ads · billed per lead</p>
+          {pplEmpty ? (
+            <div className="mt-2 space-y-1 text-[11px] text-slate-400" data-ppl-empty>
+              <p className="text-slate-300">No client ran pay per lead in this range.</p>
+              {who.setUp.length > 0 && (
+                <p>
+                  Set up, not spending: <span className="text-slate-200">{who.setUp.map((s) => `${s.name}${s.paused ? ' (paused in Google)' : ''}`).join(', ')}</span>
+                </p>
+              )}
+              {who.toConnect.length > 0 && (
+                <p>
+                  Marked LSA, not found in Google Ads yet: <span className="text-slate-200">{who.toConnect.join(', ')}</span>
+                </p>
+              )}
+              {oursHasPpl && <p>Ours is under My businesses, below.</p>}
+            </div>
+          ) : (
+            <>
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                <MiniStat label="Spend" value={money(ppl.spend)} />
+                <MiniStat label="Leads" value={Math.round(ppl.leads)} />
+                <MiniStat label="Charged" value={ppl.fromLeadRows ? ppl.charged : '—'} />
+                <MiniStat label={ppl.fromLeadRows ? 'Per charged lead' : 'Cost/lead'} value={cplText(ppl.fromLeadRows ? ppl.cpcl : ppl.cpl)} />
+              </div>
+              {who.running.length > 0 && <p className="mt-1.5 truncate text-[10px] text-slate-500" title={who.running.join(', ')}>Running: {who.running.join(', ')}</p>}
+            </>
+          )}
+          <Link to="/reports/lsa" className="mt-2 inline-block text-[11px] font-medium hover:underline" style={{ color: CHANNELS.lsa.color }}>
+            {pplEmpty ? 'Who is connected →' : 'Leads, charged and credited →'}
+          </Link>
+        </div>
+      </div>
+    </Panel>
   )
 }
 

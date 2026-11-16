@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CHANNELS, DARK } from '../../lib/channels'
 
 const PAD = { top: 14, right: 14, bottom: 26, left: 54 }
-const STACK = ['meta', 'google']
+const STACK_DEFAULT = ['meta', 'google']
 
 function niceTicks(max, count = 4) {
   if (max <= 0) return [0, 1]
@@ -33,10 +33,17 @@ function topRounded(x, y, w, h, r = 4) {
  * The point of the chart is the split: which channel carried which day. So
  * the channels stack (part of the day's whole) rather than sit side by side,
  * separated by a 2px surface gap, with the top segment rounded. A legend is
- * always shown; the tooltip gives both values and the total. LSA is not here
- * because it is logged weekly, not daily.
+ * always shown; the tooltip gives every value and the total.
+ *
+ * `keys` is the stack, bottom first: Meta and Google by default, and Google
+ * pay per lead on top where a page passes it (the agency's Performance page,
+ * since pay per lead syncs daily from Google Ads). A key with nothing all
+ * range is left out of the legend and the tooltip. `names` overrides a
+ * channel's long name.
  */
-export default function ChannelDailyChart({ series, format, axis, height = 260 }) {
+export default function ChannelDailyChart({ series, format, axis, height = 260, keys = STACK_DEFAULT, names = {} }) {
+  const name = (k, short = false) => names[k] || (short ? CHANNELS[k].label : CHANNELS[k].long)
+  const val = (r, k) => Number(r?.[k] || 0)
   const [active, setActive] = useState(null)
   const [width, setWidth] = useState(760)
   const wrapRef = useRef(null)
@@ -53,6 +60,10 @@ export default function ChannelDailyChart({ series, format, axis, height = 260 }
   }, [])
 
   if (!series.length) return <p className="text-sm text-slate-500">No daily data in this range yet.</p>
+
+  // The stack as drawn: the asked-for keys that have something this range.
+  // Meta and Google always stay, so an empty range still has a legend.
+  const STACK = keys.filter((k, i) => i < 2 || series.some((r) => val(r, k) > 0))
 
   const plotW = width - PAD.left - PAD.right
   const plotH = height - PAD.top - PAD.bottom
@@ -87,7 +98,7 @@ export default function ChannelDailyChart({ series, format, axis, height = 260 }
         width="100%"
         height={height}
         role="img"
-        aria-label="Spend by day, Meta and Google stacked"
+        aria-label={`By day, ${STACK.map((k) => name(k)).join(', ')} stacked`}
         tabIndex={0}
         onKeyDown={onKey}
         onPointerMove={onMove}
@@ -108,11 +119,11 @@ export default function ChannelDailyChart({ series, format, axis, height = 260 }
 
         {series.map((r, i) => {
           let base = 0
-          const visible = STACK.filter((k) => r[k] > 0)
+          const visible = STACK.filter((k) => val(r, k) > 0)
           return (
             <g key={r.date}>
               {STACK.map((k) => {
-                const v = r[k]
+                const v = val(r, k)
                 if (v <= 0) return null
                 const y1 = yOf(base + v)
                 const y0 = yOf(base)
@@ -148,8 +159,8 @@ export default function ChannelDailyChart({ series, format, axis, height = 260 }
             {STACK.map((k) => (
               <p key={k} className="flex items-center gap-2 tabular-nums">
                 <span className="inline-block h-2 w-2 rounded-sm" style={{ background: CHANNELS[k].color }} />
-                <span className="text-slate-400">{CHANNELS[k].label}</span>
-                <span className="ml-auto font-semibold text-white">{format(row[k])}</span>
+                <span className="text-slate-400">{name(k, true)}</span>
+                <span className="ml-auto font-semibold text-white">{format(val(row, k))}</span>
               </p>
             ))}
             <p className="flex items-center gap-2 border-t border-white/10 pt-0.5 tabular-nums">
@@ -164,7 +175,7 @@ export default function ChannelDailyChart({ series, format, axis, height = 260 }
         {STACK.map((k) => (
           <span key={k} className="flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: CHANNELS[k].color }} />
-            {CHANNELS[k].long}
+            {name(k)}
           </span>
         ))}
         <span className="ml-auto hidden text-slate-500 sm:inline">Hover, or focus and use ← →</span>

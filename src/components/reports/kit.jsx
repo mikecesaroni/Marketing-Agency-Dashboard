@@ -143,20 +143,22 @@ export function KpiTile({ label, value, delta, lowerIsBetter = false, spark, cha
  * the numbers. Identity is never colour alone: every segment has a labelled
  * swatch beside its value.
  */
-export function MixBar({ mix, format }) {
+export function MixBar({ mix, format, names = {} }) {
   if (!mix.length) return <div className="h-2.5 rounded-full bg-white/5" />
+  // `names` overrides a channel's long name, for a page that splits Google.
+  const name = (k) => names[k] || CHANNELS[k].long
   return (
     <div>
       <div className="flex h-2.5 w-full gap-[2px] overflow-hidden rounded-full bg-white/5">
         {mix.map((m) => (
-          <span key={m.key} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${m.share}%`, background: CHANNELS[m.key].color }} title={`${CHANNELS[m.key].long}: ${format(m.value)} (${Math.round(m.share)}%)`} />
+          <span key={m.key} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${m.share}%`, background: CHANNELS[m.key].color }} title={`${name(m.key)}: ${format(m.value)} (${Math.round(m.share)}%)`} />
         ))}
       </div>
       <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1.5">
         {mix.map((m) => (
           <span key={m.key} className="flex items-center gap-1.5 text-xs text-slate-400">
             <ChannelDot channel={m.key} />
-            <span className="text-slate-300">{CHANNELS[m.key].long}</span>
+            <span className="text-slate-300">{name(m.key)}</span>
             <span className="tabular-nums text-white">{format(m.value)}</span>
             <span className="tabular-nums text-slate-500">{Math.round(m.share)}%</span>
           </span>

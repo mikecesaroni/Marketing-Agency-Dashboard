@@ -217,6 +217,8 @@ const TYPES = {
   VIDEO: 'Video',
   SHOPPING: 'Shopping',
   LOCAL_SERVICES: 'Local Services',
+  // A Performance Max campaign Google runs as Local Services (the sync's type).
+  PAY_PER_LEAD: 'Pay per lead',
   DEMAND_GEN: 'Demand Gen',
   SMART: 'Smart',
   MULTI_CHANNEL: 'App',

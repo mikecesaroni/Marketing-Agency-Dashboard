@@ -79,7 +79,7 @@ const PATH_NAMES = {
   '/content/drive': 'Drive photos',
   '/reports': 'Live KPIs',
   '/reports/google-search': 'Google Ads',
-  '/reports/lsa': 'Local Services',
+  '/reports/lsa': 'Google pay per lead',
   '/reports/meta': 'Meta Ads',
 }
 

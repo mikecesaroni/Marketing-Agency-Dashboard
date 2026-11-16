@@ -13,8 +13,16 @@
 export const CHANNELS = {
   meta: { key: 'meta', label: 'Meta', long: 'Meta Ads', color: '#3987e5', soft: 'rgba(57,135,229,0.14)', ring: 'rgba(57,135,229,0.35)' },
   google: { key: 'google', label: 'Google', long: 'Google Ads', color: '#199e70', soft: 'rgba(25,158,112,0.14)', ring: 'rgba(25,158,112,0.35)' },
-  lsa: { key: 'lsa', label: 'LSA', long: 'Google LSA', color: '#d95926', soft: 'rgba(217,89,38,0.14)', ring: 'rgba(217,89,38,0.35)' },
+  // Local Services. Google moved it into Google Ads as a Performance Max
+  // campaign with pay-per-lead goals in late 2026, so it reads by what it
+  // is now, with the old name beside it for anyone who knows it as LSA.
+  lsa: { key: 'lsa', label: 'Pay per lead', long: 'Google pay per lead (LSA)', color: '#d95926', soft: 'rgba(217,89,38,0.14)', ring: 'rgba(217,89,38,0.35)' },
 }
+
+// On the agency's own Performance page Google is one channel with two parts:
+// the Search side (every campaign but pay per lead) and pay per lead. These
+// are the names for that split; elsewhere CHANNELS.*.long stands.
+export const GOOGLE_PARTS = { google: 'Google Search', lsa: 'Google pay per lead' }
 
 export const CHANNEL_ORDER = ['meta', 'google', 'lsa']
 
@@ -65,15 +73,18 @@ export function channelMix(values) {
 }
 
 /**
- * Two daily series on one date axis, for the stacked channel chart. Days
- * with nothing in either are kept, so the axis is continuous.
+ * Daily series on one date axis, for the stacked channel chart: Meta, Google
+ * and, when given, Google pay per lead. Days with nothing in any are kept,
+ * so the axis is continuous.
  */
-export function mergeDaily(metaSeries, googleSeries, key) {
+export function mergeDaily(metaSeries, googleSeries, key, lsaSeries = null) {
   const g = new Map((googleSeries || []).map((r) => [r.date, Number(r[key] || 0)]))
+  const l = new Map((lsaSeries || []).map((r) => [r.date, Number(r[key] || 0)]))
   return (metaSeries || []).map((r) => {
     const meta = Number(r[key] || 0)
     const google = g.get(r.date) || 0
-    return { date: r.date, meta, google, total: meta + google }
+    const lsa = l.get(r.date) || 0
+    return { date: r.date, meta, google, ...(lsaSeries ? { lsa } : {}), total: meta + google + lsa }
   })
 }
 

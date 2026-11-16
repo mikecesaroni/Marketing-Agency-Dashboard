@@ -25,6 +25,7 @@ import CopySetupMessageButton from '../components/CopySetupMessageButton'
 import GoogleAdsIdInput from '../components/GoogleAdsIdInput'
 import { explainSyncError, isAccessError } from '../lib/googleAdsId'
 import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from '../lib/agencyEmail'
+import { isLsaCampaign } from '../lib/lsaReport'
 
 /**
  * Google Search across every client, on a page of its own.
@@ -171,6 +172,10 @@ export default function GoogleSearchReportPage() {
   const prevRows = useMemo(() => inRange(clientOnly, prevStart, prevEnd), [clientOnly, prevStart, prevEnd])
   const now = useMemo(() => kpis(nowRows), [nowRows])
   const before = useMemo(() => kpis(prevRows), [prevRows])
+  // Google is one channel: this page counts every campaign, pay per lead
+  // (Local Services, inside Google Ads since late 2026) included, and says
+  // how much of it that is, with the way to its own report.
+  const ppl = useMemo(() => kpis(nowRows.filter((r) => isLsaCampaign(r.campaign_type, r.campaign_name))), [nowRows])
 
   const daily = useMemo(() => buildDailySeries(dailyRows(nowRows), windowStart, daysAgo(0)), [nowRows, windowStart])
   const metric = METRICS.find((m) => m.key === metricKey)
@@ -207,9 +212,19 @@ export default function GoogleSearchReportPage() {
       subtitle={`Last ${days} days · ${withData} ${withData === 1 ? 'client' : 'clients'} with data · ${money(now.spend)} spend · ${now.leads} leads`}
       actions={actions}
     >
-      <Link to="/reports" className="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white">
-        ← All channels
-      </Link>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <Link to="/reports" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white">
+          ← All channels
+        </Link>
+        {ppl.spend > 0 && (
+          <span className="text-xs text-slate-400" data-ppl-share>
+            Includes pay per lead: {money(ppl.spend)} and {Math.round(ppl.leads)} {Math.round(ppl.leads) === 1 ? 'lead' : 'leads'} ·{' '}
+            <Link to="/reports/lsa" className="font-medium hover:underline" style={{ color: CHANNELS.lsa.color }}>
+              Pay-per-lead report →
+            </Link>
+          </span>
+        )}
+      </div>
 
       {error && <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">Error: {error}</div>}
       {syncNote && <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">{syncNote}</div>}

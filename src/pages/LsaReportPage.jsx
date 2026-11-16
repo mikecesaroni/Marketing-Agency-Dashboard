@@ -74,7 +74,7 @@ export default function LsaReportPage() {
       // Twice the range, so every tile has the window before it to compare
       // with. A missing table (the SQL not applied yet) must not blank the page.
       const [clientsRes, campaigns, leadRows, hand] = await Promise.all([
-        supabase.from('clients').select('id,name,archived,is_internal,paused_at,tier,lsa_active,lsa_customer_id,google_ads_customer_id,lsa_synced_at,lsa_sync_error').order('name'),
+        supabase.from('clients').select('id,name,archived,is_internal,paused_at,tier,lsa_active,lsa_customer_id,google_ads_customer_id,lsa_synced_at,lsa_sync_error,lsa_campaigns').order('name'),
         fetchAllRows(() =>
           supabase.from('google_campaign_daily').select('client_id,customer_id,date,campaign_id,campaign_name,campaign_type,campaign_status,cost,conversions,clicks,impressions').gte('date', prevStart).order('date').order('id')
         ),
@@ -173,7 +173,7 @@ export default function LsaReportPage() {
   return (
     <Layout
       tone="dark"
-      title="Local Services"
+      title="Google pay per lead"
       subtitle={`Last ${days} days · ${link.live} ${link.live === 1 ? 'client' : 'clients'} live${link.stopped ? ` · ${link.stopped} stopped` : ''} · ${money(now.spend)} spend · ${now.leads} leads · ${now.charged} charged`}
       actions={actions}
     >
@@ -246,10 +246,19 @@ export default function LsaReportPage() {
                               {r.stoppedWhy === 'paused' ? `paused in Google, last spend ${r.lastDate}` : `no spend for ${r.quietDays} days`}
                             </span>
                           )}
+                          {/* Set up in Google Ads with nothing spent in the range:
+                              say whether the campaign is paused or on and waiting
+                              (on with no spend is usually Google's verification
+                              or the budget, worth a look in the account). */}
+                          {r.state === 'connected' && r.campaigns.length > 0 && (
+                            <span className="ml-2 text-[11px] text-amber-300/90" title={r.campaigns.map((c) => `${c.name} (${c.status})`).join(', ')} data-ppl-held>
+                              {r.campaignsPaused ? 'campaign paused in Google' : 'campaign on, nothing spent: check verification and budget'}
+                            </span>
+                          )}
                           {r.syncError && <span className="ml-2 text-[11px] text-amber-300/90">lead read failed</span>}
                         </DTd>
                         <DTd className="whitespace-nowrap text-xs text-slate-400">
-                          {r.account ? `${dashed(r.account)}${r.inSearchAccount ? ' · with Search' : ''}` : r.state === 'by-hand' ? 'weekly log' : '—'}
+                          {r.account ? `${dashed(r.account)}${r.inSearchAccount ? ' · in their Google Ads' : ''}` : r.state === 'by-hand' ? 'weekly log' : '—'}
                         </DTd>
                         <DTd numeric muted={!r.spend && !r.hand}>{r.spend ? money(r.spend) : r.hand ? `${money(r.hand.spend)} (by hand)` : '—'}</DTd>
                         <DTd numeric muted={!r.leads && !r.hand}>{r.leads || (r.hand ? `${r.hand.leads} (by hand)` : '—')}</DTd>
@@ -321,7 +330,7 @@ export default function LsaReportPage() {
             <section>
               <SectionTitle title="Latest leads" sub="Each call, message or booking Google reported · charged means Google billed for it · credited means the charge came back" />
               {latest.length === 0 ? (
-                <Panel className="p-8 text-center text-sm text-slate-500">No Local Services leads synced in this range yet. The leads arrive with the nightly sync, from every account that carries a Local Services campaign.</Panel>
+                <Panel className="p-8 text-center text-sm text-slate-500">No pay-per-lead leads synced in this range yet. The leads arrive with the nightly sync, from every Google Ads account that holds a pay-per-lead (Local Services) campaign, paused or not.</Panel>
               ) : (
                 <DTable>
                   <thead>
@@ -350,9 +359,9 @@ export default function LsaReportPage() {
 
             {/* HOW A CLIENT GETS CONNECTED. */}
             <Panel className="p-5" data-lsa-connect>
-              <Eyebrow>Connecting a client&rsquo;s Local Services</Eyebrow>
+              <Eyebrow>Connecting a client&rsquo;s pay per lead</Eyebrow>
               <p className="mt-2 text-sm text-slate-300">
-                The sync reads whatever Google Ads accounts our login can see. A client&rsquo;s Local Services lives either inside their Search account (then it is already here, as Horizon HVAC&rsquo;s is) or in an account of its own. For an account of its own, the client adds <span className="text-white">{AGENCY_EMAIL}</span> as a user on it (Local Services dashboard, the gear, Account access, Users; the allowed-domains step first) or we link it under the manager account. The next nightly run finds it by name, saves it on the client, and starts reading its campaigns and leads. The setup message below walks the client through their part.
+                Google has moved Local Services into Google Ads: a client&rsquo;s pay per lead is now a campaign inside a Google Ads account, and the old Local Services dashboard is going away (which is why it looks deleted from there). The sync reads every campaign in every Google Ads account our login can see, paused ones too, so a client whose pay per lead sits in the Google Ads account we already run is connected with nothing to do. If it sits in an account of its own, the client adds <span className="text-white">{AGENCY_EMAIL}</span> as a user on that Google Ads account (Admin, Access and security), or we link it under the manager account; the next nightly run finds it by name and reads it from then on. A new client still starts at Google&rsquo;s Local Services sign-up and verification (Google does not yet let a pay-per-lead campaign be made from scratch inside Google Ads); the setup message below walks them through it.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <CopySetupMessageButton message={buildLsaSetupMessage()} />

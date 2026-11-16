@@ -435,3 +435,52 @@ includes the Local Services campaigns, as it always did, and the client
 dashboards and weekly client reports still show them under Google. The
 sync does not write `LSA` rows to `weekly_kpis`; the hand log stays the way
 to record LSA for a client whose account is not connected.
+
+## Pay per lead inside Google Ads (2026-11-17)
+
+"We need to account for the pay per lead being merged over to Google Ads ...
+make it so Google is all one and we can see search ad data and pay per lead
+data. Check into Luccia as well, they had LSA but they said it disappeared."
+
+Google moved Local Services into Google Ads: the campaign now shows as a
+Performance Max campaign with pay-per-lead goals (named
+`Pay-per-lead-PMax-<business>` or `LocalServicesCampaign:SystemGenerated:<id>`)
+and the standalone dashboard is being retired. Sign-up and verification still
+start at https://g.co/localservices. A client who says their LSA disappeared
+has usually only seen it move into their Google Ads account.
+
+- **The sync lists every pay-per-lead campaign, spent or not.** Each run asks
+  every connected account for its campaigns that are not removed (`inventory`
+  in `google-daily-sync`). A Local Services campaign (the `LOCAL_SERVICES`
+  type, or Performance Max named pay-per-lead / local services / LSA; the
+  `pmax_campaign_settings.local_services_enabled` flag is asked for first and
+  the API version in use refuses it, so the name decides) is written to
+  `google_campaign_daily` with the type `PAY_PER_LEAD` and saved on the client
+  as `clients.lsa_campaigns` (id, name, status, account). Its leads are read
+  even before it spends.
+- **`{"inventory": true}`** (with `customer_id` or `client_id`, or neither for
+  every account our login sees) returns each account's campaigns, which are
+  pay per lead, and its lead count and last lead. Used to check Luccia.
+- **A client keeps no rows from an account that is not theirs.** After each
+  run the client's rows in the window from any other customer id are removed,
+  and synced `Google Search` weeks with no data left are zeroed. Found when
+  Active air quality and Active Air Heating both pointed at 680-969-6905 and
+  the same spend showed twice; Active air quality now points at its own
+  account (551-869-1482, "Active Air Quality (Duct & Cleaning)").
+- **The Performance page shows Google as one card** with Search and pay per
+  lead side by side (rules in `src/lib/googleSplit.js`, pinned by
+  `scripts/check-google-split.mjs`). The daily chart stacks Meta, Google
+  Search and Google pay per lead; the client table has a column for each.
+  An empty pay-per-lead half lists who is set up and not spending (and
+  whether it is paused in Google), who is marked LSA but not found in Google
+  Ads yet, and points to My businesses for ours. Google Search's own page
+  says how much of its total was pay per lead and links to the pay-per-lead
+  report.
+
+What the first inventory found (2026-11-16): Luccia (783-813-5492) has a
+Local Services campaign, enabled, never spent, no leads ever, so it is
+waiting on Google (verification, budget or service area), not deleted. MCL
+Construction, Pillar HVAC and Supreme Comfort are the same. Hometown
+Roofing's pay-per-lead campaign is paused. Express Home Services' Local
+Services has been paused since July 2024 (519 leads before that). Horizon
+HVAC (ours) has a pay-per-lead campaign on and 503 leads, last on Nov 4.

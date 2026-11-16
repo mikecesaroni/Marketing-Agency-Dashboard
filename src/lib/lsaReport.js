@@ -36,7 +36,9 @@ const r2 = (n) => Math.round(Number(n || 0) * 100) / 100
  */
 export function isLsaCampaign(type, name) {
   const t = String(type || '').toUpperCase()
-  if (t === 'LOCAL_SERVICES') return true
+  // PAY_PER_LEAD is the sync's own type for a Performance Max campaign Google
+  // marks as Local Services (since LSA moved into Google Ads, late 2026).
+  if (t === 'LOCAL_SERVICES' || t === 'PAY_PER_LEAD') return true
   return t === 'PERFORMANCE_MAX' && /pay.?per.?lead|local services|\blsa\b/i.test(String(name || ''))
 }
 
@@ -196,7 +198,9 @@ function mondayOf(day) {
  * switch with nothing connected, and who is not connected at all.
  *
  *   clients       id, name, archived, is_internal, paused_at, tier, lsa_active,
- *                 lsa_customer_id, google_ads_customer_id, lsa_synced_at, lsa_sync_error
+ *                 lsa_customer_id, google_ads_customer_id, lsa_synced_at, lsa_sync_error,
+ *                 lsa_campaigns (the pay-per-lead campaigns the accounts hold,
+ *                 spending or not: [{id, name, status, type, account}])
  *   campaignRows  google_campaign_daily rows, the loaded range (window and the
  *                 one before it); only the Local Services ones count here
  *   leads         lsa_leads rows, the loaded range
@@ -242,8 +246,12 @@ export function lsaClientReport({ clients, campaignRows, leads, handRows, since,
     const myLeads = leadsBy.get(c.id) || []
     const k = lsaKpis(rows, myLeads)
     const hand = handBy.get(c.id) || null
-    const accounts = [...new Set(everRows.map((r) => r.customer_id).filter(Boolean))]
-    const connected = everRows.length > 0 || Boolean(String(c.lsa_customer_id || '').replace(/\D/g, ''))
+    // The pay-per-lead campaigns the sync found on the accounts, spending or
+    // not: a campaign set up and paused is connected, never "not connected".
+    const held = (Array.isArray(c.lsa_campaigns) ? c.lsa_campaigns : []).filter((x) => x && x.id)
+    const accounts = [...new Set([...everRows.map((r) => r.customer_id), ...held.map((x) => x.account)].filter(Boolean))]
+    const connected = everRows.length > 0 || held.length > 0 || Boolean(String(c.lsa_customer_id || '').replace(/\D/g, ''))
+    const heldPaused = held.length > 0 && held.every((x) => String(x.status || '').toUpperCase() === 'PAUSED')
     let lastDate = ''
     for (const r of rows) if (Number(r.cost || 0) > 0 && String(r.date) > lastDate) lastDate = String(r.date)
     let lastLead = ''
@@ -268,6 +276,10 @@ export function lsaClientReport({ clients, campaignRows, leads, handRows, since,
       state,
       // For a stopped client: 'paused' (in Google) or 'quiet' (no spend for a week).
       stoppedWhy: state === 'stopped' ? why : '',
+      // The pay-per-lead campaigns held, and whether every one is paused, for
+      // a client connected with nothing spent in the range.
+      campaigns: held.map((x) => ({ name: String(x.name || ''), status: String(x.status || '') })),
+      campaignsPaused: heldPaused,
       quietDays: lastDate && now ? Math.max(0, dayDiff(lastDate, now)) : 0,
       tier: Number(c.tier) || 0,
       marked: Boolean(c.lsa_active),
