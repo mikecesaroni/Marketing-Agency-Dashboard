@@ -55,7 +55,9 @@ check('start from this form carries the headline and the intro', [b.headline, b.
 
 // The function and the Studio.
 const fn = read('supabase/functions/lead-forms/index.ts')
-check('the function sends the cover as a file, the intro as a context card and the headline, and reads them back on list', [fn.includes("fd.append('cover_photo'"), fn.includes('payload.context_card = JSON.stringify(card)'), fn.includes('payload.question_page_custom_headline = headline'), fn.includes('context_card{title,style,content,button_text}'), fn.includes('cover_refused')], [true, true, true, true, true])
+// 2026-11-16: the cover goes onto the Page first, unpublished, and the form points at it
+// by cover_photo_id: sent as a file on the create, Meta refused every cover with "(#200)".
+check('the function puts the cover on the Page unpublished and points the form at it, sends the intro as a context card and the headline, and reads them back on list', [fn.includes("up.append('published', 'false')") && fn.includes('/photos`') && fn.includes("form.set('cover_photo_id', coverPhotoId)") && !fn.includes("fd.append('cover_photo'"), fn.includes('payload.context_card = JSON.stringify(card)'), fn.includes('payload.question_page_custom_headline = headline'), fn.includes('context_card{title,style,content,button_text}'), fn.includes('cover_refused')], [true, true, true, true, true])
 check('a cover that is not a picture is refused before Meta sees it', fn.includes("/^data:(image\\/(?:jpeg|png|webp));base64,"), true)
 const studio = read('src/components/LeadFormStudio.jsx')
 check('the Studio draws the live preview and offers the cover picker', [studio.includes('<InstantFormPreview'), studio.includes('<AdImagePicker'), studio.includes('coverDataUrl(')], [true, true, true])

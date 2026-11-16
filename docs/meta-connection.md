@@ -70,8 +70,13 @@ Quality: (#200) Permissions error"): the token carried every scope above
 except `pages_manage_posts` and `leads_retrieval`. On Active Air Quality's
 Page the same form was created without a cover photo and refused with one,
 Meta answering a bare "(#200) Permissions error". So every form with a cover
-fails, for every client, until the token is regenerated with
-`pages_manage_posts` ticked; without a cover, forms are created normally.
+failed, for every client. The token was regenerated with
+`pages_manage_posts` and `leads_retrieval` the same day, and a cover sent
+as a file on the create call was still refused, on Horizon HVAC's own Page
+too. What works (lead-forms v19, tested on Horizon HVAC and Active Air
+Quality): the photo goes onto the Page first, unpublished (it never shows
+on the Page), and the form points at it with `cover_photo_id`. A refusal
+now comes from the photo upload, in Meta's own words.
 `meta-funnel` `{"action":"connection_check"}` lists what the token holds.
 
 The two `pages_*` scopes are easy to miss because ad-account access does not
@@ -321,9 +326,11 @@ form live, add a background photo on the form, and pull it from Drive"):
   (Meta does not hand the cover back, so that is picked again).
 - **What goes to Meta.** The intro is `context_card` (title, content lines,
   LIST_STYLE with more than one line, button_text), the headline is
-  `question_page_custom_headline`, and the cover is `cover_photo`, sent as
-  a file on a multipart create: the Studio turns whatever was picked into
-  one JPEG no wider than 1200 pixels (`src/lib/coverImage.js`) and the
+  `question_page_custom_headline`, and the cover is uploaded to the Page
+  unpublished (`/{page}/photos`, `published=false`) and attached by
+  `cover_photo_id` (since 2026-11-16; a `cover_photo` file on the create
+  call was refused with "(#200)"): the Studio turns whatever was picked
+  into one JPEG no wider than 1200 pixels (`src/lib/coverImage.js`) and the
   function forwards the bytes. Meta shows the cover at about 1.91 to 1, so
   a tall photo gets a note that only its middle band shows.
 - **A cover Meta refuses.** Uploading a photo to the Page needs the

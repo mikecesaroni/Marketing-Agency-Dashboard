@@ -374,22 +374,39 @@ Deno.serve(async (req) => {
       return json({ error: 'The cover photo is too big to send. Pick a smaller photo.', cover_refused: true }, 400)
     }
 
-    let res: Response
+    // THE COVER, IN TWO STEPS (2026-11-16). Sent as a file on the create
+    // call, Meta refused every cover on every Page with a bare "(#200)
+    // Permissions error", Horizon HVAC's own included, even after the token
+    // was regenerated with pages_manage_posts. Meta's reference lists a
+    // second way, cover_photo_id: the photo is put on the Page first,
+    // unpublished (it never shows on the Page), and the form points at it.
+    // A refusal now comes from the photo upload, with Meta's own words.
+    let coverPhotoId = ''
     if (cover) {
-      const fd = new FormData()
-      for (const [k, v] of Object.entries(payload)) fd.append(k, v)
-      fd.append('access_token', pToken)
-      fd.append('cover_photo', new Blob([cover.bytes], { type: cover.mime }), cover.mime === 'image/png' ? 'cover.png' : cover.mime === 'image/webp' ? 'cover.webp' : 'cover.jpg')
-      res = await fetch(`${GRAPH}/${client.meta_page_id}/leadgen_forms`, { method: 'POST', body: fd })
-    } else {
-      const form = new URLSearchParams(payload)
-      form.set('access_token', pToken)
-      res = await fetch(`${GRAPH}/${client.meta_page_id}/leadgen_forms`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: form,
-      })
+      const up = new FormData()
+      up.append('published', 'false')
+      up.append('access_token', pToken)
+      up.append('source', new Blob([cover.bytes], { type: cover.mime }), cover.mime === 'image/png' ? 'cover.png' : cover.mime === 'image/webp' ? 'cover.webp' : 'cover.jpg')
+      const upRes = await fetch(`${GRAPH}/${client.meta_page_id}/photos`, { method: 'POST', body: up })
+      const upBody = await upRes.json().catch(() => null)
+      if (!upRes.ok || !upBody?.id) {
+        const e = upBody?.error || {}
+        const metaError = { code: e.code ?? null, subcode: e.error_subcode ?? null, type: e.type ?? null, title: e.error_user_title ?? null, user_msg: e.error_user_msg ?? null, fbtrace_id: e.fbtrace_id ?? null, step: 'photo upload' }
+        console.error('lead-forms cover upload refused', client.name, JSON.stringify(metaError))
+        const said = e.error_user_msg || e.message || `Meta returned ${upRes.status}`
+        return json({ error: `Meta would not take the cover photo onto the Page: ${said}`, cover_refused: true, meta_error: metaError }, 502)
+      }
+      coverPhotoId = String(upBody.id)
     }
+
+    const form = new URLSearchParams(payload)
+    if (coverPhotoId) form.set('cover_photo_id', coverPhotoId)
+    form.set('access_token', pToken)
+    const res = await fetch(`${GRAPH}/${client.meta_page_id}/leadgen_forms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form,
+    })
     const made = await res.json()
 
     if (!res.ok || !made?.id) {
