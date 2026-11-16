@@ -1103,6 +1103,21 @@ async function serve(req: Request): Promise<Response> {
           }
         }
         if (leadRows.length) await write('lsa_leads', leadRows, 'client_id,lead_id')
+
+        // ROWS FROM AN ACCOUNT THAT IS NOT THIS CLIENT'S (2026-11-17). Two
+        // clients once carried the same account id (Active Air Heating and
+        // Cooling's on Active air quality's row too), so the same spend was
+        // counted twice on the Performance page and in Active air quality's
+        // weekly numbers. The window was just re-read from the client's own
+        // accounts, so whatever it holds for this client from any other
+        // account goes. Outside the window nothing is touched.
+        const own = [...new Set([customerId, lsaAccount].filter(Boolean))].join(',')
+        for (const table of ['google_campaign_daily', 'google_keyword_daily', 'google_search_term_daily']) {
+          await fetch(
+            `${supabaseUrl}/rest/v1/${table}?client_id=eq.${encodeURIComponent(client.id)}&date=gte.${sinceStr}&date=lte.${untilStr}&customer_id=not.in.(${own})`,
+            { method: 'DELETE', headers: { ...db, Prefer: 'return=minimal' } }
+          ).catch(() => {})
+        }
         const lsaSpend7 = lsaRows.filter((r) => String(r.date) >= sevenAgoStr).reduce((s, r) => s + r.cost, 0)
         const lsaPatch: Record<string, unknown> = {}
         // Which pay-per-lead campaigns the account holds right now, spending
@@ -1153,6 +1168,21 @@ async function serve(req: Request): Promise<Response> {
             }
           )
           if (!res.ok) throw new Error(`weekly_kpis: ${await res.text()}`)
+        }
+        // A whole week inside the window with nothing synced keeps no number
+        // from before (the shared-account case above): a SYNCED row for it
+        // goes to zero. A week typed by hand is never touched.
+        const stale: string[] = []
+        const firstMonday = mondayOf(new Date(since))
+        if (toDateString(firstMonday) < sinceStr) firstMonday.setDate(firstMonday.getDate() + 7)
+        for (const d = new Date(firstMonday); toDateString(d) <= untilStr; d.setDate(d.getDate() + 7)) {
+          if (!weeks.has(toDateString(d))) stale.push(toDateString(d))
+        }
+        if (stale.length) {
+          await fetch(
+            `${supabaseUrl}/rest/v1/weekly_kpis?client_id=eq.${encodeURIComponent(client.id)}&channel=eq.${encodeURIComponent('Google Search')}&notes=eq.${encodeURIComponent('Synced from Google Ads')}&week_of=in.(${stale.join(',')})`,
+            { method: 'PATCH', headers: { ...db, Prefer: 'return=minimal' }, body: JSON.stringify({ ad_spend: 0, leads: 0 }) }
+          ).catch(() => {})
         }
 
         results.push({
