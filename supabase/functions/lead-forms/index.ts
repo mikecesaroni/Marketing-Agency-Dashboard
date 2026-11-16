@@ -296,6 +296,38 @@ Deno.serve(async (req) => {
       })
     }
 
+    // DELETE (2026-11-16, "make so I can delete forms from the CRM too").
+    // Meta's API does not delete an instant form; it archives it, which is
+    // also what deleting a used form does in Meta's own screens: it leaves
+    // the forms list, cannot be picked for a new ad, and its leads stay
+    // downloadable. The form must be on this client's Page, so an id typed
+    // or pasted from another client is refused before Meta is asked.
+    if (action === 'archive') {
+      const formId = String(body.form_id || '').trim()
+      if (!/^\d{5,30}$/.test(formId)) return json({ error: 'That is not a form id.' }, 400)
+      const look = await fetch(`${GRAPH}/${formId}?fields=id,name,status,page&access_token=${encodeURIComponent(pToken)}`)
+      const found = await look.json().catch(() => null)
+      if (!look.ok || !found?.id) {
+        return json({ error: `Could not find that form on Meta: ${found?.error?.message || `Meta returned ${look.status}`}` }, 502)
+      }
+      if (found.page?.id && String(found.page.id) !== String(client.meta_page_id)) {
+        return json({ error: `That form is not on ${client.name}'s Facebook Page, so it was left alone.` }, 400)
+      }
+      if (String(found.status || '').toUpperCase() === 'ARCHIVED') return json({ ok: true, form_id: formId, name: found.name, already: true })
+      const res = await fetch(`${GRAPH}/${formId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ status: 'ARCHIVED', access_token: pToken }),
+      })
+      const done = await res.json().catch(() => null)
+      if (!res.ok || done?.success === false || done?.error) {
+        const e = done?.error || {}
+        console.error('lead-forms archive refused', client.name, formId, JSON.stringify({ code: e.code, subcode: e.error_subcode, msg: e.message }))
+        return json({ error: `Could not delete the form: ${e.error_user_msg || e.message || `Meta returned ${res.status}`}` }, 502)
+      }
+      return json({ ok: true, form_id: formId, name: found.name })
+    }
+
     if (action !== 'create') return json({ error: `Unknown action "${action}".` }, 400)
 
     const questions = buildQuestions(body.questions)

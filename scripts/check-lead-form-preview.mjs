@@ -66,6 +66,14 @@ check('the recommender writes the intro card too', [read('supabase/functions/for
 // with the Page shared to the business but not assigned to the system user.
 check('the function knows when it has no Page token, says so on list, and a refused create names the fix', [fn.includes('page_access: hasPageToken,'), fn.includes('if (permission && !hasPageToken)'), fn.includes('System users'), fn.includes('Assign assets'), /[—–]/.test(fn.slice(fn.indexOf('export function notAssignedHelp'), fn.indexOf('Deno.serve(')))], [true, true, true, true, false])
 check('...and when the Page has not accepted the Lead Ads terms, the list says so and a refused create links the terms page', [fn.includes('lead_terms_accepted: await leadTermsAccepted('), fn.includes("(await leadTermsAccepted(client.meta_page_id, pToken)) === false"), fn.includes('https://www.facebook.com/ads/leadgen/tos?page_id=')], [true, true, true])
+// 2026-11-16: "make so I can delete forms from the CRM too". Meta's API archives.
+check('delete: the function archives a form, only one on this client\'s Page, and says so plainly', [fn.includes("if (action === 'archive')"), fn.includes("new URLSearchParams({ status: 'ARCHIVED', access_token: pToken })"), fn.includes("is not on ${client.name}'s Facebook Page"), /\^\\d\{5,30\}\$/.test(fn)], [true, true, true, true])
+{
+  const { liveForms } = await import('../src/lib/leadFormDetails.js')
+  const mp = read('src/lib/metaPublish.js')
+  check('...a deleted (archived) form is left out of every list, and the Studio asks once before deleting', [mp.includes("action: 'archive'"), mp.includes('return liveForms(data?.forms || [])'), studio.includes('data-delete-form'), studio.includes('data-delete-confirm'), studio.includes('Yes, delete it'), studio.includes('onDelete={removeForm}')], [true, true, true, true, true, true])
+  check('...liveForms drops ARCHIVED and keeps the rest', liveForms([{ id: 1, status: 'ACTIVE' }, { id: 2, status: 'ARCHIVED' }, { id: 3 }]).map((f) => f.id), [1, 3])
+}
 check('no em dashes in the preview words', /[—–]/.test(read('src/components/InstantFormPreview.jsx') + read('src/lib/leadFormPreview.js')), false)
 
 console.log(failures === 0 ? '\nAll lead form preview checks pass' : `\n${failures} FAILED`)

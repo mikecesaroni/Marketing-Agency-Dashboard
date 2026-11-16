@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '../lib/supabaseClient'
 import Button from './ui/Button'
 import AdImagePicker from './AdImagePicker'
 import InstantFormPreview from './InstantFormPreview'
@@ -10,6 +11,7 @@ import { coverShapeNote, formExtras, previewPages } from '../lib/leadFormPreview
 import {
   FORM_QUESTIONS,
   createLeadForm,
+  deleteLeadForm,
   listLeadForms,
   recommendFormQuestions,
   replaceFormQuestion,
@@ -170,8 +172,25 @@ function CustomRow({ c, onOptions, replacing, reason, onReason, onUntick, onAsk,
  * there: copy the id for GoHighLevel, open Meta's forms library (edit,
  * preview, download leads), or start a new form from this one's questions.
  */
-function ExistingForms({ forms, pageId, copied, onCopy, onStartFrom }) {
+function ExistingForms({ forms, pageId, copied, onCopy, onStartFrom, onDelete, usedBy = {} }) {
   const [open, setOpen] = useState(null)
+  // Delete asks once, in place, before Meta is asked (2026-11-16).
+  const [confirming, setConfirming] = useState(null)
+  const [deleting, setDeleting] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
+  const remove = async (f) => {
+    setDeleting(f.id)
+    setDeleteError('')
+    try {
+      await onDelete(f)
+      setConfirming(null)
+      setOpen(null)
+    } catch (err) {
+      setDeleteError(err.message)
+    } finally {
+      setDeleting(null)
+    }
+  }
   const library = metaFormsLibraryUrl(pageId)
 
   if (forms === null) return <p className="text-xs text-slate-500">Reading the Page…</p>
@@ -285,7 +304,43 @@ function ExistingForms({ forms, pageId, copied, onCopy, onStartFrom }) {
                   <button type="button" onClick={() => onStartFrom(f)} className="text-blue-600 underline hover:text-blue-800">
                     Start a new form from this one
                   </button>
+                  {onDelete && confirming !== f.id && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirming(f.id)
+                        setDeleteError('')
+                      }}
+                      className="ml-auto text-rose-600 underline hover:text-rose-800"
+                      data-delete-form
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
+                {confirming === f.id && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-rose-900" data-delete-confirm>
+                    <p className="font-semibold">Delete &ldquo;{f.name}&rdquo;?</p>
+                    <p className="mt-0.5 text-[11px]">
+                      It comes off this list and can&rsquo;t be picked for new ads. Meta keeps it archived, so its{' '}
+                      {leads} lead{leads === 1 ? '' : 's'} can still be downloaded from Meta&rsquo;s forms library.
+                      {usedBy[f.id] > 0 && (
+                        <span className="font-medium">
+                          {' '}It is on {usedBy[f.id]} ad{usedBy[f.id] === 1 ? '' : 's'} published from the CRM: check those ads in Meta first.
+                        </span>
+                      )}
+                    </p>
+                    {deleteError && <p className="mt-1 text-[11px] font-medium text-rose-700">{deleteError}</p>}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button size="sm" variant="danger" onClick={() => remove(f)} disabled={deleting === f.id}>
+                        {deleting === f.id ? 'Deleting…' : 'Yes, delete it'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setConfirming(null)} disabled={deleting === f.id}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <p className="text-[11px] text-slate-500">
                   Meta does not let a form change once it has leads, so edits mean a new form. The library is
                   where to see the real thing as a person sees it and download the leads it already holds.
@@ -338,8 +393,20 @@ export default function LeadFormStudio({ client, files = [], driveFolderId = '',
   const [note, setNote] = useState('')
   const [made, setMade] = useState(null)
 
-  const load = () =>
-    listLeadForms(client.id)
+  // How many ads published from the CRM carry each form, for the delete warning.
+  const [usedBy, setUsedBy] = useState({})
+  const load = () => {
+    supabase
+      .from('published_ads')
+      .select('lead_form_id')
+      .eq('client_id', client.id)
+      .not('lead_form_id', 'is', null)
+      .then(({ data }) => {
+        const by = {}
+        for (const r of data || []) by[r.lead_form_id] = (by[r.lead_form_id] || 0) + 1
+        setUsedBy(by)
+      })
+    return listLeadForms(client.id)
       .then((found) => {
         setForms(found)
         setError('')
@@ -348,6 +415,14 @@ export default function LeadFormStudio({ client, files = [], driveFolderId = '',
         setError(err.message)
         setForms([])
       })
+  }
+
+  // Deletes (archives) a form in Meta, then reads the Page again.
+  const removeForm = async (f) => {
+    await deleteLeadForm(client.id, f.id)
+    setNote(`Deleted "${f.name}". Meta keeps it archived with its leads; it is off the list and can't go on new ads.`)
+    await load()
+  }
 
   useEffect(() => {
     load()
@@ -583,7 +658,7 @@ export default function LeadFormStudio({ client, files = [], driveFolderId = '',
             <p className="text-[11px] text-slate-500">Click one to see what it asks. Reuse beats a fifth near-identical form: a form owns its leads.</p>
           )}
         </div>
-        <ExistingForms forms={forms} pageId={client.meta_page_id} copied={copied} onCopy={copy} onStartFrom={startFrom} />
+        <ExistingForms forms={forms} pageId={client.meta_page_id} copied={copied} onCopy={copy} onStartFrom={startFrom} onDelete={removeForm} usedBy={usedBy} />
       </div>
 
       {/* SAID UP FRONT, because Meta refuses every form without one and no

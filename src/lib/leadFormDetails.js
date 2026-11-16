@@ -103,3 +103,12 @@ export function summariseForm(form) {
   if (typed) parts.push(`${typed} custom`)
   return parts.length ? parts.join(' + ') : 'no questions read'
 }
+
+/**
+ * The forms that are not archived. Deleting a form from the CRM archives it
+ * in Meta (2026-11-16), and an archived form cannot go on a new ad, so every
+ * list the CRM shows leaves it out.
+ */
+export function liveForms(forms) {
+  return (forms || []).filter((f) => String(f?.status || '').toUpperCase() !== 'ARCHIVED')
+}

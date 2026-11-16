@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient'
 import { readFunctionError } from './functionError'
 import { driveFileId, isDrivePath } from './driveLabels'
+import { liveForms } from './leadFormDetails'
 
 // What the publish form offers. Kept in step with the OBJECTIVES map in the
 // meta-publish Edge Function — the function is the one that enforces it, this
@@ -461,7 +462,20 @@ export async function discoverAssets(clientId) {
  */
 export async function listLeadForms(clientId) {
   const data = await callLeadForms({ action: 'list', client_id: clientId })
-  return data?.forms || []
+  // A deleted form is archived in Meta and cannot go on a new ad, so it is
+  // left out of every list the CRM shows (2026-11-16).
+  return liveForms(data?.forms || [])
+}
+
+
+/**
+ * Deletes an instant form from the client's Page. Meta's API archives it,
+ * which is what deleting a used form does in Meta too: it leaves the list,
+ * cannot be picked for a new ad, and its leads stay downloadable in Meta's
+ * forms library.
+ */
+export async function deleteLeadForm(clientId, formId) {
+  return callLeadForms({ action: 'archive', client_id: clientId, form_id: formId })
 }
 
 /**
