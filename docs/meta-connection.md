@@ -63,6 +63,16 @@ Select the system user → **Generate new token**
 | `business_management` | see the business's assets at all |
 | `pages_show_list` | find the Page an ad posts as |
 | `pages_manage_ads` | create instant forms, which live on the Page |
+| `pages_manage_posts` | put a cover photo on an instant form (the photo is uploaded to the Page) |
+
+Checked live 2026-11-16 ("could not make instant form for Active Air
+Quality: (#200) Permissions error"): the token carried every scope above
+except `pages_manage_posts` and `leads_retrieval`. On Active Air Quality's
+Page the same form was created without a cover photo and refused with one,
+Meta answering a bare "(#200) Permissions error". So every form with a cover
+fails, for every client, until the token is regenerated with
+`pages_manage_posts` ticked; without a cover, forms are created normally.
+`meta-funnel` `{"action":"connection_check"}` lists what the token holds.
 
 The two `pages_*` scopes are easy to miss because ad-account access does not
 imply Page access. Without them, instant form creation fails even when the
