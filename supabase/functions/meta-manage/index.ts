@@ -392,6 +392,54 @@ Deno.serve(async (req) => {
     }
 
     // -----------------------------------------------------------------------
+    // TARGETING — where each ad set is aimed, read off Meta (2026-11-16: "can
+    // you see zip codes for Don Air Co on Meta"). One compact row per ad
+    // set: the zips, the cities with their radius, pinned points, regions,
+    // countries, the age range, and whether the ad set is live. Read only.
+    // -----------------------------------------------------------------------
+    if (action === 'targeting') {
+      const found = await graphGet(
+        `${account}/adsets`,
+        { fields: 'id,name,campaign_id,status,effective_status,daily_budget,targeting', limit: '200' },
+        token
+      )
+      const place = (x: any) => ({
+        name: String(x?.name || x?.key || ''),
+        region: String(x?.region || ''),
+        radius: x?.radius != null ? Number(x.radius) : undefined,
+        unit: x?.distance_unit || undefined,
+      })
+      const adsets = (found.data || []).map((a: any) => {
+        const t = a.targeting || {}
+        const g = t.geo_locations || {}
+        const x = t.excluded_geo_locations || {}
+        return {
+          id: a.id,
+          name: a.name,
+          campaign_id: a.campaign_id,
+          status: a.effective_status || a.status,
+          live: String(a.effective_status || a.status || '').toUpperCase() === 'ACTIVE',
+          daily_budget: a.daily_budget ? Number(a.daily_budget) / 100 : null,
+          age: [t.age_min, t.age_max].filter((v) => v != null).join(' to ') || null,
+          geo: {
+            zips: (g.zips || []).map((z: any) => String(z.key || '').replace(/^US:/, '')),
+            cities: (g.cities || []).map(place),
+            points: (g.custom_locations || []).map((p: any) => ({ name: String(p.name || p.address_string || ''), lat: p.latitude, lng: p.longitude, radius: p.radius, unit: p.distance_unit })),
+            regions: (g.regions || []).map((r: any) => String(r.name || r.key || '')),
+            countries: g.countries || [],
+            places: (g.places || []).map(place),
+          },
+          excluded: {
+            zips: (x.zips || []).map((z: any) => String(z.key || '').replace(/^US:/, '')),
+            cities: (x.cities || []).map(place),
+            regions: (x.regions || []).map((r: any) => String(r.name || r.key || '')),
+          },
+        }
+      })
+      return json({ client: client.name, ad_account: client.meta_ad_account_id, adsets })
+    }
+
+    // -----------------------------------------------------------------------
     // INSIGHTS — numbers straight from Meta rather than the CRM's nightly copy,
     // so the chat can answer "how did yesterday go" without waiting for a sync.
     // -----------------------------------------------------------------------
