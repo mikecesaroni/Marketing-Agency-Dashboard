@@ -132,7 +132,11 @@ const addTotals = (a, b) => ({
 export function eligibility({ client, intake, metaRows = [], googleRows = [] }) {
   if (!client) return { ok: false, reason: 'no client' }
   if (client.archived) return { ok: false, reason: 'archived' }
-  if (client.is_internal) return { ok: false, reason: 'internal business, not a client' }
+  // Our own businesses (Horizon HVAC, Horizon Water Co) get one too, since
+  // 2026-11-16: "make so Horizons are added to the weekly reports send". They
+  // go out on the same rules as a client's, to the report email on the
+  // business, else its intake contact email, and can be switched off the same
+  // way. The monthly report still leaves them out (_shared/report.ts).
   if (client.weekly_report_enabled === false) return { ok: false, reason: 'weekly report switched off for this client' }
   const spend = sumMeta(metaRows).spend + sumGoogle(googleRows).spend
   if (spend <= 0) return { ok: false, reason: 'no ad spend last week' }

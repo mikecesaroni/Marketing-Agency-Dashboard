@@ -45,7 +45,8 @@ export default function WeeklyReportsPanel() {
         fetchWeeklyReports(week.from),
       ])
       if (cErr) throw cErr
-      setClients((rows || []).filter((c) => !c.is_internal && (c.meta_ad_account_id || c.google_ads_customer_id)))
+      // Our own businesses are listed too (2026-11-16): they get the weekly report.
+      setClients((rows || []).filter((c) => c.meta_ad_account_id || c.google_ads_customer_id))
       setLog(logRows)
       setError('')
     } catch (err) {

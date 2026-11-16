@@ -14,7 +14,7 @@ import ChannelDailyChart from '../components/reports/ChannelDailyChart'
 import { ChannelDot, DTable, DTd, DTh, DTr, DarkButton, Delta, Eyebrow, MixBar, Panel, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
 import { CHANNELS, GOOGLE_PARTS, channelMix, compactMoney, mergeDaily, rangeLabel } from '../lib/channels'
 import { dailyRows as googleDailyRows, inRange, kpis as googleKpis } from '../lib/googleSearchReport'
-import { isLsaCampaign, leadsInRange, lsaDailyRows, lsaKpis } from '../lib/lsaReport'
+import { budgetText, isLsaCampaign, leadsInRange, lsaDailyRows, lsaKpis } from '../lib/lsaReport'
 import { pplByClient, pplWho } from '../lib/googleSplit'
 import { runMetaSync, summariseSync } from '../lib/metaSync'
 import { supabase } from '../lib/supabaseClient'
@@ -710,7 +710,7 @@ function GoogleCard({ card }) {
               <p className="text-slate-300">No client ran pay per lead in this range.</p>
               {who.setUp.length > 0 && (
                 <p>
-                  Set up, not spending: <span className="text-slate-200">{who.setUp.map((s) => `${s.name}${s.paused ? ' (paused in Google)' : ''}`).join(', ')}</span>
+                  Set up, not spending: <span className="text-slate-200">{who.setUp.map((s) => `${s.name}${s.paused ? ' (paused in Google)' : s.noBudget != null ? ` (budget ${budgetText(s.noBudget)}, set a real one)` : ''}`).join(', ')}</span>
                 </p>
               )}
               {who.toConnect.length > 0 && (

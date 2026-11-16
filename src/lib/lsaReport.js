@@ -42,6 +42,25 @@ export function isLsaCampaign(type, name) {
   return t === 'PERFORMANCE_MAX' && /pay.?per.?lead|local services|\blsa\b/i.test(String(name || ''))
 }
 
+/**
+ * A pay-per-lead campaign switched on with a placeholder budget that cannot
+ * buy a lead. Found 2026-11-16: Luccia, MCL Construction and Supreme Comfort
+ * all read ENABLED and Eligible in Google with a $0.01 budget, which is why
+ * they never spent ("yes add the $0.01 budget flag"). The budget comes from
+ * the sync (clients.lsa_campaigns[].budget, dollars); a budget never read is
+ * never flagged, and a paused campaign says paused instead.
+ */
+export const PPL_NO_BUDGET_UNDER = 1
+export function pplNoBudget(campaign) {
+  if (!campaign || String(campaign.status || '').toUpperCase() === 'PAUSED') return false
+  const b = campaign.budget
+  if (b === null || b === undefined || b === '') return false
+  return Number.isFinite(Number(b)) && Number(b) < PPL_NO_BUDGET_UNDER
+}
+
+/** "$0.01" for the flag. */
+export const budgetText = (b) => `$${Number(b || 0).toFixed(2)}`
+
 export function lsaRows(campaignRows) {
   return (campaignRows || []).filter((r) => isLsaCampaign(r.campaign_type, r.campaign_name))
 }
@@ -278,8 +297,11 @@ export function lsaClientReport({ clients, campaignRows, leads, handRows, since,
       stoppedWhy: state === 'stopped' ? why : '',
       // The pay-per-lead campaigns held, and whether every one is paused, for
       // a client connected with nothing spent in the range.
-      campaigns: held.map((x) => ({ name: String(x.name || ''), status: String(x.status || '') })),
+      campaigns: held.map((x) => ({ name: String(x.name || ''), status: String(x.status || ''), budget: x.budget ?? null })),
       campaignsPaused: heldPaused,
+      // A campaign on with a $0.01 budget: it cannot spend until one is set.
+      noBudget: !heldPaused && held.some(pplNoBudget),
+      noBudgetAmount: held.filter(pplNoBudget).map((x) => Number(x.budget))[0] ?? null,
       quietDays: lastDate && now ? Math.max(0, dayDiff(lastDate, now)) : 0,
       tier: Number(c.tier) || 0,
       marked: Boolean(c.lsa_active),

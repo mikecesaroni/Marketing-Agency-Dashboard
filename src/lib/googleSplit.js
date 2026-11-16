@@ -10,6 +10,8 @@
 // both parts side by side, and when pay per lead is empty it says who is set
 // up, who is paused and who is still to connect rather than a row of zeros.
 
+import { pplNoBudget } from './lsaReport.js'
+
 const clean = (v) => String(v ?? '').trim()
 
 /**
@@ -24,8 +26,10 @@ const clean = (v) => String(v ?? '').trim()
  *                 clients(name))
  *
  * running     names spending in the range (synced or logged by hand)
- * setUp       [{ name, paused }]: a pay-per-lead campaign on the account,
- *             nothing spent in the range; paused when every one is paused
+ * setUp       [{ name, paused, noBudget }]: a pay-per-lead campaign on the
+ *             account, nothing spent in the range; paused when every one is
+ *             paused; noBudget the placeholder budget ($0.01) when one that is
+ *             on has one, else null
  * toConnect   names marked LSA live with no campaign found, not paused as a
  *             client (a paused client is not chased)
  */
@@ -48,7 +52,12 @@ export function pplWho({ clients = [], campaignRows = [], handRows = [] } = {}) 
     nameBy.set(c.id, c.name)
     if (running.has(c.id)) continue
     const held = (Array.isArray(c.lsa_campaigns) ? c.lsa_campaigns : []).filter((x) => x && x.id)
-    if (held.length) setUp.push({ name: clean(c.name), paused: held.every((x) => clean(x.status).toUpperCase() === 'PAUSED') })
+    if (held.length) {
+      const paused = held.every((x) => clean(x.status).toUpperCase() === 'PAUSED')
+      // On in Google with a $0.01 budget: the reason it is not spending.
+      const noBudget = held.find(pplNoBudget)
+      setUp.push({ name: clean(c.name), paused, noBudget: !paused && noBudget ? Number(noBudget.budget) : null })
+    }
     else if (c.lsa_active && !c.paused_at) toConnect.push(clean(c.name))
   }
   const byName = (a, b) => a.localeCompare(b)

@@ -37,10 +37,22 @@ const rows = [{ client_id: 's', cost: 40, conversions: 1, clients: { name: 'Supr
 const w = pplWho({ clients, campaignRows: rows, handRows: [{ client_id: 'z', ad_spend: 100, clients: { name: 'Hand Co' } }] })
 check('running: spend in the range, synced or by hand; set up: a campaign held and nothing spent, paused when every one is; to connect: marked live with no campaign, never a paused client or our own', w, {
   running: ['Hand Co', 'Supreme'],
-  setUp: [{ name: 'Hometown Roofing', paused: true }, { name: 'Luccia', paused: false }],
+  setUp: [{ name: 'Hometown Roofing', paused: true, noBudget: null }, { name: 'Luccia', paused: false, noBudget: null }],
   toConnect: ['Comfort'],
 })
 check('nothing at all is three empty lists, not an error', pplWho(), { running: [], setUp: [], toConnect: [] })
+
+// --- the $0.01 budget flag ---------------------------------------------------------------------
+// 2026-11-16: Luccia, MCL and Supreme read ENABLED and Eligible with a $0.01
+// budget, which is why they never spent. "yes add the $0.01 budget flag".
+const { pplNoBudget, budgetText } = await import('../src/lib/lsaReport.js')
+check('a campaign on with a budget under $1 is flagged; a real budget, a paused one or a budget never read is not', [pplNoBudget({ status: 'ENABLED', budget: 0.01 }), pplNoBudget({ status: 'ENABLED', budget: 65 }), pplNoBudget({ status: 'PAUSED', budget: 0.01 }), pplNoBudget({ status: 'ENABLED' }), pplNoBudget({ status: 'ENABLED', budget: null }), budgetText(0.01)], [true, false, false, false, false, '$0.01'])
+const pennies = [{ id: 'l', name: 'Luccia', lsa_campaigns: [{ id: '1', status: 'ENABLED', budget: 0.01, account: '783' }] }, { id: 'p', name: 'Paused Co', lsa_campaigns: [{ id: '2', status: 'PAUSED', budget: 0.01, account: '1' }] }]
+check('the KPI card names the budget for a client set up with $0.01, and paused still reads paused', pplWho({ clients: pennies }).setUp, [{ name: 'Luccia', paused: false, noBudget: 0.01 }, { name: 'Paused Co', paused: true, noBudget: null }])
+const pr = Object.fromEntries(lsaClientReport({ clients: pennies, campaignRows: [], leads: [], handRows: [], since: '2026-11-01', until: '2026-11-16' }).map((r) => [r.name, [r.noBudget, r.noBudgetAmount]]))
+check('the pay-per-lead report row carries the flag and the amount', [pr.Luccia, pr['Paused Co']], [[true, 0.01], [false, null]])
+const lsaPage = read('src/pages/LsaReportPage.jsx')
+check('...and the report and the KPI card both say it', [lsaPage.includes('data-ppl-no-budget'), lsaPage.includes('set a real budget'), read('src/pages/ReportsPage.jsx').includes('set a real one')], [true, true, true])
 
 // --- per client --------------------------------------------------------------------------
 const by = pplByClient({

@@ -43,7 +43,9 @@ check('switched off', eligibility({ client: { ...client, weekly_report_enabled: 
 check('no spend, no report', eligibility({ client, intake: { contact_email: 'o@b.com' }, metaRows: [] }).reason, 'no ad spend last week')
 check('no email, says where to set one', eligibility({ client, intake: {}, metaRows: metaWeek }).reason.startsWith('no email on file'), true)
 check('a bad email is named', eligibility({ client, intake: { contact_email: 'mlopez@pillarhvac' }, metaRows: metaWeek }).reason, 'email is not valid: mlopez@pillarhvac')
-check('internal businesses never get one', eligibility({ client: { ...client, is_internal: true }, intake: { contact_email: 'o@b.com' }, metaRows: metaWeek }).ok, false)
+// 2026-11-16: "make so Horizons are added to the weekly reports send".
+check('our own businesses (Horizon) get one too, on the same rules', [eligibility({ client: { ...client, is_internal: true }, intake: { contact_email: 'o@b.com' }, metaRows: metaWeek }).ok, eligibility({ client: { ...client, is_internal: true, weekly_report_enabled: false }, intake: { contact_email: 'o@b.com' }, metaRows: metaWeek }).ok], [true, false])
+check('...and the CRM lists them on the weekly reports panel', /filter\(\(c\) => !c\.is_internal/.test(readFileSync(new URL('../src/components/WeeklyReportsPanel.jsx', import.meta.url), 'utf8')), false)
 
 // ---------------------------------------------------------------- the model
 const week = weekFrom('2026-09-28')

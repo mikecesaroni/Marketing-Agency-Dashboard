@@ -10,7 +10,7 @@ import { fetchAllRows } from '../lib/pagedQuery'
 import { formatDate, getMonday, money } from '../lib/queries'
 import { buildDailySeries, daysAgo, pctChange } from '../lib/dailySeries'
 import { inRange } from '../lib/googleSearchReport'
-import { STATES, leadsInRange, lsaClientReport, lsaConnection, lsaDailyRows, lsaKpis, lsaRows, recentLeads } from '../lib/lsaReport'
+import { STATES, budgetText, leadsInRange, lsaClientReport, lsaConnection, lsaDailyRows, lsaKpis, lsaRows, recentLeads } from '../lib/lsaReport'
 import { buildLsaSetupMessage } from '../lib/lsaSetupMessage'
 import { AGENCY_EMAIL } from '../lib/agencyEmail'
 
@@ -251,9 +251,17 @@ export default function LsaReportPage() {
                               (on with no spend is usually Google's verification
                               or the budget, worth a look in the account). */}
                           {r.state === 'connected' && r.campaigns.length > 0 && (
-                            <span className="ml-2 text-[11px] text-amber-300/90" title={r.campaigns.map((c) => `${c.name} (${c.status})`).join(', ')} data-ppl-held>
-                              {r.campaignsPaused ? 'campaign paused in Google' : 'campaign on, nothing spent: check verification and budget'}
-                            </span>
+                            r.noBudget ? (
+                              // On in Google with a placeholder budget: the one
+                              // thing stopping it, so it reads louder.
+                              <span className="ml-2 inline-flex items-center rounded-md bg-rose-500/15 px-1.5 py-0.5 text-[11px] font-medium text-rose-200 ring-1 ring-rose-400/30" title={r.campaigns.map((c) => `${c.name} (${c.status}${c.budget != null ? `, budget ${budgetText(c.budget)}` : ''})`).join(', ')} data-ppl-no-budget>
+                                budget is {budgetText(r.noBudgetAmount)} in Google: set a real budget
+                              </span>
+                            ) : (
+                              <span className="ml-2 text-[11px] text-amber-300/90" title={r.campaigns.map((c) => `${c.name} (${c.status})`).join(', ')} data-ppl-held>
+                                {r.campaignsPaused ? 'campaign paused in Google' : 'campaign on, nothing spent: check verification and budget'}
+                              </span>
+                            )
                           )}
                           {r.syncError && <span className="ml-2 text-[11px] text-amber-300/90">lead read failed</span>}
                         </DTd>

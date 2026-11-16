@@ -27,6 +27,7 @@ import {
   today,
 } from '../lib/queries'
 import { cached, keys } from '../lib/pageCache'
+import { liveClients } from '../lib/liveClients'
 
 /**
  * One channel's coverage: how many clients have it live, out of how many it
@@ -189,6 +190,10 @@ export default function HomePage() {
   const now = today()
 
   const live = clients.filter((c) => !c.archived)
+  // The count on the Clients tile and card: live means not archived AND not
+  // paused (2026-11-16, "make so this is live clients who are not paused or
+  // archived"). The rest of the page still reads every client not archived.
+  const active = liveClients(clients)
   const metaLive = live.filter((c) => c.meta_ads_active)
 
   // Meta connected, ads off, GHL live or not on the plan: nothing in the way
@@ -279,7 +284,7 @@ export default function HomePage() {
           new teammate sees the whole app at a glance. */}
       <HomeTiles
         counts={{
-          '/clients': `${live.length} live`,
+          '/clients': `${active.length} live`,
           '/status': openDeliverables.length > 0 ? `${openDeliverables.length} open` : 'all done',
         }}
       />
@@ -316,7 +321,7 @@ export default function HomePage() {
       <div className="mb-6 grid grid-cols-2 gap-3 md:mb-8 md:gap-4 lg:grid-cols-3">
         <StatCard
           label="Clients"
-          value={live.length}
+          value={active.length}
           sub={
             addedThisMonth.length > 0
               ? `${addedThisMonth.length} added this month`

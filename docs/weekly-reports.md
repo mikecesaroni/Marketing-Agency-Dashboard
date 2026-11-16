@@ -38,9 +38,11 @@ The arrows beside the week move to an earlier week, for a re-run.
 
 ## Who gets one
 
-Not archived, not an internal business, weekly report switched on, ad
-spend above zero that week on Meta or Google, and a valid email on file.
-Every skip is logged with its reason.
+Not archived, weekly report switched on, ad spend above zero that week on
+Meta or Google, and a valid email on file. Every skip is logged with its
+reason. Our own businesses (Horizon HVAC, Horizon Water Co) get one too,
+since 2026-11-16 ("make so Horizons are added to the weekly reports send"),
+on the same rules; the monthly report still leaves them out.
 
 ## What is needed once, on the Supabase side
 

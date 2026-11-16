@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import AddClientForm from '../components/AddClientForm'
 import { fetchClientsWithKPIs, money } from '../lib/queries'
+import { liveClients } from '../lib/liveClients'
 import { cached, keys } from '../lib/pageCache'
 import {
   Badge,
@@ -205,7 +206,8 @@ export default function ClientsPage() {
     }
   }
 
-  const liveCount = useMemo(() => clients.filter((c) => !c.archived).length, [clients])
+  // Live = not archived and not paused (2026-11-16).
+  const liveCount = useMemo(() => liveClients(clients).length, [clients])
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
