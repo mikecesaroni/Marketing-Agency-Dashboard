@@ -376,7 +376,7 @@ Deno.serve(async (req) => {
         // set up for videos as for statics, where it makes the text and 3
         // versions right when it's uploaded so I don't have to wait"). The
         // versions are best effort: without them the clip still publishes.
-        const [out, written] = await Promise.all([
+        const [out, made] = await Promise.all([
           callFn('ad-copy', { mode: 'text_options', medium: 'video', emojis: true, ...ask, instruction: INSTRUCTION }),
           v.versions ? Promise.resolve(null) : callFn('ad-copy', { mode: 'variations', medium: 'video', ...ask, instruction: VERSIONS_INSTRUCTION }).catch(() => null),
         ])
@@ -386,9 +386,9 @@ Deno.serve(async (req) => {
         const h = merge(copy.headline, lists.headlines)
         const d = merge(copy.description, lists.descriptions)
         // The versions as the publish page keeps them (src/lib/videoCopyMemory.js versionsToSave).
-        const variations = Array.isArray(written?.variations) ? written.variations.slice(0, 3) : []
+        const variations = Array.isArray(made?.variations) ? made.variations.slice(0, 3) : []
         const versions = variations.length
-          ? { note: clean(written?.note), variations: variations.map((x: any) => ({ angle: clean(x?.angle), primaryText: clean(x?.primaryText), headline: clean(x?.headline), description: clean(x?.description), fromClip: clean(x?.fromClip) })) }
+          ? { note: clean(made?.note), variations: variations.map((x: any) => ({ angle: clean(x?.angle), primaryText: clean(x?.primaryText), headline: clean(x?.headline), description: clean(x?.description), fromClip: clean(x?.fromClip) })) }
           : null
         const { error } = await supabase
           .from('ad_videos')
