@@ -433,7 +433,7 @@ function DropIn({ clients, onDropped }) {
         <select
           value={clientId}
           onChange={(e) => setClientId(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
+          className="min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
           title="Which client this static is for"
           data-static-client
         >
@@ -489,7 +489,7 @@ function DropIn({ clients, onDropped }) {
             maxLength={600}
             placeholder="What the ad is for, for the copy (optional): the offer, who it is aimed at, when it ends"
             title="The copy assistant reads this beside the picture when it writes the three text options"
-            className="min-w-[16rem] flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
+            className="min-w-0 basis-full flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm sm:basis-auto sm:min-w-[16rem]"
             data-static-about
           />
           {missing && (
@@ -564,7 +564,8 @@ export default function StaticDropBoard({ rows, clients, onDropped, className = 
   const waiting = (rows || []).reduce((n, r) => n + r.waiting.length, 0)
 
   return (
-    <section className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 ${className}`} data-static-board>
+    // min-w-0: never wider than its column (see VideoDropBoard, 2026-11-17).
+    <section className={`min-w-0 max-w-full rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 ${className}`} data-static-board>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-900">Dropped statics</h2>

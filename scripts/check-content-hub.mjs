@@ -86,6 +86,18 @@ check('ago: nothing', ago(null, NOW), '')
   check('...and says when a client has no Facebook Page to put a form on', [page.includes('No Facebook Page ID yet'), rollupClients([{ id: 'a', name: 'A', meta_page_id: '123' }, { id: 'b', name: 'B' }], [], [], []).map((r) => r.metaPage)], [true, [true, false]])
 }
 
+// 2026-11-17: "on mobile I'm unable to click clear over on the right side".
+// The "Which client?" list, as wide as the longest client name, stretched the
+// board past a phone's edge (measured: 542px wide on a 390px iPhone, Clear at
+// the edge); a grid item must be allowed to shrink.
+{
+  const { readFileSync } = await import('node:fs')
+  const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const video = read('src/components/VideoDropBoard.jsx')
+  const statics = read('src/components/StaticDropBoard.jsx')
+  check('both drop boards stay inside a phone: the board can shrink, the client list and the note box too', [video.includes('`min-w-0 max-w-full rounded-3xl'), statics.includes('`min-w-0 max-w-full rounded-3xl'), video.includes('min-w-0 max-w-full flex-1 rounded-lg'), video.includes('w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm sm:w-64'), !video.includes('className="w-64 '), !statics.includes('className="min-w-[16rem] flex-1')], [true, true, true, true, true, true])
+}
+
 if (failures) {
   console.log(`\n${failures} check${failures === 1 ? '' : 's'} failed`)
   process.exit(1)

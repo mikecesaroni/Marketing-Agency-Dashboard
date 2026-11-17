@@ -320,11 +320,11 @@ function DropIn({ clients, onDropped }) {
             </span>
           </p>
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div className="ml-auto flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
           <select
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
+            className="min-w-0 max-w-full flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm sm:flex-none"
             title="Which client this clip is for"
           >
             <option value="">Which client?</option>
@@ -342,7 +342,7 @@ function DropIn({ clients, onDropped }) {
             maxLength={300}
             placeholder="Note for whoever publishes (optional): e.g. post these a day apart"
             title="Goes with the clip to the board, the publish screen, Slack and the morning brief"
-            className="w-64 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm"
+            className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm sm:w-64"
             data-drop-note-input
           />
           <input
@@ -437,7 +437,11 @@ export default function VideoDropBoard({ rows, clients, onDropped, onReset, comp
   const hidden = withMeta.length - shown.length
 
   return (
-    <section className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 ${className}`} data-video-board>
+    // min-w-0: in the Content page's grid a board may not be wider than its
+    // column. Without it the "Which client?" list (as wide as the longest
+    // client name) stretched the board past a phone's edge and Clear could
+    // not be reached ("on mobile I'm unable to click clear", 2026-11-17).
+    <section className={`min-w-0 max-w-full rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 ${className}`} data-video-board>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-900">Dropped videos</h2>
