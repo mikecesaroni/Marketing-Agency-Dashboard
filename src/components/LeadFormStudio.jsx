@@ -596,7 +596,7 @@ export default function LeadFormStudio({ client, files = [], driveFolderId = '',
         intro: extras.intro,
         coverImage,
       })
-      setMade({ id: out.form_id, name: out.name || name, withCover: Boolean(out.with_cover) })
+      setMade({ id: out.form_id, name: out.name || name, withCover: Boolean(out.with_cover), coverDropped: Boolean(out.cover_dropped) })
       await load()
     } catch (err) {
       if (err.coverRefused) setCoverRefused(err.message)
@@ -679,7 +679,7 @@ export default function LeadFormStudio({ client, files = [], driveFolderId = '',
       {made && (
         <div className="rounded-lg border border-green-200 bg-green-50 p-3">
           <p className="text-xs font-semibold text-green-900">
-            &ldquo;{made.name}&rdquo; is live on the Page{made.withCover ? ', cover photo and all' : ''}.
+            &ldquo;{made.name}&rdquo; is live on the Page{made.withCover ? ', cover photo and all' : made.coverDropped ? ', but Meta did not keep the cover photo' : ''}.
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <code className="rounded border border-green-300 bg-white px-2 py-1 font-mono text-sm text-slate-900">

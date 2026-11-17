@@ -328,6 +328,21 @@ Deno.serve(async (req) => {
       return json({ ok: true, form_id: formId, name: found.name })
     }
 
+    // INSPECT (2026-11-17, "the instant form did not carry over with the
+    // photo I selected"): read back one form's intro card and its cover, as
+    // Meta holds them. Read only.
+    if (action === 'inspect') {
+      const formId = String(body.form_id || '').trim()
+      if (!/^\d{5,30}$/.test(formId)) return json({ error: 'That is not a form id.' }, 400)
+      const read = async (fields: string) => {
+        const r = await fetch(`${GRAPH}/${formId}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(pToken)}`)
+        return r.json().catch(() => null)
+      }
+      const withCover = await read('id,name,status,created_time,context_card{id,title,style,button_text,cover_photo{id,images}}')
+      const plain = withCover?.error ? await read('id,name,status,created_time,context_card{id,title,style,button_text}') : null
+      return json({ ok: true, form: plain || withCover, cover_read_error: withCover?.error?.message || null })
+    }
+
     if (action !== 'create') return json({ error: `Unknown action "${action}".` }, 400)
 
     const questions = buildQuestions(body.questions)
@@ -432,7 +447,14 @@ Deno.serve(async (req) => {
     }
 
     const form = new URLSearchParams(payload)
-    if (coverPhotoId) form.set('cover_photo_id', coverPhotoId)
+    // The photo id goes INSIDE the intro card (2026-11-17): sent only as a
+    // top-level cover_photo_id, Meta took the form and dropped the photo
+    // without a word (read back with action "inspect": an intro card, no
+    // cover_photo). It is also kept top-level, which Meta's reference lists.
+    if (coverPhotoId) {
+      form.set('cover_photo_id', coverPhotoId)
+      if (card) form.set('context_card', JSON.stringify({ ...card, cover_photo_id: coverPhotoId }))
+    }
     form.set('access_token', pToken)
     const res = await fetch(`${GRAPH}/${client.meta_page_id}/leadgen_forms`, {
       method: 'POST',
@@ -472,7 +494,20 @@ Deno.serve(async (req) => {
       return json({ error: `Could not create the form: ${detail}`, cover_refused: Boolean(cover), meta_error: metaError }, 502)
     }
 
-    return json({ ok: true, form_id: made.id, name: payload.name, with_cover: Boolean(cover) })
+    // Read the cover back rather than trust the send (2026-11-17): with the
+    // photo id only top-level, Meta took the form and dropped the photo, and
+    // the CRM said "cover photo and all".
+    let withCover = false
+    if (coverPhotoId) {
+      try {
+        const back = await fetch(`${GRAPH}/${made.id}?fields=${encodeURIComponent('context_card{cover_photo{id}}')}&access_token=${encodeURIComponent(pToken)}`)
+        const got = await back.json()
+        withCover = Boolean(got?.context_card?.cover_photo?.id)
+      } catch {
+        withCover = false
+      }
+    }
+    return json({ ok: true, form_id: made.id, name: payload.name, with_cover: withCover, cover_dropped: Boolean(coverPhotoId) && !withCover })
   } catch (err) {
     return json({ error: String(err instanceof Error ? err.message : err) }, 500)
   }

@@ -76,7 +76,14 @@ as a file on the create call was still refused, on Horizon HVAC's own Page
 too. What works (lead-forms v19, tested on Horizon HVAC and Active Air
 Quality): the photo goes onto the Page first, unpublished (it never shows
 on the Page), and the form points at it with `cover_photo_id`. A refusal
-now comes from the photo upload, in Meta's own words.
+now comes from the photo upload, in Meta's own words. The photo id has to
+go INSIDE the `context_card` JSON as `cover_photo_id` (2026-11-17): sent
+only top-level, Meta created the form and silently dropped the photo
+("the instant form did not carry over with the photo I selected"). Read
+back with lead-forms `{"action":"inspect","form_id":...}`: the card now
+carries `cover_photo`. After every create the function reads the cover
+back and only then says "cover photo and all"; if Meta dropped it, the
+Studio says so.
 `meta-funnel` `{"action":"connection_check"}` lists what the token holds.
 
 The two `pages_*` scopes are easy to miss because ad-account access does not

@@ -74,6 +74,8 @@ check('delete: the function archives a form, only one on this client\'s Page, an
   check('...a deleted (archived) form is left out of every list, and the Studio asks once before deleting', [mp.includes("action: 'archive'"), mp.includes('return liveForms(data?.forms || [])'), studio.includes('data-delete-form'), studio.includes('data-delete-confirm'), studio.includes('Yes, delete it'), studio.includes('onDelete={removeForm}')], [true, true, true, true, true, true])
   check('...liveForms drops ARCHIVED and keeps the rest', liveForms([{ id: 1, status: 'ACTIVE' }, { id: 2, status: 'ARCHIVED' }, { id: 3 }]).map((f) => f.id), [1, 3])
 }
+// 2026-11-17: "the instant form did not carry over with the photo I selected".
+check('the cover id goes inside the intro card, and the cover is read back before the CRM says it is on', [fn.includes("form.set('context_card', JSON.stringify({ ...card, cover_photo_id: coverPhotoId }))"), fn.includes("context_card{cover_photo{id}}"), fn.includes('cover_dropped:'), studio.includes("but Meta did not keep the cover photo")], [true, true, true, true])
 check('no em dashes in the preview words', /[—–]/.test(read('src/components/InstantFormPreview.jsx') + read('src/lib/leadFormPreview.js')), false)
 
 console.log(failures === 0 ? '\nAll lead form preview checks pass' : `\n${failures} FAILED`)
