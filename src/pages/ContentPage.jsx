@@ -35,8 +35,8 @@ const DOORS = [
   {
     key: 'studio',
     title: 'Make Static Ads',
-    blurb: 'Pick a client and get ads written and laid out from their brief, photos and logo: 3 the Studio chooses, or any number on the templates you tick. Edit, then save them all.',
-    cta: 'Make ads: pick the client',
+    blurb: 'Ads written and laid out from the client’s brief, photos and logo.',
+    cta: 'Pick the client',
     tone: 'from-orange-500 to-amber-400',
     ring: 'group-hover:ring-orange-300',
     icon: (
@@ -51,7 +51,7 @@ const DOORS = [
   {
     key: 'drive',
     title: 'Google Drive',
-    blurb: 'Every client’s folders in one place. Open in Drive, browse the photos, download, link a folder.',
+    blurb: 'Every client’s folders. Browse, download, link one.',
     cta: 'See every client’s folders',
     tone: 'from-blue-600 to-cyan-400',
     ring: 'group-hover:ring-blue-300',
@@ -66,7 +66,7 @@ const DOORS = [
   {
     key: 'pages',
     title: 'Landing pages',
-    blurb: 'Where every client’s ads send people. Copy a link, add the new one, see who has none yet.',
+    blurb: 'Where the ads send people. Copy, add, see who has none.',
     cta: 'See every client’s pages',
     tone: 'from-violet-600 to-fuchsia-400',
     ring: 'group-hover:ring-violet-300',
@@ -84,7 +84,7 @@ const DOORS = [
     // instant form builder (the Studio's form tab) on their client page.
     key: 'forms',
     title: 'Create lead form',
-    blurb: 'Build a Meta instant form for a client: the questions, the intro, a cover photo and the thank-you page, with a live phone preview.',
+    blurb: 'Meta instant forms, with a live phone preview.',
     cta: 'Pick the client',
     tone: 'from-rose-600 to-pink-400',
     ring: 'group-hover:ring-rose-300',
@@ -99,8 +99,8 @@ const DOORS = [
   {
     key: 'publish',
     title: 'Publish',
-    blurb: 'Videos and saved statics out the door. Pick the client, tick the creative, pick the words, send it into the funnel.',
-    cta: 'See who is 10+ days without a new ad',
+    blurb: 'Videos and statics out the door, into the funnel.',
+    cta: 'Who needs a new ad',
     tone: 'from-emerald-600 to-teal-400',
     ring: 'group-hover:ring-emerald-300',
     icon: (
@@ -110,30 +110,35 @@ const DOORS = [
       </svg>
     ),
     stat: (s) => [
-      s.drops ? `${s.drops.due} at 10+ days without a new ad` : `${s.readyToPublish} clients with creative ready`,
+      s.drops ? `${s.drops.due} at 10+ days` : `${s.readyToPublish} with creative ready`,
       s.drops ? `${s.drops.done} fresh · ${s.live} ads live` : `${s.live} ads live`,
     ],
   },
 ]
 
+// The five doors sit in one row from laptop width up (2026-11-17, "make so
+// this is all in one line not 2 rows"), so each card is compact: a short
+// line under the title, the way in and the two counts stacked at the foot.
+// The full description is the section's subtitle once a door is open.
 function Door({ door, stats, onOpen }) {
   const [a, b] = stats ? door.stat(stats) : ['', '']
   return (
     <button
       type="button"
       onClick={onOpen}
-      className={`group relative flex min-h-[15rem] flex-col overflow-hidden rounded-3xl bg-gradient-to-br ${door.tone} p-6 text-left text-white shadow-lg ring-4 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl ${door.ring}`}
+      data-door={door.key}
+      className={`group relative flex min-h-[13.5rem] flex-col overflow-hidden rounded-3xl bg-gradient-to-br ${door.tone} p-5 text-left text-white shadow-lg ring-4 ring-transparent transition hover:-translate-y-0.5 hover:shadow-xl ${door.ring}`}
     >
       <div className="flex items-start justify-between">
-        <span className="rounded-2xl bg-white/20 p-3 backdrop-blur">{door.icon}</span>
-        <span className="text-2xl opacity-70 transition group-hover:translate-x-1 group-hover:opacity-100">→</span>
+        <span className="rounded-2xl bg-white/20 p-2.5 backdrop-blur [&>svg]:h-6 [&>svg]:w-6">{door.icon}</span>
+        <span className="text-xl opacity-70 transition group-hover:translate-x-1 group-hover:opacity-100">→</span>
       </div>
-      <h2 className="mt-5 text-2xl font-bold tracking-tight">{door.title}</h2>
-      <p className="mt-1.5 max-w-xs text-sm text-white/85">{door.blurb}</p>
-      <div className="mt-auto flex flex-wrap items-end justify-between gap-2 pt-5">
-        <span className="text-xs font-medium text-white/80">{door.cta}</span>
+      <h2 className="mt-4 text-xl font-bold leading-tight tracking-tight">{door.title}</h2>
+      <p className="mt-1.5 text-sm leading-snug text-white/85">{door.blurb}</p>
+      <div className="mt-auto space-y-1.5 pt-4">
+        <span className="block text-xs font-medium text-white/80">{door.cta}</span>
         {stats && (
-          <span className="text-right text-xs text-white/90">
+          <span className="block text-xs text-white/90">
             <span className="block font-semibold">{a}</span>
             <span className="block text-white/70">{b}</span>
           </span>
@@ -502,7 +507,7 @@ export default function ContentPage() {
         /* THE HUB: three doors, and under them the week's video board,
            because the week's job is the video board. */
         <div className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5" data-doors>
             {DOORS.map((d) => (
               <Door key={d.key} door={d} stats={stats} onOpen={() => openTab(d.key)} />
             ))}
