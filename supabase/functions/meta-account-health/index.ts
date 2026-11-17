@@ -189,9 +189,19 @@ Deno.serve(async (req) => {
   }
 
   let onlyClient: string | undefined
+  // {"status_only": true}: job 3 alone, every 15 minutes (2026-11-17,
+  // "Paradise is back up with no outstanding balance but the morning brief
+  // said ad account in grace period. Can we send updates when the account has
+  // been paid and is up and running again"). Read once a day at 08:20 UTC, a
+  // bill paid at 09:00 read as unpaid until the next morning, in the brief
+  // and on the client page, and the channel never heard it was fixed. Read
+  // every 15 minutes, the team alerts run posts it within the quarter hour
+  // both ways: an account that stops, and one that is back.
+  let statusOnly = false
   try {
     const body = await req.json()
     if (body?.client_id) onlyClient = String(body.client_id)
+    statusOnly = Boolean(body?.status_only)
   } catch {
     // No body is the normal case for the scheduled run.
   }
@@ -199,7 +209,7 @@ Deno.serve(async (req) => {
   const result: Record<string, unknown> = {}
 
   // --- 1. the dropdown's account list ------------------------------------
-  try {
+  if (!statusOnly) try {
     const accounts = await allAdAccounts(token)
     if (accounts.length > 0) {
       const write = await fetch(
@@ -301,7 +311,7 @@ Deno.serve(async (req) => {
 
     // Only ever fills blanks. A Page already set is somebody's decision, and
     // overwriting it from a guess would be worse than never detecting at all.
-    if (!client.meta_page_id || !client.meta_pixel_id) {
+    if (!statusOnly && (!client.meta_page_id || !client.meta_pixel_id)) {
       try {
         const { pageId, pixelId } = await suggestAssets(client.meta_ad_account_id, token)
         const found: { client: string; page_id?: string; pixel_id?: string } = {

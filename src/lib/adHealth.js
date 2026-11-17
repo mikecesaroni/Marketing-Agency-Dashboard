@@ -116,7 +116,11 @@ export function adDeliveryAlerts(clients, delivery, todayDate) {
         detail: [
           owed > 0 ? `${formatMoney(owed)} outstanding on the account.` : null,
           reason ? `Meta gives the reason as ${reason}.` : null,
-          'Ads are not delivering until this clears.',
+          // In the grace period Meta keeps the ads running for a while after
+          // a failed payment; every other status stops them.
+          Number(client.meta_account_status) === 9
+            ? 'Ads still run for now; pay it before the grace period ends or they stop.'
+            : 'Ads are not delivering until this clears.',
         ]
           .filter(Boolean)
           .join(' '),

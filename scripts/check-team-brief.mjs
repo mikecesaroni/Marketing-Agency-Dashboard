@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 // Self-check for the team brief and the Slack alerts: what goes in the
 // morning brief, the subject, the three renderings, which flags become
 // alerts, and the diff against what was already posted.
@@ -247,6 +248,18 @@ check('the alerts post: new then cleared, each client a link, one line each', [p
 check('the notification line names the first few', post.text, 'Drain Kings: New edit dropped in: clip2.mp4 from Kyle · in Meta, ready to publish · Gaps LLC: Card failing · Gaps LLC: No new video or ad in 12 days')
 check('nothing new, nothing cleared: nothing posted', alertsSlack({ fresh: [], cleared: [] }), null)
 check('only cleared still posts', alertsSlack({ fresh: [], cleared: open.slice(1, 2) }).text, 'Acme Heating: ads delivering again')
+// 2026-11-17: "send updates when the account has been paid and is up and running again".
+const paid = { key: 'p:account', kind: 'account', label: 'Ad account in grace period', client_id: 'p', client_name: 'Paradise Home Services' }
+check('an ad account problem that clears says paid up and active again; a stop that clears says delivering again', [alertsSlack({ fresh: [], cleared: [paid] }, { appUrl: 'https://crm.example' }).blocks[0].text.text, alertsSlack({ fresh: [], cleared: [paid] }).text], ['*Cleared*\n✅ <https://crm.example/client/p|Paradise Home Services>: Meta ad account paid up and active again, ads can deliver (was "Ad account in grace period")', 'Paradise Home Services: Meta ad account paid up and active again, ads can deliver'])
+{
+  const { adDeliveryAlerts } = await import('../src/lib/adHealth.js')
+  const base = { id: 'p', name: 'P', meta_ads_active: true, meta_account_balance: 96.62 }
+  const grace = adDeliveryAlerts([{ ...base, meta_account_status: 9 }], {}, '2026-11-17')[0]
+  const unsettled = adDeliveryAlerts([{ ...base, meta_account_status: 3 }], {}, '2026-11-17')[0]
+  check('grace period says the ads still run for now; unsettled says they stop', [grace.detail, unsettled.detail.endsWith('Ads are not delivering until this clears.')], ['$96.62 outstanding on the account. Ads still run for now; pay it before the grace period ends or they stop.', true])
+}
+const health = readFileSync(new URL('../supabase/functions/meta-account-health/index.ts', import.meta.url), 'utf8')
+check('the account status is re-read on its own (status_only), skipping the account list and the Page and pixel fill', [health.includes('statusOnly = Boolean(body?.status_only)'), health.includes('if (!statusOnly) try {'), health.includes('if (!statusOnly && (!client.meta_page_id')], [true, true, true])
 
 // --- a new client ---------------------------------------------------------------------
 const added = clientAddedSlack({ id: 'n1', name: 'New & Co', tier: 2, monthly_fee: 2500, setup_fee: 0 }, { appUrl: 'https://crm.example/', by: 'ethan@example.com' })

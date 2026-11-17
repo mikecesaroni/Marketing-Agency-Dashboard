@@ -875,6 +875,16 @@ export function driveLinkedSlack(items = [], { appUrl = '' } = {}) {
   }
 }
 
+/**
+ * What a cleared alert says. An ad account problem that clears is the bill
+ * paid or the review passed (2026-11-17, "send updates when the account has
+ * been paid and is up and running again"), so it says so, with the account
+ * re-read every 15 minutes; a stop that clears is the ads delivering again.
+ */
+export function clearedWords(c) {
+  return c?.kind === 'account' ? 'Meta ad account paid up and active again, ads can deliver' : 'ads delivering again'
+}
+
 /** The alerts as a Slack message, or null when there is nothing to say. */
 export function alertsSlack({ fresh = [], cleared = [] }, { appUrl = '' } = {}) {
   if (fresh.length === 0 && cleared.length === 0) return null
@@ -885,9 +895,9 @@ export function alertsSlack({ fresh = [], cleared = [] }, { appUrl = '' } = {}) 
     blocks.push(...slackSections(fresh.length === 1 ? 'New' : `New (${fresh.length})`, lines))
   }
   if (cleared.length) {
-    const lines = cleared.map((c) => `${EMOJI.cleared} ${link(model, `/client/${c.client_id}`, slackEsc(c.client_name || 'A client'))}: ads delivering again (was "${slackEsc(c.label)}")`)
+    const lines = cleared.map((c) => `${EMOJI.cleared} ${link(model, `/client/${c.client_id}`, slackEsc(c.client_name || 'A client'))}: ${clearedWords(c)} (was "${slackEsc(c.label)}")`)
     blocks.push(...slackSections('Cleared', lines))
   }
-  const text = fresh.length ? `${fresh.slice(0, 3).map((f) => `${f.client.name}: ${f.label}`).join(' · ')}${fresh.length > 3 ? ` · and ${fresh.length - 3} more` : ''}` : `${cleared.map((c) => c.client_name).join(', ')}: ads delivering again`
+  const text = fresh.length ? `${fresh.slice(0, 3).map((f) => `${f.client.name}: ${f.label}`).join(' · ')}${fresh.length > 3 ? ` · and ${fresh.length - 3} more` : ''}` : cleared.map((c) => `${c.client_name}: ${clearedWords(c)}`).join(' · ')
   return { text, blocks }
 }
