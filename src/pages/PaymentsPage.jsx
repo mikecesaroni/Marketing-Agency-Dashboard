@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import StripePanel from '../components/StripePanel'
 import StripeReconcilePanel from '../components/StripeReconcilePanel'
+import BillingSheetPanel from '../components/BillingSheetPanel'
 import OnboardingMoneyPanel from '../components/OnboardingMoneyPanel'
 import PaymentFailureAlerts from '../components/PaymentFailureAlerts'
 import PartnerSplitPanel from '../components/PartnerSplitPanel'
@@ -434,6 +435,10 @@ export default function PaymentsPage() {
       {/* Who owes money that no ledger row makes obvious, before the panels
           about reconciling and configuring Stripe. */}
       <OnboardingMoneyPanel clients={clients} payments={payments} todayDate={today()} />
+
+      {/* The client billing sheet, live from Stripe's payments, with a
+          Download Excel button (2026-11-18). */}
+      <BillingSheetPanel />
 
       {/* Above the Stripe setup panel on purpose: a disagreement with Stripe
           is something to act on, and pasting in payment links is not. */}
