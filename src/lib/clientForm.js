@@ -49,6 +49,11 @@ export const FORM_STEPS = [
       { key: 'website', table: 'intake', label: 'Website', type: 'text', placeholder: 'www.company.com', help: 'Leave blank if you do not have one. Ads can run without it.', half: true },
       { key: 'industry_trade', table: 'intake', label: 'Trade', type: 'text', required: true, placeholder: 'HVAC, plumbing, roofing, electrical…', half: true },
       { key: 'years_in_business', table: 'intake', label: 'Years in business', type: 'text', placeholder: 'e.g. 12', half: true },
+      // 2026-11-18: "we want to know what revenue they were at when we started
+      // so we can look back and see how much it has grown with our help". The
+      // first answer is kept as the baseline (onboarding_intake.revenue_at_start,
+      // supabase/client-revenue.sql).
+      { key: 'current_monthly_revenue', table: 'intake', label: 'Current monthly revenue', type: 'number', required: true, placeholder: '40000', help: 'Roughly, in US dollars a month. It is the starting line we measure your growth against. Only our team sees it.', half: true },
       { key: 'phone_for_ads', table: 'intake', label: 'Phone number to show on ads', type: 'tel', placeholder: 'If different from the one above', help: 'The number customers call from the ad. Often the main office line.', half: true },
     ],
   },

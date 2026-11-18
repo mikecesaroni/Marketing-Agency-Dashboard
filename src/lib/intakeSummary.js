@@ -32,6 +32,7 @@ export const INTAKE_SECTIONS = [
   {
     title: 'MONEY & BUDGETS',
     fields: [
+      ['current_monthly_revenue', 'Monthly Revenue ($)'],
       ['average_job_value', 'Average Job Value'],
       ['typical_price_range', 'Typical Price Range For That Job'],
       ['busy_season', 'Busy / Slow Season'],
@@ -121,6 +122,7 @@ export const INTAKE_FIELD_TYPES = {
   date_filled: 'date',
   contact_email: 'email',
   average_job_value: 'number',
+  current_monthly_revenue: 'number',
   meta_ad_budget_per_day: 'number',
   lsa_ad_budget_per_day: 'number',
   service_radius_miles: 'number',

@@ -456,6 +456,7 @@ What is on it:
   - One form in six steps: Your business, Where you work (home base and a mile radius, which is exactly where the ads run), What you sell, Why you (what makes them better than competitors, offers, reviews, licences), Your leads, then Your account (the GoHighLevel and text-messaging registration details: legal name, EIN, address, time zone). The account step is pre-filled from the earlier answers.
   - Each Continue saves that step; required questions are marked and block Continue; the last step sends everything in. A ?form=intake or ?form=ghl query on an older link shows one half only.
   - The question set is src/lib/clientForm.js; questions that fewer than a quarter of clients ever answered were dropped in September 2026.
+  - Current monthly revenue (since 2026-11-18, "we want to know what revenue they were at when we started so we can look back and see how much it has grown with our help"): asked on the first step, required, US dollars a month, only the team sees it. The first answer is kept as the baseline (onboarding_intake.revenue_at_start and revenue_at_start_on, filled once by a trigger, supabase/client-revenue.sql), so a later edit to the form does not move where the client started; the client page's intake form shows it as "Revenue when we started: $X/mo (given <date>)".
 
 What you can do:
   - It saves as the client goes. There is no submit-and-lose-everything step.

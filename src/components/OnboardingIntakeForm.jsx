@@ -20,6 +20,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
     service_want_more: '',
     jobs_to_avoid: '',
     average_job_value: '',
+    current_monthly_revenue: '',
     busy_season: '',
 
     meta_ad_budget_per_day: '',
@@ -117,7 +118,7 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
       for (const [key, value] of Object.entries(formData)) {
         if (typeof value === 'string' && value.trim() === '') {
           cleanData[key] = null
-        } else if (typeof value === 'string' && ['average_job_value', 'meta_ad_budget_per_day', 'lsa_ad_budget_per_day'].includes(key)) {
+        } else if (typeof value === 'string' && ['average_job_value', 'current_monthly_revenue', 'meta_ad_budget_per_day', 'lsa_ad_budget_per_day'].includes(key)) {
           cleanData[key] = value ? parseFloat(value) : null
         } else {
           cleanData[key] = value
@@ -280,6 +281,18 @@ export default function OnboardingIntakeForm({ client, onSuccess, onClose }) {
       <div className="border-b pb-4">
         <h3 className="font-bold text-slate-900 mb-3">MONEY & BUDGETS</h3>
         <div className="space-y-2">
+          {/* Monthly revenue (2026-11-18): the client answers it on their form;
+              the first answer is kept as the starting line for growth. */}
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Monthly Revenue ($)</label>
+            <input type="number" name="current_monthly_revenue" placeholder="$0" value={formData.current_monthly_revenue} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" step="1" />
+            {existingIntake?.revenue_at_start != null && (
+              <p className="mt-1 text-[11px] text-slate-500" data-revenue-start>
+                Revenue when we started: <span className="font-semibold text-slate-700">${Number(existingIntake.revenue_at_start).toLocaleString('en-US')}/mo</span>
+                {existingIntake.revenue_at_start_on ? ` (given ${new Date(`${existingIntake.revenue_at_start_on}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})` : ''}
+              </p>
+            )}
+          </div>
           <div>
             <label className="text-xs font-medium text-slate-600 block mb-1">Meta Ad Budget ($/day)</label>
             <input type="number" name="meta_ad_budget_per_day" placeholder="$0.00" value={formData.meta_ad_budget_per_day} onChange={handleChange} className="w-full px-2 py-1 border rounded text-sm" step="0.01" />
