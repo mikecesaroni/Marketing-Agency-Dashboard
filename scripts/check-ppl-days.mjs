@@ -84,7 +84,12 @@ const model = buildBrief({ statusRows: rows, day: TODAY, appUrl: 'https://crm.ex
 const section = briefSections(model).find((s) => s.key === 'ppl')
 check('the brief gets a section of its own, one line a business, ours tagged, linking to the pay-per-lead report', [section.title, section.lines.map((l) => [l.client.name, l.tag || '', l.text, l.href])], ['Google pay per lead (LSA), last 7 days', [['Acme Heating', '', '2 leads (1 charged) · $120 spent · $120 per charged lead', '/reports/lsa'], ['Horizon HVAC', 'ours', '1 lead (1 charged) · $300 spent · $300 per charged lead', '/reports/lsa']]])
 check('...and it reads in the text of the brief', briefText(model).includes('GOOGLE PAY PER LEAD (LSA), LAST 7 DAYS\n📞 Acme Heating: 2 leads (1 charged) · $120 spent · $120 per charged lead\n📞 Horizon HVAC (ours): 1 lead (1 charged) · $300 spent · $300 per charged lead'), true)
-check('with nobody on pay per lead the brief has no such section', briefSections(buildBrief({ statusRows: rows, day: TODAY })).some((s) => s.key === 'ppl'), false)
+// Our own account was running pay per lead before it was connected to the
+// CRM, so every campaign in it reads as "from before we connected". That rule
+// is for a client's own campaigns; ours still show. A client's stay out.
+const legacyRaw = { ...raw, legacy: [{ client_id: 'h', channel: 'google', campaign_id: 'h-PAY_PER_LEAD' }, { client_id: 'a', channel: 'google', campaign_id: 'a-PAY_PER_LEAD' }], pipeline: { ...raw.pipeline, legacy: [] } }
+check('our own business shows even when its campaigns started before the account was connected; a client\'s own old campaign does not', payPerLeadFromRows(legacyRaw).map((p) => [p.name, p.ours, p.leads, p.charged, p.spend]), [['Horizon HVAC', true, 1, 1, 300]])
+check('with nobody on pay per lead the brief has no such section',briefSections(buildBrief({ statusRows: rows, day: TODAY })).some((s) => s.key === 'ppl'), false)
 
 // --- the Monday status counts them the same way ------------------------------------------------------
 const weekly = buildWeeklyStatus({

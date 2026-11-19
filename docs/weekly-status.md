@@ -87,6 +87,8 @@ sync writes every call, message and booking Google reports into `lsa_leads`
   days": one line a business with a lead or spend that week, "5 leads (4
   charged) · $312 spent · $78 per charged lead", linking to
   `/reports/lsa`. Clients first; our own businesses after them, tagged
-  "(ours)", since they are in no client number. No business on pay per
-  lead, no section. Built by `payPerLeadFromRows` (`src/lib/statusRows.js`)
+  "(ours)", since they are in no client number. Our own businesses skip
+  the "from before we connected" rule: everything in our own account is
+  ours, whenever it started (without this our own line never showed). No
+  business on pay per lead, no section. Built by `payPerLeadFromRows` (`src/lib/statusRows.js`)
   and passed to `buildBrief`. Pinned by `scripts/check-ppl-days.mjs`.

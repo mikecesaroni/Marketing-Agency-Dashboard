@@ -83,7 +83,15 @@ function googleDays(raw) {
  * the brief, then our own businesses.
  */
 export function payPerLeadFromRows(raw) {
-  return payPerLeadWeek({ days: googleDays(raw), clients: (raw.pipeline?.clients || []).filter((c) => !c.paused_at), ours: raw.ours || [], today: raw.day || today() })
+  const ours = raw.ours || []
+  const own = new Set(ours.map((c) => c.id))
+  // Our own businesses have no "campaigns from before we connected the
+  // account" (src/lib/ourAds.js): everything in our own account is ours,
+  // whenever it started. Without this our own line never showed, its
+  // campaigns having spent before the account was connected to the CRM.
+  const ownDays = own.size ? googleAdDays((raw.googleRows || []).filter((r) => own.has(r.client_id)), (raw.lsaLeads || []).filter((l) => own.has(l.client_id))) : []
+  const days = [...googleDays(raw).filter((d) => !own.has(d.client_id)), ...ownDays]
+  return payPerLeadWeek({ days, clients: (raw.pipeline?.clients || []).filter((c) => !c.paused_at), ours, today: raw.day || today() })
 }
 
 /** One clientStatus() row per client. Pure; `now` is for the video board's day counts. */
