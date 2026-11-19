@@ -14,14 +14,15 @@ import { adDeliveryAlerts } from './adHealth.js'
 import { channelDays, clientStatus, leadTotals } from './clientStatus.js'
 import { waitingStatics } from './staticDrops.js'
 import { legacySet, withoutLegacy } from './ourAds.js'
+import { googleAdDays, ourLeadRows, payPerLeadWeek } from './pplDays.js'
 
 /** The raw rows: the pipeline's, the delivery view, two weeks of ad days, the video board's inputs, the payments. */
 export async function fetchStatusRows(supabase, { internalColumn = true, day = today() } = {}) {
-  const [pipeline, deliveryRes, metaRows, googleRows, published, videos, files, reset, newest, payments, legacy, starts, statics] = await Promise.all([
+  const [pipeline, deliveryRes, metaRows, googleRows, published, videos, files, reset, newest, payments, legacy, starts, statics, lsaLeads, ours] = await Promise.all([
     fetchPipelineRows(supabase, { internalColumn, day }),
     supabase.from('client_ad_delivery').select('client_id, last_spend_date, spend_7d, spend_30d'),
     fetchAllRows(() => supabase.from('ad_daily').select('id, client_id, campaign_id, date, leads, spend').gte('date', addDays(day, -13)).order('id')).catch(() => []),
-    fetchAllRows(() => supabase.from('google_campaign_daily').select('id, client_id, campaign_id, date, conversions, cost').gte('date', addDays(day, -13)).order('id')).catch(() => []),
+    fetchAllRows(() => supabase.from('google_campaign_daily').select('id, client_id, campaign_id, campaign_type, campaign_name, date, conversions, cost').gte('date', addDays(day, -13)).order('id')).catch(() => []),
     fetchAllRows(() => supabase.from('published_ads').select('client_id,created_at,status,size_key,video_id,ad_name,stamp').order('created_at').order('id')).catch(() => []),
     supabase.from('ad_videos').select('client_id,created_at,status,meta_video_id,thumb_url,storage_path,file_name,drop_dismissed_at').then((r) => r.data || []),
     supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by,drop_note,drop_dismissed_at').ilike('file_type', 'video/%').then((r) => r.data || []),
@@ -38,6 +39,15 @@ export async function fetchStatusRows(supabase, { internalColumn = true, day = t
     // The editor's dropped statics (src/lib/staticDrops.js), so the channel
     // and the brief can say one is waiting, the way they do for a clip.
     supabase.from('client_files').select('client_id,storage_path,file_name,date_uploaded,uploaded_by,drop_note,drop_dismissed_at').eq('drop_kind', 'static').then((r) => r.data || []).catch(() => []),
+    // Google pay per lead (Local Services): the leads Google reported, one
+    // row a call, message or booking (src/lib/pplDays.js). A project without
+    // the table reads as none.
+    fetchAllRows(() => supabase.from('lsa_leads').select('id, client_id, created_date, lead_charged').gte('created_date', addDays(day, -13)).order('id')).catch(() => []),
+    // Our own businesses, for the brief's pay-per-lead section only: they
+    // are in no client number.
+    internalColumn
+      ? supabase.from('clients').select('id, name').eq('is_internal', true).eq('archived', false).then((r) => r.data || []).catch(() => [])
+      : Promise.resolve([]),
   ])
   return {
     day,
@@ -56,7 +66,24 @@ export async function fetchStatusRows(supabase, { internalColumn = true, day = t
     reset,
     newest,
     payments,
+    lsaLeads,
+    ours,
   }
+}
+
+/** Google's ad days with pay per lead counted from the lead records, ours only. */
+function googleDays(raw) {
+  const legacy = legacySet(raw.legacy)
+  return googleAdDays(withoutLegacy(raw.googleRows, legacy, 'google'), ourLeadRows(raw.lsaLeads, raw.googleRows, legacy))
+}
+
+/**
+ * Pay per lead over the last seven days, per business, for the morning
+ * brief's own section (payPerLeadWeek in src/lib/pplDays.js): the clients in
+ * the brief, then our own businesses.
+ */
+export function payPerLeadFromRows(raw) {
+  return payPerLeadWeek({ days: googleDays(raw), clients: (raw.pipeline?.clients || []).filter((c) => !c.paused_at), ours: raw.ours || [], today: raw.day || today() })
 }
 
 /** One clientStatus() row per client. Pure; `now` is for the video board's day counts. */
@@ -78,7 +105,9 @@ export function statusFromRows(raw, { now = new Date() } = {}) {
   // Tagged by channel, so the leads flags can say which one the leads came
   // from ("only Google live, Meta not yet"); leadTotals ignores the tag.
   for (const r of withoutLegacy(raw.metaRows, legacy, 'meta')) push(r.client_id, { date: r.date, leads: r.leads, spend: r.spend, channel: 'meta' })
-  for (const r of withoutLegacy(raw.googleRows, legacy, 'google')) push(r.client_id, { date: r.date, leads: r.conversions, spend: r.cost, channel: 'google' })
+  // Google: a campaign's conversions are its leads, except pay per lead,
+  // whose leads are the lead records Google reported (src/lib/pplDays.js).
+  for (const r of googleDays(raw)) push(r.client_id, r)
   const payBy = new Map()
   for (const p of raw.payments || []) {
     if (!payBy.has(p.client_id)) payBy.set(p.client_id, [])

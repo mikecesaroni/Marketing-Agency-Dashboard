@@ -153,7 +153,7 @@ check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, cli
   check('paused today says so instead of "0 days"', briefSections(buildBrief({ statusRows: [today], day: TODAY })).find((s) => s.key === 'paused').lines[0].text, 'Today Co (paused today)')
 }
 check('the subject', briefSubject(brief), 'Morning brief · Tuesday, Oct 20 · 1 to call, 2 clips to publish, 2 running clean')
-check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week', 'Onboarding, waiting on the client (1)'])
+check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week (standard is 5 to 7)', 'Onboarding, waiting on the client (1)'])
 
 // Money is not in the brief at all: a card failing is said once, when it
 // happens (the alerts); an overdue invoice is the Payments page's business.

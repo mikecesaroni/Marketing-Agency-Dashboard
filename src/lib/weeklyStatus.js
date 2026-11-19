@@ -16,6 +16,7 @@
 // the trend. scripts/check-weekly-status.mjs runs it in Node; the
 // team-digest Edge Function folds it into Monday's brief.
 
+import { googleAdDays } from './pplDays.js'
 import { addDays, weekRangeLabel } from './dates.js'
 import { tierLabel } from './clientTiers.js'
 
@@ -157,12 +158,14 @@ export function weeklyOrder(a, b) {
  *
  *   statusRows  clientStatus() rows (src/lib/statusRows.js)
  *   metaRows    ad_daily rows { client_id, date, leads, spend }
- *   googleRows  google_campaign_daily rows { client_id, date, conversions, cost }
+ *   googleRows  google_campaign_daily rows { client_id, date, conversions, cost, campaign_type, campaign_name }
+ *   leadRows    lsa_leads rows { client_id, created_date }: pay per lead's leads, counted in
+ *               place of those campaigns' conversions (src/lib/pplDays.js)
  *   lsaRows     weekly_kpis rows with channel LSA { client_id, week_of, leads, ad_spend }
  *   day         'YYYY-MM-DD' today
  *   weeksBack   0 for the last complete week, 1 for the one before, ...
  */
-export function buildWeeklyStatus({ statusRows = [], metaRows = [], googleRows = [], lsaRows = [], day, weeksBack = 0 }) {
+export function buildWeeklyStatus({ statusRows = [], metaRows = [], googleRows = [], lsaRows = [], leadRows = [], day, weeksBack = 0 }) {
   const weeks = reportWeeks(day, weeksBack)
   const byClient = new Map()
   const push = (id, row) => {
@@ -170,7 +173,7 @@ export function buildWeeklyStatus({ statusRows = [], metaRows = [], googleRows =
     byClient.get(id).push(row)
   }
   for (const r of metaRows) push(r.client_id, { date: r.date, leads: r.leads, spend: r.spend })
-  for (const r of googleRows) push(r.client_id, { date: r.date, leads: r.conversions, spend: r.cost })
+  for (const r of googleAdDays(googleRows, leadRows)) push(r.client_id, { date: r.date, leads: r.leads, spend: r.spend })
   // LSA is logged by hand, one row a calendar week, dated by its Monday. It
   // lands in whichever 7-day window holds that Monday: close enough for a
   // number that is typed in once a week.

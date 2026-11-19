@@ -80,6 +80,7 @@ import {
   driveLinkedSlack,
   liveClientIds,
   onboardingTasksSlack,
+  payPerLeadFromRows,
   statusFromRows,
   taskAssignedSlack,
   taskDoneSlack,
@@ -508,7 +509,8 @@ Deno.serve(async (req) => {
       return json({ day, ...(await postDrives(items)) })
     }
 
-    const statusRows = statusFromRows(await fetchStatusRows(supabase, { internalColumn: true, day }))
+    const statusRaw = await fetchStatusRows(supabase, { internalColumn: true, day })
+    const statusRows = statusFromRows(statusRaw)
 
     if (action === 'alerts') {
       if (!body.force && (hour >= QUIET_FROM || hour < QUIET_TO)) return json({ day, skipped: 'quiet hours', hour })
@@ -563,7 +565,9 @@ Deno.serve(async (req) => {
     // brief and preview
     const wantWeekly = body.weekly ?? dow === 1
     const weekly = wantWeekly ? buildWeeklyStatus({ statusRows, ...(await fetchWeeklyRows(supabase, { day, weeksBack: body.weeks_back || 0 })) }) : null
-    const model = buildBrief({ statusRows, weekly, day, appUrl })
+    // Google pay per lead (Local Services) gets a section of its own: the
+    // week's leads per business, our own businesses marked.
+    const model = buildBrief({ statusRows, weekly, day, appUrl, payPerLead: payPerLeadFromRows(statusRaw) })
     const subject = briefSubject(model)
     const text = briefText(model)
     const html = briefHtml(model, { agencyName })

@@ -92,8 +92,9 @@ const isImmediate = (f) => (f.key === 'payment' ? f.label === 'Card failing' : I
  * twelve "waiting on them" lines for clients whose ads were running fine,
  * and nobody reads a list like that twice.
  */
-// 'low-leads' (two leads or fewer on a full week of spend) is in: a client
-// spending all week for one lead is not "running clean", and the brief is
+// 'low-leads' (under the standard of five leads on a full week of spend;
+// it was two or fewer until 2026-11-19) is in: a client spending all week
+// for a lead or two is not "running clean", and the brief is
 // where that gets seen ("that is where we identify delivering value").
 export const AD_FLAGS = new Set(['account', 'ads-off', 'no-leads', 'low-leads', 'video-stale', 'google-sync'])
 /** The ones worth a line when they clear: the ads are back. */
@@ -113,6 +114,7 @@ const EMOJI = {
   onboarding: '⚪',
   paused: '⏸️',
   cleared: '✅',
+  ppl: '📞',
 }
 
 const pick = (c) => ({ id: c.id, name: c.name })
@@ -289,7 +291,32 @@ export function setupLine(result, client = null, drop = null) {
  *   weekly      buildWeeklyStatus() report, or null on any day but Monday
  *   day         'YYYY-MM-DD'
  */
-export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' }) {
+/**
+ * One business's pay per lead for the week, in words: "5 leads (4 charged) ·
+ * $312 spent · $78 per charged lead". Charged is only said when the leads
+ * are Google's lead records, which carry it.
+ */
+export function payPerLeadWords(p) {
+  const n = Number(p?.leads) || 0
+  const spend = Number(p?.spend) || 0
+  const charged = Number(p?.charged) || 0
+  const dollars = (v) => `$${Math.round(v).toLocaleString('en-US')}`
+  return [
+    `${n} lead${n === 1 ? '' : 's'}${p?.fromLeadRows ? ` (${charged} charged)` : ''}`,
+    spend > 0 ? `${dollars(spend)} spent` : '',
+    p?.fromLeadRows && charged > 0 && spend > 0 ? `${dollars(spend / charged)} per charged lead` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+// payPerLead: payPerLeadFromRows() (src/lib/statusRows.js), the week's Google
+// pay per lead per business, our own businesses marked. Since 2026-11-19
+// ("is the CRM able to track leads from Google LSA / pay per lead? and
+// include that in numbers from the morning brief") the clients' leads in this
+// brief count their pay-per-lead leads too, and this is the section that
+// shows them on their own.
+export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '', payPerLead = [] }) {
   const rows = statusRows.filter(active)
   const attention = []
   const clips = []
@@ -374,6 +401,7 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '' })
     green,
     onboarding,
     paused,
+    payPerLead: (payPerLead || []).map((p) => ({ ...p, client: { id: p.id, name: p.name } })),
     counts: {
       clients: rows.length,
       red,
@@ -437,7 +465,17 @@ export function briefSections(model) {
   }
   if (model.green.length) {
     const names = model.green.map((g) => `${g.client.name} ${g.leads7}${g.leads7 > g.before ? '↑' : g.leads7 < g.before ? '↓' : ''}${g.isNew ? ' (new this week)' : ''}`).join(', ')
-    out.push({ key: 'green', title: `Running clean (${model.green.length}), leads this week`, lines: [{ emoji: EMOJI.green, text: names, href: '/status' }] })
+    out.push({ key: 'green', title: `Running clean (${model.green.length}), leads this week (standard is 5 to 7)`, lines: [{ emoji: EMOJI.green, text: names, href: '/status' }] })
+  }
+  // Google pay per lead (Local Services): the leads Google reported this
+  // week, per business. The clients' are already in their numbers above;
+  // ours are in no client number, so they are marked.
+  if (model.payPerLead?.length) {
+    out.push({
+      key: 'ppl',
+      title: 'Google pay per lead (LSA), last 7 days',
+      lines: model.payPerLead.map((p) => ({ emoji: EMOJI.ppl, client: p.client, tag: p.ours ? 'ours' : undefined, text: payPerLeadWords(p), href: '/reports/lsa' })),
+    })
   }
   // Onboarding is two lists, so "what do we do today" is one glance: our
   // moves, then the clients we are waiting on.

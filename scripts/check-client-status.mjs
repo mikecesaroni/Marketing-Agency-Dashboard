@@ -59,11 +59,13 @@ check('a week of ads with no lead is, and says how many days of ads', clientFlag
 // clean, flag those as needs attention").
 const week = (leadsOn = {}) => Array.from({ length: 7 }, (_, i) => ({ date: `2026-10-${String(19 - i).padStart(2, '0')}`, leads: leadsOn[19 - i] || 0, spend: 50 }))
 const low = clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })
-check('two leads on seven days of spend is amber, with the spend and the cost per lead', low.map((f) => [f.key, f.severity, f.label]), [['low-leads', 'amber', 'Only 2 leads this week']])
+check('two leads on seven days of spend is amber, with the spend and the cost per lead', low.map((f) => [f.key, f.severity, f.label]), [['low-leads', 'amber', 'Only 2 leads this week (standard is 5 to 7)']])
 // Six days inside the window: the seventh back is eight days old today.
 check('...and the detail says so', low[0].detail.includes('$300 spent over 6 days for $150 a lead'), true)
-check('one lead reads singular', clientFlags({ client: live, result: running, leads: leadTotals(week({ 18: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 1 lead this week')
-check('three leads is clean', keysOf(clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 17: 1, 15: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), [])
+check('one lead reads singular', clientFlags({ client: live, result: running, leads: leadTotals(week({ 18: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 1 lead this week (standard is 5 to 7)')
+// 2026-11-19: "our standard is 5-7 leads per week at least". Three used to be clean.
+check('three or four leads is under the standard of five, and flagged with the standard said', [3, 4].map((n) => clientFlags({ client: live, result: running, leads: leadTotals(week(Object.fromEntries(Array.from({ length: n }, (_, i) => [19 - i, 1]))), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY }).map((f) => [f.key, f.severity, f.label])), [[['low-leads', 'amber', 'Only 3 leads this week (standard is 5 to 7)']], [['low-leads', 'amber', 'Only 4 leads this week (standard is 5 to 7)']]])
+check('five leads meets the standard and is clean', keysOf(clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 2, 17: 2, 15: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), [])
 check('two leads on three days of spend (live since Thursday) is not a bad week', keysOf(clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 18: 1 }).slice(0, 3), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), [])
 check('no leads at all is the red flag alone, not both', keysOf(clientFlags({ client: live, result: running, leads: leadTotals(week(), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), ['no-leads'])
 check('a paused client is not flagged for low leads', keysOf(clientFlags({ client: { ...live, paused_at: '2026-10-01T00:00:00Z' }, result: running, leads: leadTotals(week({ 19: 1 }), TODAY), counts: { kpisThisWeek: 1 }, today: TODAY })), ['paused'])
@@ -72,12 +74,12 @@ check('a paused client is not flagged for low leads', keysOf(clientFlags({ clien
 // we just started their ads, make sure to add that it's still in learning
 // phase"). adsStart is the first day our ads spent anything.
 const young = clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: '2026-10-11', counts: { kpisThisWeek: 1 }, today: TODAY })
-check('two leads on ads nine days old says still in learning, amber still', young.map((f) => [f.key, f.severity, f.label]), [['low-leads', 'amber', 'Only 2 leads this week: still in learning phase (ads started 9 days ago)']])
+check('two leads on ads nine days old says still in learning, amber still', young.map((f) => [f.key, f.severity, f.label]), [['low-leads', 'amber', 'Only 2 leads this week (standard is 5 to 7): still in learning phase (ads started 9 days ago)']])
 check('...and the detail names the start and says it is not a verdict yet', young[0].detail.includes('$300 spent over 6 days for $150 a lead. Ads started 2026-10-11') && young[0].detail.includes('not a verdict yet'), true)
-check('no leads on six days of ads that started six days ago says the same', clientFlags({ client: live, result: running, leads: leadTotals(week().slice(0, 6), TODAY), adsStart: '2026-10-14', counts: { kpisThisWeek: 1 }, today: TODAY }).map((f) => [f.key, f.label]), [['low-leads', 'No leads this week: still in learning phase (ads started 6 days ago)']])
-check('ads a month old are past learning: the plain flag', clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: '2026-09-20', counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 2 leads this week')
-check('fourteen days in is out of learning', clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: '2026-10-06', counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 2 leads this week')
-check('no start on record (the view missing) is the plain flag', clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: null, counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 2 leads this week')
+check('no leads on six days of ads that started six days ago says the same', clientFlags({ client: live, result: running, leads: leadTotals(week().slice(0, 6), TODAY), adsStart: '2026-10-14', counts: { kpisThisWeek: 1 }, today: TODAY }).map((f) => [f.key, f.label]), [['low-leads', 'No leads this week (standard is 5 to 7): still in learning phase (ads started 6 days ago)']])
+check('ads a month old are past learning: the plain flag', clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: '2026-09-20', counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 2 leads this week (standard is 5 to 7)')
+check('fourteen days in is out of learning', clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: '2026-10-06', counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 2 leads this week (standard is 5 to 7)')
+check('no start on record (the view missing) is the plain flag', clientFlags({ client: live, result: running, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), adsStart: null, counts: { kpisThisWeek: 1 }, today: TODAY })[0].label, 'Only 2 leads this week (standard is 5 to 7)')
 // The channels in the why ("this looks bad; make sure it states that only
 // Google is live and not Meta yet"): the plan's live channels, and the
 // channels it still owes (an open go-live or google-publish step).
@@ -86,17 +88,17 @@ check('no start on record (the view missing) is the plain flag', clientFlags({ c
 const googleFirst = { steps: [{ key: 'weekly-kpis', done: true }, { key: 'go-live', done: false }, { key: 'google-publish', done: true }], ours: [], theirs: [], launched: true, live: { meta: false, google: true, lsa: false } }
 const googleOnlyWeek = { meta: 0, google: 6, metaEver: false, googleEver: true }
 const oneLead = (result, adsStart, channels = googleOnlyWeek, client = live) => clientFlags({ client, result, leads: leadTotals(week({ 19: 1 }), TODAY), adsStart, channels, counts: { kpisThisWeek: 1 }, today: TODAY })[0]
-check('one channel live and the other owed says so, then the learning phase', oneLead(googleFirst, '2026-10-07').label, 'Only 1 lead this week: only Google live, Meta not yet; still in learning phase (ads started 13 days ago)')
-check('...and past learning, the channels alone', oneLead(googleFirst, '2026-09-01').label, 'Only 1 lead this week: only Google live, Meta not yet')
+check('one channel live and the other owed says so, then the learning phase', oneLead(googleFirst, '2026-10-07').label, 'Only 1 lead this week (standard is 5 to 7): only Google live, Meta not yet; still in learning phase (ads started 13 days ago)')
+check('...and past learning, the channels alone', oneLead(googleFirst, '2026-09-01').label, 'Only 1 lead this week (standard is 5 to 7): only Google live, Meta not yet')
 check("...and the detail says it is one channel's leads", oneLead(googleFirst, '2026-09-01').detail.includes("Only Google live, Meta not yet, so this is one channel's leads."), true)
 check('no leads on one channel says so too', clientFlags({ client: live, result: googleFirst, leads: leadTotals(sevenDays, TODAY), channels: googleOnlyWeek, counts: { kpisThisWeek: 1 }, today: TODAY }).map((f) => [f.key, f.label]), [['no-leads', 'No leads in 7 days of ads: only Google live, Meta not yet']])
-check('a Maintenance client whose one channel is Google owes no Meta: plain', oneLead({ ...googleFirst, steps: [{ key: 'weekly-kpis', done: true }, { key: 'google-publish', done: true }] }, '2026-09-01').label, 'Only 1 lead this week')
+check('a Maintenance client whose one channel is Google owes no Meta: plain', oneLead({ ...googleFirst, steps: [{ key: 'weekly-kpis', done: true }, { key: 'google-publish', done: true }] }, '2026-09-01').label, 'Only 1 lead this week (standard is 5 to 7)')
 // Active air quality: Whole Chain, two ads published, Meta never switched
 // on, Google live. The plan read "left Meta"; the words still say Meta is
 // not live yet, because Meta never spent.
-check('the package owes both: Meta not yet even when the plan reads "left Meta", since Meta never spent', oneLead({ steps: [{ key: 'weekly-kpis', done: true }], ours: [], theirs: [], launched: true, live: { meta: false, google: true, lsa: false }, leftMeta: true }, '2026-09-01', googleOnlyWeek, { ...live, tier: 2 }).label, 'Only 1 lead this week: only Google live, Meta not yet')
-check('a client who ran Meta and left it for Google is not told Meta not yet', oneLead({ steps: [{ key: 'weekly-kpis', done: true }], ours: [], theirs: [], launched: true, live: { meta: false, google: true, lsa: false }, leftMeta: true }, '2026-09-01', { ...googleOnlyWeek, metaEver: true }, { ...live, tier: 2 }).label, 'Only 1 lead this week')
-check('both spending this week: plain', oneLead(googleFirst, '2026-09-01', { meta: 6, google: 6, metaEver: true, googleEver: true }).label, 'Only 1 lead this week')
+check('the package owes both: Meta not yet even when the plan reads "left Meta", since Meta never spent', oneLead({ steps: [{ key: 'weekly-kpis', done: true }], ours: [], theirs: [], launched: true, live: { meta: false, google: true, lsa: false }, leftMeta: true }, '2026-09-01', googleOnlyWeek, { ...live, tier: 2 }).label, 'Only 1 lead this week (standard is 5 to 7): only Google live, Meta not yet')
+check('a client who ran Meta and left it for Google is not told Meta not yet', oneLead({ steps: [{ key: 'weekly-kpis', done: true }], ours: [], theirs: [], launched: true, live: { meta: false, google: true, lsa: false }, leftMeta: true }, '2026-09-01', { ...googleOnlyWeek, metaEver: true }, { ...live, tier: 2 }).label, 'Only 1 lead this week (standard is 5 to 7)')
+check('both spending this week: plain', oneLead(googleFirst, '2026-09-01', { meta: 6, google: 6, metaEver: true, googleEver: true }).label, 'Only 1 lead this week (standard is 5 to 7)')
 check('the words each way round, "not running" for a channel that spent before, and nothing with nothing on', [
   channelWords({ result: googleFirst, channels: googleOnlyWeek, tier: 1 }),
   channelWords({ result: { steps: [{ key: 'google-publish', done: false }] }, channels: { meta: 5, google: 0, metaEver: true, googleEver: false }, tier: 1 }),

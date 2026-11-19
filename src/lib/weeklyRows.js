@@ -7,14 +7,15 @@ import { fetchAllRows } from './pagedQuery.js'
 import { addDays, today } from './dates.js'
 import { reportWeeks } from './weeklyStatus.js'
 import { legacySet, withoutLegacy } from './ourAds.js'
+import { ourLeadRows } from './pplDays.js'
 
 export async function fetchWeeklyRows(supabase, { day = today(), weeksBack = 0 } = {}) {
   const weeks = reportWeeks(day, weeksBack)
   const from = weeks[0]
   const to = addDays(weeks[weeks.length - 1], 6)
-  const [metaRows, googleRows, lsaRows, legacyRows] = await Promise.all([
+  const [metaRows, googleRows, lsaRows, legacyRows, leadRows] = await Promise.all([
     fetchAllRows(() => supabase.from('ad_daily').select('id, client_id, campaign_id, date, leads, spend').gte('date', from).lte('date', to).order('id')).catch(() => []),
-    fetchAllRows(() => supabase.from('google_campaign_daily').select('id, client_id, campaign_id, date, conversions, cost').gte('date', from).lte('date', to).order('id')).catch(() => []),
+    fetchAllRows(() => supabase.from('google_campaign_daily').select('id, client_id, campaign_id, campaign_type, campaign_name, date, conversions, cost').gte('date', from).lte('date', to).order('id')).catch(() => []),
     supabase
       .from('weekly_kpis')
       .select('client_id, week_of, leads, ad_spend')
@@ -23,9 +24,11 @@ export async function fetchWeeklyRows(supabase, { day = today(), weeksBack = 0 }
       .lte('week_of', to)
       .then((r) => r.data || []),
     supabase.from('legacy_ad_campaigns').select('client_id, channel, campaign_id').then((r) => r.data || []).catch(() => []),
+    // Google pay per lead: the leads Google reported (src/lib/pplDays.js).
+    fetchAllRows(() => supabase.from('lsa_leads').select('id, client_id, created_date, lead_charged').gte('created_date', from).lte('created_date', to).order('id')).catch(() => []),
   ])
   // Our ads only (src/lib/ourAds.js): a campaign the client was running
   // before the account was connected is not a week of our ads.
   const legacy = legacySet(legacyRows)
-  return { day, weeksBack, metaRows: withoutLegacy(metaRows, legacy, 'meta'), googleRows: withoutLegacy(googleRows, legacy, 'google'), lsaRows }
+  return { day, weeksBack, metaRows: withoutLegacy(metaRows, legacy, 'meta'), googleRows: withoutLegacy(googleRows, legacy, 'google'), lsaRows, leadRows: ourLeadRows(leadRows, googleRows, legacy) }
 }

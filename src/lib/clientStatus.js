@@ -76,7 +76,14 @@ export function leadTotals(rows = [], today) {
 // attention; that is where we identify delivering value and actual leads
 // weekly". Only after the ads ran most of the week (LOW_LEADS_MIN_DAYS of
 // spend), so a client live since Thursday is not flagged on Friday.
-export const LOW_LEADS_MAX = 2
+//
+// THE STANDARD (2026-11-19): "our standard is 5-7 leads per week at least so
+// let's keep that in mind for the brief". The flag was two leads or fewer;
+// it is now anything under five, every channel counted (Meta, Google Search
+// and Google pay per lead), and the label says the standard.
+export const LEADS_STANDARD = 5
+export const LEADS_STANDARD_WORDS = 'standard is 5 to 7'
+export const LOW_LEADS_MAX = LEADS_STANDARD - 1
 export const LOW_LEADS_MIN_DAYS = 5
 // "No leads" is only said after a week of ads. Active air quality's Google
 // Search campaign started on a Friday and the Sunday brief read "No leads in
@@ -213,7 +220,8 @@ export function clientFlags(ctx) {
     }
   }
 
-  // A full week of spend for two leads or fewer: not delivering. Not when
+  // A full week of spend for fewer leads than the standard (five): not
+  // delivering what we promise. Not when
   // the stronger "no leads" flag is already up, and not on a week the ads
   // only ran a day or two.
   const noLeadsUp = flags.some((f) => f.key === 'no-leads')
@@ -221,7 +229,7 @@ export function clientFlags(ctx) {
     const n = leads.leads7
     const started = ctx.adsStart ? daysSince(ctx.adsStart, today) : null
     const learning = started !== null && started < LEARNING_DAYS
-    const base = n === 0 ? 'No leads this week' : `Only ${n} lead${n === 1 ? '' : 's'} this week`
+    const base = `${n === 0 ? 'No leads this week' : `Only ${n} lead${n === 1 ? '' : 's'} this week`} (${LEADS_STANDARD_WORDS})`
     // The why, in the label itself, because the brief shows only the label:
     // the channels first (one platform's leads), then the learning phase.
     const why = [channels, learning ? `still in learning phase (ads started ${started} days ago)` : ''].filter(Boolean)
@@ -232,7 +240,7 @@ export function clientFlags(ctx) {
       detail: `${money(leads.spend7)} spent over ${leads.spendDays7} days${n ? ` for ${money(leads.spend7 / n)} a lead` : ''}.${channels ? ` ${capital(channels)}, so this is one channel's leads.` : ''} ${
         learning
           ? `Ads started ${String(ctx.adsStart).slice(0, 10)}: Meta's learning phase runs about a week and wants around 50 leads an ad set before the numbers mean much, so this is not a verdict yet. Leave the ads alone (edits reset learning) and judge on the 7 to 14 day trend.`
-          : 'Two or fewer in a week is not delivering: look at the ads, the offer and the form.'
+          : `Under ${LEADS_STANDARD} in a week is below our standard of 5 to 7: look at the ads, the offer and the form.`
       }`,
       href: `/client/${c.id}#ad-performance`,
     })
