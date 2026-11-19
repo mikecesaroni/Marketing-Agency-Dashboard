@@ -1,7 +1,8 @@
 // Self-check for the Meta report's numbers.
 // Run: node scripts/check-meta-report.mjs
 //
-// Fixtures: two clients with Meta, one without, one of ours, one archived.
+// Fixtures: two clients with Meta, one without, one archived; one of ours in
+// a block of its own at the end.
 // An image ad and a video ad, so hook rate is only counted where there is
 // video; one ad spending with no leads, one cheap winner.
 
@@ -29,7 +30,6 @@ const CLIENTS = [
   { id: 'belk', name: 'Belk Heating and Cooling', meta_ad_account_id: '111', archived: false, is_internal: false },
   { id: 'pillar', name: 'Pillar HVAC', meta_ad_account_id: 'act_222', archived: false, is_internal: false, paused_at: '2026-09-20T00:00:00Z' },
   { id: 'tito', name: 'Tito’s Appliances', meta_ad_account_id: null, archived: false, is_internal: false },
-  { id: 'ours', name: 'Horizon HVAC', meta_ad_account_id: '999', archived: false, is_internal: true },
   { id: 'gone', name: 'Summit Water Pros', meta_ad_account_id: '888', archived: true, is_internal: false },
 ]
 const row = (client_id, date, ad_id, over = {}) => ({
@@ -41,7 +41,6 @@ const ROWS = [
   row('belk', '2026-09-21', 'vid', { video_2s_views: 1500 }),
   row('belk', '2026-09-21', 'dead', { spend: 90, leads: 0, clicks: 40 }),
   row('pillar', '2026-09-21', 'win', { spend: 60, leads: 6, effective_status: 'PAUSED' }),
-  row('ours', '2026-09-21', 'x', { spend: 999 }),
   row('gone', '2026-09-21', 'y', { spend: 999 }),
   row('belk', '2026-08-01', 'img', { spend: 5000 }), // outside the window
 ]
@@ -56,19 +55,19 @@ check('hook rate counts video rows only, so an image ad does not drag it down',
   metaKpis([row('x', 'd', 'img'), row('x', 'd', 'vid', { video_2s_views: 1500 })]).hookRate, 30)
 check('nothing in is zeros, never Infinity',
   metaKpis([]), { spend: 0, leads: 0, impressions: 0, clicks: 0, cpl: 0, ctr: 0, cpc: 0, cpm: 0, convRate: 0, hookRate: 0 })
-check('inRange keeps both ends', inRange(ROWS, '2026-09-20', '2026-09-21').length, 6)
+check('inRange keeps both ends', inRange(ROWS, '2026-09-20', '2026-09-21').length, 5)
 
 // --- who has an account ---------------------------------------------------
 {
   const c = metaConnection(CLIENTS)
-  check('connection: clients only, act_ prefix counts, ours and archived left out',
+  check('connection: act_ prefix counts, archived left out',
     [c.total, c.connected.map((x) => x.id), c.missing.map((x) => x.id)], [3, ['belk', 'pillar'], ['tito']])
 }
 
 // --- per client -------------------------------------------------------------
 {
   const rows = metaClientReport({ clients: CLIENTS, rows: ROWS, since: SINCE, until: UNTIL })
-  check('order: spending first by spend, no account last, ours and archived out',
+  check('order: spending first by spend, no account last, archived out',
     rows.map((r) => [r.id, r.state]), [['belk', 'live'], ['pillar', 'live'], ['tito', 'no-account']])
   const belk = rows[0]
   check('a client total honours the window', [belk.spend, belk.leads, belk.ads, belk.liveAds], [190, 4, 3, 3])
@@ -78,7 +77,7 @@ check('inRange keeps both ends', inRange(ROWS, '2026-09-20', '2026-09-21').lengt
 }
 
 // --- per campaign -----------------------------------------------------------
-check('campaigns biggest first, ours and archived out',
+check('campaigns biggest first, archived out',
   metaCampaignReport(ROWS, CLIENTS, SINCE, UNTIL).map((c) => [c.clientName, c.spend, c.ads, c.liveAds]),
   [['Belk Heating and Cooling', 190, 3, 3], ['Pillar HVAC', 60, 1, 0]])
 
@@ -103,11 +102,26 @@ check('campaigns biggest first, ours and archived out',
     { client_id: 'belk', date: '2026-09-21', platform: 'facebook', spend: 150, leads: 5, impressions: 10000, clicks: 200 },
     { client_id: 'belk', date: '2026-09-21', platform: 'instagram', spend: 50, leads: 1, impressions: 5000, clicks: 50 },
     { client_id: 'belk', date: '2026-09-21', platform: 'audience_network', spend: 0, leads: 0, impressions: 10, clicks: 0 },
-    { client_id: 'ours', date: '2026-09-21', platform: 'facebook', spend: 999, leads: 1, impressions: 1, clicks: 1 },
+    { client_id: 'gone', date: '2026-09-21', platform: 'facebook', spend: 999, leads: 1, impressions: 1, clicks: 1 },
   ]
-  check('platforms by spend, named, with share and cost per lead; empty ones and ours out',
+  check('platforms by spend, named, with share and cost per lead; empty ones and the archived out',
     platformSplit(P, CLIENTS, SINCE, UNTIL).map((p) => [p.label, p.spend, p.share, p.cpl]),
     [['Facebook', 150, 75, 30], ['Instagram', 50, 25, 50]])
+}
+
+// --- our own businesses count (2026-11-19) -----------------------------------
+// "On the live KPIs make it part of the total numbers": one of our own
+// businesses is a row, a campaign and a placement like any client, and its
+// spend is in every total. It was left out of all of them until then.
+{
+  const OURS = { id: 'ours', name: 'Horizon HVAC', meta_ad_account_id: '999', archived: false, is_internal: true }
+  const all = [...CLIENTS, OURS]
+  const rows = [...ROWS, row('ours', '2026-09-21', 'x', { spend: 999 })]
+  check('our own business is on the connection list', [metaConnection(all).total, metaConnection(all).connected.map((x) => x.id)], [4, ['belk', 'ours', 'pillar']])
+  check('...a row in the client table, biggest spend first', metaClientReport({ clients: all, rows, since: SINCE, until: UNTIL }).map((r) => [r.id, r.state, r.spend]).slice(0, 2), [['ours', 'live', 999], ['belk', 'live', 190]])
+  check('...in the campaigns', metaCampaignReport(rows, all, SINCE, UNTIL).map((c) => [c.clientName, c.spend])[0], ['Horizon HVAC', 999])
+  check('...in the ads judged', adsToActOn(rows, all, { since: SINCE, until: UNTIL }).some((a) => a.adId === 'x'), true)
+  check('...and in the placements', platformSplit([{ client_id: 'ours', date: '2026-09-21', platform: 'facebook', spend: 999, leads: 1, impressions: 1, clicks: 1 }], all, SINCE, UNTIL).map((p) => [p.label, p.spend]), [['Facebook', 999]])
 }
 
 // --- pixels ------------------------------------------------------------------

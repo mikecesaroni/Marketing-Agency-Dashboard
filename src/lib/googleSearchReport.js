@@ -75,11 +75,11 @@ export function dailyRows(campaignRows) {
 
 /**
  * Who is reporting, who has an ID Google refuses, and who has no ID yet.
- * Clients only. A saved ID is not the same as access: the last sync's error
+ * Our own businesses are on the list with the clients (2026-11-19). A saved ID is not the same as access: the last sync's error
  * on the client row is what tells them apart.
  */
 export function connection(clients) {
-  const mine = (clients || []).filter((c) => !c.archived && !c.is_internal)
+  const mine = (clients || []).filter((c) => !c.archived)
   const hasId = (c) => Boolean(String(c.google_ads_customer_id || '').replace(/\D/g, ''))
   const byName = (a, b) => String(a.name).localeCompare(String(b.name))
   return {
@@ -105,8 +105,10 @@ export function lastSynced(rows) {
 /**
  * One row per client, the whole story: the totals, what is wasted, and
  * whether they are connected at all. Clients with spend first, biggest
- * first; connected-but-empty next; not connected last. Internal businesses
- * and archived clients are left out, as on the rest of Reports.
+ * first; connected-but-empty next; not connected last. Archived clients are
+ * left out; our own businesses are rows like any client's and count in every
+ * total, as on the rest of Reports (2026-11-19: "on the live KPIs make it
+ * part of the total numbers").
  */
 export function clientReport({ clients, campaignRows, keywordRows, termRows, since, until }) {
   const scopedCampaigns = inRange(campaignRows, since, until)
@@ -138,7 +140,7 @@ export function clientReport({ clients, campaignRows, keywordRows, termRows, sin
 
   const out = []
   for (const c of clients || []) {
-    if (c.archived || c.is_internal) continue
+    if (c.archived) continue
     const connected = Boolean(String(c.google_ads_customer_id || '').replace(/\D/g, ''))
     const rows = campaignsBy.get(c.id) || []
     const k = kpis(rows)
@@ -184,7 +186,7 @@ export function clientReport({ clients, campaignRows, keywordRows, termRows, sin
 /** One row per campaign across every client, biggest spend first. */
 export function campaignReport(campaignRows, clients, since, until) {
   const byName = new Map((clients || []).map((c) => [c.id, c.name]))
-  const skip = new Set((clients || []).filter((c) => c.archived || c.is_internal).map((c) => c.id))
+  const skip = new Set((clients || []).filter((c) => c.archived).map((c) => c.id))
   const groups = new Map()
   for (const r of inRange(campaignRows, since, until)) {
     if (skip.has(r.client_id)) continue
@@ -244,7 +246,7 @@ export function negativesAcross(termRows, clients, since) {
 
 /** Type share of spend, for the "where the money goes" strip. */
 export function spendByType(campaignRows, clients, since, until) {
-  const skip = new Set((clients || []).filter((c) => c.archived || c.is_internal).map((c) => c.id))
+  const skip = new Set((clients || []).filter((c) => c.archived).map((c) => c.id))
   const by = new Map()
   let total = 0
   for (const r of inRange(campaignRows, since, until)) {

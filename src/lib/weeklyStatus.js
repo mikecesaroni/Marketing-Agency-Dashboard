@@ -180,7 +180,8 @@ export function buildWeeklyStatus({ statusRows = [], metaRows = [], googleRows =
   for (const r of lsaRows) push(r.client_id, { date: r.week_of, leads: r.leads, spend: r.ad_spend })
 
   const rows = statusRows
-    .filter((s) => s.client && !s.client.archived && !s.client.is_internal)
+    // Whoever the roster holds: our own businesses too, since 2026-11-19.
+    .filter((s) => s.client && !s.client.archived)
     .map((s) => {
       const days = byClient.get(s.client.id) || []
       const totals = weeks.map((w) => weekTotals(days, w))

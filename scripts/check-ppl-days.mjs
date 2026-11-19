@@ -65,31 +65,36 @@ check('in words: charged only when the leads are lead records, cost per charged 
 check('nobody running pay per lead is an empty list', payPerLeadWeek({ days: googleAdDays([g('z', '2026-11-18', 'SEARCH', 'WC_Search', 70, 5)], []), clients: [{ id: 'z', name: 'Z' }], today: TODAY }), [])
 
 // --- through the status rows and into the brief ---------------------------------------------------
+// Our own business ('h') is on the roster (fetchStatusRows with `ours`, since
+// 2026-11-19: "can we include both Horizons in the morning brief").
 const client = (id, name, extra = {}) => ({ id, name, archived: false, is_internal: false, meta_ads_active: true, ...extra })
 const raw = {
   day: TODAY,
-  pipeline: { clients: [client('a', 'Acme Heating'), client('p', 'Paused Co', { paused_at: '2026-11-01T00:00:00Z' })], intakes: [], links: [], ghl: [], deliverables: [], payments: [], calls: [], files: [], saved: [], published: [], kpis: [], reports: [], overrides: [], googleRows: [], legacy: [] },
+  pipeline: { clients: [client('a', 'Acme Heating'), client('h', 'Horizon HVAC', { is_internal: true }), client('p', 'Paused Co', { paused_at: '2026-11-01T00:00:00Z' })], intakes: [], links: [], ghl: [], deliverables: [], payments: [], calls: [], files: [], saved: [], published: [], kpis: [], reports: [], overrides: [], googleRows: [], legacy: [] },
   legacy: [],
   metaRows: [{ client_id: 'a', campaign_id: 'm1', date: '2026-11-18', leads: 3, spend: 60 }],
   googleRows: [...googleRows, g('h', '2026-11-16', 'PAY_PER_LEAD', 'Pay-per-lead-PMax-H', 300, 4), g('p', '2026-11-18', 'PAY_PER_LEAD', 'Pay-per-lead-PMax-P', 10, 1)],
   lsaLeads: [...leadRows, lead('h', '2026-11-16')],
-  ours: [{ id: 'h', name: 'Horizon HVAC' }],
 }
 const rows = statusFromRows(raw)
 const acme = rows.find((r) => r.client.id === 'a')
 check('the status row\'s leads this week are Meta + Search conversions + pay-per-lead lead records', [acme.leads.leads7, acme.leads.spend7], [7, 230])
+const horizon = rows.find((r) => r.client.id === 'h')
+check('our own business is a status row too, its pay-per-lead leads counted from the lead records', [horizon.leads.leads7, horizon.leads.spend7, horizon.flags.map((f) => f.key)], [1, 300, []])
 const ppl = payPerLeadFromRows(raw)
-check('the brief\'s pay-per-lead list: the clients in the brief (a paused client left out), then our own businesses', ppl.map((p) => [p.name, p.ours, p.leads, p.charged, p.spend]), [['Acme Heating', false, 2, 1, 120], ['Horizon HVAC', true, 1, 1, 300]])
+check('the brief\'s pay-per-lead list: every business on the roster with a lead or spend, a paused one left out', ppl.map((p) => [p.name, p.leads, p.charged, p.spend]), [['Acme Heating', 2, 1, 120], ['Horizon HVAC', 1, 1, 300]])
 const model = buildBrief({ statusRows: rows, day: TODAY, appUrl: 'https://crm.example', payPerLead: ppl })
 const section = briefSections(model).find((s) => s.key === 'ppl')
-check('the brief gets a section of its own, one line a business, ours tagged, linking to the pay-per-lead report', [section.title, section.lines.map((l) => [l.client.name, l.tag || '', l.text, l.href])], ['Google pay per lead (LSA), last 7 days', [['Acme Heating', '', '2 leads (1 charged) · $120 spent · $120 per charged lead', '/reports/lsa'], ['Horizon HVAC', 'ours', '1 lead (1 charged) · $300 spent · $300 per charged lead', '/reports/lsa']]])
-check('...and it reads in the text of the brief', briefText(model).includes('GOOGLE PAY PER LEAD (LSA), LAST 7 DAYS\n📞 Acme Heating: 2 leads (1 charged) · $120 spent · $120 per charged lead\n📞 Horizon HVAC (ours): 1 lead (1 charged) · $300 spent · $300 per charged lead'), true)
+check('the brief gets a section of its own, one line a business, linking to the pay-per-lead report', [section.title, section.lines.map((l) => [l.client.name, l.text, l.href])], ['Google pay per lead (LSA), last 7 days', [['Acme Heating', '2 leads (1 charged) · $120 spent · $120 per charged lead', '/reports/lsa'], ['Horizon HVAC', '1 lead (1 charged) · $300 spent · $300 per charged lead', '/reports/lsa']]])
+check('...and it reads in the text of the brief', briefText(model).includes('GOOGLE PAY PER LEAD (LSA), LAST 7 DAYS\n📞 Acme Heating: 2 leads (1 charged) · $120 spent · $120 per charged lead\n📞 Horizon HVAC: 1 lead (1 charged) · $300 spent · $300 per charged lead'), true)
+check('our own business is in the brief\'s own lines as well: running clean with its leads', model.green.map((x) => [x.client.name, x.leads7]).filter(([n]) => n === 'Horizon HVAC'), [['Horizon HVAC', 1]])
 // Our own account was running pay per lead before it was connected to the
 // CRM, so every campaign in it reads as "from before we connected". That rule
-// is for a client's own campaigns; ours still show. A client's stay out.
+// is for a client's own campaigns; ours still count. A client's stay out.
 const legacyRaw = { ...raw, legacy: [{ client_id: 'h', channel: 'google', campaign_id: 'h-PAY_PER_LEAD' }, { client_id: 'a', channel: 'google', campaign_id: 'a-PAY_PER_LEAD' }], pipeline: { ...raw.pipeline, legacy: [] } }
-check('our own business shows even when its campaigns started before the account was connected; a client\'s own old campaign does not', payPerLeadFromRows(legacyRaw).map((p) => [p.name, p.ours, p.leads, p.charged, p.spend]), [['Horizon HVAC', true, 1, 1, 300]])
-check('with nobody on pay per lead the brief has no such section',briefSections(buildBrief({ statusRows: rows, day: TODAY })).some((s) => s.key === 'ppl'), false)
+check('our own business counts even when its campaigns started before the account was connected; a client\'s own old campaign does not', payPerLeadFromRows(legacyRaw).map((p) => [p.name, p.leads, p.charged, p.spend]), [['Horizon HVAC', 1, 1, 300]])
+check('...in its status row too', statusFromRows(legacyRaw).filter((r) => ['a', 'h'].includes(r.client.id)).map((r) => [r.client.name, r.leads.leads7, r.leads.spend7]), [['Acme Heating', 5, 110], ['Horizon HVAC', 1, 300]])
+check('with nobody on pay per lead the brief has no such section', briefSections(buildBrief({ statusRows: rows, day: TODAY })).some((s) => s.key === 'ppl'), false)
 
 // --- the Monday status counts them the same way ------------------------------------------------------
 const weekly = buildWeeklyStatus({
@@ -108,6 +113,8 @@ const weeklySrc = read('src/lib/weeklyRows.js')
 const fn = read('supabase/functions/team-digest/index.ts')
 check('the lead records and the campaign type are read for the board, the brief and the Monday status', [statusSrc.includes(".from('lsa_leads').select('id, client_id, created_date, lead_charged')"), statusSrc.includes('campaign_type, campaign_name, date, conversions, cost'), weeklySrc.includes(".from('lsa_leads')"), weeklySrc.includes('campaign_type, campaign_name')], [true, true, true, true])
 check('the brief function passes the pay-per-lead week in, and the bundle carries the builder', [fn.includes('payPerLead: payPerLeadFromRows(statusRaw)'), read('supabase/functions/team-digest/model.entry.js').includes('payPerLeadFromRows')], [true, true])
+check('the brief, its alerts and the weekly status put our own businesses on the roster; the Client tiers board does not', [fn.includes('fetchStatusRows(supabase, { internalColumn: true, day, ours: true })'), read('src/lib/weeklyStatusData.js').includes('ours: true'), read('src/lib/clientStatusData.js').includes('ours'), statusSrc.includes('fetchPipelineRows(supabase, { internalColumn, day, ours })'), read('src/lib/pipelineRows.js').includes('if (internalColumn && !ours)')], [true, true, false, true, true])
+check('the view of a client\'s own campaigns leaves our own businesses out', /not coalesce\(c\.is_internal, false\)[\s\S]*not coalesce\(c\.is_internal, false\)/.test(read('supabase/accounts-connected.sql')), true)
 
 if (failures) {
   console.log(`\n${failures} FAILED`)

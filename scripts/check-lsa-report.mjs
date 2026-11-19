@@ -55,7 +55,7 @@ const clients = [
 ]
 const hand = [{ client_id: 'w', week_of: '2026-11-09', ad_spend: 300, leads: 5 }, { client_id: 'w', week_of: '2026-10-05', ad_spend: 250, leads: 4 }]
 const report = lsaClientReport({ clients, campaignRows: rows, leads, handRows: hand, since: '2026-11-05', until: '2026-11-11' })
-check('states in order: live, stopped, connected and quiet, logged by hand, marked live with nothing connected, not connected, paused; internal left out', report.map((r) => [r.name, r.state]), [['Horizon', 'live'], ['Belk', 'live'], ['Stopped Co', 'stopped'], ['Quiet Co', 'connected'], ['Hand Co', 'by-hand'], ['Marked Co', 'marked'], ['New Co', 'not-connected'], ['Paused Co', 'paused']])
+check('states in order: live, stopped, connected and quiet, logged by hand, marked live with nothing connected, not connected, paused; one of our own is a row like a client (2026-11-19)', report.map((r) => [r.name, r.state]), [['Horizon', 'live'], ['Belk', 'live'], ['Stopped Co', 'stopped'], ['Quiet Co', 'connected'], ['Hand Co', 'by-hand'], ['Marked Co', 'marked'], ['New Co', 'not-connected'], ['Us', 'not-connected'], ['Paused Co', 'paused']])
 const stopped = report.find((r) => r.name === 'Stopped Co')
 check('a client whose Local Services campaigns are paused in Google is stopped, not live, with the range\'s spend and the last day it spent', [stopped.stoppedWhy, stopped.spend, stopped.lastDate, stopped.quietDays], ['paused', 60, '2026-11-06', 5])
 
@@ -74,7 +74,7 @@ const horizon = report.find((r) => r.name === 'Horizon')
 check('a client whose Local Services lives in their Search account says so, with the window\'s numbers', [horizon.inSearchAccount, horizon.account, horizon.spend, horizon.leads, horizon.charged, horizon.cpcl, horizon.lastDate, horizon.lastLead], [true, '2193411105', 200, 3, 2, 100, '2026-11-11', '2026-11-11 10:00:00'])
 check('a separate Local Services account is named, and reads as its own', [report.find((r) => r.name === 'Belk').account, report.find((r) => r.name === 'Belk').inSearchAccount], ['999', false])
 check('hand-logged weeks inside the window ride on the row, the older week left out', report.find((r) => r.name === 'Hand Co').hand, { spend: 300, leads: 5, weeks: 1 })
-check('the connection counts', lsaConnection(report), { live: 2, stopped: 1, connected: 1, byHand: 1, marked: 1, notConnected: 1, paused: 1, total: 8 })
+check('the connection counts', lsaConnection(report), { live: 2, stopped: 1, connected: 1, byHand: 1, marked: 1, notConnected: 2, paused: 1, total: 9 })
 
 // --- the recent leads ----------------------------------------------------------------
 check('recent leads newest first, naming the client, the kind and the status, charged or credited', recentLeads(leads, clients, 2).map((l) => [l.clientName, l.kind, l.status, l.charged, l.credited, l.at]), [['Horizon', 'Call', 'New', true, false, '2026-11-11 10:00:00'], ['Horizon', 'Message', 'Booked', true, false, '2026-11-11 10:00:00']])

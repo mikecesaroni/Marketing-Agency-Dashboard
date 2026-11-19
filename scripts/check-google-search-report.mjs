@@ -32,7 +32,6 @@ const CLIENTS = [
   { id: 'belk', name: 'Belk Heating and Cooling', google_ads_customer_id: '1111111111', archived: false, is_internal: false, paused_at: null },
   { id: 'pillar', name: 'Pillar HVAC', google_ads_customer_id: '2222222222', archived: false, is_internal: false, paused_at: null },
   { id: 'tito', name: 'Tito’s Appliances', google_ads_customer_id: null, archived: false, is_internal: false, paused_at: null },
-  { id: 'horizon', name: 'Horizon HVAC', google_ads_customer_id: '9999999999', archived: false, is_internal: true, paused_at: null },
   { id: 'gone', name: 'Churned Ltd', google_ads_customer_id: '8888888888', archived: true, is_internal: false, paused_at: null },
 ]
 
@@ -45,7 +44,6 @@ const CAMPAIGNS = [
   camp('belk', '2026-09-21', 'c1', { conversions: 0, cost: 50, clicks: 20, impressions: 400 }),
   camp('belk', '2026-09-21', 'pmax', { campaign_type: 'PERFORMANCE_MAX', cost: 150, clicks: 30, impressions: 3000, conversions: 1, conversion_value: 500 }),
   camp('pillar', '2026-09-21', 'c2', { cost: 200, clicks: 80, impressions: 2000, conversions: 5, conversion_value: 2500, campaign_status: 'PAUSED' }),
-  camp('horizon', '2026-09-21', 'h1', { cost: 999 }),
   camp('gone', '2026-09-21', 'g1', { cost: 999 }),
   camp('belk', '2026-09-01', 'c1', { cost: 1000 }), // outside the window
 ]
@@ -71,12 +69,12 @@ check('kpis add every metric and derive the rates',
   { spend: 200, leads: 2, clicks: 100, impressions: 2000, value: 800, cpl: 100, cpc: 2, ctr: 5, convRate: 2, roas: 4 })
 check('no leads means cpl 0, not Infinity', kpis([camp('x', '2026-09-21', 'a', { conversions: 0 })]).cpl, 0)
 check('nothing in is zeros out', kpis([]), { spend: 0, leads: 0, clicks: 0, impressions: 0, value: 0, cpl: 0, cpc: 0, ctr: 0, convRate: 0, roas: 0 })
-check('inRange keeps both ends', inRange(CAMPAIGNS, '2026-09-20', '2026-09-21').length, 6)
+check('inRange keeps both ends', inRange(CAMPAIGNS, '2026-09-20', '2026-09-21').length, 5)
 
 // --- who is connected -------------------------------------------------------
 {
   const c = connection(CLIENTS)
-  check('connection counts clients only, not ours or the archived',
+  check('connection leaves the archived out',
     [c.total, c.connected.map((x) => x.id), c.waiting.map((x) => x.id)], [3, ['belk', 'pillar'], ['tito']])
 }
 {
@@ -107,7 +105,7 @@ check('last synced with nothing is null', lastSynced([]), null)
 // --- per client --------------------------------------------------------------
 {
   const rows = clientReport({ clients: CLIENTS, campaignRows: CAMPAIGNS, keywordRows: KEYWORDS, termRows: TERMS, since: SINCE, until: UNTIL })
-  check('order: live by spend, then no data, then not connected; ours and archived left out',
+  check('order: live by spend, then no data, then not connected; archived left out',
     rows.map((r) => [r.id, r.state]), [['belk', 'live'], ['pillar', 'live'], ['tito', 'not-connected']])
   const belk = rows[0]
   check('a client total is campaign grain, so Performance Max is in it',
@@ -124,10 +122,23 @@ check('last synced with nothing is null', lastSynced([]), null)
 // --- per campaign ------------------------------------------------------------
 {
   const rows = campaignReport(CAMPAIGNS, CLIENTS, SINCE, UNTIL)
-  check('campaigns biggest first, ours and archived left out',
+  check('campaigns biggest first, archived left out',
     rows.map((r) => [r.clientName, r.campaignId, r.spend]),
     [['Pillar HVAC', 'c2', 200], ['Belk Heating and Cooling', 'c1', 150], ['Belk Heating and Cooling', 'pmax', 150]])
   check('type and status read as words', [rows[2].type, rows[0].status], ['Performance Max', 'PAUSED'])
+}
+// --- our own businesses count (2026-11-19) -----------------------------------
+// "On the live KPIs make it part of the total numbers": one of our own
+// businesses is on the connection list, a row and a campaign like any
+// client, and its spend is in every total. It was left out until then.
+{
+  const OURS = { id: 'horizon', name: 'Horizon HVAC', google_ads_customer_id: '9999999999', archived: false, is_internal: true, paused_at: null }
+  const all = [...CLIENTS, OURS]
+  const campaigns = [...CAMPAIGNS, camp('horizon', '2026-09-21', 'h1', { cost: 999 })]
+  check('our own business is on the connection list', [connection(all).total, connection(all).connected.map((x) => x.id)], [4, ['belk', 'horizon', 'pillar']])
+  check('...a row in the client table, biggest spend first', clientReport({ clients: all, campaignRows: campaigns, keywordRows: [], termRows: [], since: SINCE, until: UNTIL }).map((r) => [r.id, r.state, r.spend]).slice(0, 2), [['horizon', 'live', 999], ['belk', 'live', 300]])
+  check('...in the campaigns', campaignReport(campaigns, all, SINCE, UNTIL).map((r) => [r.clientName, r.campaignId, r.spend])[0], ['Horizon HVAC', 'h1', 999])
+  check('...and in where the money goes', spendByType(campaigns, all, SINCE, UNTIL).find((t) => t.type === 'Search').spend, 1349)
 }
 check('prettyType handles the unknown', [prettyType('SEARCH'), prettyType('SOMETHING_NEW'), prettyType('')], ['Search', 'Something new', ''])
 

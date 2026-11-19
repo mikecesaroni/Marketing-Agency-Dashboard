@@ -109,9 +109,11 @@ const check = (name, got, want) => {
     adDeliveryAlerts([client({ name: 'gone', archived: true, meta_account_status: 2 })],
       { gone: spend('2026-01-01') }, TODAY).length, 0)
 
-  check('so are the businesses we run ourselves',
+  // 2026-11-19: "can we include both Horizons in the morning brief". The
+  // roster decides who is watched; one of our own handed in is watched.
+  check('a business we run ourselves is watched like a client when it is on the roster',
     adDeliveryAlerts([client({ name: 'ours', is_internal: true, meta_account_status: 2 })],
-      { ours: spend('2026-01-01') }, TODAY).length, 0)
+      { ours: spend('2026-01-01') }, TODAY).map((a) => a.kind), ['account'])
 }
 
 // --- an unknown status must not cry wolf ---------------------------------

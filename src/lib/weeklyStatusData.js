@@ -4,9 +4,9 @@ import { fetchStatusRows, statusFromRows } from './statusRows'
 import { fetchWeeklyRows } from './weeklyRows'
 import { buildWeeklyStatus } from './weeklyStatus'
 
-/** The weekly executive status for the whole book. weeksBack 0 is the last complete week. */
+/** The weekly executive status for the whole book, our own businesses included (2026-11-19). weeksBack 0 is the last complete week. */
 export async function fetchWeeklyStatus({ weeksBack = 0 } = {}) {
   const internalColumn = await hasInternalColumn()
-  const [statusRaw, weekly] = await Promise.all([fetchStatusRows(supabase, { internalColumn }), fetchWeeklyRows(supabase, { weeksBack })])
+  const [statusRaw, weekly] = await Promise.all([fetchStatusRows(supabase, { internalColumn, ours: true }), fetchWeeklyRows(supabase, { weeksBack })])
   return buildWeeklyStatus({ statusRows: statusFromRows(statusRaw), ...weekly })
 }

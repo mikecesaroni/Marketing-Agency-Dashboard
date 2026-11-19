@@ -48,7 +48,7 @@ export function pplWho({ clients = [], campaignRows = [], handRows = [] } = {}) 
   const setUp = []
   const toConnect = []
   for (const c of clients || []) {
-    if (!c?.id || c.is_internal || c.archived) continue
+    if (!c?.id || c.archived) continue
     nameBy.set(c.id, c.name)
     if (running.has(c.id)) continue
     const held = (Array.isArray(c.lsa_campaigns) ? c.lsa_campaigns : []).filter((x) => x && x.id)

@@ -22,9 +22,22 @@
  * The database view legacy_ad_campaigns lists { client_id, channel,
  * campaign_id } for every such campaign; this file drops their rows.
  * Pure, so scripts/check-our-ads.mjs runs it in Node.
+ *
+ * The rule is a client's. Our own businesses (is_internal) have no
+ * "campaigns from before they signed": everything in our own account is
+ * ours, whenever it started. The view leaves them out, and clientsLegacy()
+ * says the same of rows already read (2026-11-19: our own pay per lead never
+ * showed in the brief, every campaign in the account having spent before it
+ * was connected to the CRM).
  */
 
 export const legacyKey = (clientId, channel, campaignId) => `${clientId}:${channel}:${campaignId}`
+
+/** The view's rows without our own businesses': the rule is for a client's campaigns. */
+export function clientsLegacy(rows, clients) {
+  const own = new Set((clients || []).filter((c) => c?.is_internal).map((c) => c.id))
+  return own.size ? (rows || []).filter((r) => !own.has(r.client_id)) : rows || []
+}
 
 /** A Set of legacy keys from the view's rows (or an existing Set, returned as is). */
 export function legacySet(rows) {

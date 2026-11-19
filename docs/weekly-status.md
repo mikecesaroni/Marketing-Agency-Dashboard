@@ -86,9 +86,40 @@ sync writes every call, message and booking Google reports into `lsa_leads`
 - **A section of its own in the brief.** "Google pay per lead (LSA), last 7
   days": one line a business with a lead or spend that week, "5 leads (4
   charged) · $312 spent · $78 per charged lead", linking to
-  `/reports/lsa`. Clients first; our own businesses after them, tagged
-  "(ours)", since they are in no client number. Our own businesses skip
-  the "from before we connected" rule: everything in our own account is
-  ours, whenever it started (without this our own line never showed). No
-  business on pay per lead, no section. Built by `payPerLeadFromRows` (`src/lib/statusRows.js`)
-  and passed to `buildBrief`. Pinned by `scripts/check-ppl-days.mjs`.
+  `/reports/lsa`. Every business in the brief, our own included. No
+  business on pay per lead, no section. Built by `payPerLeadFromRows`
+  (`src/lib/statusRows.js`) and passed to `buildBrief`. Pinned by
+  `scripts/check-ppl-days.mjs`.
+
+## Our own businesses in the brief and the KPIs (2026-11-19)
+
+"Can we include both Horizons in the morning brief and also on the live KPIs
+make it part of the total numbers."
+
+- **The brief, its Slack alerts and the weekly status** put our own
+  businesses (`is_internal`) on the roster: `fetchStatusRows(supabase, {
+  ours: true })`, which `team-digest` and `weeklyStatusData.js` pass. Each is
+  a line like a client's: needs attention on an ad flag (the ad account, ads
+  off, no leads, under the standard, no new ad, the Google sync), running
+  clean with its leads otherwise, its clips under To publish, its pay per
+  lead in that section. Never onboarding, never a payment, a chase, KPIs to
+  log or a package to pick (`clientFlags` and `buildBrief` skip those for
+  `is_internal`). The Client tiers board and the launch pipeline stay
+  clients only: a package checklist says nothing about a business that is
+  ours.
+- **The "client's own campaigns" rule does not apply to them.** Everything
+  in our own account is ours, whenever it started: the
+  `legacy_ad_campaigns` view leaves `is_internal` out
+  (`supabase/accounts-connected.sql`) and `clientsLegacy()` in
+  `src/lib/ourAds.js` says the same of rows already read. Without this our
+  own pay per lead never showed, every campaign in the account having spent
+  before it was connected to the CRM.
+- **The KPI pages** (`/reports`, `/reports/meta`, `/reports/google-search`,
+  `/reports/lsa`) count them in every tile, chart, table and connection
+  list. `/reports` keeps its My businesses rows for the Google Ads connect
+  box, now saying the numbers are already in the totals above; the
+  pay-per-lead report's separate My businesses table is gone, the rows being
+  in the main table. Billing, payments, onboarding and client dashboards
+  still leave them out: they pay nobody.
+- Pinned by `scripts/check-ppl-days.mjs`, `check-client-status.mjs`,
+  `check-team-brief.mjs`, `check-ad-health.mjs` and the three report checks.

@@ -176,6 +176,12 @@ export function clientFlags(ctx) {
   // without being live on Meta.
   const metaLive = (result.live ? Boolean(result.live.meta) : Boolean(c.meta_ads_active)) && !c.paused_at
   const live = (Boolean(result.launched) || metaLive) && !c.paused_at
+  // One of our own businesses (is_internal), in the morning brief since
+  // 2026-11-19 ("can we include both Horizons in the morning brief"): its ads
+  // are watched like a client's (the account, the spend, the leads, a new
+  // ad), and nothing else applies. It pays nobody, has no package, and there
+  // is no client to wait on.
+  const ours = Boolean(c.is_internal)
   const flags = []
   const add = (f) => flags.push(f)
 
@@ -270,7 +276,7 @@ export function clientFlags(ctx) {
   }
 
   // Money: an unpaid invoice past its date, or a card that keeps failing.
-  const owed = (ctx.payments || []).filter((p) => p.status !== 'paid' && ((p.due_date && p.due_date < today) || p.status === 'overdue' || Number(p.failure_count) > 0))
+  const owed = ours ? [] : (ctx.payments || []).filter((p) => p.status !== 'paid' && ((p.due_date && p.due_date < today) || p.status === 'overdue' || Number(p.failure_count) > 0))
   if (owed.length) {
     const total = owed.reduce((n, p) => n + (Number(p.amount) || 0), 0)
     const failing = owed.some((p) => Number(p.failure_count) > 0)
@@ -284,7 +290,7 @@ export function clientFlags(ctx) {
   }
 
   // Waiting on them for a week or more: the chase is overdue.
-  const stale = (result.theirs || []).filter((s) => (s.waitingDays || 0) >= 7)
+  const stale = ours ? [] : (result.theirs || []).filter((s) => (s.waitingDays || 0) >= 7)
   if (stale.length) {
     const longest = stale.reduce((m, s) => (s.waitingDays > m.waitingDays ? s : m), stale[0])
     add({
@@ -296,15 +302,15 @@ export function clientFlags(ctx) {
     })
   }
 
-  if (tier >= 2 && c.google_ads_customer_id && c.google_ads_sync_error) {
+  if ((tier >= 2 || ours) && c.google_ads_customer_id && c.google_ads_sync_error) {
     add({ key: 'google-sync', severity: 'amber', label: 'Google Ads sync failing', detail: String(c.google_ads_sync_error).slice(0, 140), href: `/client/${c.id}#google-search` })
   }
 
-  if (live && Number(ctx.counts?.kpisThisWeek || 0) === 0) {
+  if (live && !ours && Number(ctx.counts?.kpisThisWeek || 0) === 0) {
     add({ key: 'kpis', severity: 'blue', label: 'KPIs not logged this week', detail: 'Meta syncs itself; LSA and the rest are logged by hand.', href: `/client/${c.id}?open=kpis` })
   }
 
-  if (!tier) {
+  if (!tier && !ours) {
     add({ key: 'tier', severity: 'blue', label: 'No package set', detail: 'Pick their tier on this card so the checklist knows what they are owed.', href: `/client/${c.id}` })
   }
   // A package read from the fee is the package: no "guessed" flag, no

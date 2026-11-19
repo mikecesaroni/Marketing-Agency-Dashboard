@@ -509,7 +509,10 @@ Deno.serve(async (req) => {
       return json({ day, ...(await postDrives(items)) })
     }
 
-    const statusRaw = await fetchStatusRows(supabase, { internalColumn: true, day })
+    // Our own businesses are on the roster (2026-11-19: "can we include both
+    // Horizons in the morning brief"): the brief, its alerts and the weekly
+    // status watch their ads like a client's.
+    const statusRaw = await fetchStatusRows(supabase, { internalColumn: true, day, ours: true })
     const statusRows = statusFromRows(statusRaw)
 
     if (action === 'alerts') {

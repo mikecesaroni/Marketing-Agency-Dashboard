@@ -259,7 +259,7 @@ export function lsaClientReport({ clients, campaignRows, leads, handRows, since,
 
   const out = []
   for (const c of clients || []) {
-    if (c.archived || c.is_internal) continue
+    if (c.archived) continue
     const everRows = allBy.get(c.id) || []
     const rows = nowBy.get(c.id) || []
     const myLeads = leadsBy.get(c.id) || []
@@ -330,7 +330,7 @@ export function lsaConnection(rows) {
 /** The newest leads across every client, each naming its client. */
 export function recentLeads(leads, clients, limit = 30) {
   const byName = new Map((clients || []).map((c) => [c.id, c.name]))
-  const skip = new Set((clients || []).filter((c) => c.archived || c.is_internal).map((c) => c.id))
+  const skip = new Set((clients || []).filter((c) => c.archived).map((c) => c.id))
   return (leads || [])
     .filter((l) => !skip.has(l.client_id))
     .map((l) => ({

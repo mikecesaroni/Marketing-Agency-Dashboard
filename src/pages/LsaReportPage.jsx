@@ -133,9 +133,11 @@ export default function LsaReportPage() {
     }
   }
 
-  // Clients only, like the rest of Reports.
+  // Everyone who is not archived, our own businesses included (2026-11-19:
+  // "on the live KPIs make it part of the total numbers"), like the rest of
+  // Reports. They had a table of their own under the clients until then.
   const clientOnly = useMemo(() => {
-    const skip = new Set(clients.filter((c) => c.archived || c.is_internal).map((c) => c.id))
+    const skip = new Set(clients.filter((c) => c.archived).map((c) => c.id))
     return { rows: lsaRows(campaignRows).filter((r) => !skip.has(r.client_id)), leads: leads.filter((l) => !skip.has(l.client_id)) }
   }, [clients, campaignRows, leads])
 
@@ -150,13 +152,6 @@ export default function LsaReportPage() {
   const spark = (k) => daily.map((d) => d[k])
 
   const rows = useMemo(() => lsaClientReport({ clients, campaignRows, leads, handRows, since: windowStart, today: daysAgo(0) }), [clients, campaignRows, leads, handRows, windowStart])
-  // Our own businesses (Horizon HVAC's Local Services lives in its Search
-  // account), as rows of their own under the clients: not in the tiles, not
-  // in the counts, but not invisible either ("why is Google LSA blank").
-  const ourRows = useMemo(
-    () => lsaClientReport({ clients: clients.filter((c) => c.is_internal && !c.archived).map((c) => ({ ...c, is_internal: false })), campaignRows, leads, handRows, since: windowStart, today: daysAgo(0) }),
-    [clients, campaignRows, leads, handRows, windowStart]
-  )
   const link = useMemo(() => lsaConnection(rows), [rows])
   const latest = useMemo(() => recentLeads(nowLeads, clients, 30), [nowLeads, clients])
   const todo = rows.filter((r) => r.state === 'marked' || r.state === 'not-connected' || r.state === 'by-hand')
@@ -205,7 +200,7 @@ export default function LsaReportPage() {
               <SectionTitle
                 channel="lsa"
                 title={`${metric.label} by day`}
-                sub="Synced Local Services campaigns · clients only · daily columns with a 7-day average"
+                sub="Synced Local Services campaigns · daily columns with a 7-day average"
                 right={<Segmented size="sm" options={METRICS.map((m) => ({ value: m.key, label: m.label }))} value={metricKey} onChange={setMetricKey} />}
               />
               <DailyChart series={daily} metric={metric} theme={chartTheme('lsa')} />
@@ -285,54 +280,6 @@ export default function LsaReportPage() {
                 </p>
               )}
             </section>
-
-            {ourRows.length > 0 && (
-              <section data-our-lsa>
-                <SectionTitle title="My businesses" sub="Not clients · left out of the tiles and the counts above" />
-                <DTable>
-                  <thead>
-                    <tr>
-                      <DTh>Business</DTh>
-                      <DTh>Status</DTh>
-                      <DTh>Account</DTh>
-                      <DTh numeric>Spend</DTh>
-                      <DTh numeric>Leads</DTh>
-                      <DTh numeric>Charged</DTh>
-                      <DTh numeric>Booked</DTh>
-                      <DTh numeric>Cost / charged lead</DTh>
-                      <DTh>Last lead</DTh>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ourRows.map((r) => {
-                      const s = STATES[r.state]
-                      return (
-                        <DTr key={r.id} data-lsa-ours={r.name}>
-                          <DTd className="whitespace-nowrap">
-                            <Link to={`/client/${r.id}`} className="font-medium text-white hover:text-sky-300">{r.name}</Link>
-                          </DTd>
-                          <DTd>
-                            <Pill tone={s.tone} title={r.syncError || undefined}>{s.label}</Pill>
-                            {r.state === 'stopped' && (
-                              <span className="ml-2 text-[11px] text-amber-300/90">
-                                {r.stoppedWhy === 'paused' ? `paused in Google, last spend ${r.lastDate}` : `no spend for ${r.quietDays} days`}
-                              </span>
-                            )}
-                          </DTd>
-                          <DTd className="whitespace-nowrap text-xs text-slate-400">{r.account ? `${dashed(r.account)}${r.inSearchAccount ? ' · with Search' : ''}` : '—'}</DTd>
-                          <DTd numeric muted={!r.spend}>{r.spend ? money(r.spend) : '—'}</DTd>
-                          <DTd numeric muted={!r.leads}>{r.leads || '—'}</DTd>
-                          <DTd numeric muted={!r.fromLeadRows}>{r.fromLeadRows ? r.charged : '—'}</DTd>
-                          <DTd numeric muted={!r.fromLeadRows}>{r.fromLeadRows ? r.booked : '—'}</DTd>
-                          <DTd numeric>{dash(r.cpcl, usd)}</DTd>
-                          <DTd className="whitespace-nowrap text-xs text-slate-400">{r.lastLead ? whenLabel(r.lastLead) : r.lastDate ? `spent ${r.lastDate}` : '—'}</DTd>
-                        </DTr>
-                      )
-                    })}
-                  </tbody>
-                </DTable>
-              </section>
-            )}
 
             {/* THE LEADS THEMSELVES, newest first. */}
             <section>

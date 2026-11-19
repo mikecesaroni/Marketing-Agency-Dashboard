@@ -62,17 +62,24 @@ where t.client_id = c.id and regexp_replace(coalesce(c.google_ads_customer_id, '
 -- Every campaign that was spending before the day its account was
 -- connected: the client's own. Read by statusRows, weeklyRows and
 -- pipelineRows through src/lib/ourAds.js.
+--
+-- Never one of our own businesses (is_internal, 2026-11-19): everything in
+-- our own account is ours, whenever it started. Our own pay per lead never
+-- showed in the morning brief, its campaigns having spent before the account
+-- was connected to the CRM.
 create or replace view public.legacy_ad_campaigns as
 select g.client_id, 'google'::text as channel, g.campaign_id::text as campaign_id
 from public.google_campaign_daily g join public.clients c on c.id = g.client_id
 where c.google_ads_connected_at is not null and g.cost > 0 and g.campaign_id is not null
   and g.date < (c.google_ads_connected_at at time zone 'America/New_York')::date
+  and not coalesce(c.is_internal, false)
 group by g.client_id, g.campaign_id
 union all
 select a.client_id, 'meta'::text, a.campaign_id::text
 from public.ad_daily a join public.clients c on c.id = a.client_id
 where c.meta_connected_at is not null and a.spend > 0 and a.campaign_id is not null
   and a.date < (c.meta_connected_at at time zone 'America/New_York')::date
+  and not coalesce(c.is_internal, false)
 group by a.client_id, a.campaign_id;
 
 grant select on public.legacy_ad_campaigns to anon, authenticated, service_role;

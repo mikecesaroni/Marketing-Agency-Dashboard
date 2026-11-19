@@ -118,7 +118,11 @@ const EMOJI = {
 }
 
 const pick = (c) => ({ id: c.id, name: c.name })
-const active = (r) => r?.client && !r.client.archived && !r.client.is_internal
+// Our own businesses (is_internal) are in the brief since 2026-11-19 ("can we
+// include both Horizons in the morning brief"): whatever the roster holds
+// that is not archived is a line. The roster decides (fetchStatusRows with
+// `ours`).
+const active = (r) => r?.client && !r.client.archived
 
 // The step each channel goes live on, for the "Meta and Google live" tail.
 const LIVE_STEPS = [
@@ -311,7 +315,7 @@ export function payPerLeadWords(p) {
 }
 
 // payPerLead: payPerLeadFromRows() (src/lib/statusRows.js), the week's Google
-// pay per lead per business, our own businesses marked. Since 2026-11-19
+// pay per lead per business, our own businesses among them. Since 2026-11-19
 // ("is the CRM able to track leads from Google LSA / pay per lead? and
 // include that in numbers from the morning brief") the clients' leads in this
 // brief count their pay-per-lead leads too, and this is the section that
@@ -363,7 +367,8 @@ export function buildBrief({ statusRows = [], weekly = null, day, appUrl = '', p
     // Local Services open does not hold a client here.
     const steps = r.result?.steps || []
     const channelOpen = steps.some((s) => GATE_KEYS.has(s.key) && !s.done)
-    if (!r.client.paused_at && (!r.result?.launched || channelOpen)) {
+    // Never one of our own businesses: there is no package to onboard.
+    if (!r.client.paused_at && !r.client.is_internal && (!r.result?.launched || channelOpen)) {
       const line = setupLine(r.result, r.client, r.drop)
       // The package and the day of onboarding they are on, so "day 40 and
       // Google still not connected" reads at a glance.
@@ -468,8 +473,8 @@ export function briefSections(model) {
     out.push({ key: 'green', title: `Running clean (${model.green.length}), leads this week (standard is 5 to 7)`, lines: [{ emoji: EMOJI.green, text: names, href: '/status' }] })
   }
   // Google pay per lead (Local Services): the leads Google reported this
-  // week, per business. The clients' are already in their numbers above;
-  // ours are in no client number, so they are marked.
+  // week, per business. They are already in each business's leads above;
+  // this is where they show on their own.
   if (model.payPerLead?.length) {
     out.push({
       key: 'ppl',

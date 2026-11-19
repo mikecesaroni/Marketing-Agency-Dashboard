@@ -38,7 +38,9 @@ const rows = [
   mk('c', 'Cool Air', { flags: [{ key: 'waiting', severity: 'amber', label: 'Waiting on them 9 days', detail: 'Meta ad account and Page connected' }], needsContact: true, client: { id: 'c', name: 'Cool Air', meta_ads_active: false, archived: false, is_internal: false }, result: { launched: false, next: { title: 'Meta ad account and Page connected', owner: 'client', waitingDays: 9 } } }),
   mk('d', 'Drain Kings', { drop: { hasMeta: true, state: 'ready', behind: false, daysSince: 2, waiting: [{ path: 'd/clip2.mp4', name: 'clip2.mp4', at: '2026-10-20T09:00:00Z', by: 'Kyle', ready: true }, { path: 'd/clip1.mp4', name: 'clip1.mp4', at: '2026-10-19T09:00:00Z', by: '', ready: false, note: 'post a day after clip2' }] }, flags: [{ key: 'clip-waiting', severity: 'blue', label: '2 new clips waiting to go out' }], leads: { leads7: 3, leads14: 9, spend7: 200, spend14: 400 } }),
   mk('e', 'Ex Co', { client: { id: 'e', name: 'Ex Co', archived: true } }),
-  mk('f', 'Us Internal', { client: { id: 'f', name: 'Us Internal', is_internal: true } }),
+  // One of our own businesses, on the roster since 2026-11-19 ("can we include
+  // both Horizons in the morning brief"): a line like any client's.
+  mk('f', 'Us Internal', { client: { id: 'f', name: 'Us Internal', meta_ads_active: true, paused_at: null, archived: false, is_internal: true }, leads: { leads7: 6, leads14: 10, spend7: 300, spend14: 600 }, tier: 0 }),
 ]
 
 // --- the quiet rules ---------------------------------------------------------------
@@ -47,7 +49,7 @@ check('only the ads coming back is worth a cleared line', [...CLEAR_WORTHY].sort
 
 // --- the brief ---------------------------------------------------------------------
 const brief = buildBrief({ statusRows: rows, day: TODAY, appUrl: 'https://crm.example/' })
-check('archived and internal are left out', brief.counts.clients, 4)
+check('archived is left out; one of our own businesses on the roster is in', brief.counts.clients, 5)
 check('the day in words', brief.label, 'Tuesday, Oct 20')
 check('attention: the ad flags only; a chase is not one', brief.attention.map((a) => [a.client.name, a.severity, a.key]), [['Belk Plumbing', 'red', 'ads-off']])
 check('low leads takes a client out of running clean and into attention, amber', (() => {
@@ -84,11 +86,18 @@ check('...and says so when there is no Meta account to send it to', alertKeys([m
 const halfRow = mk('s', 'Static Co', { statics: [{ stamp: '102', name: 'coupon', files: [{ path: 'ads/s/102-feed.png', name: 'coupon.png', key: 'feed' }], at: '2026-10-20T08:00:00Z', by: 'Kyle', note: 'run it Friday', dismissed: false }] })
 check('a drop with one of the two sizes posts a warning naming the missing size and where it serves', alertKeys([halfRow]).map((k) => [k.key, k.label]), [['s:static:102', '⚠️ Static dropped in with one size: coupon has the 4:5 only, missing the 1080 × 1920 (9:16) for Stories and Reels, from Kyle. Add it on the Content page, or Meta will crop the 4:5 there. “run it Friday”']])
 check('...and the brief says which size it lacks in place of the count', buildBrief({ statusRows: [halfRow], day: TODAY }).clips.map((c) => c.label), ['coupon (4:5 only, missing the 1080 × 1920 (9:16) for Stories and Reels) from Kyle · ready to publish · “run it Friday”'])
-check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Drain Kings', 3, 6]])
+check('running clean: live with no ad flag, leads this week and the week before', brief.green.map((g) => [g.client.name, g.leads7, g.before]), [['Acme Heating', 8, 5], ['Us Internal', 6, 4], ['Drain Kings', 3, 6]])
 // Ads that started this week read as new, not as a zero.
 check('a client whose ads started this week is running clean as "new"', briefSections(buildBrief({ statusRows: [mk('n', 'New Co', { leads: { leads7: 0, leads14: 0, spend7: 10, spend14: 10, spendDays14: 3 } })], day: TODAY })).find((s) => s.key === 'green').lines[0].text, 'New Co 0 (new this week)')
 check('onboarding names what we are waiting on and how long they have had it', brief.onboarding.map((o) => [o.label, o.theirs]), [['Meta ad account and Page connected, 9 days', true]])
-check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, clips: 2, statics: 0, green: 2, greenLeads: 11, onboarding: 1, onboardingOurs: 0, onboardingTheirs: 1, paused: 0 })
+// Our own business has no package to onboard: never in the onboarding lists,
+// whatever its pipeline says, while its ad flags read like a client's.
+{
+  const own = (over = {}) => mk('o', 'Own Co', { client: { id: 'o', name: 'Own Co', meta_ads_active: false, paused_at: null, archived: false, is_internal: true }, result: { launched: false, next: { title: 'Onboarding form', owner: 'us' }, steps: [{ key: 'go-live', done: false }] }, tier: 0, ...over })
+  const b = buildBrief({ statusRows: [own({ flags: [{ key: 'low-leads', severity: 'amber', label: 'Only 2 leads this week (standard is 5 to 7)' }] })], day: TODAY })
+  check('one of our own businesses is never an onboarding line; its ad flag still needs attention', [b.onboarding.length, b.attention.map((a) => [a.client.name, a.key])], [0, [['Own Co', 'low-leads']]])
+}
+check('the counts', brief.counts, { clients: 5, red: 1, amber: 0, toCall: 1, clips: 2, statics: 0, green: 3, greenLeads: 17, onboarding: 1, onboardingOurs: 0, onboardingTheirs: 1, paused: 0 })
 
 // --- where each onboarding client is: one plain-words move -----------------------------
 // ("We want to know what we need to do, and if everything is connected then
@@ -152,8 +161,8 @@ check('the counts', brief.counts, { clients: 4, red: 1, amber: 0, toCall: 1, cli
   const today = mk('t', 'Today Co', { client: { id: 't', name: 'Today Co', meta_ads_active: true, paused_at: `${TODAY}T15:00:00Z`, archived: false, is_internal: false } })
   check('paused today says so instead of "0 days"', briefSections(buildBrief({ statusRows: [today], day: TODAY })).find((s) => s.key === 'paused').lines[0].text, 'Today Co (paused today)')
 }
-check('the subject', briefSubject(brief), 'Morning brief · Tuesday, Oct 20 · 1 to call, 2 clips to publish, 2 running clean')
-check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (2), leads this week (standard is 5 to 7)', 'Onboarding, waiting on the client (1)'])
+check('the subject', briefSubject(brief), 'Morning brief · Tuesday, Oct 20 · 1 to call, 2 clips to publish, 3 running clean')
+check('the sections in order', briefSections(brief).map((s) => s.title), ['Needs attention (1)', 'To publish (2)', 'Running clean (3), leads this week (standard is 5 to 7)', 'Onboarding, waiting on the client (1)'])
 
 // Money is not in the brief at all: a card failing is said once, when it
 // happens (the alerts); an overdue invoice is the Payments page's business.
@@ -172,7 +181,7 @@ check('nothing to flag but money leads with the all-clear', briefSections(moneyB
 check('a card failing is an alert, once; an overdue invoice is not', alertKeys(moneyRows).map((k) => [k.key, k.label]), [['m2:payment', 'Card failing'], ['m3:payment', 'Card failing']])
 check('a card that stops failing clears quietly', diffAlerts([], [{ key: 'm2:payment', kind: 'payment', label: 'Card failing', client_id: 'm2', client_name: 'MBD Washing' }]), { fresh: [], gone: [{ key: 'm2:payment', kind: 'payment', label: 'Card failing', client_id: 'm2', client_name: 'MBD Washing' }], cleared: [] })
 check('the card alert line', alertsSlack({ fresh: alertKeys(moneyRows).slice(0, 1), cleared: [] }, { appUrl: 'https://crm.example' }).blocks[0].text.text, '*New*\n💳 <https://crm.example/payments|MBD Washing>: Card failing')
-check('running clean is ONE line, names and leads with an arrow for the week', briefSections(brief)[2].lines, [{ emoji: '🟢', text: 'Acme Heating 8↑, Drain Kings 3↓', href: '/status' }])
+check('running clean is ONE line, names and leads with an arrow for the week', briefSections(brief)[2].lines, [{ emoji: '🟢', text: 'Acme Heating 8↑, Us Internal 6↑, Drain Kings 3↓', href: '/status' }])
 check('no explanations: a flag line is the label alone', briefSections(brief)[0].lines[0], { emoji: '🔴', client: { id: 'b', name: 'Belk Plumbing' }, text: 'Meta ads stopped: 3 days without spend', href: '/client/b#meta' })
 check('the trailing slash on the app url is dropped', brief.appUrl, 'https://crm.example')
 
@@ -238,7 +247,7 @@ check('gone: every open key that is no longer live, to close in the log', diff.g
 check('cleared: only the ads coming back is said out loud', diff.cleared.map((c) => c.key), ['a:ads-off'])
 // The Tito's case: the alert vanished because the client was paused, not
 // because the ads came back. Closed in the log, not announced.
-check('live clients: on Meta, not paused, not archived, not internal', [...liveClientIds(noisy)].sort(), ['a', 'b', 'd', 'g'])
+check('live clients: on Meta, not paused, not archived; one of our own on the roster counts', [...liveClientIds(noisy)].sort(), ['a', 'b', 'd', 'f', 'g'])
 const pausedAcme = noisy.map((r) => (r.client.id === 'a' ? { ...r, client: { ...r.client, paused_at: '2026-10-20T10:00:00Z' }, flags: [{ key: 'paused', severity: 'blue', label: 'On pause' }] } : r))
 const quiet = diffAlerts(alertKeys(pausedAcme), open, { live: liveClientIds(pausedAcme) })
 check('a paused client\'s open alerts close without "ads delivering again"', [quiet.gone.map((g) => g.key), quiet.cleared.map((c) => c.key)], [['a:ads-off', 'a:video-stale', 'd:clip:d/old.mp4'], []])

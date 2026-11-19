@@ -67,7 +67,10 @@ export default function ReportsPage() {
   // The pay-per-lead leads themselves, and who is set up for pay per lead.
   const [pplLeads, setPplLeads] = useState([])
   const [lsaClients, setLsaClients] = useState([])
-  // Our own businesses (is_internal), for the My businesses rows.
+  // Our own businesses (is_internal), for the My businesses rows. Their
+  // numbers are in every total on this page since 2026-11-19 ("on the live
+  // KPIs make it part of the total numbers"); the rows stay for the Google
+  // Ads connect box.
   const [ourClients, setOurClients] = useState([])
   const [scope, setScope] = useState('live')
   const [loading, setLoading] = useState(true)
@@ -161,7 +164,9 @@ export default function ReportsPage() {
     () => (scope === 'live' ? adRows.filter((r) => isLive(r.effective_status)) : adRows),
     [adRows, scope]
   )
-  const clientMeta = useMemo(() => scopedRows.filter((r) => !r.clients?.is_internal), [scopedRows])
+  // Every business, our own included (2026-11-19). They were left out of
+  // every total here until then.
+  const clientMeta = scopedRows
   const metaNowRows = useMemo(() => clientMeta.filter((r) => r.date >= windowStart), [clientMeta, windowStart])
   const metaPrevRows = useMemo(() => clientMeta.filter((r) => r.date >= prevStart && r.date <= prevEnd), [clientMeta, prevStart, prevEnd])
   const metaDaily = useMemo(() => buildDailySeries(metaNowRows, windowStart, daysAgo(0)), [metaNowRows, windowStart])
@@ -172,7 +177,7 @@ export default function ReportsPage() {
   // ---- Google -------------------------------------------------------------
   // The Local Services campaigns in the same table are LSA, not Google
   // Search: they go to the LSA card (since 2026-11-12), the rest stays here.
-  const clientGoogleAll = useMemo(() => googleRows.filter((r) => !r.clients?.is_internal && !r.clients?.archived), [googleRows])
+  const clientGoogleAll = useMemo(() => googleRows.filter((r) => !r.clients?.archived), [googleRows])
   const clientGoogle = useMemo(() => clientGoogleAll.filter((r) => !isLsaCampaign(r.campaign_type, r.campaign_name)), [clientGoogleAll])
   const clientLsaSynced = useMemo(() => clientGoogleAll.filter((r) => isLsaCampaign(r.campaign_type, r.campaign_name)), [clientGoogleAll])
   const googleNowRows = useMemo(() => inRange(clientGoogle, windowStart), [clientGoogle, windowStart])
@@ -186,10 +191,10 @@ export default function ReportsPage() {
   // (never both for one client).
   const windowMonday = formatDate(getMonday(new Date(`${windowStart}T00:00:00`)))
   const syncedLsaClients = useMemo(() => new Set(clientLsaSynced.map((r) => r.client_id)), [clientLsaSynced])
-  const clientLsa = useMemo(() => lsaRows.filter((r) => !r.clients?.is_internal && !r.clients?.archived && !syncedLsaClients.has(r.client_id)), [lsaRows, syncedLsaClients])
+  const clientLsa = useMemo(() => lsaRows.filter((r) => !r.clients?.archived && !syncedLsaClients.has(r.client_id)), [lsaRows, syncedLsaClients])
   const lsaNowRows = useMemo(() => inRange(clientLsaSynced, windowStart), [clientLsaSynced, windowStart])
   const lsaPrevRows = useMemo(() => inRange(clientLsaSynced, prevStart, prevEnd), [clientLsaSynced, prevStart, prevEnd])
-  const clientLeads = useMemo(() => pplLeads.filter((l) => !l.clients?.is_internal && !l.clients?.archived), [pplLeads])
+  const clientLeads = useMemo(() => pplLeads.filter((l) => !l.clients?.archived), [pplLeads])
   const leadsNow = useMemo(() => leadsInRange(clientLeads, windowStart), [clientLeads, windowStart])
   const leadsPrev = useMemo(() => leadsInRange(clientLeads, prevStart, prevEnd), [clientLeads, prevStart, prevEnd])
   // Spend from the campaigns, leads from the lead rows: the pay-per-lead
@@ -281,8 +286,9 @@ export default function ReportsPage() {
   }, [metaNowRows, googleNowRows, lsaNowRows, leadsNow, clientLsa, windowMonday])
   const topSpend = Math.max(...clientTable.map((r) => r.spend), 1)
 
-  // Our own businesses: Meta and Google, never in a total, with the Google
-  // Ads connect box on the row (there is no client card to reach them from).
+  // Our own businesses on their own: Meta and Google, with the Google Ads
+  // connect box on the row (there is no client card to reach them from).
+  // The same numbers are in the totals and the client table above.
   const internalRows = useMemo(() => ourBusinessRows({ clients: ourClients, metaRows: scopedRows, googleRows, windowStart }), [ourClients, scopedRows, googleRows, windowStart])
 
   const actions = (
@@ -314,8 +320,6 @@ export default function ReportsPage() {
     search: { ...google, delta: pctChange(google.spend, googleBefore.spend) },
     ppl: { ...lsa, delta: pctChange(lsa.spend, lsaBefore.spend) },
     who,
-    // Our own businesses' pay per lead is never in a client total; say where it is.
-    oursHasPpl: internalRows.some((r) => r.lsaSpend > 0),
   }
 
   return (
@@ -451,7 +455,7 @@ export default function ReportsPage() {
           <Panel className="p-5">
             <SectionTitle
               title={`${stackMetric.label} by day, by channel`}
-              sub="Meta, Google Search and Google pay per lead stacked · clients only"
+              sub="Meta, Google Search and Google pay per lead stacked"
               right={<Segmented size="sm" options={STACK_METRICS} value={stackKey} onChange={setStackKey} />}
             />
             <ChannelDailyChart series={stacked} format={stackMetric.format} axis={stackMetric.axis} keys={['meta', 'google', 'lsa']} names={GOOGLE_PARTS} />
@@ -506,7 +510,7 @@ export default function ReportsPage() {
 
           {internalRows.length > 0 && (
             <section data-our-businesses>
-              <SectionTitle title="My businesses" sub="Not clients · Meta, Google and Local Services · left out of every total above · connect a Google Ads account on the row" />
+              <SectionTitle title="My businesses" sub="Our own · Meta, Google and Local Services · already counted in every total above · connect a Google Ads account on the row" />
               <DTable>
                 <thead>
                   <tr>
@@ -649,7 +653,7 @@ function ChannelDoor({ channel, name, to, stats }) {
 }
 
 function GoogleCard({ card }) {
-  const { total, delta, spark, search, ppl, who, oursHasPpl } = card
+  const { total, delta, spark, search, ppl, who } = card
   const pplEmpty = !(ppl.spend > 0) && !(ppl.leads > 0)
   const half = (channel) => ({ borderColor: CHANNELS[channel].ring, background: CHANNELS[channel].soft })
   return (
@@ -718,7 +722,6 @@ function GoogleCard({ card }) {
                   Marked LSA, not found in Google Ads yet: <span className="text-slate-200">{who.toConnect.join(', ')}</span>
                 </p>
               )}
-              {oursHasPpl && <p>Ours is under My businesses, below.</p>}
             </div>
           ) : (
             <>

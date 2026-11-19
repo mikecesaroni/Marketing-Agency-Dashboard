@@ -13,13 +13,21 @@ import { DROPS_RESET_KEY, syncedAdRows, videoDrops } from './videoLaunch.js'
 import { adDeliveryAlerts } from './adHealth.js'
 import { channelDays, clientStatus, leadTotals } from './clientStatus.js'
 import { waitingStatics } from './staticDrops.js'
-import { legacySet, withoutLegacy } from './ourAds.js'
+import { clientsLegacy, legacySet, withoutLegacy } from './ourAds.js'
 import { googleAdDays, ourLeadRows, payPerLeadWeek } from './pplDays.js'
 
-/** The raw rows: the pipeline's, the delivery view, two weeks of ad days, the video board's inputs, the payments. */
-export async function fetchStatusRows(supabase, { internalColumn = true, day = today() } = {}) {
-  const [pipeline, deliveryRes, metaRows, googleRows, published, videos, files, reset, newest, payments, legacy, starts, statics, lsaLeads, ours] = await Promise.all([
-    fetchPipelineRows(supabase, { internalColumn, day }),
+/**
+ * The raw rows: the pipeline's, the delivery view, two weeks of ad days, the video board's inputs, the payments.
+ *
+ * `ours` true keeps our own businesses in the roster: the morning brief, its
+ * alerts and the weekly status count them like a client's ads ("can we
+ * include both Horizons in the morning brief", 2026-11-19). The Client tiers
+ * board leaves it off: a package checklist says nothing about a business
+ * that is ours.
+ */
+export async function fetchStatusRows(supabase, { internalColumn = true, day = today(), ours = false } = {}) {
+  const [pipeline, deliveryRes, metaRows, googleRows, published, videos, files, reset, newest, payments, legacy, starts, statics, lsaLeads] = await Promise.all([
+    fetchPipelineRows(supabase, { internalColumn, day, ours }),
     supabase.from('client_ad_delivery').select('client_id, last_spend_date, spend_7d, spend_30d'),
     fetchAllRows(() => supabase.from('ad_daily').select('id, client_id, campaign_id, date, leads, spend').gte('date', addDays(day, -13)).order('id')).catch(() => []),
     fetchAllRows(() => supabase.from('google_campaign_daily').select('id, client_id, campaign_id, campaign_type, campaign_name, date, conversions, cost').gte('date', addDays(day, -13)).order('id')).catch(() => []),
@@ -43,11 +51,6 @@ export async function fetchStatusRows(supabase, { internalColumn = true, day = t
     // row a call, message or booking (src/lib/pplDays.js). A project without
     // the table reads as none.
     fetchAllRows(() => supabase.from('lsa_leads').select('id, client_id, created_date, lead_charged').gte('created_date', addDays(day, -13)).order('id')).catch(() => []),
-    // Our own businesses, for the brief's pay-per-lead section only: they
-    // are in no client number.
-    internalColumn
-      ? supabase.from('clients').select('id, name').eq('is_internal', true).eq('archived', false).then((r) => r.data || []).catch(() => [])
-      : Promise.resolve([]),
   ])
   return {
     day,
@@ -67,31 +70,30 @@ export async function fetchStatusRows(supabase, { internalColumn = true, day = t
     newest,
     payments,
     lsaLeads,
-    ours,
   }
 }
 
-/** Google's ad days with pay per lead counted from the lead records, ours only. */
+/**
+ * The campaigns that are a client's own from before we connected the account
+ * (src/lib/ourAds.js). Never one of our own businesses': everything in our
+ * own account is ours.
+ */
+const legacyOf = (raw) => legacySet(clientsLegacy(raw.legacy, raw.pipeline?.clients))
+
+/** Google's ad days with pay per lead counted from the lead records, our campaigns only. */
 function googleDays(raw) {
-  const legacy = legacySet(raw.legacy)
+  const legacy = legacyOf(raw)
   return googleAdDays(withoutLegacy(raw.googleRows, legacy, 'google'), ourLeadRows(raw.lsaLeads, raw.googleRows, legacy))
 }
 
 /**
  * Pay per lead over the last seven days, per business, for the morning
- * brief's own section (payPerLeadWeek in src/lib/pplDays.js): the clients in
- * the brief, then our own businesses.
+ * brief's own section (payPerLeadWeek in src/lib/pplDays.js): every business
+ * in the brief that is not on pause, our own included when the roster has
+ * them (fetchStatusRows with `ours`).
  */
 export function payPerLeadFromRows(raw) {
-  const ours = raw.ours || []
-  const own = new Set(ours.map((c) => c.id))
-  // Our own businesses have no "campaigns from before we connected the
-  // account" (src/lib/ourAds.js): everything in our own account is ours,
-  // whenever it started. Without this our own line never showed, its
-  // campaigns having spent before the account was connected to the CRM.
-  const ownDays = own.size ? googleAdDays((raw.googleRows || []).filter((r) => own.has(r.client_id)), (raw.lsaLeads || []).filter((l) => own.has(l.client_id))) : []
-  const days = [...googleDays(raw).filter((d) => !own.has(d.client_id)), ...ownDays]
-  return payPerLeadWeek({ days, clients: (raw.pipeline?.clients || []).filter((c) => !c.paused_at), ours, today: raw.day || today() })
+  return payPerLeadWeek({ days: googleDays(raw), clients: (raw.pipeline?.clients || []).filter((c) => !c.paused_at), today: raw.day || today() })
 }
 
 /** One clientStatus() row per client. Pure; `now` is for the video board's day counts. */
@@ -109,7 +111,7 @@ export function statusFromRows(raw, { now = new Date() } = {}) {
   }
   // Our ads only: a campaign the client was already running before the
   // account was connected is theirs, and says nothing about ours.
-  const legacy = legacySet(raw.legacy)
+  const legacy = legacyOf(raw)
   // Tagged by channel, so the leads flags can say which one the leads came
   // from ("only Google live, Meta not yet"); leadTotals ignores the tag.
   for (const r of withoutLegacy(raw.metaRows, legacy, 'meta')) push(r.client_id, { date: r.date, leads: r.leads, spend: r.spend, channel: 'meta' })

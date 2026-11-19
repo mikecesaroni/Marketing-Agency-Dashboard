@@ -94,7 +94,10 @@ export function adDeliveryAlerts(clients, delivery, todayDate) {
   const out = []
 
   for (const client of clients || []) {
-    if (client.archived || client.is_internal) continue
+    // Whoever is handed in: the dashboard's roster is clients only, the
+    // morning brief's holds our own businesses too (2026-11-19), and an
+    // unpaid ad account is news on either.
+    if (client.archived) continue
     // On pause: not expected to be spending, so a quiet account is not news.
     if (client.paused_at) continue
     if (!client.meta_ads_active) continue

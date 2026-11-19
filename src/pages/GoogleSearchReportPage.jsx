@@ -161,10 +161,11 @@ export default function GoogleSearchReportPage() {
   const link = useMemo(() => connection(clients), [clients])
   const synced = useMemo(() => lastSynced(campaignRows), [campaignRows])
 
-  // Clients only, like the rest of Reports: our own businesses have real
-  // spend but folding it in would overstate what we run for clients.
+  // Everyone who is not archived, our own businesses included (2026-11-19:
+  // "on the live KPIs make it part of the total numbers"). They were left
+  // out until then.
   const clientOnly = useMemo(() => {
-    const skip = new Set(clients.filter((c) => c.archived || c.is_internal).map((c) => c.id))
+    const skip = new Set(clients.filter((c) => c.archived).map((c) => c.id))
     return campaignRows.filter((r) => !skip.has(r.client_id))
   }, [clients, campaignRows])
 
@@ -251,7 +252,7 @@ export default function GoogleSearchReportPage() {
               <SectionTitle
                 channel="google"
                 title={`${metric.label} by day`}
-                sub="Every campaign type · clients only · daily columns with a 7-day average"
+                sub="Every campaign type · daily columns with a 7-day average"
                 right={<Segmented size="sm" options={METRICS.map((m) => ({ value: m.key, label: m.label }))} value={metricKey} onChange={setMetricKey} />}
               />
               <DailyChart series={daily} metric={metric} theme={chartTheme('google')} />

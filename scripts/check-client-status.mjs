@@ -151,5 +151,18 @@ check('a row says whether a call is needed', [a.needsContact, b.needsContact, c.
 check('the buckets are the packages, with the unknowns in their own', Object.fromEntries(Object.entries(bucketRows([a, b, c, d])).map(([k, v]) => [k, v.map((r) => r.client.name)])), { 0: ['Delta'], 1: [], 2: ['Bravo', 'Alpha'], 3: ['Charlie'] })
 check('inside a bucket the red ones lead', [a, b].sort(statusOrder).map((r) => r.client.name), ['Bravo', 'Alpha'])
 
+// --- one of our own businesses (2026-11-19) ------------------------------------------
+// "Can we include both Horizons in the morning brief": its ads are watched
+// like a client's, and nothing else applies. It pays nobody, has no package,
+// and there is no client to wait on.
+{
+  const own = { id: 'h', name: 'Our HVAC', is_internal: true, monthly_fee: 998, meta_ads_active: true, paused_at: null, google_ads_customer_id: '123', google_ads_sync_error: 'Google said no' }
+  const pipeline = { steps: [], ours: [], theirs: [{ title: 'Onboarding form', waitingDays: 40 }], launched: true }
+  const ctx = (over = {}) => ({ client: own, result: pipeline, leads: leadTotals(week({ 19: 1, 16: 1 }), TODAY), payments: [{ payment_type: 'monthly', status: 'overdue', due_date: '2026-10-01', amount: 998, failure_count: 2 }], counts: { kpisThisWeek: 0 }, today: TODAY, ...over })
+  check('our own business: the ad flags only (low leads, the Google sync), never a payment, a chase, KPIs to log or a package to pick', keysOf(clientFlags(ctx())), ['low-leads', 'google-sync'])
+  check('...the same rows on a client are all flags', keysOf(clientFlags(ctx({ client: { ...own, is_internal: false } }))), ['payment', 'low-leads', 'waiting', 'kpis', 'tier'])
+  check('...and its ad account going unpaid is the red flag it is for a client', clientFlags(ctx({ alert: { kind: 'account', headline: 'Ad account unsettled', detail: 'x' } })).map((f) => [f.key, f.severity])[0], ['account', 'red'])
+}
+
 console.log(failures === 0 ? '\nAll client status checks pass' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

@@ -35,9 +35,9 @@ const clients = [
 ]
 const rows = [{ client_id: 's', cost: 40, conversions: 1, clients: { name: 'Supreme' } }]
 const w = pplWho({ clients, campaignRows: rows, handRows: [{ client_id: 'z', ad_spend: 100, clients: { name: 'Hand Co' } }] })
-check('running: spend in the range, synced or by hand; set up: a campaign held and nothing spent, paused when every one is; to connect: marked live with no campaign, never a paused client or our own', w, {
+check('running: spend in the range, synced or by hand; set up: a campaign held and nothing spent, paused when every one is; to connect: marked live with no campaign, never a paused client; our own business is on the list like a client (2026-11-19)', w, {
   running: ['Hand Co', 'Supreme'],
-  setUp: [{ name: 'Hometown Roofing', paused: true, noBudget: null }, { name: 'Luccia', paused: false, noBudget: null }],
+  setUp: [{ name: 'Hometown Roofing', paused: true, noBudget: null }, { name: 'Horizon', paused: false, noBudget: null }, { name: 'Luccia', paused: false, noBudget: null }],
   toConnect: ['Comfort'],
 })
 check('nothing at all is three empty lists, not an error', pplWho(), { running: [], setUp: [], toConnect: [] })

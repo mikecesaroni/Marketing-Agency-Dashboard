@@ -131,10 +131,11 @@ export default function MetaReportPage() {
 
   const link = useMemo(() => metaConnection(clients), [clients])
 
-  // Clients only, as on the rest of Reports: our own businesses have real
-  // spend but folding it in would overstate what we run for clients.
+  // Everyone who is not archived, our own businesses included (2026-11-19:
+  // "on the live KPIs make it part of the total numbers"). They were left
+  // out until then.
   const clientRows = useMemo(() => {
-    const skip = new Set(clients.filter((c) => c.archived || c.is_internal).map((c) => c.id))
+    const skip = new Set(clients.filter((c) => c.archived).map((c) => c.id))
     return adRows.filter((r) => !skip.has(r.client_id) && (scope === 'all' || isLive(r.effective_status)))
   }, [clients, adRows, scope])
 
@@ -227,7 +228,7 @@ export default function MetaReportPage() {
             <SectionTitle
               channel="meta"
               title={`${metric.label} by day`}
-              sub={`${scope === 'live' ? 'Live ads only' : 'All ads'} · clients only · daily columns with a 7-day average`}
+              sub={`${scope === 'live' ? 'Live ads only' : 'All ads'} · daily columns with a 7-day average`}
               right={<Segmented size="sm" options={METRICS.map((m) => ({ value: m.key, label: m.label }))} value={metricKey} onChange={setMetricKey} />}
             />
             <DailyChart series={daily} metric={metric} theme={chartTheme('meta')} />

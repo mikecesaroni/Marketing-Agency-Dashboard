@@ -229,7 +229,8 @@ The manager id is a constant in `src/lib/googleAdsAccessMessage.js`. It has
 to be the same account as the `GOOGLE_ADS_LOGIN_CUSTOMER_ID` secret.
 
 **Our own businesses** (Horizon HVAC, Horizon Water Co; `is_internal`,
-never a client, never in a total) connect on the Reports page, under **My
+never billed; counted in every KPI total since 2026-11-19, see
+`docs/weekly-status.md`) connect on the Reports page, under **My
 businesses** (since 2026-11-07: "make so I can connect Google Ads accounts
 to the Horizon businesses"). Each has a row there whether or not anything
 has spent, with its Meta and its Google numbers for the range and the same
@@ -418,7 +419,10 @@ HVAC's, and the "Pay-per-lead-PMax" shape Google moved it into on
   spend and leads beside Meta and Google (`ourBusinessRows` splits the
   Local Services campaigns out of the Google numbers), and the Local
   Services report lists our own businesses in a My businesses table under
-  the clients, outside the tiles and the counts.
+  the clients, outside the tiles and the counts. Since 2026-11-19 ("on the
+  live KPIs make it part of the total numbers") our own businesses count in
+  every total and are rows in the client tables; that separate table on the
+  Local Services report is gone.
 - **Stopped.** A client who spent on Local Services in the range but is not
   running now: the newest synced row of every one of their Local Services
   campaigns says paused or removed (the sync rewrites the whole window each
@@ -473,7 +477,7 @@ has usually only seen it move into their Google Ads account.
   Search and Google pay per lead; the client table has a column for each.
   An empty pay-per-lead half lists who is set up and not spending (and
   whether it is paused in Google), who is marked LSA but not found in Google
-  Ads yet, and points to My businesses for ours. Google Search's own page
+  Ads yet (ours is in the numbers since 2026-11-19). Google Search's own page
   says how much of its total was pay per lead and links to the pay-per-lead
   report.
 

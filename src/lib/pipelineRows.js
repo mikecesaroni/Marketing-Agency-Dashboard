@@ -16,18 +16,21 @@ import { fetchAllRows } from './pagedQuery.js'
 import { GHL_REQUIRED_KEYS, missingRequired } from './ghlSetupFields.js'
 import { addDays, formatDate, getMonday, today } from './dates.js'
 import { nextSteps } from './nextSteps.js'
-import { legacySet, withoutLegacy } from './ourAds.js'
+import { clientsLegacy, legacySet, withoutLegacy } from './ourAds.js'
 
 /**
  * The raw rows. `internalColumn` false skips the is_internal filter for a
- * project that has not applied supabase/internal-businesses.sql yet.
+ * project that has not applied supabase/internal-businesses.sql yet. `ours`
+ * true keeps our own businesses in the roster (the morning brief and the
+ * weekly status count them since 2026-11-19; the launch pipeline and the
+ * Client tiers board stay clients only).
  */
-export async function fetchPipelineRows(supabase, { internalColumn = true, day = today() } = {}) {
+export async function fetchPipelineRows(supabase, { internalColumn = true, day = today(), ours = false } = {}) {
   const monday = formatDate(getMonday(new Date(`${day}T12:00:00`)))
   const month = day.slice(0, 7)
 
   let clientsQuery = supabase.from('clients').select('*').eq('archived', false).order('name')
-  if (internalColumn) clientsQuery = clientsQuery.eq('is_internal', false)
+  if (internalColumn && !ours) clientsQuery = clientsQuery.eq('is_internal', false)
 
   const [clientsRes, intakeRes, linksRes, ghlRes, deliverables, payRes, callsRes, filesRes, savedRes, pubRes, kpiRes, reportRes, overridesRes, googleRows, legacy] =
     await Promise.all([
@@ -121,7 +124,7 @@ export function pipelineFromRows(raw) {
   const googleBy = new Map()
   // Our campaigns only: one the client was already running before the
   // account was connected does not make them live on Google.
-  for (const r of withoutLegacy(raw.googleRows, legacySet(raw.legacy), 'google')) {
+  for (const r of withoutLegacy(raw.googleRows, legacySet(clientsLegacy(raw.legacy, raw.clients)), 'google')) {
     if (!googleBy.has(r.client_id)) googleBy.set(r.client_id, new Set())
     googleBy.get(r.client_id).add(r.campaign_id)
   }

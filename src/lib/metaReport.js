@@ -58,9 +58,9 @@ export function metaKpis(rows) {
 
 const hasAccount = (c) => Boolean(String(c.meta_ad_account_id || '').replace(/\D/g, ''))
 
-/** Who has a Meta ad account on file, and who does not. Clients only. */
+/** Who has a Meta ad account on file, and who does not. Our own businesses are on the list with the clients (2026-11-19). */
 export function metaConnection(clients) {
-  const mine = (clients || []).filter((c) => !c.archived && !c.is_internal)
+  const mine = (clients || []).filter((c) => !c.archived)
   const byName = (a, b) => String(a.name).localeCompare(String(b.name))
   return {
     connected: mine.filter(hasAccount).sort(byName),
@@ -85,7 +85,9 @@ export function pixelState(client) {
 /**
  * One row per client: totals, active ads, and whether they are running at
  * all. Spending clients first, biggest first; an account with no spend in
- * the range next; no account last. Ours and archived are left out.
+ * the range next; no account last. Archived is left out; our own businesses
+ * are rows like any client's and count in every total (2026-11-19: "on the
+ * live KPIs make it part of the total numbers").
  */
 export function metaClientReport({ clients, rows, since, until }) {
   const scoped = inRange(rows, since, until)
@@ -96,7 +98,7 @@ export function metaClientReport({ clients, rows, since, until }) {
   }
   const out = []
   for (const c of clients || []) {
-    if (c.archived || c.is_internal) continue
+    if (c.archived) continue
     const mine = by.get(c.id) || []
     const k = metaKpis(mine)
     const ads = new Set(mine.filter((r) => Number(r.spend || 0) > 0).map((r) => r.ad_id))
@@ -121,7 +123,7 @@ export function metaClientReport({ clients, rows, since, until }) {
 /** One row per campaign across every client, biggest spend first. */
 export function metaCampaignReport(rows, clients, since, until) {
   const names = new Map((clients || []).map((c) => [c.id, c.name]))
-  const skip = new Set((clients || []).filter((c) => c.archived || c.is_internal).map((c) => c.id))
+  const skip = new Set((clients || []).filter((c) => c.archived).map((c) => c.id))
   const groups = new Map()
   for (const r of inRange(rows, since, until)) {
     if (skip.has(r.client_id)) continue
@@ -169,7 +171,7 @@ export const AD_RULES = {
  */
 export function adsToActOn(rows, clients, { since, until, rules = AD_RULES } = {}) {
   const names = new Map((clients || []).map((c) => [c.id, c.name]))
-  const skip = new Set((clients || []).filter((c) => c.archived || c.is_internal).map((c) => c.id))
+  const skip = new Set((clients || []).filter((c) => c.archived).map((c) => c.id))
   const scoped = inRange(rows, since, until).filter((r) => !skip.has(r.client_id))
   const blended = metaKpis(scoped).cpl
   const groups = new Map()
@@ -228,7 +230,7 @@ const PLATFORM_NAMES = {
  * the per-client roll-up of ad_platform_daily. Biggest spend first.
  */
 export function platformSplit(rows, clients, since, until) {
-  const skip = new Set((clients || []).filter((c) => c.archived || c.is_internal).map((c) => c.id))
+  const skip = new Set((clients || []).filter((c) => c.archived).map((c) => c.id))
   const by = new Map()
   let total = 0
   for (const r of inRange(rows, since, until)) {
