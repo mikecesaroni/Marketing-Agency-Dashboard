@@ -6,6 +6,7 @@
 
 import {
   IconAiSearch,
+  IconCheckCircle,
   IconClients,
   IconCompass,
   IconContent,
@@ -44,6 +45,9 @@ export const NAV_GROUPS = [
     label: 'Reference',
     items: [
       { to: '/sops', label: 'SOPs', short: 'SOPs', Icon: IconSops, mobile: false },
+      // Next to the SOPs because that is the order they are used in: read
+      // the procedure, then prove it.
+      { to: '/training', label: 'Training', short: 'Training', Icon: IconCheckCircle, mobile: false },
       { to: '/ai-search', label: 'AI Search', short: 'AI', Icon: IconAiSearch, mobile: false },
       // Last, and in the nav rather than tucked away, because something
       // arriving here for the first time -- a new hire, or a browsing agent --

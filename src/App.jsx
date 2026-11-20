@@ -42,6 +42,7 @@ const ChannelRedirect = lazy(() => import('./pages/ClientAdsPage').then((m) => (
 const KeywordPlanPage = lazy(() => import('./pages/KeywordPlanPage'))
 const MetaReportPage = lazy(() => import('./pages/MetaReportPage'))
 const SopsPage = lazy(() => import('./pages/SopsPage'))
+const TrainingPage = lazy(() => import('./pages/TrainingPage'))
 const AiSearchPage = lazy(() => import('./pages/AiSearchPage'))
 const AgentGuidePage = lazy(() => import('./pages/AgentGuidePage'))
 const TeamPage = lazy(() => import('./pages/TeamPage'))
@@ -179,6 +180,8 @@ export default function App() {
         <Route path="/reports/client/:clientId" element={<ClientAdsPage />} />
         <Route path="/reports/client/:clientId/keyword-plan" element={<KeywordPlanPage />} />
         <Route path="/sops" element={<SopsPage />} />
+        {/* The quiz a team member passes before building for a client. */}
+        <Route path="/training" element={<TrainingPage />} />
         <Route path="/ai-search" element={<AiSearchPage />} />
         <Route path="/team" element={<TeamPage />} />
         {/* How to drive the place. Also served as plain text at /llms.txt for
