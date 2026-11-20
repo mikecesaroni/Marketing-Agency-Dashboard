@@ -6,7 +6,15 @@
       "mcp__Supabase__list_edge_functions",
       "mcp__Claude_Docs__read",
       "mcp__Claude_Docs__guide",
-      "mcp__Claude_Code_Remote__read_documentation"
+      "mcp__Claude_Code_Remote__read_documentation",
+      "mcp__Supabase",
+      "mcp__Claude_Docs",
+      "mcp__github",
+      "mcp__Claude_Code_Remote__send_later",
+      "ArtifactData",
+      "ArtifactComments",
+      "WebSearch",
+      "WebFetch"
     ]
   }
 }
