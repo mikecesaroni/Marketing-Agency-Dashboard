@@ -202,3 +202,31 @@ start) and a subscription link only at the exact price ($998, $1,500,
 $2,500, and a new $3,500 slot); any other fee needs a custom Payment Link
 pasted on the client's Payments card, and until then the page says a link
 is on its way. See `docs/client-billing.md`.
+
+## The fee and the package follow Stripe
+
+Added 2026-11-21, after "if the stripe monthly is 1500 the crm matches that and puts them on that tier. just match it with stripe".
+
+The fee on a client row is what somebody typed when the client was added. Stripe is what they pay. Every time a Stripe monthly payment is recorded, a database trigger (`payments_match_stripe`, in `supabase/stripe-match.sql`) calls `match_client_to_stripe(client)`, which:
+
+1. sets `clients.monthly_fee` to what Stripe charged;
+2. sets `clients.tier` to the package that amount is the price of, when it is within $100 of one ($1,500, $2,500, $3,500). Any other amount changes the fee and leaves the package alone;
+3. sets the amount on that client's months still to come (pending and overdue rows due after the charge).
+
+So a hand-typed monthly fee is temporary: the next Stripe payment puts it back. Change the price in Stripe, not in the CRM.
+
+"What Stripe charges" is the total charged on the client's most recent billing day, so two subscriptions billed together count as one monthly total. The match is skipped, and nothing about the client changes, when that day is not the whole story:
+
+| Skipped when | Why |
+|---|---|
+| two charges that day are for the same amount | as likely one payment recorded twice as two payments |
+| the Stripe month before held a different number of charges | a second subscription billed on another day, or one just added or dropped |
+| the amount is no package price and is new | a one-off (catch-up, part payment, extra invoice) is recorded as a monthly payment too. A non-package amount is believed on a client's first ever charge, or once charged two months running |
+| there are charges on other days that month, and the amount is no package price | same reason |
+
+Skipped clients stay on the Payments page's Stripe check (`StripeReconcilePanel`), which is where a person settles them. Payments marked paid by hand never start a match: only rows carrying a Stripe invoice or event id do. Archived clients are left alone.
+
+One thing it cannot tell apart: a one-off invoice for exactly a package price moves the client to that package until their next subscription charge moves them back.
+
+The trigger swallows any error from the matching, so a broken match can never stop a payment being recorded. `scripts/check-stripe-match.mjs` pins that, and pins the package prices in the SQL to `TIERS` in `src/lib/clientTiers.js`. To see what the rule would do without changing anything: `select match_client_to_stripe(id, true) from clients`.
+

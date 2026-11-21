@@ -781,6 +781,10 @@ export const GOTCHAS = [
     body: 'No sign-in, no accounts, no roles. Nothing on screen is protected by permission, so nothing prevents a wrong edit. The one exception is the client onboarding form, which is reached with a private token in its link.',
   },
   {
+    title: 'The monthly fee and package follow Stripe',
+    body: 'When a Stripe monthly payment is recorded, the client\'s monthly fee, their package (when the amount is a package price) and the months still to come all take that amount. A fee typed by hand lasts until the next Stripe payment. Change the price in Stripe.',
+  },
+  {
     title: 'GHL is not sold to everyone',
     body: 'Only some clients buy the GoHighLevel build, so a blank GHL section is normal rather than incomplete. Its coverage on the Dashboard is counted out of the clients on the plan, not out of every client.',
   },
