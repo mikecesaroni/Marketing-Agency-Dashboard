@@ -364,16 +364,18 @@ export const ROUTES = [
   },
   {
     path: '/training',
+    aliases: ['/training/:courseId', '/training/:courseId/:moduleId'],
     name: 'Training',
     nav: 'Training',
-    purpose: 'The quiz the team passes before building for a client. Today: Field Services, level 1 of 4.',
+    purpose: 'Courses that teach a new hire how we run Meta, Google and Field Services, and the place to look a rule up afterwards. /training/<course> is one course, /training/<course>/<module> one module, /training/<course>/quiz its quiz.',
     contains: [
-      'The quiz: 20 multiple-choice questions, 18 right passes, open book (the "Field Services: study guide" SOP), and your own result.',
-      'For an admin, "Who has passed": each person\'s result, best score, tries and last date, plus the three most-missed questions. Others see only their own.',
+      'Three courses (Meta, Google, Field Services), each five short modules and a 20-question quiz (18 passes, open book). A module is cards read one at a time, with a question every few cards and things to go and find in the CRM.',
+      'Your place in every module is saved as you go, per login. "Updated" on a finished module means it changed since you read it (the Google module on Local Services moving into Google Ads is kept current this way).',
+      '"Look something up" searches everything the courses say. For an admin, "The team" shows where each person has got to.',
     ],
     actions: [
-      '"Start the quiz" / "Take it again". "Submit" works once all 20 are answered; every attempt is kept in quiz_attempts.',
-      'A fail names the questions missed and where to study, never the answer. A pass shows the answers.',
+      '"Step by step" teaches; "Read all" shows a whole module on one page with the answers, for reference.',
+      'A failed quiz names the questions missed and links the module for each, never the answer. Attempts are kept in quiz_attempts, progress in training_progress.',
     ],
   },
   {

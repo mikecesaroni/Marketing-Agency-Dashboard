@@ -179,8 +179,11 @@ export default function App() {
         <Route path="/reports/client/:clientId" element={<ClientAdsPage />} />
         <Route path="/reports/client/:clientId/keyword-plan" element={<KeywordPlanPage />} />
         <Route path="/sops" element={<SopsPage />} />
-        {/* The quiz a team member passes before building for a client. */}
+        {/* Courses and quizzes: one page, three addresses (home, a course,
+            a module or that course's quiz). */}
         <Route path="/training" element={<TrainingPage />} />
+        <Route path="/training/:courseId" element={<TrainingPage />} />
+        <Route path="/training/:courseId/:moduleId" element={<TrainingPage />} />
         <Route path="/team" element={<TeamPage />} />
         {/* How to drive the place. Also served as plain text at /llms.txt for
             anything that does not run JavaScript -- see src/lib/agentGuide.js. */}
