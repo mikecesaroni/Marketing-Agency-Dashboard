@@ -5,7 +5,6 @@
 // and reporting are their own trip; the reference material is the tail.
 
 import {
-  IconAiSearch,
   IconCheckCircle,
   IconClients,
   IconCompass,
@@ -48,7 +47,6 @@ export const NAV_GROUPS = [
       // Next to the SOPs because that is the order they are used in: read
       // the procedure, then prove it.
       { to: '/training', label: 'Training', short: 'Training', Icon: IconCheckCircle, mobile: false },
-      { to: '/ai-search', label: 'AI Search', short: 'AI', Icon: IconAiSearch, mobile: false },
       // Last, and in the nav rather than tucked away, because something
       // arriving here for the first time -- a new hire, or a browsing agent --
       // reads the sidebar before it reads anything else. A guide nobody can

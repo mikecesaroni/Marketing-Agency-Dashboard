@@ -49,7 +49,7 @@ export const ROUTES = [
     purpose:
       'The operations hub, and the right place to start. Answers "where does every client stand and what needs doing today". Carries no billing figures at all by design — money is on Payments.',
     contains: [
-      'The home screen: a tile for every part of the CRM (Clients, Content, Publish a video, Onboarding Progress, Tasks, Payments, Reports, SOPs, Training, AI Search, Guide, and Team for admins), each with a one-line description and a live count where there is one. On a phone the bottom bar keeps only Home, Clients, Content and Tasks; everything else is reached from these tiles.',
+      'The home screen: a tile for every part of the CRM (Clients, Content, Publish a video, Onboarding Progress, Tasks, Payments, Reports, SOPs, Training, Guide, and Team for admins), each with a one-line description and a live count where there is one. On a phone the bottom bar keeps only Home, Clients, Content and Tasks; everything else is reached from these tiles.',
       'Ad delivery alerts, at the very top, and only when something is wrong: a client whose ad account is disabled or unsettled, or whose ads have gone quiet. This is the most important thing on the page and it is invisible on a good day.',
       'Client form submissions, same rule — shown only when there are some. The onboarding form clears when it is opened or dismissed. A GHL setup form does not: it stays until somebody presses "GHL is set up" on it, which marks that client\'s GoHighLevel template setup deliverable done. It is a job to do, not a message to read.',
       'Three counts: Clients, Open work, KPIs logged (as "n of m" for this week).',
@@ -377,21 +377,6 @@ export const ROUTES = [
     ],
   },
   {
-    path: '/ai-search',
-    name: 'AI Search Visibility',
-    nav: 'AI Search',
-    purpose:
-      'Asks whether an AI assistant names a business when someone asks who to call, and who it names instead. Works on any business, client or not, so it doubles as a sales tool.',
-    contains: [
-      'A scan form: website, business name, city or service area, trade, and optionally a client to attach it to.',
-      'Past scans, and a comparison of any scan against an earlier one for the same business — which questions now name them that did not before.',
-    ],
-    actions: [
-      '"Run the scan" asks 15 real buyer questions with live web search. It takes a couple of minutes and shows its progress; do not assume it has hung.',
-      'A scan attached to a client becomes their baseline, so a later scan can be measured against it.',
-    ],
-  },
-  {
     path: '/login',
     name: 'Sign in',
     nav: null,
@@ -695,11 +680,6 @@ export const LOOKUPS = [
     where: 'SOPs',
     how: 'Search it. This is written procedure, not client data.',
   },
-  {
-    need: 'Whether an AI assistant recommends a business',
-    where: 'AI Search',
-    how: 'Past scans are listed; run a new one to compare against an old one.',
-  },
 ]
 
 export const DOWNLOADS = [
@@ -803,10 +783,6 @@ export const GOTCHAS = [
   {
     title: 'GHL is not sold to everyone',
     body: 'Only some clients buy the GoHighLevel build, so a blank GHL section is normal rather than incomplete. Its coverage on the Dashboard is counted out of the clients on the plan, not out of every client.',
-  },
-  {
-    title: 'The AI Search scan is slow on purpose',
-    body: 'It asks 15 questions with live web search and takes a couple of minutes. It shows its progress. Do not reload the page or start it again.',
   },
 ]
 

@@ -91,17 +91,6 @@ export function IconSops(props) {
   )
 }
 
-export function IconAiSearch(props) {
-  return (
-    <Icon {...props}>
-      <circle cx="10.5" cy="10.5" r="6.5" />
-      <path d="m20 20-4.6-4.6" />
-      <path d="M10.5 7.5 11.4 9.6l2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9Z" />
-    </Icon>
-  )
-}
-
-// A compass, for the guide: the nav item that tells you where everything is.
 export function IconCompass(props) {
   return (
     <Icon {...props}>

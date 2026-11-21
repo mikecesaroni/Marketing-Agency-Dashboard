@@ -43,7 +43,6 @@ const KeywordPlanPage = lazy(() => import('./pages/KeywordPlanPage'))
 const MetaReportPage = lazy(() => import('./pages/MetaReportPage'))
 const SopsPage = lazy(() => import('./pages/SopsPage'))
 const TrainingPage = lazy(() => import('./pages/TrainingPage'))
-const AiSearchPage = lazy(() => import('./pages/AiSearchPage'))
 const AgentGuidePage = lazy(() => import('./pages/AgentGuidePage'))
 const TeamPage = lazy(() => import('./pages/TeamPage'))
 const HelpChat = lazy(() => import('./components/HelpChat'))
@@ -182,7 +181,6 @@ export default function App() {
         <Route path="/sops" element={<SopsPage />} />
         {/* The quiz a team member passes before building for a client. */}
         <Route path="/training" element={<TrainingPage />} />
-        <Route path="/ai-search" element={<AiSearchPage />} />
         <Route path="/team" element={<TeamPage />} />
         {/* How to drive the place. Also served as plain text at /llms.txt for
             anything that does not run JavaScript -- see src/lib/agentGuide.js. */}

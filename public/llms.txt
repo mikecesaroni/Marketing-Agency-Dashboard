@@ -20,7 +20,7 @@ Sidebar: Dashboard
 The operations hub, and the right place to start. Answers "where does every client stand and what needs doing today". Carries no billing figures at all by design — money is on Payments.
 
 What is on it:
-  - The home screen: a tile for every part of the CRM (Clients, Content, Publish a video, Onboarding Progress, Tasks, Payments, Reports, SOPs, Training, AI Search, Guide, and Team for admins), each with a one-line description and a live count where there is one. On a phone the bottom bar keeps only Home, Clients, Content and Tasks; everything else is reached from these tiles.
+  - The home screen: a tile for every part of the CRM (Clients, Content, Publish a video, Onboarding Progress, Tasks, Payments, Reports, SOPs, Training, Guide, and Team for admins), each with a one-line description and a live count where there is one. On a phone the bottom bar keeps only Home, Clients, Content and Tasks; everything else is reached from these tiles.
   - Ad delivery alerts, at the very top, and only when something is wrong: a client whose ad account is disabled or unsettled, or whose ads have gone quiet. This is the most important thing on the page and it is invisible on a good day.
   - Client form submissions, same rule — shown only when there are some. The onboarding form clears when it is opened or dismissed. A GHL setup form does not: it stays until somebody presses "GHL is set up" on it, which marks that client's GoHighLevel template setup deliverable done. It is a job to do, not a message to read.
   - Three counts: Clients, Open work, KPIs logged (as "n of m" for this week).
@@ -326,19 +326,6 @@ What you can do:
   - "Start the quiz" / "Take it again". "Submit" works once all 20 are answered; every attempt is kept in quiz_attempts.
   - A fail names the questions missed and where to study, never the answer. A pass shows the answers.
 
-AI Search Visibility   /ai-search
----------------------------------
-Sidebar: AI Search
-Asks whether an AI assistant names a business when someone asks who to call, and who it names instead. Works on any business, client or not, so it doubles as a sales tool.
-
-What is on it:
-  - A scan form: website, business name, city or service area, trade, and optionally a client to attach it to.
-  - Past scans, and a comparison of any scan against an earlier one for the same business — which questions now name them that did not before.
-
-What you can do:
-  - "Run the scan" asks 15 real buyer questions with live web search. It takes a couple of minutes and shows its progress; do not assume it has hung.
-  - A scan attached to a client becomes their baseline, so a later scan can be measured against it.
-
 Sign in   /login
 ----------------
 The CRM's sign-in (every CRM page lands here without a session; the client token pages never do). An email and password, both made by an admin on the Team page, and nothing else on purpose: no Google (that needs a verified Google Cloud consent screen), no sign-in or reset emails (those need a mail sender and a redirect list). The browser keeps the session, so the next visit on that device opens the CRM straight away until they sign out. No self-signup; a forgotten password is reset by an admin on the Team page. See docs/logins.md.
@@ -602,10 +589,6 @@ How the agency does something
   Go to: SOPs
   Search it. This is written procedure, not client data.
 
-Whether an AI assistant recommends a business
-  Go to: AI Search
-  Past scans are listed; run a new one to compare against an old one.
-
 GETTING THINGS OUT
 ==================
 
@@ -683,6 +666,3 @@ There is no login
 
 GHL is not sold to everyone
   Only some clients buy the GoHighLevel build, so a blank GHL section is normal rather than incomplete. Its coverage on the Dashboard is counted out of the clients on the plan, not out of every client.
-
-The AI Search scan is slow on purpose
-  It asks 15 questions with live web search and takes a couple of minutes. It shows its progress. Do not reload the page or start it again.

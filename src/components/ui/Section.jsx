@@ -3,7 +3,7 @@ import { cn } from './cn'
 /**
  * A titled block within a longer screen.
  *
- * PublishToMetaPanel, AdStudioPanel and AiScanReport each grew their own
+ * PublishToMetaPanel, AdStudioPanel and the old AI scan report each grew their own
  * private version of this -- Section, Field, Stat -- which is the same idea
  * invented three times and drifting apart in three directions.
  *

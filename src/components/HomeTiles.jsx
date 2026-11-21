@@ -31,7 +31,6 @@ const TILES = {
   '/reports': { blurb: 'Weekly numbers per client and across the book.', tone: 'from-cyan-600 to-blue-400' },
   '/sops': { blurb: 'How we do things, written down.', tone: 'from-rose-500 to-pink-400' },
   '/training': { blurb: 'The quiz to pass before building for a client, and who has passed.', tone: 'from-teal-600 to-emerald-400' },
-  '/ai-search': { blurb: 'Ask the CRM anything about any client.', tone: 'from-indigo-600 to-violet-400' },
   '/guide': { blurb: 'What every page does, for new people and agents.', tone: 'from-stone-600 to-stone-400' },
   '/team': { blurb: 'Who has access and what they can see.', tone: 'from-zinc-700 to-zinc-500' },
 }
