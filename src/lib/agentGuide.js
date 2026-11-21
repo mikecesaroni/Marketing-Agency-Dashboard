@@ -434,12 +434,12 @@ export const ROUTES = [
       'An "Average daily ad spend" card beside the headline: Meta and Google each as dollars a day, averaged over the range, with the all-channels figure under them.',
       'Leads or spend by day with Meta and Google stacked; a card per channel (Meta, Google, LSA when logged).',
       'Your ads: every ad that ran in the range as a card with its picture (or the video\'s opening frame and a play button), its whole name as it is in the ad account, the date it was published (the day the CRM created it in Meta, else the first day it delivered), a verdict judged against the client\'s own average cost per lead for the range (Working, Fair, Costly, No leads yet, Too early), and leads, spend, cost per lead and click rate. Tapping a card opens the picture full size or plays the video. A landing page ad\'s card (and its full-size view) carries "Goes to belknapheating.com/fall-tune-up ↗", the page the ad sends people to as a link in a new tab, read off the creative with the picture (a link ad\'s link, the button on a video ad, a dynamic creative\'s link); an instant-form ad says "Form opens inside Facebook, no landing page" instead; a Google Search ad says nothing (since 2026-11-06). Pictures and videos come from Meta at the moment the page opens (the client-dashboard function), never stored, because Meta\'s links expire; Google Search ads are words, so they show no picture. A video ad\'s card and its full-size view carry "Download video" (the clip from the client-files bucket under the ad\'s name, when the CRM published it) or "Open video file" (Meta\'s copy, in a new tab); "All your videos" above the cards opens the videos tab.',
-      '"The number that matters most": dollars back per dollar spent from the weeks the client answered, with a table of those weeks; or, before any answer, the argument for return over cost per lead with a worked example from their average job value.',
+      '"Revenue from your leads": a month-by-month tracker the client fills in on the page. For each month: ad spend, leads, jobs, revenue and dollars back per $1, with totals over the months logged. The newest finished month with no figure is asked about at the top ("How did October turn out?"): jobs from the leads, and what they were worth.',
       'A glossary of every term, each one click to open.',
     ],
     actions: [
       'The range chips: 7, 30 or 90 days (kept in the address as ?days=).',
-      '"Tell us how last week\'s leads did" opens the newest weekly report\'s answer form.',
+      '"Save" on the tracker logs a month and "Change" edits one: the only writes on the page.',
     ],
   },
   {

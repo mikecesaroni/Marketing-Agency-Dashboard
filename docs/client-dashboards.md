@@ -37,11 +37,9 @@ owner needs, with no login and no agency chrome.
   "Form opens inside Facebook, no landing page"; a Google Search ad says
   nothing. Facebook-internal links (a Message button) are not a landing
   page and are left out.
-- **The number that matters most**: dollars back per dollar spent, from
-  the weeks the client answered the weekly report, with a table of those
-  weeks. Before any answer: the argument for return over cost per lead,
-  with a worked example from their average job value, and the link to the
-  newest weekly report's form.
+- **Revenue from your leads** (the revenue tracker, 2026-11-21): what the
+  jobs from these ads were worth, month by month, logged by the client on
+  the page. See "The revenue tracker" below.
 - **A glossary** of every term, each one click to open.
 
 The copy lives in `src/lib/clientDashboard.js` (`METRIC_GUIDE`) and is
@@ -204,3 +202,33 @@ call that function and nothing else; the page never reads a table.
 The page is `src/pages/ClientDashboardPage.jsx`; the Reports panel is
 `src/components/ClientDashboardsPanel.jsx`; the maths and the words are in
 `src/lib/clientDashboard.js`, checked by `scripts/check-client-dashboard.mjs`.
+
+## The revenue tracker
+
+Added 2026-11-21, after "dial in the revenue tracker on client dashboards. I want them to be able to track how much revenue leads are bringing in each month".
+
+What was there before depended on the client answering the weekly report, and nobody ever did: 96 reports, no answers, because the question sat behind an email that was not going out. The question is on the dashboard itself now, once a month, as two numbers: **how many of the leads became jobs, and what those jobs were worth**.
+
+What the client sees (`src/components/reports/RevenueTracker.jsx`, the maths in `src/lib/clientDashboard.js`):
+
+- **The ask**, at the top: the newest *finished* month that had leads or ad spend and has no figure ("How did October 2026 turn out? 28 leads came in from $1,336 in ads..."), with the two boxes and Save. This month is never asked about, because it is not over, but can be logged "so far" from its row.
+- **The totals**, once anything is logged: revenue from leads, the ad spend for the same months, and dollars back for every $1 in ads, with the best month named.
+- **Month by month**, newest first, from the first month with ads to this one: ad spend, leads, jobs (with the share of leads that became jobs), revenue, back per $1, and two bars to one scale (revenue against ad spend). "Log" or "Change" on every row. Six months show; the rest are behind "Show all".
+
+The rules, pinned in `scripts/check-client-dashboard.mjs`:
+
+- **A month is logged or it is not.** Zero jobs and $0 is an answer ("none of them booked") and counts as logged. A month nobody touched does not.
+- **Totals are over logged months only**, against the ad spend for those same months, so a month nobody logged can never drag the return down.
+- Money can be typed as `$12,500`, `12500.50` or `12.5k`. An empty box is never saved as zero.
+- "Back per $1" is revenue over **ad spend**. Our fee is not in it.
+
+How it is wired (`supabase/client-revenue-months.sql`):
+
+- `client_revenue_months`: one row per client per month (jobs, revenue).
+- `client_revenue_save(token, month, jobs, revenue)`: the only way the dashboard writes. The token in the link is the credential, checked the way `client_dashboard_load` checks it. It refuses a month that has not started, negative numbers and blanks. The anon key cannot touch the table.
+- `client_dashboard_load` returns `months`: every month over all time with ad spend and leads (Meta, Google, and LSA weeks logged by hand), and the jobs and revenue when logged. A month the client has not logged directly falls back to their weekly-report answers for that month, added up, if they ever gave any.
+
+Where the team sees it: on the Reports page, each card under "Client dashboards" shows what that client has logged and whether last month is in, with a line above the cards for the whole book. To log a month for a client (on a call, say), open their dashboard and type it in: there is one place to enter it, and it is the same place they use.
+
+Not built: asking for it by email or text, and a figure for the business's total revenue (the onboarding form asks for that once, as a starting point).
+

@@ -3,10 +3,11 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import ChannelDailyChart from '../components/reports/ChannelDailyChart'
 import PortalTabs from '../components/PortalTabs'
 import PortalSidebar from '../components/PortalSidebar'
-import { ChannelDot, DTd, DTh, DTr, Delta, Eyebrow, MixBar, Panel, Pill, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
+import RevenueTracker from '../components/reports/RevenueTracker'
+import { ChannelDot, Delta, Eyebrow, MixBar, Panel, Pill, SectionTitle, Segmented, Sparkline } from '../components/reports/kit'
 import { cn } from '../components/ui/cn'
 import { CHANNELS, channelMix, compactMoney, rangeLabel } from '../lib/channels'
-import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailySeries, guideFor, landingLabel, latestReport, lsaFor, money, pctChange, perDay, previewFrame, returnStory, sumDays, windowFor } from '../lib/clientDashboard'
+import { DEFAULT_DAYS, METRIC_GUIDE, RANGES, VERDICT_LEGEND, adVerdict, adsFor, between, dailySeries, guideFor, landingLabel, lsaFor, mergeRevenueMonth, money, pctChange, perDay, previewFrame, revenueMonths, revenueTotals, sumDays, windowFor } from '../lib/clientDashboard'
 import { portalPath } from '../lib/clientPortal'
 import { downloadName, mergeClientVideos } from '../lib/clientVideos'
 import { downloadUrl, loadClientVideos } from '../lib/clientVideoStore'
@@ -17,8 +18,9 @@ import { supabase } from '../lib/supabaseClient'
  * dark surface and pieces as the agency's Reports page, cut down to what an
  * owner needs: the numbers for 7, 30 or 90 days against the period before,
  * by day and by channel, the best ads, and under every number the reason
- * it matters. No login and no agency chrome. Nothing here can change
- * anything; the one action is a link to the weekly report's answer form.
+ * it matters. No login and no agency chrome. The one thing the page can
+ * change is the revenue tracker: the owner logging what a month's jobs
+ * were worth (RevenueTracker, through client_revenue_save).
  */
 
 const AGENCY = 'The Working Class Marketing'
@@ -344,8 +346,9 @@ export default function ClientDashboardPage() {
   const series = useMemo(() => dailySeries(rows, win.from, win.to, stackKey), [rows, win, stackKey])
   const spendSeries = useMemo(() => dailySeries(rows, win.from, win.to, 'spend'), [rows, win])
   const ads = useMemo(() => adsFor(data?.ads, days), [data, days])
-  const story = useMemo(() => returnStory(data?.weeks), [data])
-  const latest = latestReport(data?.weeks)
+  // What the client has logged about their jobs, over the months they have
+  // logged, for the one-line summary. The tracker itself is further down.
+  const revenue = useMemo(() => revenueTotals(revenueMonths(data?.months)), [data])
 
   if (data === undefined) return <div className="min-h-screen bg-[#070b14] p-6 text-sm text-slate-400">Loading your dashboard…</div>
   if (data === null)
@@ -395,7 +398,14 @@ export default function ClientDashboardPage() {
   const stackMetric = STACK_METRICS.find((m) => m.value === stackKey)
   const exampleJobs = Math.max(1, Math.round(all.leads / 5))
   const avgJob = Number(data.avg_job_value || 0) > 0 ? Number(data.avg_job_value) : null
-  const returnGuide = guideFor('return')
+  // The "what if" under an empty tracker: a fifth of this range's leads
+  // turning into jobs, in the client's own numbers.
+  const example =
+    all.leads > 0
+      ? avgJob
+        ? `For this range: if ${exampleJobs} of the ${fmtLeads(Math.round(all.leads * 10) / 10)} leads ${plural(exampleJobs, 'becomes', 'become')} a job at your usual ${money(avgJob)}, that is ${money(exampleJobs * avgJob)} of work from ${money(all.spend)} in ads.`
+        : `For this range: if ${exampleJobs} of the ${fmtLeads(Math.round(all.leads * 10) / 10)} leads ${plural(exampleJobs, 'becomes', 'become')} a job, what is that worth to you? Compare it with the ${money(all.spend)} the ads cost.`
+      : ''
 
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-200 lg:pl-64" data-client-dashboard>
@@ -484,9 +494,9 @@ export default function ClientDashboardPage() {
                 {all.leads > 0
                   ? `${fmtLeads(Math.round(all.leads * 10) / 10)} ${plural(Math.round(all.leads), 'lead', 'leads')} from ${money(all.spend)} in ads, ${cplText(all.cpl)} each.`
                   : `${money(all.spend)} in ads and no leads yet in this range.`}{' '}
-                {story.answered > 0
-                  ? `Over the ${story.answered} ${plural(story.answered, 'week', 'weeks')} you have told us about, that spend came back ${money(story.back)} for every $1.`
-                  : 'Tell us how the leads do each week and this line shows your return on the ads.'}
+                {revenue.months > 0 && revenue.back !== null
+                  ? `Over the ${revenue.months} ${plural(revenue.months, 'month', 'months')} you have logged, the ads came back ${money(revenue.back)} for every $1.`
+                  : 'Log what each month’s jobs were worth, further down, and this line shows your return on the ads.'}
               </p>
             </Panel>
 
@@ -608,118 +618,14 @@ export default function ClientDashboardPage() {
             )}
           </section>
 
-          {/* THE NUMBER THAT MATTERS MOST. */}
-          <Panel className="p-5" data-return-panel>
-            <SectionTitle title="The number that matters most" sub="Dollars back for every dollar spent" />
-            {story.answered > 0 ? (
-              <div className="grid gap-5 md:grid-cols-3">
-                <div>
-                  <p className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-                    {money(story.back)}
-                    <span className="block text-xl font-medium text-slate-400 sm:ml-2 sm:inline">back per $1</span>
-                  </p>
-                  <p className="mt-2 text-sm text-slate-300">
-                    From the {story.answered} {plural(story.answered, 'week', 'weeks')} you told us about: {story.jobs} {plural(story.jobs, 'job', 'jobs')} worth {money(story.revenue)} from {money(story.spend)} in ads.
-                  </p>
-                </div>
-                <div className="md:col-span-2">
-                  {/* Six columns do not fit a phone, so there each week is a
-                      small card; the table is for wider screens. */}
-                  <ul className="space-y-2 md:hidden" data-weeks-list>
-                    {(data.weeks || []).slice(0, 8).map((w) => {
-                      const back = Number(w.revenue) > 0 && Number(w.spend) > 0 ? money(Math.round((Number(w.revenue) / Number(w.spend)) * 100) / 100) : ''
-                      const told = Boolean(w.answered_at)
-                      return (
-                        <li key={w.week_start} className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-                          <div className="flex items-baseline justify-between gap-3">
-                            <span className="text-sm font-semibold text-white">{rangeLabel(w.week_start, w.week_end)}</span>
-                            {back ? (
-                              <span className="whitespace-nowrap text-sm font-semibold text-white">
-                                {back} <span className="text-xs font-normal text-slate-400">back per $1</span>
-                              </span>
-                            ) : (
-                              <span className="text-xs text-slate-400">{told ? 'n/a' : 'not told yet'}</span>
-                            )}
-                          </div>
-                          <div className="mt-1.5 grid grid-cols-4 gap-2 text-xs">
-                            <div>
-                              <span className="block text-slate-500">Spend</span>
-                              <span className="text-slate-200">{money(w.spend)}</span>
-                            </div>
-                            <div>
-                              <span className="block text-slate-500">Leads</span>
-                              <span className="text-slate-200">{fmtLeads(w.leads)}</span>
-                            </div>
-                            <div>
-                              <span className="block text-slate-500">Jobs</span>
-                              <span className={told ? 'text-slate-200' : 'text-slate-500'}>{told ? (w.jobs_booked ?? 0) : '…'}</span>
-                            </div>
-                            <div>
-                              <span className="block text-slate-500">Worth</span>
-                              <span className={told ? 'text-slate-200' : 'text-slate-500'}>{told && Number(w.revenue) > 0 ? money(w.revenue) : told ? 'n/a' : '…'}</span>
-                            </div>
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                  <table className="hidden w-full text-sm md:table">
-                    <thead>
-                      <tr>
-                        <DTh>Week</DTh>
-                        <DTh numeric>Spend</DTh>
-                        <DTh numeric>Leads</DTh>
-                        <DTh numeric>Jobs</DTh>
-                        <DTh numeric>Worth</DTh>
-                        <DTh numeric>Back per $1</DTh>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data.weeks || []).slice(0, 8).map((w) => (
-                        <DTr key={w.week_start}>
-                          <DTd className="whitespace-nowrap">{rangeLabel(w.week_start, w.week_end)}</DTd>
-                          <DTd numeric>{money(w.spend)}</DTd>
-                          <DTd numeric>{fmtLeads(w.leads)}</DTd>
-                          <DTd numeric muted={!w.answered_at}>{w.answered_at ? (w.jobs_booked ?? 0) : 'not told yet'}</DTd>
-                          <DTd numeric muted={!w.answered_at}>{w.answered_at && Number(w.revenue) > 0 ? money(w.revenue) : w.answered_at ? 'n/a' : ''}</DTd>
-                          <DTd numeric className="font-semibold text-white">
-                            {Number(w.revenue) > 0 && Number(w.spend) > 0 ? money(Math.round((Number(w.revenue) / Number(w.spend)) * 100) / 100) : ''}
-                          </DTd>
-                        </DTr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-5 md:grid-cols-2">
-                <div className="space-y-2 text-sm leading-relaxed text-slate-300">
-                  <p>Cheap leads are not the goal. Booked jobs are.</p>
-                  <p>Cost per lead tells us the ads are working. It cannot tell us the leads were worth having. Only you know that, because you know which ones booked and what they paid.</p>
-                  {all.leads > 0 && (
-                    <p className="rounded-lg border-l-2 border-sky-400 bg-sky-400/10 px-3 py-2 text-slate-200">
-                      {avgJob
-                        ? `For this range: if ${exampleJobs} of the ${fmtLeads(Math.round(all.leads * 10) / 10)} leads ${plural(exampleJobs, 'becomes', 'become')} a job at your usual ${money(avgJob)}, that is ${money(exampleJobs * avgJob)} of work from ${money(all.spend)} in ads.`
-                        : `For this range: if ${exampleJobs} of the ${fmtLeads(Math.round(all.leads * 10) / 10)} leads ${plural(exampleJobs, 'becomes', 'become')} a job, what is that worth to you? Compare it with the ${money(all.spend)} the ads cost.`}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <GuideBits guide={returnGuide} />
-                </div>
-              </div>
-            )}
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              {latest ? (
-                <a href={`/report/${latest.token}`} className="inline-flex min-h-[44px] items-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-200" data-answer-link>
-                  Tell us how last week&apos;s leads did
-                </a>
-              ) : (
-                <span className="text-sm text-slate-400">Your first weekly report arrives on Monday with a form for this.</span>
-              )}
-              <span className="text-xs text-slate-500">Takes 20 seconds. Rough numbers are fine.</span>
-            </div>
-          </Panel>
+          {/* REVENUE FROM THE LEADS, month by month: the number that matters
+              most, and the one thing on this page the owner can change. */}
+          <RevenueTracker
+            months={data.months}
+            token={token}
+            example={example}
+            onSaved={(saved) => setData((d) => ({ ...d, months: mergeRevenueMonth(d.months, saved) }))}
+          />
 
           {/* WHAT EACH NUMBER MEANS. */}
           <section data-glossary>

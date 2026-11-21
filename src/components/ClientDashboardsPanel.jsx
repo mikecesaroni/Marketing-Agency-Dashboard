@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChannelDot, DarkButton, Panel, Pill, SectionTitle } from './reports/kit'
-import { dashboardLink, newToken } from '../lib/clientDashboard'
+import { dashboardLink, money, newToken, revenueLogSummary } from '../lib/clientDashboard'
 import { cleanPublicUrl, getPublicAppUrl } from '../lib/publicSite'
 import { loadPublicAppUrl, savePublicAppUrl } from '../lib/publicSiteStore'
 import { supabase } from '../lib/supabaseClient'
@@ -113,6 +113,9 @@ export default function ClientDashboardsPanel() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState('')
   const [confirmId, setConfirmId] = useState('')
+  // What each client has logged on their dashboard's revenue tracker, by
+  // client id. Empty until it loads, and the cards say nothing until then.
+  const [revenue, setRevenue] = useState(null)
   // Bumped when the link address changes, so the cards re-read their links.
   const [, setLinkBase] = useState('')
 
@@ -126,6 +129,17 @@ export default function ClientDashboardsPanel() {
       .then(({ data, error: err }) => {
         if (err) setError(err.message)
         else setClients(data || [])
+      })
+    supabase
+      .from('client_revenue_months')
+      .select('client_id, month, jobs, revenue')
+      .then(({ data, error: err }) => {
+        // A missing table (the migration not run yet) just leaves the cards
+        // without the line; it is not worth an error across the panel.
+        if (err) return
+        const by = {}
+        for (const r of data || []) (by[r.client_id] ||= []).push(r)
+        setRevenue(by)
       })
   }, [])
 
@@ -153,11 +167,22 @@ export default function ClientDashboardsPanel() {
     setClients((cs) => cs.map((x) => (x.id === c.id ? { ...x, dashboard_token: token } : x)))
   }
 
+  // Across the book: how many clients have logged anything, and how much.
+  const logging = revenue ? clients.filter((c) => (revenue[c.id] || []).length > 0) : []
+  const loggedTotal = logging.reduce((s, c) => s + revenueLogSummary(revenue[c.id]).revenue, 0)
+
   return (
     <section data-client-dashboards>
-      <SectionTitle title="Client dashboards" sub="One private link per client: every number, what it means, and why return beats cost per lead. Send it once; it stays live." />
+      <SectionTitle title="Client dashboards" sub="One private link per client: every number, what it means, and a tracker where they log what each month's jobs were worth. Send it once; it stays live." />
       <LinkAddressRow onChange={setLinkBase} />
       {error && <p className="mb-3 text-sm text-rose-300">{error}</p>}
+      {revenue && (
+        <p className="mb-3 text-sm text-slate-300" data-revenue-logged-summary>
+          {logging.length > 0
+            ? `${logging.length} of ${clients.length} clients have logged revenue from their leads: ${money(loggedTotal)} so far.`
+            : 'No client has logged revenue from their leads yet. Open a client’s dashboard on your next call and fill last month in with them: the tracker is on the page.'}
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {clients.map((c) => {
           const link = c.dashboard_token ? dashboardLink(c.dashboard_token) : ''
@@ -182,6 +207,22 @@ export default function ClientDashboardsPanel() {
                 )}
                 {!c.meta_ad_account_id && !c.google_ads_customer_id && <span className="text-slate-500">No ad account linked yet</span>}
               </div>
+              {revenue &&
+                (() => {
+                  const r = revenueLogSummary(revenue[c.id])
+                  return r.months > 0 ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-300" data-revenue-logged>
+                      <span>
+                        <span className="font-semibold text-emerald-300">{money(r.revenue)}</span> logged over {r.months} {r.months === 1 ? 'month' : 'months'}
+                      </span>
+                      {r.lastMonthLogged ? <Pill tone="success">{r.lastMonthLabel} in</Pill> : <Pill tone="warning">{r.lastMonthLabel} not logged</Pill>}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-500" data-revenue-logged>
+                      No revenue logged yet
+                    </p>
+                  )
+                })()}
               {link ? (
                 <p className="mt-3 truncate font-mono text-[11px] text-slate-500" title={link}>
                   {link}

@@ -6,8 +6,9 @@
 -- day and by channel, their best ads, what each number means and why the
 -- return on the leads matters more than cost per lead. The token in the
 -- link is the credential. The page reads through client_dashboard_load,
--- which is the only thing the anon key can reach; nothing on the page can
--- change anything.
+-- which is the only thing the anon key can read with. The page can change
+-- exactly one thing: the client logging what a month's jobs were worth
+-- (client_revenue_save, in supabase/client-revenue-months.sql).
 --
 -- Run this whole file in the SQL editor. Safe to re-run.
 
@@ -24,6 +25,9 @@ create unique index if not exists clients_dashboard_token_idx on clients (dashbo
 --    ads:   one row per ad (or Google campaign) per window (7, 30, 90 days).
 --    weeks: the weekly reports that were built, with the client's answers.
 --    lsa:   the LSA weeks logged by hand, when there are any.
+--    months: every month over all time: what the ads cost and brought in,
+--           and what the client says the jobs from them were worth (their
+--           monthly entry; failing that, their weekly answers added up).
 create or replace function client_dashboard_load(p_token text)
 returns jsonb
 language sql
@@ -101,6 +105,37 @@ as $$
     select week_of, ad_spend as spend, leads
     from weekly_kpis
     where client_id = (select id from c) and channel = 'LSA' and week_of >= current_date - 180
+  ),
+  -- Month by month, with no cut-off: a client a year in still sees month one.
+  mo as (
+    select date_trunc('month', x.date)::date as month, sum(x.spend) as spend, sum(x.leads) as leads
+    from (
+      select date, spend, leads::numeric as leads from ad_daily where client_id = (select id from c)
+      union all
+      select date, cost, conversions from google_campaign_daily where client_id = (select id from c)
+      union all
+      select week_of, ad_spend, leads from weekly_kpis where client_id = (select id from c) and channel = 'LSA'
+    ) x
+    group by 1
+  ),
+  rev as (
+    select month, jobs, revenue from client_revenue_months where client_id = (select id from c)
+  ),
+  wk as (
+    select date_trunc('month', week_start)::date as month, sum(coalesce(jobs_booked, 0)) as jobs, sum(coalesce(revenue, 0)) as revenue
+    from weekly_reports
+    where client_id = (select id from c) and answered_at is not null
+    group by 1
+  ),
+  months as (
+    select k.month,
+      coalesce(mo.spend, 0) as spend, coalesce(mo.leads, 0) as leads,
+      coalesce(rev.jobs, wk.jobs) as jobs, coalesce(rev.revenue, wk.revenue) as revenue,
+      case when rev.month is not null then 'month' when wk.month is not null then 'weeks' end as source
+    from (select month from mo union select month from rev union select month from wk) k
+    left join mo on mo.month = k.month
+    left join rev on rev.month = k.month
+    left join wk on wk.month = k.month
   )
   select case when (select id from c) is null then null else jsonb_build_object(
     'client', (select jsonb_build_object('name', name, 'industry', industry, 'market', market) from c),
@@ -112,7 +147,8 @@ as $$
     'days', coalesce((select jsonb_agg(to_jsonb(d) order by d.date) from d), '[]'::jsonb),
     'ads', coalesce((select jsonb_agg(to_jsonb(ads)) from ads), '[]'::jsonb),
     'weeks', coalesce((select jsonb_agg(to_jsonb(w) order by w.week_start desc) from w), '[]'::jsonb),
-    'lsa', coalesce((select jsonb_agg(to_jsonb(lsa) order by lsa.week_of) from lsa), '[]'::jsonb)
+    'lsa', coalesce((select jsonb_agg(to_jsonb(lsa) order by lsa.week_of) from lsa), '[]'::jsonb),
+    'months', coalesce((select jsonb_agg(to_jsonb(months) order by months.month desc) from months), '[]'::jsonb)
   ) end;
 $$;
 

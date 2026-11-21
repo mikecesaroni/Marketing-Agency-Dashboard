@@ -195,13 +195,159 @@ export function lsaFor(lsa, from, to) {
   })
 }
 
-/** Dollars back per dollar, from the weeks the client told us about. */
-export function returnStory(weeks) {
-  const answered = (weeks || []).filter((w) => num(w.revenue) > 0 && num(w.spend) > 0)
-  const spend = answered.reduce((s, w) => s + num(w.spend), 0)
-  const revenue = answered.reduce((s, w) => s + num(w.revenue), 0)
-  const jobs = answered.reduce((s, w) => s + num(w.jobs_booked), 0)
-  return { answered: answered.length, spend: r2(spend), revenue: r2(revenue), jobs, back: spend > 0 ? r2(revenue / spend) : 0 }
+// ---------------------------------------------------------------------------
+// The revenue tracker: what the jobs from these leads were worth, by month.
+//
+// The client logs two numbers for a month on the dashboard itself: how many
+// of the leads became jobs, and what those jobs were worth. `months` is what
+// client_dashboard_load returns: one row per month over all time with the
+// ad spend and leads, and jobs / revenue / source when the month is logged
+// (source 'month' for their own entry, 'weeks' for weekly answers added up).
+//
+// A month is LOGGED or it is not. Zero jobs and $0 is an answer ("none of
+// them booked") and counts as logged; a month nobody has touched does not.
+// Every total is taken over logged months only, with the ad spend for those
+// same months, so an unanswered month can never make the return look worse
+// than it is.
+// ---------------------------------------------------------------------------
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/** The first day of the month a date is in, as 'YYYY-MM-01'. */
+export const monthStart = (iso) => `${String(iso).slice(0, 7)}-01`
+
+/** 'October 2026', or 'Oct 2026' short. */
+export function monthLabel(iso, short = false) {
+  const [y, m] = String(iso).split('-').map(Number)
+  const name = MONTH_NAMES[(m || 1) - 1] || ''
+  return `${short ? name.slice(0, 3) : name} ${y}`
+}
+
+const nextMonth = (iso) => {
+  const [y, m] = String(iso).split('-').map(Number)
+  return m === 12 ? `${y + 1}-01-01` : `${y}-${pad(m + 1)}-01`
+}
+
+/**
+ * The months the tracker shows, newest first: every month from the first
+ * one with ad spend or a logged figure through this month, with the gaps
+ * filled so a month the ads were off still has a row.
+ */
+export function revenueMonths(months, today = new Date()) {
+  const thisMonth = monthStart(typeof today === 'string' ? today : isoDay(today))
+  const byMonth = new Map((months || []).map((m) => [monthStart(m.month), m]))
+  const known = [...byMonth.keys()].filter((k) => k <= thisMonth).sort()
+  const first = known.find((k) => num(byMonth.get(k).spend) > 0 || num(byMonth.get(k).leads) > 0 || byMonth.get(k).source) || thisMonth
+  const out = []
+  for (let k = first; k <= thisMonth; k = nextMonth(k)) {
+    const row = byMonth.get(k) || {}
+    const logged = Boolean(row.source)
+    const spend = r2(num(row.spend))
+    const leads = Math.round(num(row.leads) * 10) / 10
+    const jobs = logged ? Math.round(num(row.jobs)) : null
+    const revenue = logged ? r2(num(row.revenue)) : null
+    out.push({
+      month: k,
+      label: monthLabel(k),
+      current: k === thisMonth,
+      spend,
+      leads,
+      logged,
+      source: row.source || null,
+      jobs,
+      revenue,
+      // Dollars back per ad dollar. Nothing to divide by in a month the ads
+      // did not spend, and a blank beats a made-up number.
+      back: logged && spend > 0 ? r2(revenue / spend) : null,
+      // Jobs can outnumber the leads we counted (a phone call we never saw),
+      // and "140% of leads" helps nobody, so it is only shown when it reads.
+      closeRate: logged && leads > 0 && jobs <= leads ? Math.round((jobs / leads) * 100) : null,
+      perJob: logged && jobs > 0 ? r2(revenue / jobs) : null,
+    })
+  }
+  return out.reverse()
+}
+
+/** Everything logged so far, against the ad spend for those same months. */
+export function revenueTotals(rows) {
+  const logged = (rows || []).filter((r) => r.logged)
+  const revenue = r2(logged.reduce((s, r) => s + r.revenue, 0))
+  const spend = r2(logged.reduce((s, r) => s + r.spend, 0))
+  const jobs = logged.reduce((s, r) => s + r.jobs, 0)
+  const leads = Math.round(logged.reduce((s, r) => s + r.leads, 0) * 10) / 10
+  const best = logged.filter((r) => r.revenue > 0).sort((a, b) => b.revenue - a.revenue)[0] || null
+  return { months: logged.length, revenue, spend, jobs, leads, back: spend > 0 ? r2(revenue / spend) : null, best }
+}
+
+/**
+ * The month to ask about: the newest FINISHED month that had leads or ad
+ * spend and has no figure. This month is never nagged about, because it is
+ * not over; it can still be logged "so far".
+ */
+export function monthToLog(rows) {
+  return (rows || []).find((r) => !r.current && !r.logged && (r.leads > 0 || r.spend > 0)) || null
+}
+
+/**
+ * What one client has logged, for the team's view in the CRM: how much, over
+ * how many months, the last month they logged, and whether last month (the
+ * one a monthly check-in would ask about) is in.
+ * rows: that client's client_revenue_months rows [{ month, jobs, revenue }].
+ */
+export function revenueLogSummary(rows, today = new Date()) {
+  const thisMonth = monthStart(typeof today === 'string' ? today : isoDay(today))
+  const [y, m] = thisMonth.split('-').map(Number)
+  const lastMonth = m === 1 ? `${y - 1}-12-01` : `${y}-${pad(m - 1)}-01`
+  const list = (rows || []).map((r) => ({ month: monthStart(r.month), jobs: Math.round(num(r.jobs)), revenue: r2(num(r.revenue)) })).sort((a, b) => b.month.localeCompare(a.month))
+  return {
+    months: list.length,
+    revenue: r2(list.reduce((s, r) => s + r.revenue, 0)),
+    jobs: list.reduce((s, r) => s + r.jobs, 0),
+    latest: list[0] ? { ...list[0], label: monthLabel(list[0].month) } : null,
+    lastMonth,
+    lastMonthLabel: monthLabel(lastMonth),
+    lastMonthLogged: list.some((r) => r.month === lastMonth),
+  }
+}
+
+/** The loader's months with one month just saved folded in, so the page shows it without reloading. */
+export function mergeRevenueMonth(months, saved) {
+  const key = monthStart(saved.month)
+  const list = [...(months || [])]
+  const i = list.findIndex((m) => monthStart(m.month) === key)
+  const row = { ...(i >= 0 ? list[i] : { month: key, spend: 0, leads: 0 }), jobs: saved.jobs, revenue: saved.revenue, source: 'month' }
+  if (i >= 0) list[i] = row
+  else list.push(row)
+  return list
+}
+
+/**
+ * What somebody typed for money, as a number: "$12,500", "12500.50" and
+ * "12.5k" all work. null when it is not a number at all, so an empty box is
+ * never saved as zero by accident.
+ */
+export function parseMoney(text) {
+  const t = String(text ?? '').trim().toLowerCase().replace(/[$,\s]/g, '')
+  if (!t) return null
+  const m = t.match(/^(\d+(?:\.\d+)?)(k)?$/)
+  if (!m) return null
+  return r2(Number(m[1]) * (m[2] ? 1000 : 1))
+}
+
+/** A whole number of jobs, or null when it is not one. */
+export function parseCount(text) {
+  const t = String(text ?? '').trim()
+  return /^\d{1,6}$/.test(t) ? Number(t) : null
+}
+
+/** Why a month's entry cannot be saved yet, or '' when it can. */
+export function revenueEntryProblem(jobsText, revenueText) {
+  const jobs = parseCount(jobsText)
+  const revenue = parseMoney(revenueText)
+  if (jobs === null) return 'Enter how many jobs, as a whole number. 0 is fine.'
+  if (revenue === null) return 'Enter what they were worth in dollars. 0 is fine.'
+  if (jobs === 0 && revenue > 0) return 'That is revenue with no jobs. How many jobs was it?'
+  return ''
 }
 
 /**
@@ -220,8 +366,6 @@ export function previewFrame(html) {
 }
 
 /** The newest weekly report with a link, for "tell us how the leads did". */
-export const latestReport = (weeks) => (weeks || []).find((w) => w.token) || null
-
 export const money = (n) => {
   const v = Number(n || 0)
   const whole = Math.abs(v) >= 100 || Number.isInteger(v)
@@ -304,7 +448,7 @@ export const METRIC_GUIDE = [
     what: 'Revenue from booked jobs divided by the ad spend for the same weeks: dollars back for every dollar spent.',
     why: 'This is the number that decides whether to spend more or less. Cheap leads are not the goal. Booked jobs are.',
     good: 'Most home-services owners want at least $4 back for every $1 once the account has settled. Early weeks run lower while the ads learn.',
-    we: 'Only you know this number. Answer the Monday email with how many leads booked and what they were worth, and it shows here.',
+    we: 'Only you know this number. Log each month on this page: how many of the leads became jobs and what they were worth. Rough numbers are fine.',
   },
 ]
 

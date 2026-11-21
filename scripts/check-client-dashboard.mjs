@@ -14,7 +14,6 @@ import {
   dashboardLink,
   guideFor,
   landingLabel,
-  latestReport,
   lsaFor,
   mondayOf,
   newToken,
@@ -22,7 +21,15 @@ import {
   perDay,
   previewFrame,
   rates,
-  returnStory,
+  mergeRevenueMonth,
+  monthLabel,
+  monthToLog,
+  parseCount,
+  parseMoney,
+  revenueEntryProblem,
+  revenueLogSummary,
+  revenueMonths,
+  revenueTotals,
   sumDays,
   windowFor,
 } from '../src/lib/clientDashboard.js'
@@ -105,9 +112,61 @@ check('the legend has no em dash', /[—–]/.test(VERDICT_LEGEND), false)
 
 // ------------------------------------------------------------------- the rest
 check('LSA takes the weeks the range touches', lsaFor([{ week_of: '2026-09-28', spend: 100, leads: 3 }, { week_of: '2026-09-21', spend: 50, leads: 1 }], '2026-10-01', '2026-10-09').spend, 100)
-check('return story from the answered weeks', returnStory([{ spend: 480, revenue: 9000, jobs_booked: 3 }, { spend: 300, revenue: 0, jobs_booked: 0 }, { spend: 200, revenue: 1000, jobs_booked: 1 }]), { answered: 2, spend: 680, revenue: 10000, jobs: 4, back: 14.71 })
-check('no answers yet', returnStory([]).answered, 0)
-check('the newest report with a link', latestReport([{ week_start: '2026-10-05', token: null }, { week_start: '2026-09-28', token: 'abc' }]).token, 'abc')
+// --- the revenue tracker ---------------------------------------------------
+// The rule: A MONTH IS LOGGED OR IT IS NOT, AND AN UNLOGGED MONTH NEVER COUNTS
+// AGAINST THE CLIENT. Zero jobs is an answer; a month nobody touched is not.
+const RAW = [
+  { month: '2026-11-01', spend: 662, leads: 13, jobs: null, revenue: null, source: null },
+  { month: '2026-10-01', spend: 1335.92, leads: 28, jobs: 4, revenue: 12500.46, source: 'month' },
+  { month: '2026-08-01', spend: 2535, leads: 72, jobs: 0, revenue: 0, source: 'month' },
+  { month: '2026-07-01', spend: 545, leads: 24, jobs: null, revenue: null, source: null },
+  { month: '2026-12-01', spend: 0, leads: 0, jobs: 9, revenue: 9, source: 'month' },
+]
+const R = revenueMonths(RAW, '2026-11-21')
+check('months run newest first from the first month with ads to this one, gaps filled', R.map((r) => r.month), ['2026-11-01', '2026-10-01', '2026-09-01', '2026-08-01', '2026-07-01'])
+check('a month that has not started is left out', R.some((r) => r.month === '2026-12-01'), false)
+check('this month is marked, and only this month', R.filter((r) => r.current).map((r) => r.month), ['2026-11-01'])
+check('a month the ads were off is a row of zeros, not logged', [R[2].spend, R[2].leads, R[2].logged, R[2].revenue], [0, 0, false, null])
+check('a logged month carries its return, close rate and value per job', [R[1].back, R[1].closeRate, R[1].perJob], [9.36, 14, 3125.12])
+check('zero jobs and $0 is an answer', [R[3].logged, R[3].jobs, R[3].revenue, R[3].back], [true, 0, 0, 0])
+check('an unlogged month has no figures at all', [R[0].jobs, R[0].revenue, R[0].back, R[0].closeRate], [null, null, null, null])
+check('months are named for an owner', [monthLabel('2026-10-01'), monthLabel('2026-10-01', true), R[1].label], ['October 2026', 'Oct 2026', 'October 2026'])
+check('more jobs than counted leads shows no close rate', revenueMonths([{ month: '2026-11-01', spend: 100, leads: 2, jobs: 5, revenue: 900, source: 'month' }], '2026-11-21')[0].closeRate, null)
+check('revenue with no ad spend has no return, never a divide by zero', revenueMonths([{ month: '2026-11-01', spend: 0, leads: 0, jobs: 1, revenue: 900, source: 'month' }], '2026-11-21')[0].back, null)
+check('weekly answers added up count as logged', revenueMonths([{ month: '2026-11-01', spend: 100, leads: 5, jobs: 2, revenue: 800, source: 'weeks' }], '2026-11-21')[0].logged, true)
+check('a client with nothing yet still has this month to log', revenueMonths([], '2026-11-21').map((r) => [r.month, r.current, r.logged]), [['2026-11-01', true, false]])
+
+const T = revenueTotals(R)
+check('totals are over logged months only, with the spend for those same months', [T.months, T.revenue, T.spend, T.jobs, T.leads], [2, 12500.46, 3870.92, 4, 100])
+check('so the return is not dragged down by a month nobody logged', T.back, 3.23)
+check('the best month is the one that made the most', T.best.month, '2026-10-01')
+check('nothing logged is no return, not zero', [revenueTotals(revenueMonths([RAW[0]], '2026-11-21')).months, revenueTotals(revenueMonths([RAW[0]], '2026-11-21')).back], [0, null])
+
+check('the month asked about is the newest finished one with leads and no figure', monthToLog(R).month, '2026-07-01')
+check('this month is never nagged about', monthToLog(revenueMonths([RAW[0]], '2026-11-21')), null)
+check('a month with no ads is not asked about', monthToLog(revenueMonths([RAW[1], { month: '2026-09-01', spend: 0, leads: 0 }], '2026-11-21')), null)
+check('last month goes first when it is the one missing', monthToLog(revenueMonths([{ month: '2026-10-01', spend: 50, leads: 3 }, RAW[3]], '2026-11-21')).month, '2026-10-01')
+
+check('money is read the way people type it', [parseMoney('$12,500'), parseMoney('12500.50'), parseMoney('12.5k'), parseMoney(' 0 ')], [12500, 12500.5, 12500, 0])
+check('an empty box or a word is not a number', [parseMoney(''), parseMoney('lots'), parseMoney('-5'), parseMoney(null)], [null, null, null, null])
+check('jobs are whole numbers', [parseCount('4'), parseCount('0'), parseCount('4.5'), parseCount(''), parseCount('four')], [4, 0, null, null, null])
+check('both boxes are needed', [revenueEntryProblem('', '500') !== '', revenueEntryProblem('3', '') !== ''], [true, true])
+check('none booked can be saved', revenueEntryProblem('0', '0'), '')
+check('revenue with no jobs is asked about', revenueEntryProblem('0', '500') !== '', true)
+check('a normal month can be saved', revenueEntryProblem('4', '$12,500'), '')
+
+// What the team sees on a client's card in the CRM.
+const LOG = revenueLogSummary([{ month: '2026-09-01', jobs: 6, revenue: 21400 }, { month: '2026-10-01', jobs: 4, revenue: 12500 }], '2026-11-21')
+check('a client\'s log adds up, newest month named', [LOG.months, LOG.revenue, LOG.jobs, LOG.latest.label], [2, 33900, 10, 'October 2026'])
+check('last month is the one a check-in asks about', [LOG.lastMonthLabel, LOG.lastMonthLogged], ['October 2026', true])
+check('last month missing is said', revenueLogSummary([{ month: '2026-09-01', jobs: 6, revenue: 21400 }], '2026-11-21').lastMonthLogged, false)
+check('in January last month is December of the year before', revenueLogSummary([], '2027-01-05').lastMonth, '2026-12-01')
+check('nothing logged is nothing, not an error', [revenueLogSummary(null, '2026-11-21').months, revenueLogSummary(null, '2026-11-21').latest], [0, null])
+
+const merged = mergeRevenueMonth(RAW, { month: '2026-11-01', jobs: 2, revenue: 4000 })
+check('a saved month shows without reloading, keeping its spend and leads', merged.find((m) => m.month === '2026-11-01'), { month: '2026-11-01', spend: 662, leads: 13, jobs: 2, revenue: 4000, source: 'month' })
+check('saving does not change the list it was given', RAW[0].source, null)
+check('a month the loader never returned is added', mergeRevenueMonth([], { month: '2026-11-15', jobs: 1, revenue: 500 }), [{ month: '2026-11-01', spend: 0, leads: 0, jobs: 1, revenue: 500, source: 'month' }])
 check('the link', dashboardLink('tok', 'https://x'), 'https://x/dashboard/tok')
 check('a Meta preview snippet becomes an address and a size', previewFrame('<iframe src="https://www.facebook.com/ads/api/preview_iframe.php?d=abc&amp;t=1" width="320" height="690" scrolling="yes"></iframe>'), { src: 'https://www.facebook.com/ads/api/preview_iframe.php?d=abc&t=1', width: 320, height: 690 })
 check('the business.facebook.com host Meta really uses is accepted', previewFrame('<iframe src="https://business.facebook.com/ads/api/preview_iframe.php?d=x" width="320" height="690"></iframe>')?.src, 'https://business.facebook.com/ads/api/preview_iframe.php?d=x')
@@ -136,6 +195,18 @@ const page = readFileSync(new URL('../src/pages/ClientDashboardPage.jsx', import
 const panel = readFileSync(new URL('../src/components/ClientDashboardsPanel.jsx', import.meta.url), 'utf8')
 check('page and panel import the lib', [page.includes("from '../lib/clientDashboard'"), panel.includes("from '../lib/clientDashboard'")], [true, true])
 check('the page reads through the RPC only', page.includes("rpc('client_dashboard_load'") && !page.includes(".from('"), true)
+
+// The one thing a client's page can write, and how.
+const tracker = readFileSync(new URL('../src/components/reports/RevenueTracker.jsx', import.meta.url), 'utf8')
+const revenueSql = readFileSync(new URL('../supabase/client-revenue-months.sql', import.meta.url), 'utf8')
+const loaderSql = readFileSync(new URL('../supabase/client-dashboard.sql', import.meta.url), 'utf8')
+check('the tracker is on the page', page.includes('<RevenueTracker'), true)
+check('it writes through the one function and touches no table', tracker.includes("rpc('client_revenue_save'") && !tracker.includes(".from('"), true)
+check('the function checks the link the way the loader does', /dashboard_token = p_token and length\(p_token\) >= 20 and archived = false/.test(revenueSql), true)
+check('a month that has not started cannot be logged', /m > date_trunc\('month', current_date\)::date/.test(revenueSql), true)
+check('negative or missing numbers are refused', /p_jobs is null or p_jobs < 0[\s\S]*p_revenue is null or p_revenue < 0/.test(revenueSql), true)
+check('only the team can read the table directly', [/for all to authenticated/.test(revenueSql), /to anon/.test(revenueSql.split('create or replace function')[0])], [true, false])
+check('the loader returns the months, with no cut-off', /'months', coalesce\(/.test(loaderSql) && /from client_revenue_months where client_id/.test(loaderSql), true)
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)
