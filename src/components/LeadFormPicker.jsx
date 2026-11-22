@@ -100,7 +100,7 @@ export default function LeadFormPicker({ client, value, onChange }) {
                 </option>
               ))}
             </select>
-          ) : (
+          ) : error ? null : (
             <p className="text-xs text-slate-500">
               No instant forms on this Page yet. Build the first one below.
             </p>

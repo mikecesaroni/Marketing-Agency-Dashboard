@@ -366,3 +366,17 @@ The builder asks where the lead lands: a website form (ad sets optimise for
 the pixel's Lead event) or an instant form (ad sets promote the Page and the
 form is picked when creatives are published into them). That choice is fixed
 once the ad sets exist. Default is the pixel when the client has one.
+
+## "(#10) User has insufficient privileges on the page"
+
+Seen 2026-11-22 on the publish page's instant form step ("Why do I not have privilege to see form"). It is not a CRM fault and not a token scope: the system user is simply **not on that client's Facebook Page**. In the case that raised it, the client's ad account was shared with our business (four tasks, full control) and their Page was not among the Pages shared with us at all.
+
+Why it looks like a bug:
+
+- The ad account and the Page are shared separately. With only the ad account, the campaigns and ad sets show, the CRM can even name the form the ad set's other ads use (it reads that off the ads), and then every request to the Page itself is refused.
+- Whoever is looking can open the same forms in Ads Manager, because that is their own login. The CRM uses the system user (section 3 above), which only reaches Pages assigned to it.
+
+To fix it: on the client's page run "What did they actually grant?" ("Check access") to see whether the Page is missing or only partly shared; have the client share the Page with full control and Leads ticked (the Meta access message asks for exactly that); then assign the Page to the system user under Business Settings, System Users, Assign Assets, Pages, with Manage Page. Publishing needs the Page as well, so hold off until the check comes back clean.
+
+The CRM now says this in place of Meta's sentence (`pageAccessProblem` in `src/lib/metaAccess.js`, used by `callLeadForms`), and the form picker no longer says "No instant forms on this Page yet" after a read that failed.
+

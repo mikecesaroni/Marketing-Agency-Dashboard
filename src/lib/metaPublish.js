@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient'
 import { readFunctionError } from './functionError'
 import { driveFileId, isDrivePath } from './driveLabels'
 import { liveForms } from './leadFormDetails'
+import { pageAccessProblem } from './metaAccess'
 
 // What the publish form offers. Kept in step with the OBJECTIVES map in the
 // meta-publish Edge Function — the function is the one that enforces it, this
@@ -493,10 +494,22 @@ async function callLeadForms(body) {
     if (!detail.status || detail.status === 404) {
       throw new Error('The lead-forms function is not deployed yet. Deploy it in Supabase.')
     }
+    // Meta's refusal comes back as a 502 from the function, so this is the
+    // branch "(#10) User has insufficient privileges on the page" arrives on.
+    const refused = pageAccessProblem(detail.detail)
+    if (refused) {
+      const err = new Error(refused)
+      err.pageAccess = true
+      throw err
+    }
     throw new Error(detail.detail || 'Could not reach the instant form service.')
   }
   if (data?.error) {
-    const err = new Error(data.error)
+    // "(#10) User has insufficient privileges on the page" means we are not on
+    // the client's Page. Said as Meta says it, it reads like a CRM bug.
+    const notOnPage = pageAccessProblem(data.error)
+    const err = new Error(notOnPage || data.error)
+    err.pageAccess = Boolean(notOnPage)
     // The privacy policy URL is the one failure worth handling rather than
     // just showing: none of the clients have one on file, so the panel offers
     // the field instead of just refusing.

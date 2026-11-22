@@ -645,6 +645,7 @@ export const META_COURSE = {
           points: [
             '“(#200) Permissions error” when making an instant form with a cover photo: press “Create it without the photo”, and report it.',
             '“(#100) Requires pages_manage_ads or leads_retrieval permission” on a lead list: Leads access is missing on that Page.',
+            '“(#10) User has insufficient privileges on the page”: we are not on that client’s Page at all, or not with full control. The ad account can be shared while the Page is not. Run “Check access”, and do not publish until it is fixed.',
             'Our Meta token is a password. It never goes in chat, email or a document.',
           ],
         },

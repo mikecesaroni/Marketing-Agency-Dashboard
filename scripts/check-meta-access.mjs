@@ -15,6 +15,7 @@ import {
   normaliseTask,
   sameId,
   taskCheck,
+  pageAccessProblem,
 } from '../src/lib/metaAccess.js'
 
 let failures = 0
@@ -234,8 +235,20 @@ check(
   accessReport({ clients: CLIENTS, pages: [], adAccounts: [] }).summary.missing === 4
 )
 
+// --- Meta's "not on this Page" error, in words somebody can act on ------------
+const refused = pageAccessProblem('(#10) User has insufficient privileges on the page.')
+check('the Page refusal is explained', /Facebook Page/.test(refused))
+check('and says what to do about it', /Check access/.test(refused) && /system user/.test(refused))
+check('it is recognised by its words as well as its number', pageAccessProblem('User has insufficient privileges on the Page') !== '')
+check(
+  'any other Meta error is left as it came',
+  ['(#100) Button text is missing for Thank You Page', '(#200) Permissions error', '', null].every((m) => pageAccessProblem(m) === '')
+)
+check('no long dash in what people read', !/\u2014/.test(refused))
+
 if (failures > 0) {
   console.error(`\nmeta-access checks FAILED (${failures})`)
   process.exit(1)
 }
+
 console.log('\nAll meta-access checks passed')

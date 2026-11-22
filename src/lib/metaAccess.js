@@ -223,3 +223,30 @@ export function chaseLine(row) {
   const list = asks.length === 1 ? asks[0] : `${asks.slice(0, -1).join(', ')} and ${asks.at(-1)}`
   return `${row.clientName}: needs to ${list}.`
 }
+
+/**
+ * Meta's "(#10) User has insufficient privileges on the page", said in a way
+ * somebody can act on. '' for any other error, which is shown as it came.
+ *
+ * It is what every Page request answers when the CRM's system user is not on
+ * the client's Page: the Page was never shared with our business, or it was
+ * shared without full control, or it was never assigned to the system user.
+ * It reads like a bug in the CRM because the ad account can be shared while
+ * the Page is not (so the campaigns and ad sets show), and because the
+ * person looking can open the same forms in Ads Manager with their own
+ * login. The CRM does not use that login.
+ */
+export function pageAccessProblem(metaError) {
+  const said = String(metaError || '')
+  if (!/\(#10\)|insufficient privileges on the page/i.test(said)) return ''
+  return (
+    'Meta will not let the CRM into this client’s Facebook Page. Either the Page was never shared with our business, ' +
+    'or it was shared without full control, or it was never assigned to our system user. ' +
+    'An ad account can be shared while the Page is not, which is why the campaign shows here and the forms do not. ' +
+    'You can still open the forms in Ads Manager because that is your own login; the CRM uses the system user. ' +
+    'To fix it: on the client’s page, press “Check access” to see exactly what is missing, have the client share the Page with full control and Leads ticked, ' +
+    'then assign the Page to the system user in Meta Business Settings. ' +
+    'Hold off publishing until then: an ad is a post from the Page, so it will very likely be refused the same way.'
+  )
+}
+
