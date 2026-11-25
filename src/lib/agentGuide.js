@@ -679,8 +679,8 @@ export const LOOKUPS = [
   },
   {
     need: 'A client with two Google Ads accounts',
-    where: 'Client page, Google tab',
-    how: '"Other Google Ads accounts": add each ID. All count under the client.',
+    where: 'Google Ads report or client page',
+    how: 'Add each ID beside the client. All count under them.',
   },
   {
     need: 'How the agency does something',

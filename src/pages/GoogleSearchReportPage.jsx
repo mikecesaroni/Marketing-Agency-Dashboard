@@ -23,7 +23,8 @@ import {
 import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough } from '../lib/googleAdsAccessMessage'
 import CopySetupMessageButton from '../components/CopySetupMessageButton'
 import GoogleAdsIdInput from '../components/GoogleAdsIdInput'
-import { explainSyncError, isAccessError } from '../lib/googleAdsId'
+import GoogleExtraAccounts from '../components/GoogleExtraAccounts'
+import { dashedId, explainSyncError, isAccessError } from '../lib/googleAdsId'
 import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from '../lib/agencyEmail'
 import { isLsaCampaign } from '../lib/lsaReport'
 
@@ -104,7 +105,7 @@ export default function GoogleSearchReportPage() {
       // Twice the range for the campaign rows, so every tile has a previous
       // window to compare with. Keywords and terms only need the window.
       const [clientsRes, campaigns, keywords, terms] = await Promise.all([
-        supabase.from('clients').select('id,name,google_ads_customer_id,google_ads_sync_error,google_ads_synced_at,archived,is_internal,paused_at').order('name'),
+        supabase.from('clients').select('id,name,google_ads_customer_id,google_ads_extra_customer_ids,google_ads_extra_status,lsa_customer_id,google_ads_sync_error,google_ads_synced_at,archived,is_internal,paused_at').order('name'),
         fetchAllRows(() =>
           supabase.from('google_campaign_daily').select('*').gte('date', prevStart).order('date').order('id')
         ),
@@ -475,6 +476,32 @@ export default function GoogleSearchReportPage() {
                     <div className="min-w-0 flex-1">
                       <GoogleAdsIdInput client={c} onSaved={load} compact dark />
                       {c.google_ads_sync_error && <p className="mt-1 text-[11px] text-amber-300/90">{explainSyncError(c.google_ads_sync_error)}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* THE CONNECTED ONES, each with its accounts (2026-11-25: "make so
+              I can add more from the Google KPIs tab, where I add IDs"). A
+              client used to drop off this panel the moment they connected,
+              which left nowhere here to give them a second account. */}
+          {link.connected.length > 0 && (
+            <>
+              <p className="mt-5 text-xs text-slate-400">
+                Connected. If a client has a second Google Ads account (an old one, another location, or Local Services in an account of its own), add it
+                beside their name. It syncs on the spot and counts under that client from then on.
+              </p>
+              <div className="mt-3 divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.07] bg-black/20" data-connected-accounts>
+                {link.connected.map((c) => (
+                  <div key={c.id} className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-start sm:gap-3" data-connected-client={c.id}>
+                    <div className="min-w-0 sm:w-56">
+                      <Link to={`/reports/client/${c.id}?channel=google`} className="block truncate text-sm font-medium text-white hover:text-emerald-300">{c.name}</Link>
+                      <p className="font-mono text-[11px] tabular-nums text-slate-500">{dashedId(c.google_ads_customer_id)}</p>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <GoogleExtraAccounts client={c} onSaved={load} dark inline />
                     </div>
                   </div>
                 ))}

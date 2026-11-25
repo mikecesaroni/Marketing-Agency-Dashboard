@@ -19,16 +19,23 @@ import { cleanCustomerId, dashedId, explainSyncError, extraCustomerIds, extraIdP
  *
  * One account belongs to one client: an ID another client already carries is
  * refused, because the same spend would be counted twice.
+ *
+ * Two places, one control. On the client page it is a section under the main
+ * ID. On the Google Ads report's "Connected accounts" panel it sits beside
+ * each connected client's name (`dark`, `inline`): there the box stays folded
+ * behind "+ Add another account" until it is wanted, so a list of fifteen
+ * clients is not fifteen empty boxes.
  */
 
 const ROW_TABLES = ['google_campaign_daily', 'google_keyword_daily', 'google_search_term_daily', 'lsa_leads']
 
-export default function GoogleExtraAccounts({ client, onSaved }) {
+export default function GoogleExtraAccounts({ client, onSaved, dark = false, inline = false }) {
   const extras = extraCustomerIds(client)
   const status = client.google_ads_extra_status || {}
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState('') // '' | 'adding' | 'syncing' | the id being removed
   const [note, setNote] = useState(null) // { ok, text }
+  const [open, setOpen] = useState(!inline)
 
   const sync = async () => {
     const { data, error } = await supabase.functions.invoke('google-daily-sync', { body: { client_id: client.id, days: 30 } })
@@ -110,33 +117,61 @@ export default function GoogleExtraAccounts({ client, onSaved }) {
 
   const working = Boolean(busy)
   const digits = value.replace(/\D/g, '')
+  // The two skins: the client page is light, the reports are dark.
+  const t = dark
+    ? {
+        row: 'border-white/[0.07] bg-black/20',
+        id: 'text-white',
+        quiet: 'text-slate-500',
+        ok: 'text-emerald-300',
+        warn: 'text-amber-300',
+        remove: 'text-slate-400 hover:bg-white/10 hover:text-white',
+        input: 'bg-white/[0.04] text-white placeholder:text-slate-600 focus:ring-emerald-400/60',
+        inputEdge: 'border-white/15',
+        button: 'bg-emerald-500 text-slate-950 hover:bg-emerald-400',
+        link: 'text-emerald-300 hover:text-emerald-200',
+      }
+    : {
+        row: 'border-slate-200 bg-slate-50',
+        id: 'text-slate-900',
+        quiet: 'text-slate-500',
+        ok: 'text-emerald-700',
+        warn: 'text-amber-800',
+        remove: 'text-slate-500 hover:bg-slate-200 hover:text-slate-800',
+        input: 'bg-white focus:ring-blue-400',
+        inputEdge: 'border-slate-300',
+        button: 'bg-blue-600 text-white hover:bg-blue-700',
+        link: 'text-blue-600 hover:text-blue-800',
+      }
   return (
-    <div className="mt-3 border-t border-slate-100 pt-3" data-google-extra-accounts>
-      <p className="text-xs font-semibold text-slate-800">
-        Other Google Ads accounts
-        <span className="ml-1 font-normal text-slate-500">a second account, an old one, or Local Services in an account of its own</span>
-      </p>
+    <div className={inline ? '' : 'mt-3 border-t border-slate-100 pt-3'} data-google-extra-accounts>
+      {!inline && (
+        <p className="text-xs font-semibold text-slate-800">
+          Other Google Ads accounts
+          <span className="ml-1 font-normal text-slate-500">a second account, an old one, or Local Services in an account of its own</span>
+        </p>
+      )}
       {extras.length > 0 && (
-        <ul className="mt-2 space-y-1.5">
+        <ul className={`${inline ? '' : 'mt-2 '}space-y-1.5`}>
           {extras.map((id) => {
             const s = status[id]
             return (
-              <li key={id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs" data-extra-account={id}>
-                <span className="font-mono tabular-nums text-slate-900">{dashedId(id)}</span>
+              <li key={id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-2.5 py-1.5 text-xs ${t.row}`} data-extra-account={id}>
+                <span className={`font-mono tabular-nums ${t.id}`}>{dashedId(id)}</span>
                 {!s ? (
-                  <span className="text-slate-500">Not read yet. Tonight’s sync will pick it up.</span>
+                  <span className={t.quiet}>Not read yet. Tonight’s sync will pick it up.</span>
                 ) : s.ok ? (
-                  <span className="text-emerald-700">
+                  <span className={t.ok}>
                     ✓ Connected{Number(s.spend) > 0 ? `, $${Number(s.spend).toLocaleString('en-US', { maximumFractionDigits: 0 })} in the last sync` : ', no spend in the last sync'}
                   </span>
                 ) : (
-                  <span className="text-amber-800">{explainSyncError(s.error)}</span>
+                  <span className={t.warn}>{explainSyncError(s.error)}</span>
                 )}
                 <button
                   type="button"
                   onClick={() => remove(id)}
                   disabled={working}
-                  className="ml-auto rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-200 hover:text-slate-800 disabled:opacity-40"
+                  className={`ml-auto rounded px-1.5 py-0.5 disabled:opacity-40 ${t.remove}`}
                   aria-label={`Remove account ${dashedId(id)}`}
                 >
                   {busy === id ? 'Removing…' : 'Remove'}
@@ -146,7 +181,12 @@ export default function GoogleExtraAccounts({ client, onSaved }) {
           })}
         </ul>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      {!open ? (
+        <button type="button" onClick={() => setOpen(true)} className={`${extras.length ? 'mt-1.5 ' : ''}text-xs font-medium ${t.link}`} data-add-another>
+          + Add another account
+        </button>
+      ) : (
+      <div className={`${inline && !extras.length ? '' : 'mt-2 '}flex flex-wrap items-center gap-2`}>
         <input
           value={value}
           onChange={(e) => {
@@ -157,20 +197,22 @@ export default function GoogleExtraAccounts({ client, onSaved }) {
           inputMode="numeric"
           placeholder="123-456-7890"
           aria-label={`Another Google Ads customer ID for ${client.name}`}
-          className={`w-36 rounded-lg border bg-white px-2.5 py-1 font-mono text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-            digits.length > 0 && !cleanCustomerId(value) ? 'border-amber-400' : 'border-slate-300'
+          autoFocus={inline}
+          className={`w-36 rounded-lg border px-2.5 py-1 font-mono text-xs tabular-nums focus:outline-none focus:ring-2 ${t.input} ${
+            digits.length > 0 && !cleanCustomerId(value) ? 'border-amber-400' : t.inputEdge
           }`}
         />
         <button
           type="button"
           onClick={add}
           disabled={working || !digits}
-          className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+          className={`rounded-lg px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${t.button}`}
         >
           {busy === 'adding' ? 'Saving…' : busy === 'syncing' ? 'Checking access…' : 'Add account & sync'}
         </button>
       </div>
-      {note && <p className={`mt-1.5 text-xs ${note.ok ? 'text-emerald-700' : 'text-amber-800'}`}>{note.ok ? '✓ ' : ''}{note.text}</p>}
+      )}
+      {note && <p className={`mt-1.5 text-xs ${note.ok ? t.ok : t.warn}`}>{note.ok ? '✓ ' : ''}{note.text}</p>}
     </div>
   )
 }
