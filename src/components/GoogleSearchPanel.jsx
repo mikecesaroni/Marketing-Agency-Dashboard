@@ -7,6 +7,7 @@ import { discoverGoogleAdsAccounts } from '../lib/googleAdsDiscover'
 import { buildGoogleAdsAccessMessage, buildGoogleAdsLinkWalkthrough, GOOGLE_ADS_MANAGER_ID_DISPLAY } from '../lib/googleAdsAccessMessage'
 import CopySetupMessageButton from './CopySetupMessageButton'
 import GoogleAdsIdInput from './GoogleAdsIdInput'
+import GoogleExtraAccounts from './GoogleExtraAccounts'
 import { dashedId, explainSyncError, isAccessError } from '../lib/googleAdsId'
 import { AGENCY_EMAIL, AGENCY_EMAIL_DOMAIN } from '../lib/agencyEmail'
 import { announceAccount } from '../lib/teamBriefClient'
@@ -388,6 +389,7 @@ export default function GoogleSearchPanel({ client, onUpdate }) {
         <span className="text-xs text-slate-600">Google Ads customer ID</span>
         <GoogleAdsIdInput client={client} onSaved={onUpdate} compact />
       </div>
+      <GoogleExtraAccounts client={client} onSaved={onUpdate} />
     </div>
   )
 }

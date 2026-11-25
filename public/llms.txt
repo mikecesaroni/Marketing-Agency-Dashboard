@@ -586,6 +586,10 @@ Which Facebook Page or pixel a client advertises with
   Go to: The client page → the Meta ad account section
   Filled in automatically once an ad account is connected. Blank usually means no ad account is connected yet.
 
+A client with two Google Ads accounts
+  Go to: Client page, Google tab
+  "Other Google Ads accounts": add each ID. All count under the client.
+
 How the agency does something
   Go to: SOPs
   Search it. This is written procedure, not client data.

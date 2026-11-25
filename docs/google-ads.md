@@ -488,3 +488,18 @@ Construction, Pillar HVAC and Supreme Comfort are the same. Hometown
 Roofing's pay-per-lead campaign is paused. Express Home Services' Local
 Services has been paused since July 2024 (519 leads before that). Horizon
 HVAC (ours) has a pay-per-lead campaign on and 503 leads, last on Nov 4.
+
+## More than one account on a client (2026-11-25)
+
+"Make so I can add multiple Google customer IDs to Google Ads for a client." Some clients have more than one account: an old account next to a new one, a second location, or Local Services living in an account of its own.
+
+- **One main account, any number of others.** `clients.google_ads_customer_id` is still the main account and still what "connected" means everywhere. The others are in `clients.google_ads_extra_customer_ids` (`supabase/google-extra-accounts.sql`).
+- **Where it is typed.** Client page, Google tab, under the main ID: "Other Google Ads accounts" (`src/components/GoogleExtraAccounts.jsx`). "Add account & sync" saves the ID, syncs the client on the spot and says whether Google let us into that account. Each account in the list shows how its last read went.
+- **What the sync does.** `google-daily-sync` reads every extra account exactly as it reads the main one (campaigns, keywords, search terms, the campaign list, and Local Services leads where it holds a pay-per-lead campaign) and files the rows under the same client with that account's own `customer_id`. Every report reads by client, so the numbers add up with nothing else to change. The weekly totals in `weekly_kpis` are the sum across the accounts.
+- **One failing does not fail the client.** Each extra account is read in its own try. How it went is saved in `clients.google_ads_extra_status`, apart from `google_ads_sync_error`, which stays about the main account: a second account we cannot reach must not make a working client read as "No access yet". Its rows from the last good read are kept.
+- **One account belongs to one client.** The box refuses an ID that is another client's main account, extra account or Local Services account (`extraIdProblem` in `src/lib/googleAdsId.js`), because the same account on two clients counts its spend twice. Discovery treats an extra account as claimed, so it is never auto-matched or offered to another client.
+- **Removing.** "Remove" takes the account off the client and deletes that account's rows for the client (campaign, keyword and search-term days, and Local Services leads), then re-syncs so the weekly totals are rebuilt without it.
+- `lsa_customer_id` still works for a separate Local Services account found by discovery (campaigns and leads only). An ID added as an extra account is read in full instead.
+
+Pinned by `scripts/check-google-ads-match.mjs`.
+

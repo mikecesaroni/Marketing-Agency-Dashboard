@@ -124,6 +124,18 @@ function bareId(v: unknown): string {
   return String(v ?? '').replace(/\D/g, '')
 }
 
+/**
+ * A client's OTHER Google Ads accounts (clients.google_ads_extra_customer_ids,
+ * 2026-11-25: "add multiple Google customer IDs for a client"): ten digits
+ * each, no repeats, and never the main account again. Read exactly like the
+ * main account and filed under the same client.
+ */
+export function extraIdsOf(client: { google_ads_customer_id?: string | null; google_ads_extra_customer_ids?: unknown } | null | undefined): string[] {
+  const main = bareId(client?.google_ads_customer_id)
+  const list = Array.isArray(client?.google_ads_extra_customer_ids) ? (client!.google_ads_extra_customer_ids as unknown[]) : []
+  return [...new Set(list.map((v) => bareId(v)).filter((id) => id.length === 10 && id !== main))]
+}
+
 let cachedToken: { token: string; expiresAt: number } | null = null
 
 async function accessToken(): Promise<string> {
@@ -384,10 +396,12 @@ export type Candidate = { customer_id: string; account: string; score: number }
  * worse than an empty panel.
  */
 export function matchAccounts(
-  clients: { id: string; name: string; google_ads_customer_id?: string | null }[],
+  clients: { id: string; name: string; google_ads_customer_id?: string | null; google_ads_extra_customer_ids?: unknown }[],
   accounts: LinkedAccount[]
 ): { matches: Match[]; candidates: Record<string, Candidate[]>; unclaimed: LinkedAccount[] } {
-  const claimed = new Set(clients.map((c) => bareId(c.google_ads_customer_id)).filter(Boolean))
+  // An account a client already carries, as its main one or as one of its
+  // others, is nobody else's to be offered.
+  const claimed = new Set(clients.flatMap((c) => [bareId(c.google_ads_customer_id), ...extraIdsOf(c)]).filter(Boolean))
   const open = accounts.filter((a) => !a.manager && !claimed.has(a.id))
   const need = clients.filter((c) => !bareId(c.google_ads_customer_id))
 
@@ -438,7 +452,7 @@ async function discover(
   opts: { dryRun?: boolean } = {}
 ) {
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id,lsa_customer_id&archived=eq.false&order=name`,
+    `${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id,google_ads_extra_customer_ids,lsa_customer_id&archived=eq.false&order=name`,
     { headers: db }
   )
   const clients = await res.json()
@@ -481,7 +495,11 @@ async function discover(
   const savedLsa: Match[] = []
   const lsaMatches: Match[] = []
   const withSearch = clients.filter((c: any) => bareId(c.google_ads_customer_id) && !bareId(c.lsa_customer_id))
-  const taken = new Set([...saved.map((s) => s.customer_id), ...clients.map((c: any) => bareId(c.lsa_customer_id)).filter(Boolean)])
+  const taken = new Set([
+    ...saved.map((s) => s.customer_id),
+    ...clients.map((c: any) => bareId(c.lsa_customer_id)).filter(Boolean),
+    ...clients.flatMap((c: any) => extraIdsOf(c)),
+  ])
   const lsaPass = matchAccounts(
     withSearch.map((c: any) => ({ id: c.id, name: c.name, google_ads_customer_id: null })),
     unclaimed.filter((a) => !a.manager && !taken.has(a.id))
@@ -829,18 +847,18 @@ async function serve(req: Request): Promise<Response> {
     try {
       const manager = bareId(Deno.env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID'))
       const token = await accessToken()
-      const clientsRes = await fetch(`${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id,lsa_customer_id,archived`, { headers: db })
+      const clientsRes = await fetch(`${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id,google_ads_extra_customer_ids,lsa_customer_id,archived`, { headers: db })
       const clientRows = clientsRes.ok ? await clientsRes.json() : []
       const owner = (id: string) =>
         clientRows
-          .filter((c: any) => bareId(c.google_ads_customer_id) === id || bareId(c.lsa_customer_id) === id)
+          .filter((c: any) => bareId(c.google_ads_customer_id) === id || bareId(c.lsa_customer_id) === id || extraIdsOf(c).includes(id))
           .map((c: any) => `${c.name}${c.archived ? ' (archived)' : ''}`)
       let targets: { id: string; name: string }[] = []
       if (body.customer_id) targets = [{ id: bareId(body.customer_id), name: '' }]
       else if (body.client_id) {
         const c = clientRows.find((x: any) => x.id === String(body.client_id))
         if (!c) return json({ ok: false, error: 'No such client.' }, 404)
-        targets = [bareId(c.google_ads_customer_id), bareId(c.lsa_customer_id)].filter(Boolean).map((id) => ({ id, name: c.name }))
+        targets = [...new Set([bareId(c.google_ads_customer_id), ...extraIdsOf(c), bareId(c.lsa_customer_id)].filter(Boolean))].map((id) => ({ id, name: c.name }))
         if (!targets.length) return json({ ok: false, error: `${c.name} has no Google Ads account saved.` }, 400)
       } else {
         const linked = manager ? await linkedAccounts(token, manager).catch(() => []) : []
@@ -924,7 +942,7 @@ async function serve(req: Request): Promise<Response> {
 
     const filter = body.client_id ? `&id=eq.${encodeURIComponent(String(body.client_id))}` : ''
     const clientsRes = await fetch(
-      `${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id,lsa_customer_id,lsa_active` +
+      `${supabaseUrl}/rest/v1/clients?select=id,name,google_ads_customer_id,google_ads_extra_customer_ids,lsa_customer_id,lsa_active` +
         `&google_ads_customer_id=not.is.null&archived=eq.false${filter}`,
       { headers: db }
     )
@@ -974,25 +992,52 @@ async function serve(req: Request): Promise<Response> {
 
       // One client's revoked link must not stop the rest of the run.
       try {
-        const [keywords, terms, campaigns, inv] = await Promise.all([
-          gaqlEither(customerId, KEYWORD_QUERY(sinceStr, untilStr), token),
-          gaqlEither(customerId, SEARCH_TERM_QUERY(sinceStr, untilStr), token),
-          gaqlEither(customerId, CAMPAIGN_QUERY(sinceStr, untilStr), token),
-          // Every campaign, spending or not, so a paused pay-per-lead one is
-          // found. Never allowed to fail the client's sync.
-          inventory(customerId, token).then(
-            (v) => ({ ...v, error: '' }),
-            (err) => ({ campaigns: [] as CampaignInfo[], flagRead: false, error: String(err instanceof Error ? err.message : err) })
-          ),
-        ])
+        // Everything one account holds for the window. The main account and
+        // each of the client's other accounts are read the same way.
+        const readAccount = (account: string) =>
+          Promise.all([
+            gaqlEither(account, KEYWORD_QUERY(sinceStr, untilStr), token),
+            gaqlEither(account, SEARCH_TERM_QUERY(sinceStr, untilStr), token),
+            gaqlEither(account, CAMPAIGN_QUERY(sinceStr, untilStr), token),
+            // Every campaign, spending or not, so a paused pay-per-lead one is
+            // found. Never allowed to fail the client's sync.
+            inventory(account, token).then(
+              (v) => ({ ...v, error: '' }),
+              (err) => ({ campaigns: [] as CampaignInfo[], flagRead: false, error: String(err instanceof Error ? err.message : err) })
+            ),
+          ])
+        const [keywords, terms, campaigns, inv] = await readAccount(customerId)
+
+        // THE CLIENT'S OTHER ACCOUNTS (2026-11-25). Read one at a time, each
+        // in its own try: an account we cannot reach is written down against
+        // that account and the rest of the client still syncs. The main
+        // account failing is still the client failing, as before.
+        type Source = { account: string; keywords: any[]; terms: any[]; campaigns: any[]; inv: { campaigns: CampaignInfo[]; error: string } }
+        const sources: Source[] = [{ account: customerId, keywords, terms, campaigns, inv }]
+        const extraStatus: Record<string, Record<string, unknown>> = {}
+        for (const account of extraIdsOf(client)) {
+          try {
+            const [k, t, c, i] = await readAccount(account)
+            sources.push({ account, keywords: k, terms: t, campaigns: c, inv: i })
+            extraStatus[account] = {
+              ok: true,
+              error: null,
+              spend: Number(c.reduce((sum: number, r: any) => sum + fromMicros(r.metrics?.costMicros), 0).toFixed(2)),
+              campaigns: i.campaigns.length,
+              synced_at: new Date().toISOString(),
+            }
+          } catch (err) {
+            extraStatus[account] = { ok: false, error: String(err instanceof Error ? err.message : err).slice(0, 600), synced_at: new Date().toISOString() }
+          }
+        }
         // The campaigns Google runs as Local Services, by id, so their rows
         // are labelled pay per lead whatever they are called.
-        const pplIds = new Set(inv.campaigns.filter((c) => c.ppl).map((c) => c.id))
+        const pplIds = new Set(sources.flatMap((s) => s.inv.campaigns.filter((c) => c.ppl).map((c) => c.id)))
 
-        const keywordRows = keywords.map((r: any) => ({
+        const keywordRows = sources.flatMap((s) => s.keywords.map((r: any) => ({
           client_id: client.id,
           date: r.segments?.date,
-          customer_id: customerId,
+          customer_id: s.account,
           campaign_id: String(r.campaign?.id ?? ''),
           campaign_name: r.campaign?.name ?? null,
           ad_group_id: String(r.adGroup?.id ?? ''),
@@ -1006,12 +1051,12 @@ async function serve(req: Request): Promise<Response> {
           cost: fromMicros(r.metrics?.costMicros),
           conversions: num(r.metrics?.conversions),
           conversion_value: num(r.metrics?.conversionsValue),
-        }))
+        })))
 
-        const termRows = terms.map((r: any) => ({
+        const termRows = sources.flatMap((s) => s.terms.map((r: any) => ({
           client_id: client.id,
           date: r.segments?.date,
-          customer_id: customerId,
+          customer_id: s.account,
           campaign_id: String(r.campaign?.id ?? ''),
           campaign_name: r.campaign?.name ?? null,
           ad_group_id: String(r.adGroup?.id ?? ''),
@@ -1026,7 +1071,7 @@ async function serve(req: Request): Promise<Response> {
           clicks: num(r.metrics?.clicks),
           cost: fromMicros(r.metrics?.costMicros),
           conversions: num(r.metrics?.conversions),
-        }))
+        })))
 
         // The unique key is (client, date, ad_group, criterion) and Google can
         // return the same keyword twice in a window when something about it
@@ -1098,7 +1143,7 @@ async function serve(req: Request): Promise<Response> {
           conversion_value: num(r.metrics?.conversionsValue),
         })
         const campaignRows = dedupe(
-          campaigns.map((r: any) => campaignRow(r, customerId)),
+          sources.flatMap((s) => s.campaigns.map((r: any) => campaignRow(r, s.account))),
           (r) => `${r.date}|${r.campaign_id}`
         )
         await write('google_campaign_daily', campaignRows, 'client_id,date,campaign_id')
@@ -1109,17 +1154,22 @@ async function serve(req: Request): Promise<Response> {
         // its id in lsa_customer_id: that account is read for campaigns too,
         // into the same table under its own customer id. Then the leads,
         // from every account that showed a Local Services campaign.
-        let allCampaigns = campaigns
+        let allCampaigns = sources.flatMap((s) => s.campaigns)
         let lsaRows = campaignRows.filter((r) => isLsaCampaign(r.campaign_type, r.campaign_name))
         const lsaAccounts = new Set<string>()
         // An account with a pay-per-lead campaign gets its leads read even
         // when nothing spent in the window: the campaign is paused, or new.
-        if (lsaRows.length || pplIds.size) lsaAccounts.add(customerId)
-        let pplList = pplSummary(inv.campaigns, customerId)
-        const inventoryError = inv.error ? `campaign list of ${customerId}: ${inv.error}` : ''
+        for (const s of sources) {
+          if (lsaRows.some((r) => r.customer_id === s.account) || s.inv.campaigns.some((c) => c.ppl)) lsaAccounts.add(s.account)
+        }
+        let pplList = sources.flatMap((s) => pplSummary(s.inv.campaigns, s.account))
+        const inventoryError = sources
+          .filter((s) => s.inv.error)
+          .map((s) => `campaign list of ${s.account}: ${s.inv.error}`)
+          .join(' · ')
         const lsaAccount = bareId(client.lsa_customer_id)
         let lsaError = ''
-        if (lsaAccount && lsaAccount !== customerId) {
+        if (lsaAccount && !sources.some((s) => s.account === lsaAccount)) {
           try {
             const moreInv = await inventory(lsaAccount, token).catch(() => ({ campaigns: [] as CampaignInfo[], flagRead: false }))
             for (const c of moreInv.campaigns) if (c.ppl) pplIds.add(c.id)
@@ -1127,7 +1177,7 @@ async function serve(req: Request): Promise<Response> {
             const more = await gaqlEither(lsaAccount, CAMPAIGN_QUERY(sinceStr, untilStr), token)
             const moreRows = dedupe(more.map((r: any) => campaignRow(r, lsaAccount)), (r) => `${r.date}|${r.campaign_id}`)
             await write('google_campaign_daily', moreRows, 'client_id,date,campaign_id')
-            allCampaigns = [...campaigns, ...more]
+            allCampaigns = [...allCampaigns, ...more]
             const moreLsa = moreRows.filter((r) => isLsaCampaign(r.campaign_type, r.campaign_name))
             lsaRows = [...lsaRows, ...moreLsa]
             if (moreLsa.length || moreInv.campaigns.some((c) => c.ppl)) lsaAccounts.add(lsaAccount)
@@ -1174,7 +1224,9 @@ async function serve(req: Request): Promise<Response> {
         // weekly numbers. The window was just re-read from the client's own
         // accounts, so whatever it holds for this client from any other
         // account goes. Outside the window nothing is touched.
-        const own = [...new Set([customerId, lsaAccount].filter(Boolean))].join(',')
+        // An extra account that could not be read this time is still the
+        // client's own: its rows from the last good read stay.
+        const own = [...new Set([customerId, ...extraIdsOf(client), lsaAccount].filter(Boolean))].join(',')
         for (const table of ['google_campaign_daily', 'google_keyword_daily', 'google_search_term_daily']) {
           await fetch(
             `${supabaseUrl}/rest/v1/${table}?client_id=eq.${encodeURIComponent(client.id)}&date=gte.${sinceStr}&date=lte.${untilStr}&customer_id=not.in.(${own})`,
@@ -1195,6 +1247,11 @@ async function serve(req: Request): Promise<Response> {
           if (lsaSpend7 > 0 && !client.lsa_active) lsaPatch.lsa_active = true
         }
         if (Object.keys(lsaPatch).length) await patchClient(client.id, lsaPatch)
+        // How each of the other accounts read, on the client row, so the
+        // client page can say which one Google refused. Null with none.
+        const extras = extraIdsOf(client)
+        await patchClient(client.id, { google_ads_extra_status: extras.length ? extraStatus : null })
+        const extraErrors = extras.filter((id) => extraStatus[id]?.ok === false).map((id) => ({ account: id, error: String(extraStatus[id].error || '') }))
 
         // THE ROLL-UP, from campaign grain so every campaign type is counted.
         const weeks = new Map<string, { spend: number; leads: number }>()
@@ -1251,6 +1308,7 @@ async function serve(req: Request): Promise<Response> {
         results.push({
           client: client.name,
           customer_id: customerId,
+          ...(extras.length ? { accounts: [customerId, ...extras], ...(extraErrors.length ? { extra_errors: extraErrors } : {}) } : {}),
           keywords: keywordsOut.length,
           search_terms: termsOut.length,
           campaign_days: campaignRows.length,

@@ -678,6 +678,11 @@ export const LOOKUPS = [
     how: 'Filled in automatically once an ad account is connected. Blank usually means no ad account is connected yet.',
   },
   {
+    need: 'A client with two Google Ads accounts',
+    where: 'Client page, Google tab',
+    how: '"Other Google Ads accounts": add each ID. All count under the client.',
+  },
+  {
     need: 'How the agency does something',
     where: 'SOPs',
     how: 'Search it. This is written procedure, not client data.',
