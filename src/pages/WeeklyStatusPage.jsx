@@ -213,12 +213,7 @@ export default function WeeklyStatusPage() {
             <span className="text-red-700">▼ {t.down} down</span>
             <span>{t.needAds} need a new ad</span>
             <span>{t.adsOff} with ads off</span>
-            <span>
-              {t.needCall} need a call ·{' '}
-              <Link to="/status" className="text-blue-700 hover:underline">
-                Client tiers
-              </Link>
-            </span>
+            <span>{t.needCall} need a call</span>
           </p>
 
           <Card className="mt-4 hidden overflow-x-auto md:block" padding="sm">

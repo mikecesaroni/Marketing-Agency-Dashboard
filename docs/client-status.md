@@ -1,5 +1,30 @@
 # Client tiers (the Client tiers board)
 
+## 2026-11-26: names only
+
+"Make client tiers be all 3 tiers horizontally and then all clients listed below. Can see all of them without scrolling. Get rid of all the bs info and just show us their names and we can click onto them to see more details like what their plan includes, live status on Meta/Google. Simple. Get rid of the calling."
+
+The page (`src/pages/ClientStatusPage.jsx`, `/status`) is now three columns side by side, one per plan, each headed with the plan and a count, and under it only the names: running clients A to Z, then paused ones in grey. A "No plan set" strip shows below only when somebody has none. Nothing else is on the page: no cards, checklists, flags, views, owner filter, search, phone buttons or "to call" counts.
+
+Clicking a name opens the details: the plan and its price, what the plan includes (`TIERS[].includes`), the live status on Meta and Google, a "Change plan" dropdown (writes `clients.tier`; the name moves column) and "Open client page".
+
+Live status is `liveChannels(row)` in `src/lib/tierBoard.js`, on top of `everyChannel()` in `src/lib/channelStatus.js` (both channels always, each marked `inPackage` or not):
+
+| Shown | Means |
+|---|---|
+| Live | Meta: marked live and the delivery alert is quiet. Google: one of our campaigns ran in the last two weeks, or Local Services is marked live (the line under it says which). |
+| Not live yet | The account is connected, nothing running. |
+| Not connected | No account on the client. |
+| No access | A Google Ads id is saved and Google refuses us. |
+| Stopped | Meta is marked live but nothing is spending, or the ad account is disabled (the board's `ads-off` / `account` flag). |
+| Paused | The client is on pause. |
+
+A channel outside the plan says "Not part of their plan".
+
+What did not change: the flags below are still worked out (`src/lib/clientStatus.js`) for the morning brief, the Slack alerts and Weekly status, and the launch checklist is still the Next-up bar on each client's page. They are just not shown here. Everything under "The flags" and "The board" below describes the page as it was until this date and the logic that still feeds the brief.
+
+Pinned by `scripts/check-channel-status.mjs` (`everyChannel`, `liveChannels`, `tierColumns`).
+
 Added 2026-10-20, after "organize all clients in 3 buckets based on which tier they are in and what they need us to do ... flag any clients who haven't had videos in 10 days or they have not been getting leads". It took over from the Onboarding Progress board (`/deliverables`, which still lands here).
 
 ## The packages

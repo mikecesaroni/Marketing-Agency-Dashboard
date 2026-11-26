@@ -19,13 +19,8 @@ import { isAccessError } from './googleAdsId.js'
 /** live: ads running · connected: account in, not live · refused: Google has not let us in · missing: no account */
 export const CHANNEL_STATES = ['live', 'connected', 'refused', 'missing']
 
-/**
- * client: a clients row; googleCampaigns: campaigns the Google sync saw
- * running (pipelineRows.js counts them). Returns one entry per channel to
- * show, in order: { key, label, state, detail, extra } where extra marks a
- * live channel the package does not owe.
- */
-export function channelStatus(client = {}, { googleCampaigns = 0 } = {}) {
+/** Where the client stands on each channel, and which ones their package owes. */
+function readChannels(client = {}, { googleCampaigns = 0 } = {}) {
   const { tier } = tierOf(client)
   const metaAccount = Boolean(client.meta_ad_account_id)
   const metaPage = Boolean(client.meta_page_id)
@@ -67,12 +62,33 @@ export function channelStatus(client = {}, { googleCampaigns = 0 } = {}) {
           ? 'Google Ads account connected, no campaign running yet'
           : 'No Google Ads account connected',
   }
-  const all = { meta, google }
+  return { meta, google, owed }
+}
+
+/**
+ * client: a clients row; googleCampaigns: campaigns the Google sync saw
+ * running (pipelineRows.js counts them). Returns one entry per channel to
+ * show, in order: { key, label, state, detail, extra } where extra marks a
+ * live channel the package does not owe.
+ */
+export function channelStatus(client = {}, opts = {}) {
+  const { owed, ...all } = readChannels(client, opts)
   const out = owed.map((k) => ({ ...all[k], extra: false }))
   for (const k of ['meta', 'google']) {
     if (!owed.includes(k) && all[k].state === 'live') out.push({ ...all[k], extra: true, detail: `${all[k].detail} (not in their package)` })
   }
   return out
+}
+
+/**
+ * Meta and Google both, always, for one client's details (the Client tiers
+ * page: "click onto them to see ... live status on Meta/Google"). Each entry
+ * says whether the package includes that channel, so "Google: not connected"
+ * on a one-channel plan reads as expected rather than as a gap.
+ */
+export function everyChannel(client = {}, opts = {}) {
+  const { owed, ...all } = readChannels(client, opts)
+  return ['meta', 'google'].map((k) => ({ ...all[k], inPackage: owed.includes(k) }))
 }
 
 /** True when a channel the package owes has no account, or Google has refused us. */

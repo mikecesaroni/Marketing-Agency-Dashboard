@@ -59,7 +59,7 @@ export default function OnboardingCallPanel({ client, intake }) {
     setGhl(setup.data || null)
   }, [client?.id])
 
-  // "Mark the call done": one row on the sheet, so the Client tiers board and
+  // "Mark the call done": one row on the sheet, so the launch checklist and
   // the morning brief stop calling the call our next move ("make so I can
   // click if the onboarding call has been done yet"). Undo takes that one
   // row back and leaves the ticks made on the call alone.
@@ -208,7 +208,7 @@ export default function OnboardingCallPanel({ client, intake }) {
               ✓ Call done
             </span>
           ) : (
-            <Button variant="outline" size="sm" onClick={markCallDone} disabled={marking} data-mark-call-done title="The call happened: tell the Client tiers board and the morning brief, so it stops being our next move">
+            <Button variant="outline" size="sm" onClick={markCallDone} disabled={marking} data-mark-call-done title="The call happened: tell the morning brief, so it stops being our next move">
               {marking ? 'Saving…' : '✓ Mark the call done'}
             </Button>
           )}
