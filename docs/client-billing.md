@@ -110,3 +110,10 @@ the page complete: a **$2,500 a month** and a **$3,500 a month** Payment
 Link pasted into the Stripe box (neither exists yet, so those clients see
 "on its way" until they do), and the setup fee link's amount checked
 against what it charges in Stripe.
+
+## A new client who is not in the CRM yet
+
+Since 2026-11-27 there is a link for that too: a signup link
+(`/join/<token>`, `docs/client-signup.md`) takes the same two payments
+through the same saved Stripe links, then the onboarding form, and the first
+payment makes the client.

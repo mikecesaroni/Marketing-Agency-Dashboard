@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import AddClientForm from '../components/AddClientForm'
+import SignupLinkPanel from '../components/SignupLinkPanel'
 import { fetchClientsWithKPIs, money } from '../lib/queries'
 import { liveClients } from '../lib/liveClients'
 import { cached, keys } from '../lib/pageCache'
@@ -186,6 +187,7 @@ export default function ClientsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showSignup, setShowSignup] = useState(false)
 
   useEffect(() => {
     loadClients()
@@ -243,10 +245,17 @@ export default function ClientsPage() {
     })
   }, [clients, search, statusFilter])
 
+  // Two ways in: add them by hand, or send a signup link they pay through
+  // and land here on their own (src/components/SignupLinkPanel.jsx).
   const addButton = (
-    <Button variant="dark" size="lg" onClick={() => setShowAddModal(true)} className="w-full md:w-auto">
-      + New Client
-    </Button>
+    <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+      <Button variant="outline" size="lg" onClick={() => setShowSignup(true)} className="w-full md:w-auto" data-signup-open>
+        Signup link
+      </Button>
+      <Button variant="dark" size="lg" onClick={() => setShowAddModal(true)} className="w-full md:w-auto">
+        + New Client
+      </Button>
+    </div>
   )
 
   return (
@@ -429,6 +438,9 @@ export default function ClientsPage() {
         </>
       )}
 
+      <Modal isOpen={showSignup} onClose={() => setShowSignup(false)} title="Signup link" wide>
+        <SignupLinkPanel onClientMade={loadClients} />
+      </Modal>
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="New Client">
         <AddClientForm onSuccess={loadClients} onClose={() => setShowAddModal(false)} />
       </Modal>

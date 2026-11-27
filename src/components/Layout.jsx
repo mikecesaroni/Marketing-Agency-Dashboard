@@ -154,6 +154,13 @@ export default function Layout({ title, subtitle, actions, children, tone = 'lig
   // The report pages run dark: the page, the sticky header and the title.
   // Everything else in the app keeps the light frame.
   const dark = tone === 'dark'
+  // A signup link's payment makes a client with nobody at the keyboard
+  // (docs/client-signup.md). The first CRM page anybody opens after that
+  // makes their onboarding tasks and tells the channel; it looks at most
+  // every five minutes, and the file loads only for this.
+  useEffect(() => {
+    import('../lib/clientSignupStore').then((m) => m.finishSignups()).catch(() => {})
+  }, [])
   // The body is the scroll container (index.css), so an overscroll bounce
   // shows its colour. Match it on dark pages, put it back on the way out.
   useEffect(() => {

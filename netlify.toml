@@ -58,6 +58,10 @@
 #   to = "/index.html"
 #   status = 200
 # [[redirects]]
+#   from = "https://clients.example.com/join/*"
+#   to = "/index.html"
+#   status = 200
+# [[redirects]]
 #   from = "https://clients.example.com/*"
 #   to = "/nothing-here.html"
 #   status = 404
@@ -100,6 +104,11 @@
 
 [[redirects]]
   from = "/pay/*"
+  to = "/client.html"
+  status = 200
+
+[[redirects]]
+  from = "/join/*"
   to = "/client.html"
   status = 200
 

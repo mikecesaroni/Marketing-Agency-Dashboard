@@ -30,6 +30,7 @@ const LABELS = {
   '/scripts/': 'Video Scripts',
   '/videos/': 'My Videos',
   '/pay/': 'Billing',
+  '/join/': 'Get Started',
 }
 
 /** The name the icon gets on the phone, by which client page this is; '' for a CRM page. */

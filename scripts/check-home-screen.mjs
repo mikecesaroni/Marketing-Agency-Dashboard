@@ -12,7 +12,7 @@ const check = (name, got, want) => {
   if (!ok) console.log(`        want ${JSON.stringify(want)}\n        got  ${JSON.stringify(got)}`)
 }
 
-check('each client page names its icon', ['/dashboard/abc', '/report/abc', '/approve/abc', '/onboarding/abc', '/scripts/abc', '/videos/abc', '/pay/abc'].map(homeScreenLabel), ['KPI Dashboard', 'Weekly Report', 'Ad Approval', 'Onboarding', 'Video Scripts', 'My Videos', 'Billing'])
+check('each client page names its icon', ['/dashboard/abc', '/report/abc', '/approve/abc', '/onboarding/abc', '/scripts/abc', '/videos/abc', '/pay/abc', '/join/abc'].map(homeScreenLabel), ['KPI Dashboard', 'Weekly Report', 'Ad Approval', 'Onboarding', 'Video Scripts', 'My Videos', 'Billing', 'Get Started'])
 check('a CRM page is left alone', ['/', '/clients', '/client/abc', '/dashboard', '/login'].map(homeScreenLabel), ['', '', '', '', ''])
 
 // A stand-in for the document: a head with the manifest link and the iOS

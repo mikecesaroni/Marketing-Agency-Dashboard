@@ -41,7 +41,10 @@ function check(name, actual, expected) {
 // `raceWith` are rows another delivery of the webhook is writing AT THE SAME
 // TIME: invisible until this one has written its own row, the way the
 // subscription checkout and its first invoice landed two milliseconds apart.
-function makeFake({ client, payments, parked = [], ignored = [], parkFails = false, raceWith = [] }) {
+// `signup` is a signup link the claim function knows: { id, created }. The
+// claim answers with the client it made (or already had) for that id, null
+// for any other, and `claimFails` makes it a database that is not answering.
+function makeFake({ client, payments, parked = [], ignored = [], parkFails = false, raceWith = [], signup = null, claimFails = false }) {
   const rows = payments.map((p, i) => ({ id: `p${i}`, notes: null, ...p }))
   // The unmatched queue, so parking can be asserted on rather than inferred
   // from a log line.
@@ -90,6 +93,11 @@ function makeFake({ client, payments, parked = [], ignored = [], parkFails = fal
       return []
     },
     async post(table, body) {
+      if (table === 'rpc/client_signup_claim') {
+        log.push({ op: 'claim', id: body.p_id })
+        if (claimFails) return new Response('down', { status: 503 })
+        return new Response(JSON.stringify(signup && body.p_id === signup.id ? { client_id: client.id, created: signup.created } : null))
+      }
       log.push({ op: 'insert', table, body })
       if (table === 'stripe_unmatched') {
         if (parkFails) return new Response('permission denied', { status: 403 })
@@ -867,6 +875,81 @@ check('resume on the pause day clears nothing',
   check('an archived internal client is reported once, as archived',
     mrrExclusions([c({ id: 'z', name: 'Both', archived: true, is_internal: true })], []).map((x) => x.reason),
     ['archived'])
+}
+
+// --- signup links: the first payment makes the client -----------------------
+// docs/client-signup.md. The reference on the checkout is the SIGNUP's id;
+// client_signup_claim (supabase/client-signups.sql) answers with the client.
+
+{
+  const SIGNUP = '99999999-9999-4999-8999-999999999999'
+  const NEW = { id: '22222222-2222-2222-2222-222222222222', name: 'New Signup Co', stripe_customer_id: null, monthly_fee: 1500 }
+  const schedule = () => [
+    { payment_type: 'setup', amount: 2500, due_date: '2026-11-27', status: 'pending' },
+    { payment_type: 'monthly', amount: 1500, due_date: '2026-11-27', status: 'pending' },
+    { payment_type: 'monthly', amount: 1500, due_date: '2026-12-27', status: 'pending' },
+  ]
+
+  {
+    const { db, rows, queue, log } = makeFake({ client: { ...NEW }, payments: schedule(), signup: { id: SIGNUP, created: true } })
+    const r = await handleEvent(db, checkout(250000, { mode: 'payment', client_reference_id: SIGNUP, customer: 'cus_new' }))
+    check('signup link, setup fee: the claim makes the client and the fee is booked to them',
+      [r.status, r.newClientId, /signup link/.test(r.note), /new client/.test(r.note), queue.length, rows.filter((x) => x.status === 'paid').map((x) => [x.payment_type, x.amount])],
+      ['processed', NEW.id, true, true, 0, [['setup', 2500]]])
+    check('and the Stripe customer is linked to the new client', log.some((l) => l.op === 'patch' && l.path === `clients?id=eq.${NEW.id}` && l.body.stripe_customer_id === 'cus_new'), true)
+  }
+
+  {
+    const client = { ...NEW }
+    const { db, rows, queue } = makeFake({ client, payments: schedule(), signup: { id: SIGNUP, created: true } })
+    const r = await handleEvent(db, checkout(150000, { mode: 'subscription', client_reference_id: SIGNUP, customer: 'cus_new' }))
+    check('signup link, subscription first: the client is made and linked, no money booked from the checkout',
+      [r.status, r.newClientId, queue.length, rows.filter((x) => x.status === 'paid').length], ['processed', NEW.id, 0, 0])
+    // The fake reads the link the way the database would after the patch.
+    client.stripe_customer_id = 'cus_new'
+    await handleEvent(db, { id: 'evt_first', type: 'invoice.paid', data: { object: { id: 'in_new', customer: 'cus_new', amount_paid: 150000, created: 1788000000, status_transitions: { paid_at: 1788000000 } } } })
+    check('and its first invoice settles the first month of the schedule the claim made',
+      rows.filter((x) => x.status === 'paid').map((x) => [x.payment_type, x.due_date, x.amount]), [['monthly', '2026-11-27', 1500]])
+  }
+
+  {
+    const { db, rows } = makeFake({ client: { ...NEW, stripe_customer_id: 'cus_new' }, payments: schedule(), signup: { id: SIGNUP, created: false } })
+    const r = await handleEvent(db, checkout(250000, { mode: 'payment', client_reference_id: SIGNUP, customer: 'cus_new' }))
+    check('the second payment on the same link goes to the same client, and no second "new client"',
+      [r.status, r.newClientId, /new client/.test(r.note), rows.filter((x) => x.status === 'paid').map((x) => x.payment_type)], ['processed', undefined, false, ['setup']])
+  }
+
+  {
+    // The invoice beat the checkout: parked, then rescued once the claim
+    // made the client and the checkout linked the customer.
+    const { db, rows, queue } = makeFake({ client: { ...NEW }, payments: schedule(), signup: { id: SIGNUP, created: true } })
+    await handleEvent(db, { id: 'evt_early', type: 'invoice.paid', data: { object: { id: 'in_early', customer: 'cus_new', amount_paid: 150000, created: 1788000000, status_transitions: { paid_at: 1788000000 } } } })
+    check('an invoice that arrives before the signup checkout is parked', queue.filter((q) => q.resolved_client_id === null).length, 1)
+    const r = await handleEvent(db, checkout(150000, { mode: 'subscription', client_reference_id: SIGNUP, customer: 'cus_new' }))
+    check('and booked to the new client the moment the checkout lands',
+      [r.newClientId, queue.filter((q) => q.resolved_client_id === null).length, rows.filter((x) => x.status === 'paid').map((x) => x.payment_type)], [NEW.id, 0, ['monthly']])
+  }
+
+  {
+    const { db, queue, log } = makeFake({ client: CLIENT, payments: [] })
+    const r = await handleEvent(db, checkout(250000, { mode: 'payment', client_reference_id: '88888888-8888-4888-8888-888888888888' }))
+    check('a reference that is neither a client nor a signup is parked, as it always was',
+      [r.status, queue.length, log.filter((l) => l.op === 'claim').length], ['unmatched', 1, 1])
+  }
+
+  {
+    const { db, queue, log } = makeFake({ client: { ...NEW }, payments: [], signup: { id: SIGNUP, created: true }, claimFails: true })
+    const r = await handleEvent(db, checkout(250000, { mode: 'payment', client_reference_id: SIGNUP }))
+    check('a claim that cannot be reached is tried twice, then the payment is parked where a person sees it, never lost',
+      [r.status, queue.length, queue[0]?.amount, log.filter((l) => l.op === 'claim').length], ['unmatched', 1, 2500, 2])
+  }
+
+  {
+    const { db, rows, log } = makeFake({ client: CLIENT, payments: [...SCHEDULE.map((p) => ({ ...p }))] })
+    await handleEvent(db, checkout(250000, { mode: 'payment', client_reference_id: CLIENT.id, customer: 'cus_1' }))
+    check('a client\'s own link never asks the signup claim',
+      [log.filter((l) => l.op === 'claim').length, rows.filter((x) => x.status === 'paid').map((x) => x.payment_type)], [0, ['setup']])
+  }
 }
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)

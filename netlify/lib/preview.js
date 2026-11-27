@@ -44,6 +44,14 @@ export const KINDS = {
     description: 'Your plan, your setup fee and your monthly subscription, with a secure Stripe checkout to pay or to start.',
     image: '/og-billing.png',
   },
+  // A new client's signup link: its own token (client_signups), not a
+  // client's dashboard token.
+  join: {
+    prefix: '/join/',
+    title: (name) => (name ? `Get started: ${name}` : 'Get started with The Working Class Marketing'),
+    description: 'Your plan with The Working Class Marketing. Pay securely through Stripe, then tell us about your business so we can get to work.',
+    image: '/og-get-started.png',
+  },
 }
 
 /** Which client page an address is, and its token; null for anything else. */

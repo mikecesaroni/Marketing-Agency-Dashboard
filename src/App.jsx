@@ -9,6 +9,7 @@ import ClientDashboardPage from './pages/ClientDashboardPage'
 import ScriptStudioPage from './pages/ScriptStudioPage'
 import ClientVideosPage from './pages/ClientVideosPage'
 import ClientBillingPage from './pages/ClientBillingPage'
+import ClientJoinPage from './pages/ClientJoinPage'
 import ClientOnboardingPage from './pages/ClientOnboardingPage'
 import AdApprovalPage from './pages/AdApprovalPage'
 import LoginPage from './pages/LoginPage'
@@ -104,6 +105,7 @@ export default function App() {
         <Route path="/scripts/:token" element={<ScriptStudioPage />} />
         <Route path="/videos/:token" element={<ClientVideosPage />} />
         <Route path="/pay/:token" element={<ClientBillingPage />} />
+        <Route path="/join/:token" element={<ClientJoinPage />} />
         <Route path="*" element={<NothingHerePage />} />
       </Routes>
       </>
@@ -147,6 +149,10 @@ export default function App() {
           the subscription, with Stripe's checkout behind the buttons, through
           client_billing_load. */}
       <Route path="/pay/:token" element={<ClientBillingPage />} />
+      {/* Public, with a token of its own: a new client's signup link. They
+          pay, then fill in the onboarding form; the payment is what makes
+          them a client (client_signup_load, docs/client-signup.md). */}
+      <Route path="/join/:token" element={<ClientJoinPage />} />
       {/* A tab that opened a client link never sees the sign-in form. */}
       <Route path="/login" element={cameFromClientLink() ? <NothingHerePage /> : <LoginPage />} />
       {/* Everything else needs a login. RequireAuth also turns a VA away from

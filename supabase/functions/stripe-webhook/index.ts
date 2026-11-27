@@ -130,6 +130,33 @@ function methodFrom(types: unknown): string {
 }
 
 /**
+ * A signup link's payment (docs/client-signup.md, supabase/client-signups.sql).
+ *
+ * The signup page's Stripe links carry the SIGNUP's id as the reference,
+ * because there is no client yet: nobody is in the CRM until money arrives.
+ * client_signup_claim makes the client on the first payment (the plan, the
+ * fees, the billing schedule, the onboarding form link) and returns the same
+ * client on every payment after. Null when the id is not a signup, or the
+ * function is not there, so the payment carries on to the customer id, the
+ * email and the unmatched queue exactly as before.
+ */
+export async function claimSignup(db: Db, ref: string) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await db.post('rpc/client_signup_claim', { p_id: ref }, 'return=representation')
+      if (!res.ok) continue
+      const out = await res.json().catch(() => null)
+      if (!out?.client_id) return null
+      const rows = await db.get(`clients?id=eq.${out.client_id}&select=${CLIENT_FIELDS}`)
+      return rows?.[0] ? { client: rows[0], created: Boolean(out.created) } : null
+    } catch {
+      // once more, then on to the other ways of finding them
+    }
+  }
+  return null
+}
+
+/**
  * Finds the client this money belongs to, best evidence first.
  *
  * client_reference_id is the only signal that is actually authoritative, but it
@@ -140,10 +167,14 @@ function methodFrom(types: unknown): string {
 export async function findClient(
   db: Db,
   { clientRef, customerId, email }: { clientRef?: string | null; customerId?: string | null; email?: string | null }
-) {
+): Promise<{ client: any; via: string | null; created?: boolean }> {
   if (clientRef && UUID_RE.test(clientRef)) {
     const rows = await db.get(`clients?id=eq.${clientRef}&select=${CLIENT_FIELDS}`)
     if (rows?.[0]) return { client: rows[0], via: 'client_reference_id' }
+
+    // Not a client: a signup link, whose own id rides as the reference.
+    const signed = await claimSignup(db, clientRef)
+    if (signed) return { client: signed.client, via: 'signup link', created: signed.created }
   }
 
   if (customerId) {
@@ -305,11 +336,15 @@ export async function handleEvent(db: Db, event: any) {
   if (type === 'checkout.session.completed') {
     const customerId = obj.customer || null
     const email = obj.customer_details?.email || obj.customer_email || null
-    const { client, via } = await findClient(db, {
+    const { client, via, created } = await findClient(db, {
       clientRef: obj.client_reference_id,
       customerId,
       email,
     })
+    // A signup link's first payment just made this client: said in the note,
+    // and handed back so the channel hears about them.
+    const made = created ? { newClientId: client.id } : {}
+    const madeNote = created ? ' (new client, made from their signup link)' : ''
 
     if (!client) {
       // PARKED, INCLUDING SUBSCRIPTIONS.
@@ -353,12 +388,13 @@ export async function handleEvent(db: Db, event: any) {
       const rescued = linked ? await resolveUnmatchedForCustomer(db, customerId, client.id) : 0
       return {
         status: 'processed',
-        note: `subscription linked to ${client.name} via ${via}${rescued ? `, ${rescued} parked payment(s) resolved` : ''}`,
+        note: `subscription linked to ${client.name} via ${via}${rescued ? `, ${rescued} parked payment(s) resolved` : ''}${madeNote}`,
+        ...made,
       }
     }
 
     const amount = centsToAmount(obj.amount_total)
-    if (amount <= 0) return { status: 'ignored', note: 'zero amount checkout session' }
+    if (amount <= 0) return { status: 'ignored', note: `zero amount checkout session${madeNote}`, ...made }
 
     const result = await recordPayment(db, {
       clientId: client.id,
@@ -373,7 +409,8 @@ export async function handleEvent(db: Db, event: any) {
     })
     return {
       status: 'processed',
-      note: `setup fee ${amount} for ${client.name} via ${via}${result.inserted ? ' (unscheduled)' : ''}`,
+      note: `setup fee ${amount} for ${client.name} via ${via}${result.inserted ? ' (unscheduled)' : ''}${madeNote}`,
+      ...made,
     }
   }
 
@@ -693,6 +730,34 @@ export function makeDb(supabaseUrl: string, serviceKey: string): Db {
   }
 }
 
+/**
+ * A signup link just made a client: the channel hears "new client added"
+ * the way it does from the add form (team-digest, client_added; once per
+ * client). Best effort and in the background, so Stripe gets its answer at
+ * once and a quiet channel never fails a payment.
+ */
+async function announceNewClient(clientId: string) {
+  try {
+    const url = Deno.env.get('SUPABASE_URL')
+    const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!url || !key) return
+    const told = fetch(`${url}/functions/v1/team-digest`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, apikey: key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'client_added', client_id: clientId }),
+      signal: AbortSignal.timeout(25000),
+    })
+      .then((r) => r.text())
+      .catch(() => '')
+    // deno-lint-ignore no-explicit-any
+    const runtime = (globalThis as any).EdgeRuntime
+    if (typeof runtime?.waitUntil === 'function') runtime.waitUntil(told)
+    else await Promise.race([told, new Promise((done) => setTimeout(done, 4000))])
+  } catch {
+    // the client exists and the payment is booked either way
+  }
+}
+
 export async function serve(req: Request) {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
@@ -731,8 +796,9 @@ export async function serve(req: Request) {
   }
 
   try {
-    const result = await handleEvent(db, event)
+    const result: any = await handleEvent(db, event)
     await db.patch(`stripe_events?id=eq.${event.id}`, { status: result.status, note: result.note })
+    if (result.newClientId) await announceNewClient(result.newClientId)
     return json({ received: true, ...result })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

@@ -52,12 +52,17 @@ check('a failing call gives no name rather than an error', await lookupName({ ki
 // --------------------------------------------------------------- the pieces
 check('every kind has its card image', Object.values(KINDS).map((k) => existsSync(new URL(`../public${k.image}`, import.meta.url))), Object.values(KINDS).map(() => true))
 const edge = readFileSync(new URL('../netlify/edge-functions/client-preview.ts', import.meta.url), 'utf8')
-check('the edge function covers the five paths and bypasses on error', edge.includes("path: ['/dashboard/*', '/report/*', '/scripts/*', '/videos/*', '/pay/*']") && edge.includes("onError: 'bypass'"), true)
+check('the edge function covers the six paths and bypasses on error', edge.includes("path: ['/dashboard/*', '/report/*', '/scripts/*', '/videos/*', '/pay/*', '/join/*']") && edge.includes("onError: 'bypass'"), true)
 const sql = readFileSync(new URL('../supabase/client-dashboard.sql', import.meta.url), 'utf8')
 check('the name lookup is in the SQL file', sql.includes('function client_link_name(p_kind text, p_token text)'), true)
 // The lookup has grown a kind per tab since; the newest definition names them all.
 const newest = readFileSync(new URL('../supabase/client-billing.sql', import.meta.url), 'utf8')
 check('the newest lookup knows every tab with the dashboard token', newest.includes("p_kind in ('dashboard', 'scripts', 'videos', 'pay')"), true)
+
+// A signup link (docs/client-signup.md): its own token and its own lookup.
+check('a signup link has its own words and card', [previewMeta({ kind: 'join', name: 'Belk', origin: 'https://x', pathname: '/j' }).title, previewMeta({ kind: 'join', name: '', origin: 'https://x', pathname: '/j' }).title, previewMeta({ kind: 'join', name: 'Belk', origin: 'https://x', pathname: '/j' }).image], ['Get started: Belk', 'Get started with The Working Class Marketing', 'https://x/og-get-started.png'])
+check('and its address is matched by its token', matchClientPath('/join/' + 'a'.repeat(36)), { kind: 'join', token: 'a'.repeat(36) })
+check('the lookup names a signup by its own token', readFileSync(new URL('../supabase/client-signups.sql', import.meta.url), 'utf8').includes("when p_kind = 'join' then (select business_name from client_signups where token = p_token and revoked = false"), true)
 
 console.log(failures === 0 ? '\nAll checks passed' : `\n${failures} FAILED`)
 process.exit(failures ? 1 : 0)

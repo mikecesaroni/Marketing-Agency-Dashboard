@@ -492,6 +492,19 @@ export const ROUTES = [
     actions: ['Paying and subscribing, on Stripe. Nothing here reaches the CRM or another client. On the agency side: the client page\'s Payments card has "Client billing page" (Open, Copy link, what the tab says right now, the custom links), and the Payments page\'s "Setup fee not paid" and "Not subscribed yet" lists have "Copy billing link" on every row.'],
   },
   {
+    path: '/join/:token',
+    name: 'Signup link',
+    nav: null,
+    purpose:
+      'NOT part of the CRM. A new client\'s signup link, with a token of its own (since 2026-11-27): they pay, then fill in the onboarding form, and they are in the CRM without anybody adding them. Nobody is a client until money arrives: the first payment makes the client (plan, fees, billing schedule, onboarding form link) and books itself to them.',
+    contains: [
+      'Their plan and what it includes, then numbered steps: "Pay the setup fee" (not shown when it is waived), "Start your monthly plan", "Tell us about your business". Each pay button opens Stripe in a new tab; the page checks every few seconds and ticks the step once the payment lands. The form step opens only when the payments are in, and goes to their /onboarding form. Then "You are all set".',
+    ],
+    actions: [
+      'Made on the Clients page, "Signup link": the business name, the plan (it sets the monthly price) and "$2,500 setup fee" or "No setup fee", then "Get the link" with Copy link and Copy message. "Links out" lists each one: Not opened yet, Opened not paid, one payment in, "Paid, waiting on their form", Signed up; Copy link again or Cancel. A plan with no Stripe subscription link saved (Payments, Stripe) cannot get a link, and says so. The new client gets Ken\'s onboarding tasks and the Slack "new client" post automatically.',
+    ],
+  },
+  {
     path: '/approve/:token',
     name: 'Ad approval link',
     nav: null,
